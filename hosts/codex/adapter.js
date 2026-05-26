@@ -27,6 +27,7 @@ const { runHeadless } = require("../../core/adapters/headless");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const ROLES_DIR = path.join(REPO_ROOT, "roles");
 const RULES_DIR = path.join(REPO_ROOT, "rules");
+const SKILLS_DIR = path.join(REPO_ROOT, "skills");
 
 // Role → filename mapping. Codex uses the bare role name (no `dev-` prefix
 // and no `-engineer` suffix), matching what's already in roles/.
@@ -79,14 +80,41 @@ function installRules(targetDir, opts) {
   return { written, skipped, warnings: [] };
 }
 
+function installSkills(targetDir, opts) {
+  const written = [];
+  const skipped = [];
+  if (!fs.existsSync(SKILLS_DIR)) {
+    return { written, skipped, warnings: [`no skills source at ${SKILLS_DIR}`] };
+  }
+  const destBase = path.join(targetDir, capabilities.skillsDir);
+  for (const skill of fs.readdirSync(SKILLS_DIR)) {
+    const srcDir = path.join(SKILLS_DIR, skill);
+    if (!fs.statSync(srcDir).isDirectory()) continue;
+    const destDir = path.join(destBase, skill);
+    fs.mkdirSync(destDir, { recursive: true });
+    for (const f of fs.readdirSync(srcDir)) {
+      const src = path.join(srcDir, f);
+      const dest = path.join(destDir, f);
+      if (fs.existsSync(dest) && !opts.force) {
+        skipped.push(dest);
+        continue;
+      }
+      fs.copyFileSync(src, dest);
+      written.push(dest);
+    }
+  }
+  return { written, skipped, warnings: [] };
+}
+
 function install(targetDir, opts = {}) {
   const o = { force: false, roles: [], isolation: "in-place", ...opts };
   const roles = installRoles(targetDir, o);
   const rules = installRules(targetDir, o);
+  const skills = installSkills(targetDir, o);
   return {
-    written: [...roles.written, ...rules.written],
-    skipped: [...roles.skipped, ...rules.skipped],
-    warnings: [...roles.warnings, ...rules.warnings],
+    written: [...roles.written, ...rules.written, ...skills.written],
+    skipped: [...roles.skipped, ...rules.skipped, ...skills.skipped],
+    warnings: [...roles.warnings, ...rules.warnings, ...skills.warnings],
   };
 }
 
@@ -106,6 +134,16 @@ function uninstall(targetDir) {
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
   }
+  const skillsBase = path.join(targetDir, capabilities.skillsDir);
+  if (fs.existsSync(skillsBase) && fs.existsSync(SKILLS_DIR)) {
+    for (const skill of fs.readdirSync(SKILLS_DIR)) {
+      const dir = path.join(skillsBase, skill);
+      if (fs.existsSync(dir)) {
+        for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f));
+        try { fs.rmdirSync(dir); } catch { /* not empty — leave it */ }
+      }
+    }
+  }
 }
 
 function status(targetDir) {
@@ -120,6 +158,12 @@ function status(targetDir) {
     for (const f of fs.readdirSync(RULES_DIR)) {
       if (!f.endsWith(".md")) continue;
       const p = path.join(targetDir, ".devteam", "rules", f);
+      if (!fs.existsSync(p)) missing.push(p);
+    }
+  }
+  if (fs.existsSync(SKILLS_DIR)) {
+    for (const skill of fs.readdirSync(SKILLS_DIR)) {
+      const p = path.join(targetDir, capabilities.skillsDir, skill, "SKILL.md");
       if (!fs.existsSync(p)) missing.push(p);
     }
   }
