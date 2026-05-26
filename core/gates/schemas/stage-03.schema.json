@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-03.schema.json",
+  "title": "Stage 03 Clarification Gate",
+  "description": "Stage 3 (Pre-Build Clarification) gate. The orchestrator (or pm in clarification mode) writes this after resolving any QUESTION: lines in pipeline/context.md.",
+  "type": "object",
+  "required": [
+    "open_questions_count",
+    "answered_questions_count",
+    "scope_changed"
+  ],
+  "properties": {
+    "open_questions_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "QUESTION: lines in pipeline/context.md still without a PM-ANSWER:. Must be zero to PASS."
+    },
+    "answered_questions_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Questions resolved during this clarification pass."
+    },
+    "scope_changed": {
+      "type": "boolean",
+      "description": "True when an answer materially changed the brief; if true, the orchestrator surfaces the delta to the user."
+    }
+  },
+  "additionalProperties": true
+}

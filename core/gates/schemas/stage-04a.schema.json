@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-04a.schema.json",
+  "title": "Stage 04a Pre-Review Gate",
+  "description": "Stage 4.5a (Pre-Review) gate. Authored by dev-platform after running lint, type-check, and SCA across the merged build output. Stage 5 cannot start until this passes.",
+  "type": "object",
+  "required": [
+    "lint_passed",
+    "tests_passed",
+    "dependency_review_passed",
+    "security_review_required"
+  ],
+  "properties": {
+    "lint_passed": {
+      "type": "boolean",
+      "description": "Project lint command exited cleanly across all areas. Failure routes the fix to the owning dev."
+    },
+    "tests_passed": {
+      "type": "boolean",
+      "description": "Unit tests in the integrated branch pass. Stage 6 re-runs the full suite with criterion mapping."
+    },
+    "dependency_review_passed": {
+      "type": "boolean",
+      "description": "SCA found no high or critical findings in new/changed dependencies."
+    },
+    "security_review_required": {
+      "type": "boolean",
+      "description": "When true, the Stage 4.5b security-engineer review is mandatory before Stage 5; trigger heuristic in scripts/security-heuristic.js."
+    }
+  },
+  "additionalProperties": true
+}

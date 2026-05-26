@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-06.schema.json",
+  "title": "Stage 06 Tests Gate",
+  "description": "Stage 6 (Test & CI) gate. Authored by dev-qa from v2.3 forward (was dev-platform pre-v2.3). When all_acceptance_criteria_met is true AND criterion_to_test_mapping_is_one_to_one is true, the orchestrator auto-folds Stage 7 instead of invoking the PM.",
+  "type": "object",
+  "required": [
+    "all_acceptance_criteria_met",
+    "tests_total",
+    "tests_passed",
+    "tests_failed",
+    "failing_tests",
+    "criterion_to_test_mapping_is_one_to_one"
+  ],
+  "properties": {
+    "all_acceptance_criteria_met": {
+      "type": "boolean",
+      "description": "Every brief acceptance criterion has at least one passing test. Required for the Stage 7 auto-fold."
+    },
+    "tests_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total tests executed in the suite that gates this stage."
+    },
+    "tests_passed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Tests that passed; informational, not the only PASS criterion."
+    },
+    "tests_failed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Tests that failed; populates failing_tests for retry routing."
+    },
+    "failing_tests": {
+      "type": "array",
+      "description": "Names of failing tests; the orchestrator routes each to the owning dev based on the test path."
+    },
+    "criterion_to_test_mapping_is_one_to_one": {
+      "type": "boolean",
+      "description": "True when every criterion maps to exactly one dedicated test and no test covers multiple criteria with distinct verify conditions. Drives the Stage 7 auto-fold; when in doubt, set false."
+    }
+  },
+  "additionalProperties": true
+}

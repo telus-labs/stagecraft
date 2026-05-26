@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-09.schema.json",
+  "title": "Stage 09 Retrospective Gate",
+  "description": "Stage 9 (Retrospective) gate. Informational — status is always PASS unless the synthesis itself failed. Authored by the principal agent after parallel agent contributions land in pipeline/retrospective.md.",
+  "type": "object",
+  "required": [
+    "severity",
+    "lessons_promoted",
+    "patterns_harvested",
+    "contributions_written"
+  ],
+  "properties": {
+    "severity": {
+      "type": "string",
+      "enum": ["green", "yellow", "red"],
+      "description": "Run severity per the rubric in .devteam/rules/retrospective.md: green=clean, yellow=retries or post-build BLOCKERs, red=user-visible defect or unresolved halt."
+    },
+    "lessons_promoted": {
+      "type": "array",
+      "description": "Lesson titles added to pipeline/lessons-learned.md this run. Capped at 2 per retro."
+    },
+    "patterns_harvested": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Count of PATTERN: entries the principal pulled from Stage 5 review files before promotion selection."
+    },
+    "contributions_written": {
+      "type": "array",
+      "description": "Agents that wrote a Stage 9a contribution section (always pm + principal + 4 devs; security-engineer also when 4.5b fired)."
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-05.schema.json",
+  "title": "Stage 05 Peer Review Gate",
+  "description": "Stage 5 (Peer Code Review) gate. One per area: stage-05-<area>.json. WRITTEN BY THE approval-derivation HOOK ONLY — never authored by an agent. The hook parses pipeline/code-review/by-<reviewer>.md for REVIEW: APPROVED / REVIEW: CHANGES REQUESTED markers and reconciles approvals/changes_requested on every save. PASS when approvals.length >= required_approvals AND changes_requested is empty.",
+  "type": "object",
+  "required": [
+    "area",
+    "review_shape",
+    "required_approvals",
+    "approvals",
+    "changes_requested",
+    "escalated_to_principal"
+  ],
+  "properties": {
+    "area": {
+      "type": "string",
+      "enum": ["backend", "frontend", "platform", "qa", "security", "deps"],
+      "description": "Owning area for this review gate. Reviewers must come from a different area; see .devteam/rules/pipeline.md §Stage 5."
+    },
+    "review_shape": {
+      "type": "string",
+      "enum": ["scoped", "matrix"],
+      "description": "Scoped (one cross-area reviewer, required_approvals=1) when the diff is area-contained; matrix (the v1 cross-review, required_approvals=2) when it spans areas."
+    },
+    "required_approvals": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Approvals needed for PASS. The orchestrator pre-creates the gate with this set; the hook does not change it."
+    },
+    "approvals": {
+      "type": "array",
+      "description": "Reviewer names that emitted REVIEW: APPROVED for this area. Hook-managed; agents must not write directly."
+    },
+    "changes_requested": {
+      "type": "array",
+      "description": "Reviewers who emitted REVIEW: CHANGES REQUESTED. Non-empty blocks PASS regardless of approvals count."
+    },
+    "escalated_to_principal": {
+      "type": "boolean",
+      "description": "True after the two-round review limit fires and the principal is invoked for a binding ruling."
+    }
+  },
+  "additionalProperties": true
+}

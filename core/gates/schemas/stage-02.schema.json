@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-02.schema.json",
+  "title": "Stage 02 Design Gate",
+  "description": "Stage 2 (Design) gate. Authored by the principal agent after the design review concludes. Both arch_approved and pm_approved must be true to pass.",
+  "type": "object",
+  "required": [
+    "arch_approved",
+    "pm_approved",
+    "adr_count"
+  ],
+  "properties": {
+    "arch_approved": {
+      "type": "boolean",
+      "description": "Principal sign-off on the design after considering the parallel dev annotations."
+    },
+    "pm_approved": {
+      "type": "boolean",
+      "description": "PM confirms the design still fits the brief's scope and acceptance criteria."
+    },
+    "adr_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of ADR files written under pipeline/adr/ during this design pass."
+    }
+  },
+  "additionalProperties": true
+}

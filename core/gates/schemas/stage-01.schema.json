@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-01.schema.json",
+  "title": "Stage 01 Requirements Gate",
+  "description": "Stage 1 (Requirements) gate. Authored by the pm agent after writing pipeline/brief.md. See .devteam/rules/pipeline.md §Stage 1 for the full contract.",
+  "type": "object",
+  "required": [
+    "acceptance_criteria_count",
+    "out_of_scope_items",
+    "required_sections_complete"
+  ],
+  "properties": {
+    "acceptance_criteria_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of acceptance criteria in the brief. Stage 6 maps these 1:1 to passing tests; mismatch blocks the Stage 7 auto-fold."
+    },
+    "out_of_scope_items": {
+      "type": "array",
+      "description": "Things the brief explicitly excludes; reviewers and PM use this to push back on scope creep."
+    },
+    "required_sections_complete": {
+      "type": "boolean",
+      "description": "True when the brief contains every section the brief template requires for the chosen track. See docs/brief-template.md."
+    }
+  },
+  "additionalProperties": true
+}

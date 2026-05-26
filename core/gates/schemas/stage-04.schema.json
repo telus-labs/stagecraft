@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-04.schema.json",
+  "title": "Stage 04 Build Gate",
+  "description": "Stage 4 (Build) gate. One per area: stage-04-backend.json, stage-04-frontend.json, stage-04-platform.json, written by the corresponding dev-* agent in its worktree.",
+  "type": "object",
+  "required": [
+    "workstreams",
+    "pr_summaries_written",
+    "local_verification"
+  ],
+  "properties": {
+    "workstreams": {
+      "type": "array",
+      "description": "Areas this gate covers (typically one of 'backend', 'frontend', 'platform'; mixed for /quick or /nano)."
+    },
+    "pr_summaries_written": {
+      "type": "array",
+      "description": "Paths to pipeline/pr-<area>.md files this dev produced; reviewers read these in Stage 5."
+    },
+    "local_verification": {
+      "type": "array",
+      "description": "Commands the dev ran locally to verify the change (e.g. 'npm test', 'npm run lint'). Stage 4.5a re-runs these in CI."
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/gate.schema.json",
+  "title": "AI Dev Team Gate",
+  "description": "Base contract for every pipeline gate JSON written under pipeline/gates/. Per-stage schemas extend this with stage-specific required fields. Field semantics are defined in .devteam/rules/gates.md; core/gates/validator.js is the authoritative reader. A gate may be a workstream gate (per-role, written by a single adapter) or a stage gate (merged from workstream gates by the orchestrator).",
+  "type": "object",
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings"
+  ],
+  "properties": {
+    "stage": {
+      "type": "string",
+      "pattern": "^stage-[0-9]{2}([-.][a-z0-9-]+)?$",
+      "description": "Stage identifier matching the gate's filename, e.g. 'stage-04' or 'stage-05-backend'."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["PASS", "WARN", "FAIL", "ESCALATE"],
+      "description": "Outcome of the stage or workstream. ESCALATE halts the pipeline regardless of any newer gate; see .devteam/rules/escalation.md. Stage-level merged gates inherit FAIL/ESCALATE if any workstream is FAIL/ESCALATE."
+    },
+    "orchestrator": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Identifier of the orchestrator that minted this gate, including version (e.g. 'devteam@1.0'). Replaces the legacy 'agent' field."
+    },
+    "host": {
+      "type": "string",
+      "description": "Adapter that produced this workstream (e.g. 'claude-code', 'codex'). REQUIRED on workstream gates, ABSENT on stage-level merged gates."
+    },
+    "workstream": {
+      "type": "string",
+      "description": "Role this workstream gate belongs to (e.g. 'backend', 'pm'). REQUIRED on workstream gates, ABSENT on stage-level merged gates."
+    },
+    "workstreams": {
+      "type": "array",
+      "description": "On stage-level merged gates: list of workstream entries that contributed. Each entry mirrors the workstream gate's required fields plus its specific status. ABSENT on workstream gates.",
+      "items": {
+        "type": "object",
+        "required": ["workstream", "host", "status"],
+        "properties": {
+          "workstream": { "type": "string" },
+          "host": { "type": "string" },
+          "status": { "type": "string", "enum": ["PASS", "WARN", "FAIL", "ESCALATE"] }
+        },
+        "additionalProperties": true
+      }
+    },
+    "track": {
+      "type": "string",
+      "enum": ["full", "quick", "nano", "config-only", "dep-update", "hotfix"],
+      "description": "Pipeline track the gate belongs to. Tracks differ on which stages run and how many approvals each gate requires."
+    },
+    "timestamp": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO 8601 timestamp when the gate was written. Used for the bypassed-escalation sweep."
+    },
+    "blockers": {
+      "type": "array",
+      "description": "Reasons the stage/workstream cannot proceed. A non-empty array typically pairs with status FAIL or ESCALATE."
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Non-blocking concerns surfaced for visibility. Do not change the gate status."
+    },
+    "retry_number": {
+      "type": "number",
+      "description": "Zero-based retry counter. When >= 1, this_attempt_differs_by must be a non-empty string (enforced by validator)."
+    },
+    "previous_failure_reason": {
+      "type": "string",
+      "description": "Short summary of why the previous attempt failed; informational only."
+    },
+    "this_attempt_differs_by": {
+      "type": "string",
+      "description": "What changed since the previous failure. Required when retry_number >= 1; same content twice escalates instead of retrying."
+    }
+  },
+  "additionalProperties": true
+}

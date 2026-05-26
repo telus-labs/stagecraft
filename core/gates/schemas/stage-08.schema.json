@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-08.schema.json",
+  "title": "Stage 08 Deploy Gate",
+  "description": "Stage 8 (Deploy) gate. Authored by dev-platform after running the selected adapter. PASS requires status PASS AND runbook_referenced true. The adapter-specific result lives in an additional 'adapter_result' object; see .devteam/adapters/<adapter>.md for its shape.",
+  "type": "object",
+  "required": [
+    "pm_signoff",
+    "deploy_requested",
+    "runbook_referenced"
+  ],
+  "properties": {
+    "pm_signoff": {
+      "type": "boolean",
+      "description": "Carried forward from Stage 7; included here so the deploy gate is self-contained."
+    },
+    "deploy_requested": {
+      "type": "boolean",
+      "description": "Confirms the user wanted Stage 8 to run (i.e. didn't stop after sign-off)."
+    },
+    "runbook_referenced": {
+      "type": "boolean",
+      "description": "Re-checked at Stage 8 start; a missing runbook ESCALATEs (does not FAIL) so the user can fill it in and resume."
+    }
+  },
+  "additionalProperties": true
+}
