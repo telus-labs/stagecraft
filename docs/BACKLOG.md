@@ -44,7 +44,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
 | D1 | ~~**OpenTelemetry tracing per stage**~~ ✅ landed (Unreleased) | 5 | 3 | ~~Every workstream emits spans~~. See `docs/observability.md`. |
-| D2 | **Gate-pass-rate dashboards** | 4 | 2 | Per-stage, per-role, per-host historical pass/fail/escalate rates. Surfaces which combinations don't work. |
+| D2 | ~~**Gate-pass-rate dashboards**~~ ✅ landed (Unreleased) | 4 | 2 | `scripts/dashboard.js` aggregates pipeline/gates/ across one or more projects. Per-stage / per-host / per-role / per-status grouping. Markdown report with ASCII bar chart or `--json` for tooling. `--from p1,p2,...` for multi-project, `--since YYYY-MM-DD` for time-windowed views. Expands merged stage gates into workstream rows so host/role attribution is correct. |
 | D3 | **Lessons-learned across projects (org-shared)** | 5 | 4 | The `pipeline/lessons-learned.md` from each project flows to a shared pool. Future runs in other projects can pull relevant lessons by embedding similarity. Network effect. |
 | D4 | **Per-role per-model performance scores** | 5 | 3 | Track which (role, host) combinations produce gates that pass first-try most often. Surfaces "Codex is better than Claude at backend; Claude is better at design." Drives D5. |
 | D5 | **Adaptive routing** | 5 | 3 | Routing config auto-updates from D4 telemetry. The system learns which model is best at which role. (Builds on D4.) |
@@ -117,7 +117,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 3. ~~**A1 — Gemini CLI adapter** (4 / 2)~~ — ✅ landed (Unreleased).
 4. ~~**B1 — Accessibility audit stage** (4 / 2)~~ — ✅ landed (Unreleased).
 5. ~~**B4 — Observability gate** (4 / 2)~~ — ✅ landed (Unreleased).
-6. **D2 — Gate-pass-rate dashboards** (4 / 2) — required to do D4/D5; immediately useful as standalone.
+6. ~~**D2 — Gate-pass-rate dashboards** (4 / 2)~~ — ✅ landed (Unreleased).
 7. **F1 — GitHub PR integration** (4 / 3) — meets teams where they already work.
 8. **E2 — Web UI for pipeline runs** (4 / 4) — accessibility win for non-CLI users; broadens audience.
 9. **D7 — Persistent project memory (embeddings)** (5 / 4) — enables continuity across runs; foundation for G8.
