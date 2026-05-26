@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-04b.schema.json",
+  "title": "Stage 04b Security Review Gate",
+  "description": "Stage 4b (Security Review) gate. Conditional — only written when stage-04a reports security_review_required: true. Authored by the security role; veto: true halts the pipeline regardless of any other gate.",
+  "type": "object",
+  "required": [
+    "security_approved",
+    "veto",
+    "triggering_conditions"
+  ],
+  "properties": {
+    "security_approved": {
+      "type": "boolean",
+      "description": "Security reviewer's overall verdict. True only when no high/critical issues remain unresolved."
+    },
+    "veto": {
+      "type": "boolean",
+      "description": "Hard halt. When true, the pipeline cannot advance regardless of peer-review approvals or any subsequent stage. Reserved for unfixable security defects."
+    },
+    "triggering_conditions": {
+      "type": "array",
+      "description": "Which security-trigger heuristics fired (e.g. 'path:auth', 'dep:upgrade', 'crypto:new-primitive'). Captured for audit so the same conditions raise the same review next time."
+    }
+  },
+  "additionalProperties": true
+}

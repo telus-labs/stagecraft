@@ -81,7 +81,7 @@ const STAGES = {
     roles: ["platform"],
     objective: "Run lint, tests, dependency/license review, and security-trigger checks before peer review.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/build-plan.md", "pipeline/pr-*.md"],
-    allowedWrites: ["pipeline/pre-review.md", "pipeline/security-review.md", "pipeline/gates/stage-04a.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/pre-review.md", "pipeline/gates/stage-04a.json", "pipeline/context.md"],
     artifact: "pipeline/pre-review.md",
     template: "pre-review-template.md",
     gate: {
@@ -89,6 +89,25 @@ const STAGES = {
       tests_passed: false,
       dependency_review_passed: false,
       security_review_required: false,
+    },
+  },
+  "security-review": {
+    stage: "stage-04b",
+    roles: ["security"],
+    // Conditional stage. The orchestrator (in next()) reads
+    // stage-04a's gate; runs this only when
+    // security_review_required === true. Otherwise it's skipped
+    // silently and the pipeline advances to peer-review.
+    conditionalOn: { stage: "stage-04a", field: "security_review_required", equals: true },
+    objective: "Security review of changes flagged by the Stage 4a security-trigger heuristic. Has veto power; a FAIL here halts the pipeline regardless of peer-review outcomes.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/pre-review.md", "pipeline/build-plan.md", "pipeline/pr-*.md"],
+    allowedWrites: ["pipeline/security-review.md", "pipeline/gates/stage-04b.json", "pipeline/context.md"],
+    artifact: "pipeline/security-review.md",
+    template: "review-template.md",
+    gate: {
+      security_approved: false,
+      veto: false,
+      triggering_conditions: [],
     },
   },
   "peer-review": {
@@ -187,6 +206,7 @@ const ORDERED_STAGE_NAMES = [
   "clarification",
   "build",
   "pre-review",
+  "security-review",
   "peer-review",
   "qa",
   "sign-off",
@@ -194,16 +214,17 @@ const ORDERED_STAGE_NAMES = [
   "retrospective",
 ];
 
-// Per-track stage lists. Lifted verbatim from the prior claude-team.js
-// fork — these reflect a year+ of operational tuning over which stages
-// are skippable for which kind of change.
+// Per-track stage lists. Lifted from the prior claude-team.js fork and
+// extended for security-review (conditional — only fires when stage-04a
+// reports security_review_required: true; included only in tracks that
+// already run stage-04a).
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
   quick:         ["requirements", "build", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
   nano:          ["build", "qa"],
-  "config-only": ["build", "pre-review", "qa", "sign-off", "deploy"],
+  "config-only": ["build", "pre-review", "security-review", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
-  hotfix:        ["build", "pre-review", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
+  hotfix:        ["build", "pre-review", "security-review", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
 };
 
 function stageNames() {

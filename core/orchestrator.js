@@ -188,6 +188,26 @@ function next(opts = {}) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
 
+    // Conditional stages: skip when the prerequisite gate's named field
+    // is not equal to the required value. The prerequisite gate must
+    // already exist — if it doesn't, the pipeline would be advancing
+    // out of order, so we surface that as needing the prerequisite first.
+    if (stageDef.conditionalOn) {
+      const c = stageDef.conditionalOn;
+      const prereqDef = Object.values(STAGES).find((s) => s && s.stage === c.stage);
+      const prereqGatePath = path.join(gatesDir, `${c.stage}.json`);
+      if (!fs.existsSync(prereqGatePath)) {
+        // Prereq not done yet; the earlier iteration of this loop should
+        // have returned for it. If we got here, fall through to normal
+        // run-stage handling — but flag the issue.
+      } else {
+        const prereq = JSON.parse(fs.readFileSync(prereqGatePath, "utf8"));
+        if (prereq[c.field] !== c.equals) {
+          continue; // condition not met — skip this stage silently
+        }
+      }
+    }
+
     if (!fs.existsSync(stageGatePath)) {
       if (stageDef.roles.length > 1) {
         const completed = [];
