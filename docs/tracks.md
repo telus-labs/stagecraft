@@ -25,18 +25,21 @@ Or override per-invocation: `devteam stage build --track quick`.
 ## What each track runs
 
 ```
-                            req  des  cla  bld  4a  4b  5    qa  6b   7    8    9
-   full                     ✓    ✓    ✓    ✓    ✓   ✓⁺  ✓    ✓   ✓    ✓    ✓    ✓
-   quick                    ✓              ✓              ✓    ✓   ✓    ✓    ✓    ✓
+                            req  des  cla  bld  4a  4b  5    qa  6b  6c   7    8    9
+   full                     ✓    ✓    ✓    ✓    ✓   ✓⁺  ✓    ✓   ✓   ✓    ✓    ✓    ✓
+   quick                    ✓              ✓              ✓    ✓   ✓        ✓    ✓    ✓
    nano                                    ✓                  ✓
-   config-only                              ✓    ✓   ✓⁺           ✓        ✓    ✓
-   dep-update                               ✓              ✓    ✓        ✓    ✓
-   hotfix                                   ✓    ✓   ✓⁺  ✓    ✓   ✓    ✓    ✓    ✓
+   config-only                              ✓    ✓   ✓⁺           ✓             ✓    ✓
+   dep-update                               ✓              ✓    ✓             ✓    ✓
+   hotfix                                   ✓    ✓   ✓⁺  ✓    ✓   ✓   ✓    ✓    ✓    ✓
 
    Legend: ✓⁺ = stage-04b (security review) is conditional — only runs
    when stage-04a reports security_review_required: true.
    6b = accessibility audit (axe-core / pa11y / lighthouse). See
         skills/accessibility-audit/SKILL.md.
+   6c = observability gate (verify the brief's promised metrics/logs/
+        traces actually ship). full + hotfix only. See
+        skills/observability-verification/SKILL.md.
 ```
 
 ## Safety: the stoplist

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-06c.schema.json",
+  "title": "Stage 06c Observability Gate",
+  "description": "Stage 6c (Observability) gate. Authored by the Platform role. Reads §9 'Observability requirements' from pipeline/brief.md (and any expansion in pipeline/design-spec.md) to extract the metrics / logs / traces the change promised to emit, then verifies each one is actually present in the shipped code. PASS requires zero gaps across all three signal categories. WARN allowed when verified ⊇ required but verification_method is weaker than 'runtime-probe' (i.e. we found references in code but didn't observe them in a real run).",
+  "type": "object",
+  "required": [
+    "metrics",
+    "logs",
+    "traces",
+    "verification_method"
+  ],
+  "properties": {
+    "metrics": {
+      "type": "object",
+      "required": ["required", "verified", "gap"],
+      "properties": {
+        "required": { "type": "array", "description": "Metric names the brief / design-spec promised, e.g. ['notifications_opt_in_changes_total', 'sms_sent_total']." },
+        "verified": { "type": "array", "description": "Metric names confirmed to be emitted by the shipped code." },
+        "gap":      { "type": "array", "description": "required - verified. Non-empty → FAIL." }
+      },
+      "additionalProperties": false
+    },
+    "logs": {
+      "type": "object",
+      "required": ["required", "verified", "gap"],
+      "properties": {
+        "required": { "type": "array", "description": "Log statements the brief / design-spec promised, identified by event-name or substring (e.g. 'opt-in changed', 'verification SMS failed')." },
+        "verified": { "type": "array", "description": "Log statements confirmed to fire." },
+        "gap":      { "type": "array", "description": "required - verified. Non-empty → FAIL." }
+      },
+      "additionalProperties": false
+    },
+    "traces": {
+      "type": "object",
+      "required": ["required", "verified", "gap"],
+      "properties": {
+        "required": { "type": "array", "description": "Trace span names the design-spec promised (e.g. 'notification.opt_in.change', 'sms.send'). May be empty if the change doesn't introduce tracing." },
+        "verified": { "type": "array", "description": "Span names confirmed in the code." },
+        "gap":      { "type": "array", "description": "required - verified. Non-empty → FAIL." }
+      },
+      "additionalProperties": false
+    },
+    "verification_method": {
+      "type": ["string", "null"],
+      "enum": ["code-grep", "static-analysis", "staging-run", "runtime-probe", "dashboard-query", "manual", null],
+      "description": "How verification was done. 'code-grep' is the floor (find the literal name); 'runtime-probe' (actually triggered the code and saw the signal in the backend) is the ceiling. Weaker methods → WARN, not FAIL, when no gap exists."
+    },
+    "dashboard_url": {
+      "type": "string",
+      "description": "Optional link to the dashboard or query that proved the signals are in production / staging."
+    }
+  },
+  "additionalProperties": true
+}

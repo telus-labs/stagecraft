@@ -165,6 +165,21 @@ const STAGES = {
       audit_skipped_reason: null,
     },
   },
+  "observability-gate": {
+    stage: "stage-06c",
+    roles: ["platform"],
+    objective: "Verify that every metric / log / trace the design-spec promised is actually emitted by the shipped code. Closes the gap where designs claim instrumentation that never lands.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/test-report.md"],
+    allowedWrites: ["pipeline/observability-report.md", "pipeline/gates/stage-06c.json", "pipeline/context.md"],
+    artifact: "pipeline/observability-report.md",
+    template: "test-report-template.md",
+    gate: {
+      metrics: { required: [], verified: [], gap: [] },
+      logs: { required: [], verified: [], gap: [] },
+      traces: { required: [], verified: [], gap: [] },
+      verification_method: null,
+    },
+  },
   "sign-off": {
     stage: "stage-07",
     roles: ["pm", "platform"],
@@ -226,6 +241,7 @@ const ORDERED_STAGE_NAMES = [
   "peer-review",
   "qa",
   "accessibility-audit",
+  "observability-gate",
   "sign-off",
   "deploy",
   "retrospective",
@@ -233,8 +249,10 @@ const ORDERED_STAGE_NAMES = [
 
 // Per-track stage lists. Lifted from the prior claude-team.js fork and
 // extended over time. Accessibility audit (stage-06b) runs on full,
-// quick, and hotfix — anywhere meaningful UI changes can ship.
-// Security-review (stage-04b) is in the lists but is conditional on
+// quick, and hotfix. Observability gate (stage-06c) runs on full and
+// hotfix only — the tracks where the brief actually requires
+// observability sections per .devteam/rules/gates.md §Stage 01.
+// Security-review (stage-04b) is in the lists but conditional on
 // stage-04a's security_review_required flag at runtime.
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
@@ -242,7 +260,7 @@ const STAGES_BY_TRACK = {
   nano:          ["build", "qa"],
   "config-only": ["build", "pre-review", "security-review", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
-  hotfix:        ["build", "pre-review", "security-review", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
+  hotfix:        ["build", "pre-review", "security-review", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
 };
 
 function stageNames() {
