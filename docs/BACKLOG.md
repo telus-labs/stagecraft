@@ -56,7 +56,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
 | E1 | **`devteam status` rich CLI output** | 3 | 1 | One screen showing where the current pipeline is, what gates passed, what's next. Already half-built via `next`. |
-| E2 | **Web UI for pipeline runs** | 4 | 4 | Local server (`devteam ui`) showing live progress, gate contents, role briefs. Single biggest accessibility win for non-CLI users. |
+| E2 | ~~**Web UI for pipeline runs**~~ ✅ landed (Unreleased) | 4 | 4 | `devteam ui` starts a local HTTP server on http://127.0.0.1:3737/. Single-page UI shows pipeline state, per-workstream rows, gate detail on click. Live updates via SSE backed by `fs.watch` on `pipeline/gates/`. Zero build step (vanilla HTML/CSS/JS); zero new deps. `--open` launches the browser; `--port N` overrides. |
 | E3 | **VS Code extension** | 3 | 3 | Sidebar with stage status, "run next stage" button, gate viewer. |
 | E4 | **Live streaming output** | 3 | 2 | Currently `--headless` waits for the host CLI to finish. Stream the LLM's output to the user's terminal as it happens. |
 | E5 | **Pre-flight check** (`devteam doctor`) | 3 | 1 | Verifies devteam install + each declared host is reachable + roles/rules/skills laid down correctly. Catches misconfig before it bites mid-pipeline. |
@@ -119,7 +119,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 5. ~~**B4 — Observability gate** (4 / 2)~~ — ✅ landed (Unreleased).
 6. ~~**D2 — Gate-pass-rate dashboards** (4 / 2)~~ — ✅ landed (Unreleased).
 7. ~~**F1 — GitHub PR integration** (4 / 3)~~ — ✅ landed (Unreleased).
-8. **E2 — Web UI for pipeline runs** (4 / 4) — accessibility win for non-CLI users; broadens audience.
+8. ~~**E2 — Web UI for pipeline runs** (4 / 4)~~ — ✅ landed (Unreleased).
 9. **D7 — Persistent project memory (embeddings)** (5 / 4) — enables continuity across runs; foundation for G8.
 10. **G1 — Multi-model adversarial review** (5 / 3) — one of the few items that is *qualitatively* better than what a single team can do.
 

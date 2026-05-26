@@ -55,6 +55,9 @@ Commands:
   doctor                           Pre-flight check: install integrity,
                                    target layout, config validity, adapter
                                    status, host CLIs on PATH.
+  ui [--port N] [--open]           Start a local web UI on http://127.0.0.1:3737/
+                                   showing pipeline state, gate detail, live
+                                   updates via SSE. --open launches the browser.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -73,6 +76,8 @@ function parseFlags(argv) {
     if (a === "--force")   { flags.force   = true;      continue; }
     if (a === "--json")    { flags.json    = true;      continue; }
     if (a === "--headless"){ flags.headless = true;     continue; }
+    if (a === "--port")    { flags.port    = Number(argv[++i]); continue; }
+    if (a === "--open")    { flags.open    = true;      continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -157,6 +162,29 @@ function cmdNext(argv) {
     for (const b of result.blockers) console.log(`     - ${b}`);
   }
   if (result.command) console.log(`   → ${result.command}`);
+}
+
+function cmdUI(argv) {
+  const { flags } = parseFlags(argv);
+  const { startServer } = require(path.join(__dirname, "..", "core", "ui", "server"));
+  startServer({
+    port: flags.port,
+    cwd: flags.cwd || process.cwd(),
+    open: flags.open,
+  }).then(({ url, server }) => {
+    console.log(`devteam UI: ${url}`);
+    console.log(`Watching pipeline/gates/ for live updates. Ctrl-C to stop.`);
+    function shutdown() {
+      console.log("\nshutting down…");
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 500).unref();
+    }
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
+  }).catch((err) => {
+    console.error(`devteam ui: ${err.message}`);
+    process.exit(1);
+  });
 }
 
 function cmdDoctor(argv) {
@@ -356,6 +384,7 @@ function main() {
     case "merge":    return cmdMerge(rest);
     case "summary":  return cmdSummary(rest);
     case "doctor":   return cmdDoctor(rest);
+    case "ui":       return cmdUI(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":

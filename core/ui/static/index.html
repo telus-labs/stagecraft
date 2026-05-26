@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>devteam</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header>
+  <h1>devteam <span class="track" data-track>—</span></h1>
+  <div class="meta">
+    <span class="cwd" data-cwd></span>
+    <span class="status-bar" data-status></span>
+  </div>
+</header>
+
+<main>
+  <section class="pipeline">
+    <h2>Pipeline</h2>
+    <ol class="stages" data-stages></ol>
+  </section>
+
+  <aside class="detail" data-detail>
+    <div class="detail-empty">Select a stage to inspect its gate.</div>
+  </aside>
+</main>
+
+<footer>
+  <span class="hosts" data-hosts></span>
+  <span class="connection" data-connection>connecting…</span>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
