@@ -1,0 +1,19 @@
+{
+  "name": "claude-code",
+  "displayName": "Claude Code",
+  "version": "1",
+  "hooks": true,
+  "subagents": true,
+  "slashCommands": true,
+  "worktrees": true,
+  "headless": true,
+  "headlessCommand": "claude --print",
+  "skillFormat": "markdown-with-frontmatter",
+  "skillsDir": ".claude/skills",
+  "commandsDir": ".claude/commands",
+  "agentsDir": ".claude/agents",
+  "enforces": {
+    "allowed_writes": "tool-call-time",
+    "stoplist": "tool-call-time"
+  }
+}
