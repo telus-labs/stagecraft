@@ -1,0 +1,124 @@
+# Pipeline Tracks (Stage 0)
+
+This file covers track routing, the safety stoplist, the budget gate,
+and async-friendly checkpoints — everything the orchestrator decides
+*before* invoking Stage 1. The pipeline definition itself lives in
+`pipeline-core.md` (Stages 1–3, 9, durations) and `pipeline-build.md`
+(Stages 4–8). The full index is in `pipeline.md`.
+
+## Stage 0 — Routing + budget (orchestrator, pre-stage)
+
+### Budget gate (v2.5+, opt-in)
+
+Before Stage 1, the orchestrator initialises budget tracking if
+`.devteam/config.yml` has `budget.enabled: true`. Budget tracking
+writes `pipeline/budget.md` at run start with zero counters and
+updates it at every stage boundary:
+
+```markdown
+# Budget
+
+Started: <ISO>
+Tokens max: 500000
+Wall-clock max: 90 min
+
+## Running totals
+| Stage | Tokens | Elapsed (min) |
+|-------|--------|---------------|
+| 1     | 12000  | 3.2           |
+| 2     | 45000  | 8.7           |
+| ...   | ...    | ...           |
+```
+
+After each stage gate passes, the orchestrator checks the running
+totals against the configured maximums. On exceed:
+
+- `on_exceed: escalate` — write `pipeline/gates/stage-budget.json`
+  with `status: ESCALATE`, `escalation_reason: "Budget exceeded
+  — <tokens | wall-clock>"`, and `decision_needed: "Continue
+  (override budget), or halt and inspect?"`. The orchestrator halts.
+- `on_exceed: warn` — log the breach, continue the pipeline. Useful
+  for calibration runs where the team is still tuning limits.
+
+Token counts are best-effort — the orchestrator sums reported usage
+where Claude Code surfaces it, otherwise estimates from character
+counts. This is a guardrail, not a cryptographic limit.
+
+When `budget.enabled: false` (default), no tracking happens. This is
+what projects that don't want the overhead should use.
+
+### Track routing
+
+Before Stage 1, the orchestrator must decide which track to run. Four tracks
+exist and they share gates, agents, and artefacts where they overlap, but
+differ on which stages run and how many approvals a gate requires:
+
+| Track | Command | Runs | Stage 5 approvals | Retro |
+|---|---|---|---|---|
+| **Full** | `/pipeline` | Stages 1–9 as defined below | 2 per area (matrix) | Full Stage 9 |
+| **Quick** | `/quick` | 1 (mini-brief) → 4 (single dev) → 5 (1 cross-area reviewer) → 6 → 7 (auto) → 8 (optional) → 9 (abbreviated) | 1 per area | Single-dev contribution + Principal synthesis |
+| **Nano** | `/nano` | 4 (single dev) → 6 (affected tests, no regression) → 7 (auto) | None | Fix-log entry only |
+| **Config-only** | `/config-only` | 4 (platform) → 4.5 (lint + config validate) → 6 (no-regression) → 8 (optional) | N/A | Fix-log entry only |
+| **Dep update** | `/dep-update` | 4 (platform + changelog scan + SCA) → 5 (single supply-chain reviewer) → 6 (no-regression) → 8 (optional) | 1 (supply-chain focus) | Fix-log entry only |
+| **Hotfix** | `/hotfix` | 4 → 4.5b (conditional) → 5 → 6 → 7 → 8 (design + 4.5a skipped; blast-radius rule active) | 2 per area | Abbreviated single-section retro |
+
+The routing decision is recorded in `pipeline/context.md` under `## Brief
+Changes` as `TRACK: <name>` with a one-line rationale. Each gate file in
+`pipeline/gates/` includes `"track": "<name>"` in its body so the
+gate-validator and downstream tooling can branch on track.
+
+**Safety stoplist** — the full `/pipeline` track is mandatory for any change
+that touches:
+
+- Authentication / authorization / session handling
+- Cryptography, key management, secrets rotation
+- PII / payments / regulated-data handling
+- Schema migrations, destructive data changes
+- Feature-flag introduction (toggling existing flags is fine in `/config-only`)
+- New external dependencies (upgrades are fine in `/dep-update`)
+
+The lighter tracks (`/quick`, `/config-only`, `/dep-update`) must not be
+used to bypass this list. If the orchestrator is uncertain whether a
+change crosses the stoplist, it must default to `/pipeline`. As of
+B-13 (audit 2026-05-07), `devteam` enforces the stoplist
+programmatically by refusing the lighter tracks on description or diff
+matches; `--force` overrides for false positives.
+
+The rules in `pipeline-build.md` describe the **full** track. Lighter-track
+deltas live in the track's own command file
+(`.devteam/commands/{track}.md`). When a gate in a lighter track differs
+from the full-track definition (for example, Stage 5 needing only one
+approval in `/quick`), the track file overrides the rule here — the track
+file is authoritative for its own track.
+
+### Async-friendly checkpoints (v2.5+, opt-in)
+
+By default, the pipeline halts at Checkpoints A, B, and C waiting for
+a human `proceed`. Teams can pre-approve a checkpoint when a
+precondition holds, configured in `.devteam/config.yml`:
+
+```yaml
+checkpoints:
+  c:
+    auto_pass_when: all_criteria_passed
+```
+
+Supported conditions:
+
+- `null` / absent — always wait for human (default; current behaviour)
+- `no_warnings` — auto-pass if the stage gate has zero warnings
+- `all_criteria_passed` — auto-pass if `stage-06.json` has
+  `all_acceptance_criteria_met: true` (Checkpoint C only)
+
+Auto-pass writes a record to `pipeline/context.md` under `## User
+Decisions` as:
+
+```
+<ISO> — Checkpoint <X> auto-passed via config (<condition>)
+```
+
+Never auto-pass security-sensitive work. The safety stoplist above
+and the Stage 4.5b security-engineer veto remain the hard guards —
+auto-pass at checkpoints does not override them. As of B-24 (audit
+2026-05-07), `devteam checkpoint <stage>` implements the
+auto-pass with explicit stoplist suppression on context.md content.
