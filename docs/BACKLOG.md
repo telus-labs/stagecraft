@@ -66,7 +66,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| F1 | **GitHub PR integration** | 4 | 3 | `devteam` runs on PR open: rendered prompts post as PR comments; gates post as PR checks. Closes the loop with how teams already work. |
+| F1 | ~~**GitHub PR integration**~~ ✅ landed (Unreleased) | 4 | 3 | `scripts/pr-publish.js` uses `gh` CLI to post pipeline state. Two modes: `body` (replace PR description with pr-pack output) and `checks` (post each gate as a GitHub check run on the PR head — PASS→success, WARN→neutral, FAIL/ESCALATE→failure). Auto-detects repo + PR from current branch; `--dry-run` for previewing without API calls. |
 | F2 | **Jira/Linear ticket integration** | 3 | 2 | `devteam stage requirements --ticket FOO-123` pulls the ticket as the feature brief input. Gates link back to the ticket. |
 | F3 | **Slack/Discord notifications** | 3 | 1 | Pipeline events (stage start, fail, escalate) post to a channel. Triggers for human checkpoints. |
 | F4 | **CI runner integration** | 4 | 3 | GitHub Actions / GitLab CI jobs that run a stage in CI (e.g. nano track on every PR). Bring the pipeline into existing CI infra. |
@@ -118,7 +118,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 4. ~~**B1 — Accessibility audit stage** (4 / 2)~~ — ✅ landed (Unreleased).
 5. ~~**B4 — Observability gate** (4 / 2)~~ — ✅ landed (Unreleased).
 6. ~~**D2 — Gate-pass-rate dashboards** (4 / 2)~~ — ✅ landed (Unreleased).
-7. **F1 — GitHub PR integration** (4 / 3) — meets teams where they already work.
+7. ~~**F1 — GitHub PR integration** (4 / 3)~~ — ✅ landed (Unreleased).
 8. **E2 — Web UI for pipeline runs** (4 / 4) — accessibility win for non-CLI users; broadens audience.
 9. **D7 — Persistent project memory (embeddings)** (5 / 4) — enables continuity across runs; foundation for G8.
 10. **G1 — Multi-model adversarial review** (5 / 3) — one of the few items that is *qualitatively* better than what a single team can do.
