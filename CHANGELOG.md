@@ -14,6 +14,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `core/observability.js` — tracer bootstrap + `withSpan` helper.
 - `docs/observability.md` — setup cookbooks for Jaeger / Honeycomb / Datadog.
 - `tests/observability.test.js` — 9 tests asserting expected spans + attributes using `InMemorySpanExporter`.
+- **Secret scanning PreToolUse hook** (`docs/BACKLOG.md` C2). Blocks `Write` / `Edit` operations that introduce AWS keys, GitHub / Anthropic / OpenAI / Google / Slack / Stripe credentials, private keys, JWTs, or postgres URLs with embedded passwords. Built-in regex patterns; no external scanner required. Path allowlist (`.env.example`, `docs/`, `examples/`, tests, snapshots). Magic-comment override `devteam-allow-secret:` for verified false positives. Findings are redacted before being echoed back. `DEVTEAM_SECRET_SCAN_ALLOW` env var accepts additional path-regex allowlist entries.
+- `core/hooks/secret-scan.js` — hook script + exported `scanContent()`.
+- `tests/secret-scan.test.js` — 32 tests across pattern detection, false-positive guards, magic-comment override, path allowlist, end-to-end PreToolUse stdin parsing, and snippet redaction.
 
 ---
 

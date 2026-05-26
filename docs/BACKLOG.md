@@ -33,7 +33,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
 | C1 | **Filesystem-level `allowedWrites` enforcement** | 4 | 4 | Run each workstream in a sandboxed FS (overlay, chroot, container) where writes outside the allowlist literally cannot happen. Removes "honour system" risk. |
-| C2 | **Secret scanning hook** (PreToolUse on Write/Edit) | 4 | 1 | gitleaks/trufflehog as a pre-write hook. Blocks the write if a secret is detected. Same plumbing as `approval-derivation`. |
+| C2 | ~~**Secret scanning hook**~~ ✅ landed (Unreleased) | 4 | 1 | ~~Blocks the write if a secret is detected.~~ Built-in regex patterns for AWS / GitHub / Anthropic / OpenAI / Google / Slack / Stripe / private keys / JWTs / postgres URLs. Path allowlist for `.env.example`, `docs/`, `examples/`, tests. Magic-comment override (`devteam-allow-secret:`) for verified false positives. Wired into claude-code's PreToolUse `Write|Edit`. |
 | C3 | **License compatibility gate** | 3 | 1 | Already half-present in pre-review's SCA. Make it explicit and per-license, not just "high/critical found". |
 | C4 | **Reproducible runs** | 4 | 4 | Pin model versions per-stage; record temperature, seed, system prompt hashes in the gate. Replay-able pipeline runs. Becomes critical for audits. |
 | C5 | **Capability-required permissions** | 3 | 2 | Adapter declares `enforces.network`, `enforces.shell`, etc. Orchestrator refuses to run a stage that needs network if the routed host denies network access. |
@@ -113,7 +113,7 @@ Agents that compose deeper tool stacks beat ones that just write code. Roles gai
 By impact/effort ratio, with bias toward high-impact even when expensive:
 
 1. ~~**D1 — OpenTelemetry tracing per stage** (5 / 3)~~ — ✅ landed (Unreleased).
-2. **C2 — Secret scanning hook** (4 / 1) — small lift, blocks an entire class of security incident.
+2. ~~**C2 — Secret scanning hook** (4 / 1)~~ — ✅ landed (Unreleased).
 3. **A1 — Gemini CLI adapter** (4 / 2) — proves the multi-host story is genuinely portable beyond Anthropic/OpenAI.
 4. **B1 — Accessibility audit stage** (4 / 2) — common hard requirement; mechanical to add.
 5. **B4 — Observability gate** (4 / 2) — closes a real gap (designs claim instrumentation that doesn't ship).

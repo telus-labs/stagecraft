@@ -188,12 +188,17 @@ function installRules(targetDir, opts) {
 function renderSettingsLocal() {
   const validatorPath = path.join(REPO_ROOT, "core", "gates", "validator.js");
   const approvalDerivationPath = path.join(REPO_ROOT, "core", "hooks", "approval-derivation.js");
+  const secretScanPath = path.join(REPO_ROOT, "core", "hooks", "secret-scan.js");
   const validateCmd = `node ${JSON.stringify(validatorPath)}`;
   const approvalCmd = `node ${JSON.stringify(approvalDerivationPath)}`;
+  const secretScanCmd = `node ${JSON.stringify(secretScanPath)}`;
   return {
     hooks: {
       Stop: [{ hooks: [{ type: "command", command: validateCmd }] }],
       SubagentStop: [{ hooks: [{ type: "command", command: validateCmd }] }],
+      PreToolUse: [
+        { matcher: "Write|Edit", hooks: [{ type: "command", command: secretScanCmd }] },
+      ],
       PostToolUse: [
         { matcher: "Write|Edit", hooks: [{ type: "command", command: approvalCmd }] },
       ],
