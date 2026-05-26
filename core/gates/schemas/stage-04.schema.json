@@ -2,25 +2,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/ai-dev-team/stage-04.schema.json",
   "title": "Stage 04 Build Gate",
-  "description": "Stage 4 (Build) gate. One per area: stage-04-backend.json, stage-04-frontend.json, stage-04-platform.json, written by the corresponding dev-* agent in its worktree.",
+  "description": "Stage 4 (Build) gate. Workstream gates land at pipeline/gates/stage-04.<role>.json (one per role: backend, frontend, platform, qa) and the orchestrator merges them into pipeline/gates/stage-04.json with a workstreams[] array. Per-workstream gates carry the stage-specific fields below; the merged gate also conforms to base gate.schema.json.",
   "type": "object",
   "required": [
-    "workstreams",
     "pr_summaries_written",
     "local_verification"
   ],
   "properties": {
-    "workstreams": {
-      "type": "array",
-      "description": "Areas this gate covers (typically one of 'backend', 'frontend', 'platform'; mixed for /quick or /nano)."
-    },
     "pr_summaries_written": {
       "type": "array",
-      "description": "Paths to pipeline/pr-<area>.md files this dev produced; reviewers read these in Stage 5."
+      "description": "Paths to pipeline/pr-<role>.md files this dev produced; reviewers read these at Stage 5."
     },
     "local_verification": {
       "type": "array",
-      "description": "Commands the dev ran locally to verify the change (e.g. 'npm test', 'npm run lint'). Stage 4.5a re-runs these in CI."
+      "description": "Commands the dev ran locally to verify the change (e.g. 'npm test', 'npm run lint'). Stage 4a re-runs these in CI."
     }
   },
   "additionalProperties": true

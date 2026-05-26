@@ -33,7 +33,7 @@ const STOPLIST_PATTERNS = [
   },
   {
     name: "payments",
-    re: /\b(payment|billing|credit[-_\s]?card)\b/i,
+    re: /\b(payment\w*|billing|credit[-_\s]?card)\b/i,
   },
   {
     name: "migrations",

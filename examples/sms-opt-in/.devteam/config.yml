@@ -1,0 +1,14 @@
+# Example config showing split routing: backend goes to Codex, the
+# rest stay on Claude Code. The orchestrator merges across the seam.
+
+routing:
+  default_host: claude-code
+  roles:
+    backend: codex
+
+pipeline:
+  default_track: full
+  isolation: in-place
+
+deploy:
+  adapter: docker-compose

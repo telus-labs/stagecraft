@@ -2,25 +2,41 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.local/ai-dev-team/stage-08.schema.json",
   "title": "Stage 08 Deploy Gate",
-  "description": "Stage 8 (Deploy) gate. Authored by dev-platform after running the selected adapter. PASS requires status PASS AND runbook_referenced true. The adapter-specific result lives in an additional 'adapter_result' object; see .devteam/adapters/<adapter>.md for its shape.",
+  "description": "Stage 8 (Deploy) gate. Authored by dev-platform after running the selected deploy adapter. PASS requires status PASS AND smoke_tests_passed true. The adapter-specific result lives in an additional 'adapter_result' object; see core/deploy/<adapter>.md for its shape.",
   "type": "object",
   "required": [
-    "pm_signoff",
-    "deploy_requested",
-    "runbook_referenced"
+    "deploy_completed",
+    "smoke_tests_passed",
+    "rollback_executed"
   ],
   "properties": {
-    "pm_signoff": {
+    "deploy_completed": {
       "type": "boolean",
-      "description": "Carried forward from Stage 7; included here so the deploy gate is self-contained."
+      "description": "The selected deploy adapter completed its procedure without halt."
     },
-    "deploy_requested": {
+    "smoke_tests_passed": {
       "type": "boolean",
-      "description": "Confirms the user wanted Stage 8 to run (i.e. didn't stop after sign-off)."
+      "description": "Post-deploy smoke tests passed. Required true for PASS."
+    },
+    "rollback_executed": {
+      "type": "boolean",
+      "description": "True if the role rolled back during deploy (per the adapter's procedure). PASS allowed only when this is false; a rollback halts the pipeline."
+    },
+    "deploy_adapter": {
+      "type": "string",
+      "description": "Which deploy adapter ran (docker-compose, kubernetes, terraform, custom). Distinct from the top-level 'host' field which is the AI-tool adapter."
+    },
+    "environment": {
+      "type": "string",
+      "description": "Target environment for the deploy (adapter-specific shape)."
     },
     "runbook_referenced": {
       "type": "boolean",
-      "description": "Re-checked at Stage 8 start; a missing runbook ESCALATEs (does not FAIL) so the user can fill it in and resume."
+      "description": "Confirms pipeline/runbook.md was referenced in the deploy-log. A missing runbook ESCALATEs at Stage 8 start, before deploy runs."
+    },
+    "adapter_result": {
+      "type": "object",
+      "description": "Deploy-adapter-specific result fields. See core/deploy/<adapter>.md."
     }
   },
   "additionalProperties": true

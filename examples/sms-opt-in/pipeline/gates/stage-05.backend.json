@@ -1,0 +1,19 @@
+{
+  "stage": "stage-05",
+  "workstream": "backend",
+  "host": "claude-code",
+  "orchestrator": "devteam@1.0.0-pre.1",
+  "track": "full",
+  "status": "FAIL",
+  "timestamp": "2026-05-26T20:11:37.249Z",
+  "blockers": [],
+  "warnings": [],
+  "area": "backend",
+  "approvals": [
+    "dev-frontend"
+  ],
+  "changes_requested": [],
+  "escalated_to_principal": false,
+  "required_approvals": 2,
+  "review_shape": "matrix"
+}
