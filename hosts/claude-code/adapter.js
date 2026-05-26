@@ -183,15 +183,53 @@ function installRules(targetDir, opts) {
   return { written, skipped, warnings: [] };
 }
 
+function renderSettingsLocal() {
+  const validatorPath = path.join(REPO_ROOT, "core", "gates", "validator.js");
+  const cmd = `node ${JSON.stringify(validatorPath)}`;
+  return {
+    hooks: {
+      Stop: [{ hooks: [{ type: "command", command: cmd }] }],
+      SubagentStop: [{ hooks: [{ type: "command", command: cmd }] }],
+    },
+    permissions: {
+      allow: [
+        "Bash(devteam *)",
+        "Bash(npm run *)",
+        "Bash(npm test *)",
+        "Write(src/**)",
+        "Write(pipeline/**)",
+        "Write(.claude/agents/**)",
+      ],
+      deny: [
+        "Bash(rm -rf *)",
+        "Bash(git push --force *)",
+        "Bash(git push -f *)",
+      ],
+    },
+  };
+}
+
+function installSettings(targetDir, opts) {
+  const dir = path.join(targetDir, ".claude");
+  fs.mkdirSync(dir, { recursive: true });
+  const dest = path.join(dir, "settings.local.json");
+  if (fs.existsSync(dest) && !opts.force) {
+    return { written: [], skipped: [dest], warnings: [] };
+  }
+  fs.writeFileSync(dest, JSON.stringify(renderSettingsLocal(), null, 2) + "\n", "utf8");
+  return { written: [dest], skipped: [], warnings: [] };
+}
+
 function install(targetDir, opts = {}) {
   const o = { force: false, roles: [], isolation: "in-place", ...opts };
   const roles = installRoles(targetDir, o);
   const commands = installCommands(targetDir, o);
   const rules = installRules(targetDir, o);
+  const settings = installSettings(targetDir, o);
   return {
-    written: [...roles.written, ...commands.written, ...rules.written],
-    skipped: [...roles.skipped, ...commands.skipped, ...rules.skipped],
-    warnings: [...roles.warnings, ...commands.warnings, ...rules.warnings],
+    written: [...roles.written, ...commands.written, ...rules.written, ...settings.written],
+    skipped: [...roles.skipped, ...commands.skipped, ...rules.skipped, ...settings.skipped],
+    warnings: [...roles.warnings, ...commands.warnings, ...rules.warnings, ...settings.warnings],
   };
 }
 
@@ -219,6 +257,8 @@ function uninstall(targetDir) {
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
   }
+  const settings = path.join(targetDir, ".claude", "settings.local.json");
+  if (fs.existsSync(settings)) fs.unlinkSync(settings);
 }
 
 function status(targetDir) {
@@ -239,6 +279,8 @@ function status(targetDir) {
       if (!fs.existsSync(p)) missing.push(p);
     }
   }
+  const settings = path.join(targetDir, ".claude", "settings.local.json");
+  if (!fs.existsSync(settings)) missing.push(settings);
   return {
     ok: missing.length === 0 && stale.length === 0,
     missing,

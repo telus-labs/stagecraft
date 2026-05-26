@@ -351,25 +351,34 @@ const HALT_FS_CODES = new Set([
   "EISDIR",
   "EROFS",
 ]);
-try {
-  main();
-} catch (err) {
-  const code = err && err.code;
-  if (code === "ENOENT") {
-    // Expected absence (gates dir vanished between existsSync and readdir).
+
+function runMain() {
+  try {
+    main();
+  } catch (err) {
+    const code = err && err.code;
+    if (code === "ENOENT") {
+      // Expected absence (gates dir vanished between existsSync and readdir).
+      process.exit(0);
+    }
+    if (HALT_FS_CODES.has(code)) {
+      const msg = err.message || String(err);
+      console.error(`[gate-validator] ❌ filesystem error (${code}): ${msg}`);
+      console.error(
+        `[gate-validator] Fix the underlying issue (permissions, path type) before re-running.`,
+      );
+      process.exit(1);
+    }
+    // Unknown / runtime error — likely a bug in this validator. Don't halt the
+    // user's session with an opaque stack trace.
+    const msg = err && err.message ? err.message : String(err);
+    console.log(`[gate-validator] ⚠️  internal error: ${msg}; treating as PASS`);
     process.exit(0);
   }
-  if (HALT_FS_CODES.has(code)) {
-    const msg = err.message || String(err);
-    console.error(`[gate-validator] ❌ filesystem error (${code}): ${msg}`);
-    console.error(
-      `[gate-validator] Fix the underlying issue (permissions, path type) before re-running.`,
-    );
-    process.exit(1);
-  }
-  // Unknown / runtime error — likely a bug in this validator. Don't halt the
-  // user's session with an opaque stack trace.
-  const msg = err && err.message ? err.message : String(err);
-  console.log(`[gate-validator] ⚠️  internal error: ${msg}; treating as PASS`);
-  process.exit(0);
 }
+
+if (require.main === module) {
+  runMain();
+}
+
+module.exports = { main, runMain };
