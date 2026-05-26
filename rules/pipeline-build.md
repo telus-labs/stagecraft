@@ -22,7 +22,7 @@ All three must have `"status": "PASS"` before proceeding.
 
 ---
 
-## Stage 4.5 — Pre-review checks (v2.3+)
+## Stage 4.5 — Pre-review checks
 
 Between Stage 4 (build) and Stage 5 (peer code review), two automated
 gates must pass. These catch issues the toolchain already knows about
@@ -42,7 +42,7 @@ exact commands. On failure, the owning dev (identified from the failing
 check) is re-invoked to fix. Stage 5 does not start until this gate
 passes.
 
-### Stage 4.5b — Security review (conditional, v2.3+)
+### Stage 4.5b — Security review (conditional)
 
 Invoke: `security-engineer` agent **only when** the triggering heuristic
 fires. The heuristic matches any of:
@@ -88,7 +88,7 @@ surfaces, and that's exactly when review is most needed).
 
 ## Stage 5 — Peer Code Review (Agent Teams preferred, sequential fallback)
 
-### Review shape — scoped vs matrix (v2.3.1+)
+### Review shape — scoped vs matrix
 
 Before Stage 5 begins, the orchestrator inspects the diff and picks one
 of two review shapes, then writes the chosen shape into each stage-05
@@ -133,7 +133,7 @@ applies:
 Each area's stage-05 gate accumulates two approvals from reviewers
 whose own area is different.
 
-### Review file format (v2.3.1+)
+### Review file format
 
 Reviewers now write per-area sections inside their review file, each
 ending with a `REVIEW: APPROVED` or `REVIEW: CHANGES REQUESTED` marker
@@ -184,7 +184,7 @@ the patched lines, and leave no audit trail tying the patch to a
 CHANGES-REQUESTED → addressed loop. If the one-line patch has a second
 bug, no reviewer is assigned to catch it.
 
-### Gate merge strategy (v2.3.1+ — hook-derived)
+### Gate merge strategy (hook-derived)
 
 Each area gate (`pipeline/gates/stage-05-{area}.json`) accumulates
 approvals via `approval-derivation.js`, not via agent self-write. The
@@ -207,7 +207,7 @@ Pre-read requirement (pass to each reviewer agent):
 On architectural escalation: invoke `principal` agent. Principal ruling is binding.
 On deadlock (reviewers disagree, no escalation): invoke `principal` agent to decide.
 
-### Review round limit (v2.5.1+)
+### Review round limit
 
 To prevent an unbounded review-fix spiral, the orchestrator enforces a
 **two-round maximum** per area per pipeline run:
@@ -230,10 +230,9 @@ Record the escalation in `pipeline/context.md` as
 
 ---
 
-## Stage 6 — Test & CI (QA Dev, v2.3+)
+## Stage 6 — Test & CI (QA Dev)
 
-Invoke: `dev-qa` agent (was `dev-platform` in v1–v2.2; see v2.3 migration
-in `docs/migration/v1-to-v2.md` for the rationale).
+Invoke: `dev-qa` agent.
 Input: `src/` + `pipeline/brief.md` (acceptance criteria).
 Output: `pipeline/test-report.md`.
 Gate file: `pipeline/gates/stage-06.json`.
@@ -261,7 +260,7 @@ Gate key: `"pm_signoff": true`
 On NO: PM writes delta list. Return to Stage 4 with delta items only.
 Delta items must not trigger a full pipeline rerun — scope them explicitly.
 
-### Auto-fold from Stage 6 (v2.2+)
+### Auto-fold from Stage 6
 
 When Stage 6 maps every acceptance criterion 1:1 to a passing test and
 sets `"all_acceptance_criteria_met": true`, the orchestrator auto-writes
@@ -295,7 +294,7 @@ delta items and edge cases, not on rubber-stamping a clean sheet.
 
 ---
 
-## Stage 8 — Deploy (Platform Dev, adapter-driven v2.4+)
+## Stage 8 — Deploy (Platform Dev)
 
 Invoke: `dev-platform` agent.
 Preconditions:
@@ -304,7 +303,7 @@ Preconditions:
   sections (see `docs/runbook-template.md`)
 - `.devteam/config.yml` names a valid adapter in `deploy.adapter`
 
-Stage 8 is **adapter-driven** from v2.4 forward. The dev-platform
+Stage 8 is **adapter-driven**. The dev-platform
 agent reads the selected adapter's instructions from
 `.devteam/adapters/<adapter>.md` and follows them. Built-in adapters:
 `docker-compose` (default), `kubernetes`, `terraform`, `custom`. See

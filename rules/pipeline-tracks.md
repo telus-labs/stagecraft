@@ -8,7 +8,7 @@ and async-friendly checkpoints — everything the orchestrator decides
 
 ## Stage 0 — Routing + budget (orchestrator, pre-stage)
 
-### Budget gate (v2.5+, opt-in)
+### Budget gate (opt-in)
 
 Before Stage 1, the orchestrator initialises budget tracking if
 `.devteam/config.yml` has `budget.enabled: true`. Budget tracking
@@ -91,7 +91,7 @@ from the full-track definition (for example, Stage 5 needing only one
 approval in `/quick`), the track file overrides the rule here — the track
 file is authoritative for its own track.
 
-### Async-friendly checkpoints (v2.5+, opt-in)
+### Async-friendly checkpoints (opt-in)
 
 By default, the pipeline halts at Checkpoints A, B, and C waiting for
 a human `proceed`. Teams can pre-approve a checkpoint when a

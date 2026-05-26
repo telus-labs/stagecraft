@@ -65,7 +65,7 @@ Aggregate status: `ESCALATE` wins over `FAIL` wins over `WARN` wins over `PASS`.
 }
 ```
 
-`required_sections_complete` (v2.2+) must be `true` when the brief
+`required_sections_complete` must be `true` when the brief
 contains all sections required for its track. Required sections:
 
 - Every track: §1–§5 (Problem, Stories, Acceptance Criteria, Out of
@@ -126,7 +126,7 @@ When the heuristic does not fire, no gate file is written. The
 orchestrator records the skip decision in `pipeline/context.md` under
 `## Brief Changes` as `SECURITY-SKIP: <reason>`.
 
-### Stage 05 (Code review, per area, v2.3.1+)
+### Stage 05 (Code review, per area)
 ```json
 {
   "area": "backend | frontend | platform | qa",
@@ -140,7 +140,7 @@ orchestrator records the skip decision in `pipeline/context.md` under
 }
 ```
 
-**Authorship (v2.3.1+).** The `approvals` and `changes_requested`
+**Authorship.** The `approvals` and `changes_requested`
 arrays are written by the `approval-derivation.js` hook, not by the
 reviewer agent. The hook parses per-area sections in
 `pipeline/code-review/by-<reviewer>.md` for `REVIEW: APPROVED` or
@@ -148,7 +148,7 @@ reviewer agent. The hook parses per-area sections in
 that write `approvals` directly will have their writes overwritten on
 the next reviewer file save — the hook is authoritative.
 
-**Review shape (v2.3.1+).** The orchestrator picks shape before Stage
+**Review shape.** The orchestrator picks shape before Stage
 5 begins:
 - `scoped` — diff is area-contained; `required_approvals: 1`. One
   reviewer from a different area suffices.
@@ -180,9 +180,9 @@ JSON validation — reviewers should self-enforce.
 }
 ```
 
-Authored by `dev-qa` from v2.3 forward (`dev-platform` in v1–v2.2).
+Authored by `dev-qa`.
 
-`criterion_to_test_mapping_is_one_to_one` (v2.3+) is required for the
+`criterion_to_test_mapping_is_one_to_one` is required for the
 Stage 7 auto-fold. Set `true` only if every acceptance criterion has a
 dedicated test and no test covers multiple criteria with distinct
 verify conditions. When in doubt, set `false` and let the PM perform
@@ -193,7 +193,7 @@ a manual sign-off.
 { "pm_signoff": true, "delta_items": [] }
 ```
 
-Auto-fold from Stage 6 (v2.2+): when Stage 6 has `"all_acceptance_criteria_met":
+Auto-fold from Stage 6: when Stage 6 has `"all_acceptance_criteria_met":
 true` and a 1:1 criterion-to-test mapping, the orchestrator writes Stage
 7 directly with:
 
@@ -255,15 +255,15 @@ Informational gate — status is PASS unless synthesis itself failed.
 }
 ```
 
-**v2.5+ fields**:
+**Field semantics**:
 - `aged_out` — rules retired via the age-out rule (not reinforced in
   10 runs + current `Reinforced` is 0). Distinct from `lessons_retired`,
   which is for rules explicitly proven wrong or internalised.
 - `patterns_harvested` — count of `PATTERN:` entries the Principal
   pulled from Stage 5 review files during synthesis, before
   selection for promotion.
-- `contributions_written` — dev-qa was added in v2.3;
-  security-engineer contributes when Stage 4.5b fired.
+- `contributions_written` — typically includes all dev roles; the
+  security-engineer contributes when Stage 4b fired.
 
 ## Retry Protocol
 
@@ -279,13 +279,13 @@ On FAIL gates with retries, include:
 If `retry_number` >= 2 AND `failing_tests` matches previous FAIL gate exactly:
 set `"status": "ESCALATE"` and halt. Same failure twice = escalate, don't retry.
 
-**Enforced since v2.1**: the validator exits 1 on any gate where
+**Enforced**: the validator exits 1 on any gate where
 `retry_number >= 1` but `this_attempt_differs_by` is missing or empty. The
 fix is to state the delta explicitly before re-writing the gate.
 
 ---
 
-## Track field (v2.0+)
+## Track field
 
 Every gate should carry a `"track"` field identifying which pipeline
 track the gate belongs to. Valid values: `full`, `quick`, `config-only`,
@@ -296,16 +296,14 @@ track the gate belongs to. Valid values: `full`, `quick`, `config-only`,
 ```
 
 The validator emits an advisory (non-blocking) when the field is missing
-or carries an unrecognised value. Legacy gates written before v2.0 don't
-carry the field — they still pass, but downstream tooling that branches on
-track should treat "missing" as "full" for backward compatibility.
+or carries an unrecognised value. Downstream tooling that branches on
+track should treat "missing" as "full" for compatibility.
 
 ---
 
-## What the validator enforces (v2.1)
+## What the validator enforces
 
-The `gate-validator.js` hook runs after every subagent stop. As of v2.1
-it performs these checks in order:
+The `gate-validator.js` hook runs after every subagent stop. It performs these checks in order:
 
 1. **Bypassed-escalation sweep.** Across all gate files, if any gate has
    `"status": "ESCALATE"` but is not the most recently modified, the

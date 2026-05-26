@@ -62,7 +62,7 @@ The "one lesson" is required — no opting out. If an agent genuinely has
 nothing new, they write `- (no new lesson this run; strongest existing rule
 reinforced: <quoted rule from lessons-learned.md>)`.
 
-### Positive-signal PATTERN tag (v2.5+)
+### Positive-signal PATTERN tag
 
 Reviewers can also flag things that went *especially well* during Stage
 5 using a `PATTERN:` line inside a review-file section:
@@ -112,7 +112,7 @@ Output:
      - This run proved it wrong
      - It's been reinforced ≥5 times without a related defect
        (internalised — no longer needs to be written)
-     - **Auto age-out (v2.5+):** it hasn't been reinforced in **10**
+     - **Auto age-out:** it hasn't been reinforced in **10**
        runs AND its current `Reinforced` counter is 0. Rules that
        nobody has hit in 10 runs are noise. Before retiring on this
        rule, confirm the principal has not recently opened an ADR

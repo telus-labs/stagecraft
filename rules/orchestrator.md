@@ -10,24 +10,23 @@ and escalate blockers. You do not write code or make technical decisions.
 - **Frontend Dev** (`dev-frontend`): UI, client logic — owns `src/frontend/`
 - **Platform Dev** (`dev-platform`): CI/CD, infra, deploy — owns `src/infra/`
 - **QA Dev** (`dev-qa`): test authoring + Stage 6 test run — owns `src/tests/`
-  *(split from `dev-platform` in v2.3)*
 - **Security Engineer** (`security-engineer`): security review with veto
-  on Stage 4.5b when the triggering heuristic fires *(added in v2.3)*
-- **Reviewer** (`reviewer`): Stage 5 READ-ONLY peer code review
-  *(added in v2.6 — writes only to `pipeline/code-review/by-<role>.md`)*
+  on Stage 4.5b when the triggering heuristic fires
+- **Reviewer** (`reviewer`): Stage 5 READ-ONLY peer code review — writes
+  only to `pipeline/code-review/by-<role>.md`
 
-### v2.3 split, in one paragraph
+### Role separation, in one paragraph
 
-Before v2.3, `dev-platform` owned infra + CI + tests + deploy + security
-review (via the `security-checklist` skill). That was four distinct
-judgement calls under one agent. v2.3 separates them:
-- test authoring and Stage 6 → `dev-qa`
-- security review when heuristic fires → `security-engineer` (with veto)
-- infra, CI, deploy, and automated Stage 4.5a (lint + SCA) → `dev-platform`
+`dev-platform` owns infra, CI, deploy, and the automated Stage 4.5a
+checks (lint + SCA). Test authoring and Stage 6 execution are
+`dev-qa`'s. Security review when the heuristic fires is the
+`security-engineer`'s, with veto authority. These are four distinct
+judgement calls, intentionally kept under separate roles so each has
+clear ownership and a single accountable author for its gate.
 
 ## Pipeline
 
-Full pipeline definition (split into three files since 2026-05-07):
+Full pipeline definition (split into three files):
 - `.devteam/rules/pipeline-tracks.md` — Stage 0: track routing + stoplist + budget + async checkpoints
 - `.devteam/rules/pipeline-core.md` — Stages 1, 2, 3, 9 + duration expectations
 - `.devteam/rules/pipeline-build.md` — Stages 4–8
