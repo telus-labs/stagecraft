@@ -149,6 +149,22 @@ const STAGES = {
       criterion_to_test_mapping_is_one_to_one: false,
     },
   },
+  "accessibility-audit": {
+    stage: "stage-06b",
+    roles: ["qa"],
+    objective: "Audit UI changes for WCAG accessibility violations using axe-core / pa11y / lighthouse. PASS requires zero critical + zero serious findings.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/test-report.md"],
+    allowedWrites: ["pipeline/accessibility-report.md", "pipeline/gates/stage-06b.json", "pipeline/context.md"],
+    artifact: "pipeline/accessibility-report.md",
+    template: "test-report-template.md",
+    gate: {
+      audit_method: null,
+      wcag_level: "AA",
+      violations: { critical: 0, serious: 0, moderate: 0, minor: 0 },
+      components_audited: [],
+      audit_skipped_reason: null,
+    },
+  },
   "sign-off": {
     stage: "stage-07",
     roles: ["pm", "platform"],
@@ -209,22 +225,24 @@ const ORDERED_STAGE_NAMES = [
   "security-review",
   "peer-review",
   "qa",
+  "accessibility-audit",
   "sign-off",
   "deploy",
   "retrospective",
 ];
 
 // Per-track stage lists. Lifted from the prior claude-team.js fork and
-// extended for security-review (conditional — only fires when stage-04a
-// reports security_review_required: true; included only in tracks that
-// already run stage-04a).
+// extended over time. Accessibility audit (stage-06b) runs on full,
+// quick, and hotfix — anywhere meaningful UI changes can ship.
+// Security-review (stage-04b) is in the lists but is conditional on
+// stage-04a's security_review_required flag at runtime.
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
-  quick:         ["requirements", "build", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
+  quick:         ["requirements", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
   nano:          ["build", "qa"],
   "config-only": ["build", "pre-review", "security-review", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
-  hotfix:        ["build", "pre-review", "security-review", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
+  hotfix:        ["build", "pre-review", "security-review", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
 };
 
 function stageNames() {

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.local/ai-dev-team/stage-06b.schema.json",
+  "title": "Stage 06b Accessibility Audit Gate",
+  "description": "Stage 6b (Accessibility Audit) gate. Authored by the QA role after running an axe-core / pa11y / Lighthouse accessibility audit against the changed UI. PASS requires zero critical AND zero serious WCAG violations. WARN allowed when moderate/minor findings exist but no critical/serious. When the change has no UI surface, set audit_skipped_reason and status PASS.",
+  "type": "object",
+  "required": [
+    "audit_method",
+    "wcag_level",
+    "violations",
+    "components_audited"
+  ],
+  "properties": {
+    "audit_method": {
+      "type": ["string", "null"],
+      "enum": ["axe-core", "pa11y", "lighthouse", "manual", null],
+      "description": "Which tool ran the audit. Null only when audit_skipped_reason is set."
+    },
+    "wcag_level": {
+      "type": "string",
+      "enum": ["A", "AA", "AAA"],
+      "description": "WCAG conformance level checked. AA is the standard floor; AAA is aspirational."
+    },
+    "violations": {
+      "type": "object",
+      "required": ["critical", "serious", "moderate", "minor"],
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0, "description": "Findings that completely break access for users with disabilities. Any > 0 → FAIL." },
+        "serious":  { "type": "integer", "minimum": 0, "description": "Findings that severely impair access. Any > 0 → FAIL." },
+        "moderate": { "type": "integer", "minimum": 0, "description": "Findings that impair access but workarounds exist. > 0 → WARN, not FAIL." },
+        "minor":    { "type": "integer", "minimum": 0, "description": "Findings that are friction but not blocking. > 0 → WARN, not FAIL." }
+      },
+      "additionalProperties": false
+    },
+    "components_audited": {
+      "type": "array",
+      "description": "Components, routes, or pages that were audited. Used for traceability and to verify nothing was skipped."
+    },
+    "audit_skipped_reason": {
+      "type": ["string", "null"],
+      "description": "When set, the audit was intentionally skipped (e.g. 'no UI changes in this PR', 'backend-only feature'). Status should be PASS and violations all zero. Captured for audit trail."
+    },
+    "wcag_findings_url": {
+      "type": "string",
+      "description": "Optional link to the raw findings report (axe JSON, pa11y HTML, Lighthouse JSON)."
+    }
+  },
+  "additionalProperties": true
+}

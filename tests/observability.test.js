@@ -131,8 +131,9 @@ describe("observability: next() emits pipeline.next with action attribute", () =
 
   it("all-pass pipeline emits action=pipeline-complete", () => {
     const cwd = track(makeTargetProject());
-    for (const s of ["stage-01","stage-02","stage-03","stage-04","stage-04a","stage-05","stage-06","stage-07","stage-08","stage-09"]) {
-      seedGate(cwd, s, { status: "PASS" });
+    const { orderedStageNamesForTrack, getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+    for (const name of orderedStageNamesForTrack("full")) {
+      seedGate(cwd, getStage(name).stage, { status: "PASS" });
     }
     next({ cwd });
     const nextSpan = findSpan(exporter.getFinishedSpans(), "pipeline.next");

@@ -252,7 +252,7 @@ function cmdSummary(argv) {
   console.log("".padEnd(50, "─"));
   for (const row of result.rows) {
     const icon = icons[row.state] || "•";
-    const left = `${icon} ${row.name.padEnd(18)}${row.stage}`;
+    const left = `${icon} ${row.name.padEnd(20)}${row.stage}`;
     if (row.state === "skipped") {
       console.log(`${left}  (skipped — ${row.reason || "condition not met"})`);
       continue;
@@ -261,7 +261,7 @@ function cmdSummary(argv) {
     if (row.workstreams) {
       for (const w of row.workstreams) {
         const wicon = icons[w.state] || "•";
-        console.log(`    ${wicon} ${(w.role || "").padEnd(14)}${(w.host ? `(${w.host})` : "").padEnd(18)} ${w.state.toUpperCase()}`);
+        console.log(`    ${wicon} ${(w.role || "").padEnd(14)}${(w.host ? `(${w.host})` : "").padEnd(20)} ${w.state.toUpperCase()}`);
       }
       if (row.remaining && row.remaining.length > 0) {
         console.log(`    pending workstreams: ${row.remaining.join(", ")}`);

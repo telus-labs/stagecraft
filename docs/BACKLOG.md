@@ -20,7 +20,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| B1 | **Accessibility audit stage** (between QA and sign-off) | 4 | 2 | Runs axe-core / pa11y / wave against the changed UI. Gate carries WCAG findings. Hard requirement for many teams. |
+| B1 | ~~**Accessibility audit stage**~~ ✅ landed (Unreleased) | 4 | 2 | stage-06b after QA; gate carries WCAG critical/serious/moderate/minor counts + audit_method + components_audited. `skills/accessibility-audit/SKILL.md` walks through axe-core / pa11y / Lighthouse. Tracks: full, quick, hotfix. |
 | B2 | **Performance budget stage** | 4 | 3 | Lighthouse / k6 / bundle-size budget per change. Gate fails if budgets exceeded. |
 | B3 | **Cost gate at deploy** | 4 | 2 | Estimate cloud cost delta from the deploy plan. Block deploys that 10× cost without explicit override. |
 | B4 | **Observability gate** | 4 | 2 | Confirm the change emits the metrics/logs/traces the design-spec named. Fails if a "this should emit X" claim has no corresponding instrumentation. |
@@ -115,7 +115,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 1. ~~**D1 — OpenTelemetry tracing per stage** (5 / 3)~~ — ✅ landed (Unreleased).
 2. ~~**C2 — Secret scanning hook** (4 / 1)~~ — ✅ landed (Unreleased).
 3. ~~**A1 — Gemini CLI adapter** (4 / 2)~~ — ✅ landed (Unreleased).
-4. **B1 — Accessibility audit stage** (4 / 2) — common hard requirement; mechanical to add.
+4. ~~**B1 — Accessibility audit stage** (4 / 2)~~ — ✅ landed (Unreleased).
 5. **B4 — Observability gate** (4 / 2) — closes a real gap (designs claim instrumentation that doesn't ship).
 6. **D2 — Gate-pass-rate dashboards** (4 / 2) — required to do D4/D5; immediately useful as standalone.
 7. **F1 — GitHub PR integration** (4 / 3) — meets teams where they already work.

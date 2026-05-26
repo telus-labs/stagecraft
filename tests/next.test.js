@@ -66,8 +66,12 @@ describe("next: walks through full track", () => {
 
   it("all stages PASS → pipeline-complete", () => {
     const cwd = track(makeTargetProject());
-    for (const s of ["stage-01","stage-02","stage-03","stage-04","stage-04a","stage-05","stage-06","stage-07","stage-08","stage-09"]) {
-      seedGate(cwd, s, { status: "PASS" });
+    // Seed a PASS gate for every stage in the full track so the test
+    // stays robust as new stages are added to ORDERED_STAGE_NAMES.
+    const { orderedStageNamesForTrack, getStage } = require("../core/pipeline/stages");
+    for (const name of orderedStageNamesForTrack("full")) {
+      const stageId = getStage(name).stage;
+      seedGate(cwd, stageId, { status: "PASS" });
     }
     const r = next({ cwd });
     assert.equal(r.action, "pipeline-complete");

@@ -18,6 +18,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `core/hooks/secret-scan.js` — hook script + exported `scanContent()`.
 - `tests/secret-scan.test.js` — 32 tests across pattern detection, false-positive guards, magic-comment override, path allowlist, end-to-end PreToolUse stdin parsing, and snippet redaction.
 - **Gemini CLI host adapter** (`docs/BACKLOG.md` A1). Third real host alongside claude-code and codex. Symmetric to codex (no hooks, no slash commands, headless via `gemini`). Installs roles → `.gemini/prompts/roles/<role>.md`, rules → `.devteam/rules/` (shared), skills → `.gemini/skills/<name>/`. Tri-host install (`devteam init --host claude-code,codex,gemini-cli`) lays down all three side-by-side with shared rules deduped automatically.
+- **Accessibility audit stage** (`docs/BACKLOG.md` B1). New `stage-06b` between QA and sign-off, role: `qa`. Gate carries `audit_method` (axe-core / pa11y / lighthouse / manual), `wcag_level` (A / AA / AAA), `violations` (critical / serious / moderate / minor counts), `components_audited`, and an `audit_skipped_reason` escape for backend-only changes. PASS requires zero critical AND zero serious; moderate/minor flow through as WARN. Included in `full`, `quick`, `hotfix` tracks (skipped on `nano`, `config-only`, `dep-update`). `skills/accessibility-audit/SKILL.md` walks through tool choice, procedure, triage, gate writing, and gotchas (Storybook-passes-route-fails, color-contrast in real browsers, manual audit for hover/focus/error states).
 
 ---
 
