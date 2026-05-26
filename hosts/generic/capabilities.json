@@ -1,0 +1,17 @@
+{
+  "name": "generic",
+  "displayName": "Generic CLI (no host integration)",
+  "version": "1",
+  "hooks": false,
+  "subagents": false,
+  "slashCommands": false,
+  "worktrees": false,
+  "headless": false,
+  "skillFormat": null,
+  "skillsDir": null,
+  "commandsDir": null,
+  "enforces": {
+    "allowed_writes": "prompt-only",
+    "stoplist": "prompt-only"
+  }
+}

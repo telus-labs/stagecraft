@@ -1,0 +1,18 @@
+{
+  "name": "ai-dev-team",
+  "version": "1.0.0-pre.1",
+  "private": true,
+  "description": "Model-agnostic AI dev team pipeline. A model-agnostic spine plus per-host adapters; one shared source of truth for templates, schemas, role briefs, and orchestrator logic.",
+  "bin": {
+    "devteam": "bin/devteam"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

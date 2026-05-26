@@ -1,0 +1,173 @@
+#!/usr/bin/env node
+// devteam — CLI entrypoint for the ai-dev-team orchestrator.
+//
+// Subcommands (MVP):
+//   stage <name> [--feature "..."]    Render the stage prompt(s) for the
+//                                     given stage to stdout. For multi-role
+//                                     stages, prints one prompt per role
+//                                     separated by a divider.
+//   hosts                             List installed host adapters.
+//   stages                            List known stage names.
+//   merge <stage>                     Read pipeline/gates/<stage>.<role>.json
+//                                     files and write the merged stage gate.
+//   help                              Show this usage.
+
+const fs = require("node:fs");
+const path = require("node:path");
+const { runStage, mergeWorkstreamGates } = require(path.join(__dirname, "..", "core", "orchestrator"));
+const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
+const { stageNames } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
+const { writeConfigIfAbsent, configPath } = require(path.join(__dirname, "..", "core", "config"));
+
+function usage() {
+  console.log(`devteam — model-agnostic AI dev team orchestrator
+
+Usage: devteam <command> [args]
+
+Commands:
+  init --host <list> [--force]     Install host adapter(s) into the current
+                                   project. <list> is comma-separated, e.g.
+                                   "claude-code" or "claude-code,codex".
+                                   Writes .devteam/config.yml and creates
+                                   pipeline/gates/ workspace.
+  stage <name> [--feature "..."]   Render stage prompt(s) for <name>.
+  merge <stage>                    Merge per-workstream gates into stage gate.
+  stages                           List known stage names.
+  hosts                            List available host adapters.
+  help                             Show this message.
+`);
+}
+
+function parseFlags(argv) {
+  const flags = {};
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--feature") { flags.feature = argv[++i]; continue; }
+    if (a === "--track")   { flags.track   = argv[++i]; continue; }
+    if (a === "--cwd")     { flags.cwd     = argv[++i]; continue; }
+    if (a === "--host")    { flags.host    = argv[++i]; continue; }
+    if (a === "--force")   { flags.force   = true;      continue; }
+    if (a.startsWith("--")) {
+      console.error(`Unknown flag: ${a}`);
+      process.exit(2);
+    }
+    positional.push(a);
+  }
+  return { positional, flags };
+}
+
+function cmdStage(argv) {
+  const { positional, flags } = parseFlags(argv);
+  const name = positional[0];
+  if (!name) {
+    console.error("Usage: devteam stage <name> [--feature \"...\"]");
+    process.exit(2);
+  }
+  const result = runStage(name, flags);
+  for (const ws of result.workstreams) {
+    console.log(`\n────────  workstream: ${ws.role}  (host: ${ws.host})  ────────\n`);
+    console.log(ws.prompt);
+  }
+  console.log(`\n────────  end of ${result.stage} (${result.roles.length} workstream${result.roles.length === 1 ? "" : "s"})  ────────`);
+}
+
+function cmdMerge(argv) {
+  const { positional, flags } = parseFlags(argv);
+  const stageName = positional[0];
+  if (!stageName) {
+    console.error("Usage: devteam merge <stage-name>");
+    process.exit(2);
+  }
+  const result = mergeWorkstreamGates(stageName, flags);
+  if (!result.merged) {
+    console.error(`Merge skipped: ${result.reason}`);
+    process.exit(1);
+  }
+  console.log(`Merged → ${result.file} (status: ${result.gate.status})`);
+}
+
+function cmdHosts() {
+  const hosts = listHosts();
+  if (hosts.length === 0) {
+    console.log("(no host adapters installed under hosts/)");
+    return;
+  }
+  for (const h of hosts) console.log(h);
+}
+
+function cmdInit(argv) {
+  const { flags } = parseFlags(argv);
+  if (!flags.host) {
+    console.error("Usage: devteam init --host <name>[,<name>...] [--force]");
+    console.error(`Available hosts: ${listHosts().join(", ") || "(none)"}`);
+    process.exit(2);
+  }
+  const hosts = flags.host.split(",").map((s) => s.trim()).filter(Boolean);
+  const cwd = flags.cwd || process.cwd();
+  const available = new Set(listHosts());
+  const unknown = hosts.filter((h) => !available.has(h));
+  if (unknown.length > 0) {
+    console.error(`Unknown host(s): ${unknown.join(", ")}`);
+    console.error(`Available: ${[...available].join(", ")}`);
+    process.exit(2);
+  }
+
+  console.log(`Initializing devteam in: ${cwd}`);
+  console.log(`Host(s): ${hosts.join(", ")}`);
+
+  const cfg = writeConfigIfAbsent(cwd, hosts, { force: !!flags.force });
+  console.log(cfg.written
+    ? `  ✓ wrote ${path.relative(cwd, cfg.path)}`
+    : `  - skipped ${path.relative(cwd, cfg.path)} (${cfg.reason}; use --force to overwrite)`);
+
+  for (const dir of ["pipeline", "pipeline/gates"]) {
+    const p = path.join(cwd, dir);
+    if (!fs.existsSync(p)) {
+      fs.mkdirSync(p, { recursive: true });
+      console.log(`  ✓ created ${dir}/`);
+    } else {
+      console.log(`  - exists  ${dir}/`);
+    }
+  }
+
+  for (const hostName of hosts) {
+    console.log(`\nInstalling host adapter: ${hostName}`);
+    const adapter = loadAdapter(hostName);
+    const r = adapter.install(cwd, { force: !!flags.force });
+    console.log(`  written: ${r.written.length}, skipped: ${r.skipped.length}`);
+    for (const f of r.warnings) console.log(`  ⚠️  ${f}`);
+  }
+
+  console.log(`\nNext: edit ${path.relative(cwd, configPath(cwd))} if you need custom routing, then \`devteam stage requirements --feature "..."\`.`);
+}
+
+function cmdStages() {
+  for (const n of stageNames()) console.log(n);
+}
+
+function main() {
+  const [, , command, ...rest] = process.argv;
+  switch (command) {
+    case "init":   return cmdInit(rest);
+    case "stage":  return cmdStage(rest);
+    case "merge":  return cmdMerge(rest);
+    case "stages": return cmdStages();
+    case "hosts":  return cmdHosts();
+    case "help":
+    case "-h":
+    case "--help":
+    case undefined: return usage();
+    default:
+      console.error(`Unknown command: ${command}`);
+      usage();
+      process.exit(2);
+  }
+}
+
+try {
+  main();
+} catch (err) {
+  console.error(`devteam: ${err.message}`);
+  process.exit(1);
+}
