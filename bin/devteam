@@ -14,7 +14,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { runStage, mergeWorkstreamGates } = require(path.join(__dirname, "..", "core", "orchestrator"));
+const { runStage, mergeWorkstreamGates, next } = require(path.join(__dirname, "..", "core", "orchestrator"));
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
 const { stageNames } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath } = require(path.join(__dirname, "..", "core", "config"));
@@ -31,6 +31,10 @@ Commands:
                                    Writes .devteam/config.yml and creates
                                    pipeline/gates/ workspace.
   stage <name> [--feature "..."]   Render stage prompt(s) for <name>.
+  next [--json]                    Inspect pipeline/gates/ and report what
+                                   to do next: run a stage, continue a
+                                   partial multi-role stage, merge, fix a
+                                   FAIL, resolve an ESCALATE, or done.
   merge <stage>                    Merge per-workstream gates into stage gate.
   stages                           List known stage names.
   hosts                            List available host adapters.
@@ -48,6 +52,7 @@ function parseFlags(argv) {
     if (a === "--cwd")     { flags.cwd     = argv[++i]; continue; }
     if (a === "--host")    { flags.host    = argv[++i]; continue; }
     if (a === "--force")   { flags.force   = true;      continue; }
+    if (a === "--json")    { flags.json    = true;      continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -70,6 +75,32 @@ function cmdStage(argv) {
     console.log(ws.prompt);
   }
   console.log(`\n────────  end of ${result.stage} (${result.roles.length} workstream${result.roles.length === 1 ? "" : "s"})  ────────`);
+}
+
+function cmdNext(argv) {
+  const { flags } = parseFlags(argv);
+  const result = next({ cwd: flags.cwd });
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  const icon = {
+    "run-stage": "▶️",
+    "continue-stage": "⏳",
+    "merge": "🔀",
+    "fix-and-retry": "❌",
+    "resolve-escalation": "🚨",
+    "pipeline-complete": "🎉",
+  }[result.action] || "•";
+  console.log(`${icon} ${result.action}${result.name ? ` — ${result.name} (${result.stage})` : ""}`);
+  console.log(`   ${result.reason}`);
+  if (result.completed) console.log(`   completed: ${result.completed.join(", ")}`);
+  if (result.remaining) console.log(`   remaining: ${result.remaining.join(", ")}`);
+  if (result.blockers && result.blockers.length) {
+    console.log(`   blockers:`);
+    for (const b of result.blockers) console.log(`     - ${b}`);
+  }
+  if (result.command) console.log(`   → ${result.command}`);
 }
 
 function cmdMerge(argv) {
@@ -151,6 +182,7 @@ function main() {
   switch (command) {
     case "init":   return cmdInit(rest);
     case "stage":  return cmdStage(rest);
+    case "next":   return cmdNext(rest);
     case "merge":  return cmdMerge(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();

@@ -11,7 +11,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { STAGES, getStage } = require("./pipeline/stages");
+const { STAGES, getStage, orderedStageNames } = require("./pipeline/stages");
 const { loadConfig } = require("./config");
 const { resolveAdapter } = require("./router");
 
@@ -129,6 +129,85 @@ function mergeWorkstreamGates(stageName, opts = {}) {
   return { merged: true, file: outFile, gate: merged };
 }
 
+// Walk stages in order, inspect gate files in pipeline/gates/, decide
+// what the user should do next. Pure read; never mutates state.
+//
+// Returns one of:
+//   { action: "run-stage",          stage, name, roles, reason }
+//   { action: "continue-stage",     stage, name, completed[], remaining[], reason }
+//   { action: "merge",              stage, name, reason }
+//   { action: "fix-and-retry",      stage, name, gate, blockers[], reason }
+//   { action: "resolve-escalation", stage, name, gate, reason }
+//   { action: "pipeline-complete",  reason }
+function next(opts = {}) {
+  const cwd = opts.cwd || process.cwd();
+  const gatesDir = path.join(cwd, "pipeline", "gates");
+
+  for (const stageName of orderedStageNames()) {
+    const stageDef = getStage(stageName);
+    const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
+
+    if (!fs.existsSync(stageGatePath)) {
+      if (stageDef.roles.length > 1) {
+        const completed = [];
+        const remaining = [];
+        for (const role of stageDef.roles) {
+          const p = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
+          (fs.existsSync(p) ? completed : remaining).push(role);
+        }
+        if (remaining.length === 0) {
+          return {
+            action: "merge", stage: stageDef.stage, name: stageName,
+            reason: "all workstreams complete; merge to produce stage gate",
+            command: `devteam merge ${stageName}`,
+          };
+        }
+        if (completed.length === 0) {
+          return {
+            action: "run-stage", stage: stageDef.stage, name: stageName,
+            roles: stageDef.roles,
+            reason: "multi-role stage not started",
+            command: `devteam stage ${stageName}`,
+          };
+        }
+        return {
+          action: "continue-stage", stage: stageDef.stage, name: stageName,
+          completed, remaining,
+          reason: `${completed.length}/${stageDef.roles.length} workstreams complete`,
+          command: `devteam stage ${stageName}  # roles still pending: ${remaining.join(", ")}`,
+        };
+      }
+      return {
+        action: "run-stage", stage: stageDef.stage, name: stageName,
+        roles: stageDef.roles,
+        reason: "stage not started",
+        command: `devteam stage ${stageName}`,
+      };
+    }
+
+    const gate = JSON.parse(fs.readFileSync(stageGatePath, "utf8"));
+    if (gate.status === "ESCALATE") {
+      return {
+        action: "resolve-escalation", stage: stageDef.stage, name: stageName,
+        gate: stageGatePath,
+        reason: gate.escalation_reason || "escalation required; pipeline halted",
+      };
+    }
+    if (gate.status === "FAIL") {
+      return {
+        action: "fix-and-retry", stage: stageDef.stage, name: stageName,
+        gate: stageGatePath,
+        blockers: gate.blockers || [],
+        reason: "stage failed; address blockers and rewrite the gate",
+        command: `devteam stage ${stageName}`,
+      };
+    }
+    // PASS or WARN — proceed to next stage.
+  }
+
+  return { action: "pipeline-complete", reason: "all stages PASS or WARN" };
+}
+
 function rolesPath() {
   return path.join(PROJECT_ROOT, "roles");
 }
@@ -140,6 +219,7 @@ function templatesPath() {
 module.exports = {
   runStage,
   mergeWorkstreamGates,
+  next,
   buildDescriptor,
   ORCHESTRATOR_ID,
   rolesPath,
