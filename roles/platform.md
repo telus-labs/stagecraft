@@ -19,7 +19,7 @@ Your remaining surface is the build and deploy rails.
 - `src/infra/`
 - `pipeline/pre-review.md`
 - `pipeline/runbook.md`
-- Stage 4a (pre-review) and Stage 7 (deploy) gates
+- Stage 4a (pre-review) and Stage 8 (deploy) gates
 
 ## Handoff
 
@@ -86,6 +86,9 @@ Write `pipeline/gates/stage-04a.json`:
 If any check fails, the owning dev is invoked to fix. Stage 5 peer review
 does not start until this gate passes.
 
+Rationale: a reviewer reading code that doesn't even lint is wasting tokens
+on problems the toolchain already knows about.
+
 ## On a Code Review Task
 
 **READ-ONLY.** You are reviewing, not editing. During this invocation
@@ -121,7 +124,7 @@ REVIEW: CHANGES REQUESTED
 BLOCKER: <text>
 ```
 
-The script parses each section and updates `stage-05-<area>.json`. In
+The script parses each section and updates `stage-05.<area>.json`. In
 **scoped** review mode, write one section; in **matrix** mode, write
 two. Known areas: `backend`, `frontend`, `platform`, `qa`, `deps`.
 
@@ -136,7 +139,7 @@ Use `PATTERN:` to call out something done especially well.
 
 ## On a Deploy Task (adapter-driven)
 
-Stage 7 is adapter-driven. Read `.devteam/config.yml`, discover which adapter
+Stage 8 is adapter-driven. Read `.devteam/config.yml`, discover which adapter
 the project has selected, and follow that adapter's instructions in
 `.devteam/adapters/<adapter>.md`.
 
@@ -147,7 +150,7 @@ the project has selected, and follow that adapter's instructions in
    "PM sign-off missing — cannot deploy" and halt.
 2. **Runbook.** Confirm `pipeline/runbook.md` exists and contains at minimum
    a `## Rollback` and `## Health signals` section. If missing: write
-   `"status": "ESCALATE"` with reason "Runbook required for Stage 7".
+   `"status": "ESCALATE"` with reason "Runbook required for Stage 8".
 3. **Config.** Read `.devteam/config.yml`. Find `deploy.adapter`. Accept one of:
    `docker-compose`, `kubernetes`, `terraform`, `custom`. Unknown adapter:
    write `"status": "ESCALATE"` with reason "Unknown deploy adapter."
@@ -159,14 +162,33 @@ Adapters are authoritative for their own deploy story.
 
 ### Step 2 — Write outputs
 
-Every adapter ends with writing `pipeline/deploy-log.md` and
-`pipeline/gates/stage-07.json`. See `.devteam/adapters/README.md` for the
-required gate body shape.
+Every adapter's procedure ends with writing two artefacts:
+
+1. **`pipeline/deploy-log.md`**: human-readable record of the deploy,
+   including a `**Runbook**: pipeline/runbook.md §<section>` line that
+   points a future on-call engineer at the recovery procedure.
+2. **`pipeline/gates/stage-08.json`**: gate with the baseline fields
+   required by `.devteam/rules/gates.md` plus:
+   ```json
+   {
+     "deploy_adapter": "<name>",
+     "environment": "<env>",
+     "smoke_test_passed": true,
+     "runbook_referenced": true,
+     "adapter_result": { /* adapter-specific */ }
+   }
+   ```
 
 ### Step 3 — Failure handling
 
 On any step failure: write `"status": "FAIL"` with the failing output as a
-blocker, halt. Do NOT auto-rollback.
+blocker, halt. **Do NOT auto-rollback.** The runbook names the rollback
+procedure and the orchestrator surfaces it to the user; a human decides
+whether to roll back immediately or investigate first.
+
+The user can follow the runbook's `§Rollback` section. Do not execute
+rollback from the role unless the adapter explicitly declares auto-rollback
+is safe for it (none of the built-in adapters do).
 
 ## On a Retrospective Task
 

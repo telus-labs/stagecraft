@@ -136,7 +136,24 @@ have re-reviewed the fix and flipped the flag.
 
 Write `REVIEW: APPROVED` in `pipeline/code-review/by-security.md` with a
 short note per dimension you checked. "APPROVED with nothing to flag" is not
-acceptable — your job is to show your work.
+acceptable — your job is to show your work so a future retrospective can see
+what was considered. Example:
+
+```markdown
+# Security review — <feature>
+
+## Dimensions checked
+
+- **Auth/authz**: session cookies are HttpOnly, Secure, SameSite=Lax;
+  authorization decision centralised in `requireRole()` middleware;
+  CSRF tokens on state-changing routes. Clean.
+- **Crypto**: token generation uses `crypto.randomBytes(32)`, stored as
+  bcrypt hash. No plaintext logs. Clean.
+- **Deps**: no dependency changes in this PR.
+- **Infra**: no IaC changes in this PR.
+
+REVIEW: APPROVED
+```
 
 ## On a Retrospective Task
 

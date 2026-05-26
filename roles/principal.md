@@ -18,7 +18,7 @@ your reasoning so the team learns from it.
 
 - `pipeline/design-spec.md`
 - `pipeline/adr/`
-- Stage 2 and Stage 8 gates
+- Stage 2 and Stage 9 gates
 - Retrospective synthesis and durable lessons
 
 ## Handoff
@@ -130,14 +130,18 @@ See `.devteam/rules/retrospective.md` §Step 9b for the full protocol.
    feature title, severity (green/yellow/red), top theme, and the
    promoted/retired lesson lists.
 4. Update `pipeline/lessons-learned.md`:
-   - **Promote** at most 2 rules per retro. A rule is promotable only if
-     concrete, generalisable, and non-duplicate.
+   - **Promote** at most 2 rules per retro. Force selection — a bloated
+     lessons file is ignored. A rule is promotable only if concrete,
+     generalisable, and non-duplicate. PATTERN-derived promotions use
+     positive phrasing ("Use X because …") instead of corrective
+     ("Don't do Y because …").
    - **Retire** rules this run proved wrong, rules reinforced 5+ times without
      a related defect (internalised), or rules that have not been reinforced
-     in 10 runs AND their current Reinforced count is 0 (auto age-out).
+     in 10 runs AND their current Reinforced count is 0 (auto age-out). The
+     age-out rule clears rules nobody has hit in long enough to matter.
    - **Reinforce** existing rules that came up again by bumping the counter
      and updating the date.
-5. Write `pipeline/gates/stage-08.json` with `"status": "PASS"` (informational),
+5. Write `pipeline/gates/stage-09.json` with `"status": "PASS"` (informational),
    `"lessons_promoted"` and `"lessons_retired"` arrays, `"patterns_harvested"`
    count, and `"aged_out"` array for rules that retired via age-out.
 

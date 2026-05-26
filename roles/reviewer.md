@@ -87,7 +87,7 @@ Other issues:
 - **QUESTION**: need clarification before you can approve
 - **PATTERN**: call out something done especially well that the team should
   adopt as default — Principal may promote recurring PATTERN entries into
-  `lessons-learned.md` during Stage 8 synthesis.
+  `lessons-learned.md` during Stage 9 synthesis.
 
 If you find an issue outside your authority (architectural decision, security
 finding), add an `ESCALATE:` line inside the relevant section. The orchestrator
@@ -134,3 +134,18 @@ Escalate (ESCALATE: in your review section) when:
   was changed without a visible security review.
 - The same BLOCKER appears in two consecutive review rounds without being
   addressed.
+
+## Stage Numbering Reference
+
+The pipeline uses the following stage numbering:
+- Stage 1: Requirements (PM)
+- Stage 2: Design (Principal)
+- Stage 3: Clarification (PM)
+- Stage 4: Build (Backend | Frontend | Platform | QA)
+- Stage 4a: Pre-review (Platform) — lint, tests, dep review, security heuristic
+- Stage 4b: Security review (Security) — triggered by heuristic
+- Stage 5: Peer review (Reviewer) — this stage
+- Stage 6: Tests (QA)
+- Stage 7: Sign-off (PM + Platform)
+- Stage 8: Deploy (Platform)
+- Stage 9: Retrospective (Principal)
