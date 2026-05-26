@@ -269,6 +269,94 @@ function next(opts = {}) {
   return { action: "pipeline-complete", reason: `all stages PASS or WARN (track: ${track})`, track };
 }
 
+// One-screen pipeline state for `devteam summary`. Walks the active
+// track's stage list, classifies each stage as one of:
+//   - pass    : merged stage gate exists with status PASS or WARN
+//   - warn    : merged stage gate exists with status WARN
+//   - fail    : merged stage gate exists with status FAIL
+//   - escalate: merged stage gate exists with status ESCALATE
+//   - partial : multi-role stage with some workstream gates but no merge
+//   - skipped : conditional stage whose condition is not met
+//   - pending : nothing on disk yet
+// For multi-role stages, includes per-workstream rows.
+function summary(opts = {}) {
+  const cwd = opts.cwd || process.cwd();
+  const gatesDir = path.join(cwd, "pipeline", "gates");
+  const track = opts.track || (opts.config && opts.config.pipeline && opts.config.pipeline.default_track) || (loadConfig(cwd).pipeline.default_track) || "full";
+  const stageList = orderedStageNamesForTrack(track);
+
+  const rows = [];
+
+  function readJSONSafe(file) {
+    try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; }
+  }
+
+  for (const stageName of stageList) {
+    const stageDef = getStage(stageName);
+    const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
+
+    // Check conditional first
+    if (stageDef.conditionalOn) {
+      const c = stageDef.conditionalOn;
+      const prereqGatePath = path.join(gatesDir, `${c.stage}.json`);
+      if (fs.existsSync(prereqGatePath)) {
+        const prereq = readJSONSafe(prereqGatePath);
+        if (prereq && prereq[c.field] !== c.equals) {
+          rows.push({
+            stage: stageDef.stage,
+            name: stageName,
+            state: "skipped",
+            reason: `condition not met: ${c.stage}.${c.field} !== ${c.equals}`,
+          });
+          continue;
+        }
+      }
+    }
+
+    if (fs.existsSync(stageGatePath)) {
+      const gate = readJSONSafe(stageGatePath);
+      const state = gate ? gate.status.toLowerCase() : "pending";
+      const row = { stage: stageDef.stage, name: stageName, state, timestamp: gate && gate.timestamp };
+      if (gate && Array.isArray(gate.workstreams) && gate.workstreams.length > 0) {
+        row.workstreams = gate.workstreams.map((w) => ({ role: w.workstream, host: w.host, state: w.status.toLowerCase() }));
+      }
+      if (gate && Array.isArray(gate.warnings) && gate.warnings.length > 0) row.warnings = gate.warnings;
+      if (gate && Array.isArray(gate.blockers) && gate.blockers.length > 0) row.blockers = gate.blockers;
+      rows.push(row);
+      continue;
+    }
+
+    // No stage gate. Multi-role: check per-workstream gates.
+    if (stageDef.roles.length > 1) {
+      const completed = [];
+      const remaining = [];
+      for (const role of stageDef.roles) {
+        const p = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
+        if (fs.existsSync(p)) {
+          const g = readJSONSafe(p);
+          completed.push({ role, host: g && g.host, state: g && g.status ? g.status.toLowerCase() : "pending" });
+        } else {
+          remaining.push(role);
+        }
+      }
+      if (completed.length === 0) {
+        rows.push({ stage: stageDef.stage, name: stageName, state: "pending" });
+      } else {
+        rows.push({
+          stage: stageDef.stage, name: stageName, state: "partial",
+          workstreams: completed,
+          remaining,
+        });
+      }
+      continue;
+    }
+
+    rows.push({ stage: stageDef.stage, name: stageName, state: "pending" });
+  }
+
+  return { track, rows };
+}
+
 function rolesPath() {
   return path.join(PROJECT_ROOT, "roles");
 }
@@ -282,6 +370,7 @@ module.exports = {
   runStageHeadless,
   mergeWorkstreamGates,
   next,
+  summary,
   buildDescriptor,
   ORCHESTRATOR_ID,
   rolesPath,

@@ -14,10 +14,17 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { runStage, runStageHeadless, mergeWorkstreamGates, next } = require(path.join(__dirname, "..", "core", "orchestrator"));
+const { runStage, runStageHeadless, mergeWorkstreamGates, next, summary } = require(path.join(__dirname, "..", "core", "orchestrator"));
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
 const { stageNames } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
-const { writeConfigIfAbsent, configPath } = require(path.join(__dirname, "..", "core", "config"));
+const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
+const { checkStoplist, explainMatches } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
+
+// Tracks where the stoplist applies. Full and hotfix bypass the
+// stoplist by design (full runs everything anyway; hotfix has its own
+// safety story). Lighter tracks must run clean through the stoplist
+// unless --force is passed.
+const STOPLIST_GUARDED_TRACKS = new Set(["quick", "nano", "config-only", "dep-update"]);
 
 function usage() {
   console.log(`devteam — model-agnostic AI dev team orchestrator
@@ -44,6 +51,10 @@ Commands:
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
                                    by host hooks (e.g. Claude Code Stop).
   merge <stage>                    Merge per-workstream gates into stage gate.
+  summary [--json]                 One-screen pipeline state report.
+  doctor                           Pre-flight check: install integrity,
+                                   target layout, config validity, adapter
+                                   status, host CLIs on PATH.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -77,6 +88,17 @@ function cmdStage(argv) {
   if (!name) {
     console.error("Usage: devteam stage <name> [--feature \"...\"] [--headless]");
     process.exit(2);
+  }
+  // Resolve track and run stoplist if applicable
+  const cwd = flags.cwd || process.cwd();
+  const track = flags.track || loadConfig(cwd).pipeline.default_track;
+  if (STOPLIST_GUARDED_TRACKS.has(track) && !flags.force) {
+    const matches = checkStoplist({ description: flags.feature || "", cwd });
+    if (matches.length > 0) {
+      console.error(explainMatches(matches));
+      console.error(`(Active track: ${track}. Stoplist guarded.)`);
+      process.exit(2);
+    }
   }
   if (flags.headless) {
     runStageHeadless(name, flags)
@@ -135,6 +157,119 @@ function cmdNext(argv) {
     for (const b of result.blockers) console.log(`     - ${b}`);
   }
   if (result.command) console.log(`   → ${result.command}`);
+}
+
+function cmdDoctor(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const FRAMEWORK_ROOT = path.join(__dirname, "..");
+  const { loadConfig, configPath } = require(path.join(FRAMEWORK_ROOT, "core", "config"));
+  const { spawnSync } = require("node:child_process");
+  let criticalFailures = 0;
+  let warnings = 0;
+
+  function check(label, ok, detail) {
+    const icon = ok === true ? "✓" : ok === "warn" ? "⚠" : "✗";
+    console.log(`  ${icon} ${label}${detail ? `  — ${detail}` : ""}`);
+    if (ok === false) criticalFailures++;
+    if (ok === "warn") warnings++;
+  }
+
+  console.log("Framework install");
+  check("bin/devteam exists", fs.existsSync(path.join(FRAMEWORK_ROOT, "bin", "devteam")));
+  check("core/orchestrator.js loads", fs.existsSync(path.join(FRAMEWORK_ROOT, "core", "orchestrator.js")));
+  check("package.json parses",
+    (() => { try { JSON.parse(fs.readFileSync(path.join(FRAMEWORK_ROOT, "package.json"), "utf8")); return true; } catch { return false; } })());
+  check("node_modules/js-yaml present", fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "js-yaml")),
+    fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "js-yaml")) ? null : "run `npm install` in the framework dir");
+
+  console.log("\nTarget project");
+  console.log(`  cwd: ${cwd}`);
+  const configFile = configPath(cwd);
+  check(".devteam/config.yml exists", fs.existsSync(configFile),
+    fs.existsSync(configFile) ? null : "run `devteam init --host <name>`");
+  check("pipeline/gates/ exists", fs.existsSync(path.join(cwd, "pipeline", "gates")));
+
+  if (!fs.existsSync(configFile)) {
+    console.log(`\n${criticalFailures} critical failure(s), ${warnings} warning(s)`);
+    process.exit(1);
+  }
+
+  const config = loadConfig(cwd);
+  console.log("\nConfig");
+  check("config parses", config._source === "file", `source: ${config._source}`);
+  check("default_host set", !!config.routing.default_host, `→ ${config.routing.default_host}`);
+  check(`default_track is valid`, ["full","quick","nano","config-only","dep-update","hotfix"].includes(config.pipeline.default_track),
+    `→ ${config.pipeline.default_track}`);
+
+  // Gather all hosts referenced by the config
+  const referencedHosts = new Set();
+  referencedHosts.add(config.routing.default_host);
+  for (const v of Object.values(config.routing.roles || {})) referencedHosts.add(v);
+  for (const v of Object.values(config.routing.stages || {})) referencedHosts.add(v);
+
+  console.log("\nAdapters");
+  const { listHosts, loadAdapter } = require(path.join(FRAMEWORK_ROOT, "core", "router"));
+  const available = new Set(listHosts());
+  for (const h of referencedHosts) {
+    if (!available.has(h)) {
+      check(`host "${h}" available`, false, `no adapter at hosts/${h}/`);
+      continue;
+    }
+    const adapter = loadAdapter(h);
+    const status = adapter.status(cwd);
+    check(`host "${h}" install`, status.ok, status.ok ? null : `${status.missing.length} missing file(s)`);
+    if (adapter.capabilities && adapter.capabilities.headless && adapter.capabilities.headlessCommand) {
+      const bin = adapter.capabilities.headlessCommand.split(/\s+/)[0];
+      const which = spawnSync("which", [bin], { encoding: "utf8" });
+      check(`  ${bin} on PATH (for --headless)`, which.status === 0 ? true : "warn",
+        which.status === 0 ? which.stdout.trim() : `${bin} not found; --headless will fail`);
+    }
+  }
+
+  console.log("");
+  if (criticalFailures > 0) {
+    console.log(`❌ ${criticalFailures} critical failure(s), ${warnings} warning(s)`);
+    process.exit(1);
+  }
+  if (warnings > 0) {
+    console.log(`⚠️  ${warnings} warning(s)`);
+    process.exit(0);
+  }
+  console.log("✅ everything looks good");
+}
+
+function cmdSummary(argv) {
+  const { flags } = parseFlags(argv);
+  const result = summary({ cwd: flags.cwd });
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  const icons = { pass: "✅", warn: "⚠️ ", fail: "❌", escalate: "🚨",
+                  partial: "⏳", skipped: "⏸ ", pending: "○ " };
+  console.log(`Pipeline state — track: ${result.track}`);
+  console.log("".padEnd(50, "─"));
+  for (const row of result.rows) {
+    const icon = icons[row.state] || "•";
+    const left = `${icon} ${row.name.padEnd(18)}${row.stage}`;
+    if (row.state === "skipped") {
+      console.log(`${left}  (skipped — ${row.reason || "condition not met"})`);
+      continue;
+    }
+    console.log(`${left}  ${row.state.toUpperCase()}`);
+    if (row.workstreams) {
+      for (const w of row.workstreams) {
+        const wicon = icons[w.state] || "•";
+        console.log(`    ${wicon} ${(w.role || "").padEnd(14)}${(w.host ? `(${w.host})` : "").padEnd(18)} ${w.state.toUpperCase()}`);
+      }
+      if (row.remaining && row.remaining.length > 0) {
+        console.log(`    pending workstreams: ${row.remaining.join(", ")}`);
+      }
+    }
+    if (row.blockers) for (const b of row.blockers) console.log(`    ❌ ${b}`);
+    if (row.warnings) for (const w of row.warnings) console.log(`    ⚠️  ${w}`);
+  }
 }
 
 function cmdMerge(argv) {
@@ -219,6 +354,8 @@ function main() {
     case "next":     return cmdNext(rest);
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);
+    case "summary":  return cmdSummary(rest);
+    case "doctor":   return cmdDoctor(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":
