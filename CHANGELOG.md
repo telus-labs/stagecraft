@@ -8,22 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-Pre-release polish before the first tagged version. See [`docs/GAP-ANALYSIS.md`](docs/GAP-ANALYSIS.md) tier 2/3 items for what's still expected before `1.0.0`.
-
-### Added
-
-- `docs/tracks.md`, `CHANGELOG.md` (this file).
-- Tier 2 test additions: stoplist, budget, security-heuristic, tracks, cli, schemas.
-- `scripts/consistency.js` — standalone cross-artifact lint.
-- `.github/workflows/test.yml` — CI running the test suite on push + PR.
-- `docs/user-guide.md` — comprehensive how-to.
-- `examples/` — known-good fixture project.
+Nothing yet. See [`docs/BACKLOG.md`](docs/BACKLOG.md) for the queue.
 
 ---
 
-## [1.0.0-pre.1] — 2026-05-26
+## [0.1.0] — 2026-05-26
 
-First substantive release. This is the unification of `claude-dev-team` and `codex-dev-team` into a single model-agnostic core with per-host adapters.
+First tagged release. This is the unification of `claude-dev-team` and `codex-dev-team` into a single model-agnostic core with per-host adapters. The 0.x signals that the public surface — gate JSON shape, host adapter contract, CLI subcommands, `.devteam/config.yml` schema — may break before 1.0. 1.0.0 is reserved for a substantial future release (see `docs/BACKLOG.md`).
 
 ### Added
 

@@ -90,7 +90,7 @@ Write to `pipeline/gates/stage-01.json`. You provide:
   "required_sections_complete": false
 }
 ```
-The orchestrator adds `"orchestrator": "devteam@1.0.0-pre.1"` and `"host": "claude-code"` at validation time.
+The orchestrator adds `"orchestrator": "devteam@0.1.0"` and `"host": "claude-code"` at validation time.
 ```
 
 Inside Claude Code, the PM subagent reads the brief template, drafts `pipeline/brief.md`, and writes the gate. The Stop hook fires the validator. PASS:
@@ -179,7 +179,7 @@ The merged stage gate carries the contributing workstreams:
 {
   "stage": "stage-04",
   "status": "PASS",
-  "orchestrator": "devteam@1.0.0-pre.1",
+  "orchestrator": "devteam@0.1.0",
   "track": "full",
   "timestamp": "2026-05-26T20:00:00Z",
   "blockers": [],

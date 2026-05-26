@@ -1,6 +1,6 @@
 {
   "name": "ai-dev-team",
-  "version": "1.0.0-pre.1",
+  "version": "0.1.0",
   "private": true,
   "description": "Model-agnostic AI dev team pipeline. A model-agnostic spine plus per-host adapters; one shared source of truth for templates, schemas, role briefs, and orchestrator logic.",
   "bin": {

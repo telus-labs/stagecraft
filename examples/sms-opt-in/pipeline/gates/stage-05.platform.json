@@ -2,7 +2,7 @@
   "stage": "stage-05",
   "workstream": "platform",
   "host": "claude-code",
-  "orchestrator": "devteam@1.0.0-pre.1",
+  "orchestrator": "devteam@0.1.0",
   "track": "full",
   "status": "FAIL",
   "timestamp": "2026-05-26T20:11:37.249Z",

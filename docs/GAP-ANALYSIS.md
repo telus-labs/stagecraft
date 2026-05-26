@@ -40,7 +40,7 @@ The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files 
 4. **`docs/concepts.md`** — one-sentence definitions of stage / role / workstream / gate / track / adapter / host. The thing you skim before reading anything else.
 5. **`docs/user-guide.md`** — long-form how-to. Lift selectively from claude-dev-team's version, adapt for the multi-host model.
 6. **`docs/tracks.md`** — what each track skips and why. Operational reference.
-7. **`CHANGELOG.md`** — start tracking from `1.0.0-pre.1`.
+7. **`CHANGELOG.md`** — start tracking from `0.1.0`.
 8. **`docs/adoption-guide.md`** — for team leads deciding whether to use this. Defer until there's a v1 release to point at.
 
 ## Functionality gaps (beyond docs)
