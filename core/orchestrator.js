@@ -74,7 +74,7 @@ function runStage(stageName, opts = {}) {
     const { hostName, adapter } = resolveAdapter(config, stageDef.stage, role);
     const descriptor = buildDescriptor(stageDef, role);
     const prompt = adapter.renderStagePrompt(descriptor, ctx);
-    return { role, host: hostName, descriptor, prompt };
+    return { role, host: hostName, descriptor, prompt, adapter };
   });
 
   return {
@@ -84,6 +84,33 @@ function runStage(stageName, opts = {}) {
     workstreams: dispatches,
     ctx,
   };
+}
+
+// Headless variant of runStage — actually drives each adapter's invoke()
+// to spawn the host CLI per workstream. Resolves with an array of
+// {role, host, invokeResult, descriptor}. Honors per-workstream
+// capability check; rejects if any routed host has headless: false.
+async function runStageHeadless(stageName, opts = {}) {
+  const plan = runStage(stageName, opts);
+  for (const ws of plan.workstreams) {
+    if (!ws.adapter.capabilities || !ws.adapter.capabilities.headless) {
+      throw new Error(
+        `host "${ws.host}" cannot drive workstream "${ws.role}" headlessly ` +
+        `(capabilities.headless is false). Either install a different host ` +
+        `for this role or run interactively (omit --headless).`,
+      );
+    }
+    if (typeof ws.adapter.invoke !== "function") {
+      throw new Error(`host "${ws.host}" declares headless: true but exports no invoke()`);
+    }
+  }
+  const results = [];
+  for (const ws of plan.workstreams) {
+    process.stderr.write(`[devteam] dispatching ${ws.role} → ${ws.host} (headless)\n`);
+    const r = await ws.adapter.invoke(ws.descriptor, plan.ctx);
+    results.push({ role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r });
+  }
+  return { stage: plan.stage, name: stageName, roles: plan.roles, results, ctx: plan.ctx };
 }
 
 function gateFileFor(stage, workstream, gatesDir) {
@@ -227,6 +254,7 @@ function templatesPath() {
 
 module.exports = {
   runStage,
+  runStageHeadless,
   mergeWorkstreamGates,
   next,
   buildDescriptor,

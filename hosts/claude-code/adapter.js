@@ -15,6 +15,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const capabilities = require("./capabilities.json");
+const { runHeadless } = require("../../core/adapters/headless");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const ROLES_DIR = path.join(REPO_ROOT, "roles");
 const RULES_DIR = path.join(REPO_ROOT, "rules");
@@ -330,10 +331,15 @@ function renderStagePrompt(descriptor, ctx) {
   return lines.join("\n");
 }
 
+function invoke(descriptor, ctx) {
+  return runHeadless(module.exports, descriptor, ctx);
+}
+
 module.exports = {
   capabilities,
   install,
   uninstall,
   status,
   renderStagePrompt,
+  invoke,
 };
