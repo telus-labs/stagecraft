@@ -10,7 +10,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| A1 | **Gemini CLI adapter** (`hosts/gemini-cli/`) | 4 | 2 | Symmetric to codex adapter; lifts the multi-model story to three real hosts. Capabilities likely close to codex (no hooks, has headless via `gemini --print`). |
+| A1 | ~~**Gemini CLI adapter**~~ ✅ landed (Unreleased) | 4 | 2 | Lifted the multi-model story to three real hosts (claude-code, codex, gemini-cli). Symmetric to codex: no hooks, no slash commands, headless via `gemini`. Installs roles → `.gemini/prompts/roles/`, skills → `.gemini/skills/`. |
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
 | A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs the stage on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). |
 | A4 | **Pluggable adapter discovery** | 3 | 2 | `npm install @devteam/host-foo` and the orchestrator auto-loads. Makes the ecosystem extensible without forking. |
@@ -114,7 +114,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 
 1. ~~**D1 — OpenTelemetry tracing per stage** (5 / 3)~~ — ✅ landed (Unreleased).
 2. ~~**C2 — Secret scanning hook** (4 / 1)~~ — ✅ landed (Unreleased).
-3. **A1 — Gemini CLI adapter** (4 / 2) — proves the multi-host story is genuinely portable beyond Anthropic/OpenAI.
+3. ~~**A1 — Gemini CLI adapter** (4 / 2)~~ — ✅ landed (Unreleased).
 4. **B1 — Accessibility audit stage** (4 / 2) — common hard requirement; mechanical to add.
 5. **B4 — Observability gate** (4 / 2) — closes a real gap (designs claim instrumentation that doesn't ship).
 6. **D2 — Gate-pass-rate dashboards** (4 / 2) — required to do D4/D5; immediately useful as standalone.

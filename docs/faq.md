@@ -68,9 +68,9 @@ routing:
 
 The orchestrator. The merge is host-agnostic — it just reads JSON files. The `host` field on each workstream gate is preserved in the merged `workstreams[]` array so the merged gate tells you which workstream came from which host.
 
-### Can I add Gemini CLI / Cursor / Aider as a host?
+### Can I add Cursor / Aider / Cline / Windsurf as a host?
 
-Yes. Implement `hosts/<your-host>/adapter.js` per the contract in `core/adapters/host-adapter.md` — see [`CONTRIBUTING.md`](../CONTRIBUTING.md) recipe 1. Adding a host is intentionally a small, self-contained task.
+Yes. Gemini CLI is already shipped (`hosts/gemini-cli/`). For others, implement `hosts/<your-host>/adapter.js` per the contract in `core/adapters/host-adapter.md` — see [`CONTRIBUTING.md`](../CONTRIBUTING.md) recipe 1. Adding a host is intentionally a small, self-contained task. The codex/gemini-cli adapters are the closest templates for IDE-embedded tools.
 
 ### Does the routing config support different model versions of the same host?
 

@@ -2,7 +2,7 @@
 
 A model-agnostic AI dev team pipeline. A single source of truth for templates, schemas, role briefs, and orchestrator logic, plus per-host adapters that lay down host-native surfaces (subagents, slash commands, hooks, role prompts) into your project.
 
-Today's hosts: **Claude Code**, **Codex CLI**, and a **generic** no-host adapter. One project, one config, one or more hosts. Stages can route to different hosts — the same pipeline can use Claude for design, Codex for backend, Claude for review.
+Today's hosts: **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host adapter. One project, one config, one or more hosts. Stages can route to different hosts — the same pipeline can use Claude for design, Codex for backend, Gemini for QA, Claude for review.
 
 ## What this gives you
 
