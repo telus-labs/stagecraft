@@ -90,22 +90,42 @@ function check() {
   console.log(`✅ release:check passed (version: ${pkg.version})`);
 }
 
-function notes() {
+function notes(version) {
   const changelog = fs.readFileSync(path.join(REPO_ROOT, "CHANGELOG.md"), "utf8");
-  const m = changelog.match(/^##\s+\[Unreleased\]\s*\n([\s\S]*?)(?=^##\s+\[)/m);
-  if (!m) {
-    console.error("No [Unreleased] section in CHANGELOG.md");
+  const label = version || "Unreleased";
+  // Walk the file by section header. Each section starts with `## [...]`.
+  // Capture everything after the header up to (a) the next `## [` header
+  // or (b) end-of-file. Robust against the requested section being last.
+  const lines = changelog.split("\n");
+  const headerRe = /^##\s+\[([^\]]+)\]/;
+  let inSection = false;
+  const body = [];
+  for (const line of lines) {
+    const m = line.match(headerRe);
+    if (m) {
+      if (inSection) break;       // hit the next section, we're done
+      if (m[1] === label) inSection = true;
+      continue;
+    }
+    if (inSection) body.push(line);
+  }
+  if (body.length === 0) {
+    console.error(`No [${label}] section in CHANGELOG.md`);
     process.exit(1);
   }
-  process.stdout.write(m[1].trim() + "\n");
+  process.stdout.write(body.join("\n").trim() + "\n");
 }
 
 function usage() {
   console.log(`release — pre-release checks + release-notes extraction
 
 Usage:
-  node scripts/release.js check  Verify clean tree, tests pass, CHANGELOG ready.
-  node scripts/release.js notes  Print the [Unreleased] section of CHANGELOG.md.
+  node scripts/release.js check                Verify clean tree, tests
+                                               pass, CHANGELOG ready.
+  node scripts/release.js notes [<version>]    Print the [<version>]
+                                               section of CHANGELOG.md.
+                                               Defaults to [Unreleased].
+                                               Example: notes 0.1.0
 `);
 }
 
@@ -113,7 +133,7 @@ function main() {
   const cmd = process.argv[2];
   switch (cmd) {
     case "check": return check();
-    case "notes": return notes();
+    case "notes": return notes(process.argv[3]);
     case "help":
     case "-h":
     case "--help":
