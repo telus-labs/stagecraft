@@ -63,6 +63,12 @@ const STAGES = {
     objective: "Implement the approved design in role-owned workstreams and record local verification.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md"],
     allowedWrites: ["src/backend/", "src/frontend/", "src/infra/", "src/tests/", "pipeline/pr-*.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.*.json", "pipeline/gates/stage-04.json"],
+    roleWrites: {
+      backend:  ["src/backend/", "src/tests/", "pipeline/pr-backend.md",  "pipeline/build-plan.md", "pipeline/gates/stage-04.backend.json",  "pipeline/context.md"],
+      frontend: ["src/frontend/",               "pipeline/pr-frontend.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.frontend.json", "pipeline/context.md"],
+      platform: ["src/infra/",                  "pipeline/pr-platform.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.platform.json", "pipeline/context.md"],
+      qa:       ["src/tests/",                  "pipeline/pr-qa.md",                                  "pipeline/gates/stage-04.qa.json",       "pipeline/context.md"],
+    },
     artifact: "pipeline/build-plan.md",
     template: "build-template.md",
     gate: {
@@ -125,6 +131,10 @@ const STAGES = {
     objective: "PM sign-off on QA results; platform prepares deploy runbook.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/test-report.md"],
     allowedWrites: ["pipeline/runbook.md", "pipeline/gates/stage-07.*.json", "pipeline/gates/stage-07.json", "pipeline/context.md"],
+    roleWrites: {
+      pm:       ["pipeline/gates/stage-07.pm.json",       "pipeline/context.md"],
+      platform: ["pipeline/runbook.md", "pipeline/gates/stage-07.platform.json", "pipeline/context.md"],
+    },
     artifact: "pipeline/runbook.md",
     template: "runbook-template.md",
     gate: {
@@ -179,6 +189,18 @@ const ORDERED_STAGE_NAMES = [
   "retrospective",
 ];
 
+// Per-track stage lists. Lifted verbatim from the prior claude-team.js
+// fork — these reflect a year+ of operational tuning over which stages
+// are skippable for which kind of change.
+const STAGES_BY_TRACK = {
+  full:          ORDERED_STAGE_NAMES,
+  quick:         ["requirements", "build", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
+  nano:          ["build", "qa"],
+  "config-only": ["build", "pre-review", "qa", "sign-off", "deploy"],
+  "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
+  hotfix:        ["build", "pre-review", "peer-review", "qa", "sign-off", "deploy", "retrospective"],
+};
+
 function stageNames() {
   return Object.keys(STAGES);
 }
@@ -187,8 +209,30 @@ function orderedStageNames() {
   return ORDERED_STAGE_NAMES.filter((n) => STAGES[n]);
 }
 
+function orderedStageNamesForTrack(track = "full") {
+  const list = STAGES_BY_TRACK[track];
+  if (!list) {
+    throw new Error(`Unknown track "${track}". Valid: ${TRACKS.join(", ")}.`);
+  }
+  return list.filter((n) => STAGES[n]);
+}
+
+function isStageInTrack(stageName, track) {
+  return orderedStageNamesForTrack(track).includes(stageName);
+}
+
 function getStage(name) {
   return STAGES[name] || null;
 }
 
-module.exports = { STAGES, TRACKS, ORDERED_STAGE_NAMES, stageNames, orderedStageNames, getStage };
+module.exports = {
+  STAGES,
+  TRACKS,
+  ORDERED_STAGE_NAMES,
+  STAGES_BY_TRACK,
+  stageNames,
+  orderedStageNames,
+  orderedStageNamesForTrack,
+  isStageInTrack,
+  getStage,
+};

@@ -11,7 +11,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { STAGES, getStage, orderedStageNames } = require("./pipeline/stages");
+const { STAGES, getStage, orderedStageNames, orderedStageNamesForTrack, isStageInTrack } = require("./pipeline/stages");
 const { loadConfig } = require("./config");
 const { resolveAdapter } = require("./router");
 
@@ -23,6 +23,7 @@ function workstreamId(stage, role, roleCount) {
 }
 
 function buildDescriptor(stageDef, role) {
+  const allowedWrites = stageDef.roleWrites?.[role] ?? stageDef.allowedWrites;
   return {
     stage: stageDef.stage,
     name: nameForStage(stageDef.stage),
@@ -31,7 +32,7 @@ function buildDescriptor(stageDef, role) {
     workstreamId: workstreamId(stageDef.stage, role, stageDef.roles.length),
     objective: stageDef.objective,
     readFirst: stageDef.readFirst,
-    allowedWrites: stageDef.allowedWrites,
+    allowedWrites,
     artifact: stageDef.artifact,
     template: stageDef.template,
     expectedGate: stageDef.gate,
@@ -62,6 +63,12 @@ function runStage(stageName, opts = {}) {
     isolation: opts.isolation || config.pipeline.isolation,
     orchestrator: ORCHESTRATOR_ID,
   };
+
+  if (!isStageInTrack(stageName, ctx.track)) {
+    process.stderr.write(
+      `[devteam] note: stage "${stageName}" is skipped by track "${ctx.track}". Running anyway; if this is unintended, change pipeline.default_track in .devteam/config.yml.\n`,
+    );
+  }
 
   const dispatches = stageDef.roles.map((role) => {
     const { hostName, adapter } = resolveAdapter(config, stageDef.stage, role);
@@ -142,8 +149,10 @@ function mergeWorkstreamGates(stageName, opts = {}) {
 function next(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const gatesDir = path.join(cwd, "pipeline", "gates");
+  const track = opts.track || (opts.config && opts.config.pipeline && opts.config.pipeline.default_track) || (loadConfig(cwd).pipeline.default_track) || "full";
+  const stageList = orderedStageNamesForTrack(track);
 
-  for (const stageName of orderedStageNames()) {
+  for (const stageName of stageList) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
 
@@ -205,7 +214,7 @@ function next(opts = {}) {
     // PASS or WARN — proceed to next stage.
   }
 
-  return { action: "pipeline-complete", reason: "all stages PASS or WARN" };
+  return { action: "pipeline-complete", reason: `all stages PASS or WARN (track: ${track})`, track };
 }
 
 function rolesPath() {
