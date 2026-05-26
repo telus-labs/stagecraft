@@ -1,0 +1,18 @@
+{
+  "name": "codex",
+  "displayName": "Codex CLI",
+  "version": "1",
+  "hooks": false,
+  "subagents": false,
+  "slashCommands": false,
+  "worktrees": true,
+  "headless": true,
+  "headlessCommand": "codex exec",
+  "skillFormat": "markdown",
+  "rolePromptsDir": ".codex/prompts/roles",
+  "skillsDir": ".codex/skills",
+  "enforces": {
+    "allowed_writes": "prompt-only",
+    "stoplist": "prompt-only"
+  }
+}
