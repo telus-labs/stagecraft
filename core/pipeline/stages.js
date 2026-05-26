@@ -93,14 +93,19 @@ const STAGES = {
   },
   "peer-review": {
     stage: "stage-05",
-    roles: ["reviewer"],
-    objective: "Review peer implementation notes, record findings, and derive deterministic approval gates. Dispatched per area; one workstream per reviewed area.",
+    // Workstreams are AREAS being reviewed, not the role doing the
+    // reviewing. The dispatched subagent is `reviewer` for all of them
+    // (see `subagent` override below). The approval-derivation
+    // PostToolUse hook fills each area's workstream gate by parsing
+    // per-area "## Review of X" sections in by-<reviewer>.md files.
+    roles: ["backend", "frontend", "platform", "qa"],
+    subagent: "reviewer",
+    objective: "Review peer implementation per area; record findings in pipeline/code-review/by-<reviewer>.md; the approval-derivation hook fills the per-area workstream gates.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/pr-*.md"],
-    allowedWrites: ["pipeline/code-review/by-<area>.md", "pipeline/gates/stage-05.*.json", "pipeline/gates/stage-05.json"],
-    artifact: "pipeline/code-review/by-backend.md",
+    allowedWrites: ["pipeline/code-review/by-<reviewer>.md", "pipeline/gates/stage-05.*.json", "pipeline/gates/stage-05.json"],
+    artifact: "pipeline/code-review/by-<reviewer>.md",
     template: "review-template.md",
     gate: {
-      area: null,
       review_shape: "matrix",
       required_approvals: 2,
       approvals: [],

@@ -36,6 +36,11 @@ function buildDescriptor(stageDef, role) {
     artifact: stageDef.artifact,
     template: stageDef.template,
     expectedGate: stageDef.gate,
+    // When set, all workstreams of this stage dispatch to the same
+    // subagent regardless of role (used by peer-review where the
+    // workstreams are areas being reviewed but the dispatched agent
+    // is always the reviewer). Adapters honor this in renderStagePrompt.
+    subagent: stageDef.subagent,
   };
 }
 

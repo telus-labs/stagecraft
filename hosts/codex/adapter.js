@@ -132,7 +132,11 @@ function status(targetDir) {
 }
 
 function renderStagePrompt(descriptor, ctx) {
-  const rolePromptPath = `${capabilities.rolePromptsDir}/${descriptor.role}.md`;
+  // descriptor.subagent (when set) overrides the role-to-prompt mapping —
+  // used by stages like peer-review where every workstream-area dispatches
+  // to the same reviewer prompt file.
+  const promptRole = descriptor.subagent || descriptor.role;
+  const rolePromptPath = `${capabilities.rolePromptsDir}/${promptRole}.md`;
   const lines = [];
   lines.push(`# Stage ${descriptor.stage} — ${descriptor.name}`);
   lines.push(`Workstream: ${descriptor.workstreamId} (role: ${descriptor.role}, host: codex)`);

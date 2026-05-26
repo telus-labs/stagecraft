@@ -296,8 +296,13 @@ function status(targetDir) {
 }
 
 function renderStagePrompt(descriptor, ctx) {
-  const fm = ROLE_FRONTMATTER[descriptor.role];
-  const agentName = fm ? fm.name : descriptor.role;
+  // descriptor.subagent (when set) overrides the role-to-agent mapping —
+  // used by stages like peer-review where every workstream-area dispatches
+  // to the same reviewer subagent.
+  const fm = descriptor.subagent
+    ? ROLE_FRONTMATTER[descriptor.subagent]
+    : ROLE_FRONTMATTER[descriptor.role];
+  const agentName = fm ? fm.name : (descriptor.subagent || descriptor.role);
   const lines = [];
   lines.push(`# Stage ${descriptor.stage} — ${descriptor.name}`);
   lines.push(`Workstream: ${descriptor.workstreamId} (role: ${descriptor.role}, host: claude-code)`);
