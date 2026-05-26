@@ -186,11 +186,16 @@ function installRules(targetDir, opts) {
 
 function renderSettingsLocal() {
   const validatorPath = path.join(REPO_ROOT, "core", "gates", "validator.js");
-  const cmd = `node ${JSON.stringify(validatorPath)}`;
+  const approvalDerivationPath = path.join(REPO_ROOT, "core", "hooks", "approval-derivation.js");
+  const validateCmd = `node ${JSON.stringify(validatorPath)}`;
+  const approvalCmd = `node ${JSON.stringify(approvalDerivationPath)}`;
   return {
     hooks: {
-      Stop: [{ hooks: [{ type: "command", command: cmd }] }],
-      SubagentStop: [{ hooks: [{ type: "command", command: cmd }] }],
+      Stop: [{ hooks: [{ type: "command", command: validateCmd }] }],
+      SubagentStop: [{ hooks: [{ type: "command", command: validateCmd }] }],
+      PostToolUse: [
+        { matcher: "Write|Edit", hooks: [{ type: "command", command: approvalCmd }] },
+      ],
     },
     permissions: {
       allow: [
