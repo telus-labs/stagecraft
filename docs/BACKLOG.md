@@ -43,7 +43,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| D1 | **OpenTelemetry tracing per stage** | 5 | 3 | Every workstream emits spans: prompt, model response, tool calls, gate writes. Drop them into Jaeger / Tempo / Honeycomb and replay any pipeline run. The single biggest debuggability win. |
+| D1 | ~~**OpenTelemetry tracing per stage**~~ ✅ landed (Unreleased) | 5 | 3 | ~~Every workstream emits spans~~. See `docs/observability.md`. |
 | D2 | **Gate-pass-rate dashboards** | 4 | 2 | Per-stage, per-role, per-host historical pass/fail/escalate rates. Surfaces which combinations don't work. |
 | D3 | **Lessons-learned across projects (org-shared)** | 5 | 4 | The `pipeline/lessons-learned.md` from each project flows to a shared pool. Future runs in other projects can pull relevant lessons by embedding similarity. Network effect. |
 | D4 | **Per-role per-model performance scores** | 5 | 3 | Track which (role, host) combinations produce gates that pass first-try most often. Surfaces "Codex is better than Claude at backend; Claude is better at design." Drives D5. |
@@ -112,7 +112,7 @@ Agents that compose deeper tool stacks beat ones that just write code. Roles gai
 
 By impact/effort ratio, with bias toward high-impact even when expensive:
 
-1. **D1 — OpenTelemetry tracing per stage** (5 / 3) — single biggest debuggability win; foundation for D2/D4/D5.
+1. ~~**D1 — OpenTelemetry tracing per stage** (5 / 3)~~ — ✅ landed (Unreleased).
 2. **C2 — Secret scanning hook** (4 / 1) — small lift, blocks an entire class of security incident.
 3. **A1 — Gemini CLI adapter** (4 / 2) — proves the multi-host story is genuinely portable beyond Anthropic/OpenAI.
 4. **B1 — Accessibility audit stage** (4 / 2) — common hard requirement; mechanical to add.

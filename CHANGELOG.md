@@ -8,7 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-Nothing yet. See [`docs/BACKLOG.md`](docs/BACKLOG.md) for the queue.
+### Added
+
+- **OpenTelemetry tracing** (`docs/BACKLOG.md` D1). Every pipeline operation emits spans: `pipeline.stage`, `pipeline.workstream`, `pipeline.stage.headless`, `pipeline.merge`, `pipeline.next`, `adapter.renderStagePrompt`, `adapter.invoke`. Opt-in via the standard `OTEL_EXPORTER_OTLP_ENDPOINT` env var; no-op tracer when unset (zero overhead). Ships spans via OTLP/HTTP to Jaeger, Tempo, Honeycomb, Datadog Agent, etc.
+- `core/observability.js` — tracer bootstrap + `withSpan` helper.
+- `docs/observability.md` — setup cookbooks for Jaeger / Honeycomb / Datadog.
+- `tests/observability.test.js` — 9 tests asserting expected spans + attributes using `InMemorySpanExporter`.
 
 ---
 

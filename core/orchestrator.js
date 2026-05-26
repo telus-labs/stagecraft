@@ -14,6 +14,7 @@ const path = require("node:path");
 const { STAGES, getStage, orderedStageNames, orderedStageNamesForTrack, isStageInTrack } = require("./pipeline/stages");
 const { loadConfig } = require("./config");
 const { resolveAdapter } = require("./router");
+const { withSpan, setSpanAttributes } = require("./observability");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const ORCHESTRATOR_ID = `devteam@${require("../package.json").version}`;
@@ -75,20 +76,37 @@ function runStage(stageName, opts = {}) {
     );
   }
 
-  const dispatches = stageDef.roles.map((role) => {
-    const { hostName, adapter } = resolveAdapter(config, stageDef.stage, role);
-    const descriptor = buildDescriptor(stageDef, role);
-    const prompt = adapter.renderStagePrompt(descriptor, ctx);
-    return { role, host: hostName, descriptor, prompt, adapter };
-  });
+  return withSpan("pipeline.stage", {
+    "devteam.stage": stageDef.stage,
+    "devteam.stage.name": stageName,
+    "devteam.track": ctx.track,
+    "devteam.roles": stageDef.roles.join(","),
+    "devteam.workstream_count": stageDef.roles.length,
+    "devteam.feature": ctx.feature || undefined,
+  }, () => {
+    const dispatches = stageDef.roles.map((role) => withSpan("pipeline.workstream", {
+      "devteam.stage": stageDef.stage,
+      "devteam.workstream.role": role,
+    }, () => {
+      const { hostName, adapter } = resolveAdapter(config, stageDef.stage, role);
+      const descriptor = buildDescriptor(stageDef, role);
+      const prompt = withSpan("adapter.renderStagePrompt", {
+        "devteam.host": hostName,
+        "devteam.stage": stageDef.stage,
+        "devteam.workstream.role": role,
+      }, () => adapter.renderStagePrompt(descriptor, ctx));
+      setSpanAttributes({ "devteam.host": hostName, "devteam.workstream.id": descriptor.workstreamId });
+      return { role, host: hostName, descriptor, prompt, adapter };
+    }));
 
-  return {
-    stage: stageDef.stage,
-    name: stageName,
-    roles: stageDef.roles,
-    workstreams: dispatches,
-    ctx,
-  };
+    return {
+      stage: stageDef.stage,
+      name: stageName,
+      roles: stageDef.roles,
+      workstreams: dispatches,
+      ctx,
+    };
+  });
 }
 
 // Headless variant of runStage — actually drives each adapter's invoke()
@@ -109,13 +127,31 @@ async function runStageHeadless(stageName, opts = {}) {
       throw new Error(`host "${ws.host}" declares headless: true but exports no invoke()`);
     }
   }
-  const results = [];
-  for (const ws of plan.workstreams) {
-    process.stderr.write(`[devteam] dispatching ${ws.role} → ${ws.host} (headless)\n`);
-    const r = await ws.adapter.invoke(ws.descriptor, plan.ctx);
-    results.push({ role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r });
-  }
-  return { stage: plan.stage, name: stageName, roles: plan.roles, results, ctx: plan.ctx };
+  return withSpan("pipeline.stage.headless", {
+    "devteam.stage": plan.stage,
+    "devteam.stage.name": stageName,
+    "devteam.workstream_count": plan.workstreams.length,
+  }, async () => {
+    const results = [];
+    for (const ws of plan.workstreams) {
+      process.stderr.write(`[devteam] dispatching ${ws.role} → ${ws.host} (headless)\n`);
+      const r = await withSpan("adapter.invoke", {
+        "devteam.host": ws.host,
+        "devteam.workstream.role": ws.role,
+        "devteam.workstream.id": ws.descriptor.workstreamId,
+      }, async (span) => {
+        const out = await ws.adapter.invoke(ws.descriptor, plan.ctx);
+        if (span) span.setAttributes({
+          "devteam.invoke.exit_code": out.exitCode,
+          "devteam.invoke.duration_ms": out.durationMs,
+          "devteam.invoke.gate_written": Boolean(out.gatePath),
+        });
+        return out;
+      });
+      results.push({ role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r });
+    }
+    return { stage: plan.stage, name: stageName, roles: plan.roles, results, ctx: plan.ctx };
+  });
 }
 
 function gateFileFor(stage, workstream, gatesDir) {
@@ -132,40 +168,53 @@ function mergeWorkstreamGates(stageName, opts = {}) {
     return { merged: false, reason: "single-role stage; no merge needed" };
   }
 
-  const gatesDir = opts.gatesDir || path.join(opts.cwd || process.cwd(), "pipeline", "gates");
-  const wsGates = [];
-  for (const role of stageDef.roles) {
-    const wsFile = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
-    if (!fs.existsSync(wsFile)) {
-      return { merged: false, reason: `missing workstream gate: ${wsFile}` };
+  return withSpan("pipeline.merge", {
+    "devteam.stage": stageDef.stage,
+    "devteam.stage.name": stageName,
+    "devteam.workstream_count": stageDef.roles.length,
+  }, () => {
+    const gatesDir = opts.gatesDir || path.join(opts.cwd || process.cwd(), "pipeline", "gates");
+    const wsGates = [];
+    for (const role of stageDef.roles) {
+      const wsFile = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
+      if (!fs.existsSync(wsFile)) {
+        setSpanAttributes({ "devteam.merge.result": "missing", "devteam.merge.missing_role": role });
+        return { merged: false, reason: `missing workstream gate: ${wsFile}` };
+      }
+      wsGates.push({ role, gate: JSON.parse(fs.readFileSync(wsFile, "utf8")) });
     }
-    wsGates.push({ role, gate: JSON.parse(fs.readFileSync(wsFile, "utf8")) });
-  }
 
-  const statuses = wsGates.map((w) => w.gate.status);
-  const aggregate = statuses.includes("ESCALATE") ? "ESCALATE"
-    : statuses.includes("FAIL") ? "FAIL"
-    : statuses.includes("WARN") ? "WARN"
-    : "PASS";
+    const statuses = wsGates.map((w) => w.gate.status);
+    const aggregate = statuses.includes("ESCALATE") ? "ESCALATE"
+      : statuses.includes("FAIL") ? "FAIL"
+      : statuses.includes("WARN") ? "WARN"
+      : "PASS";
 
-  const merged = {
-    stage: stageDef.stage,
-    status: aggregate,
-    orchestrator: ORCHESTRATOR_ID,
-    track: wsGates[0].gate.track,
-    timestamp: new Date().toISOString(),
-    blockers: wsGates.flatMap((w) => w.gate.blockers || []),
-    warnings: wsGates.flatMap((w) => w.gate.warnings || []),
-    workstreams: wsGates.map((w) => ({
-      workstream: w.role,
-      host: w.gate.host || null,
-      status: w.gate.status,
-    })),
-  };
+    const merged = {
+      stage: stageDef.stage,
+      status: aggregate,
+      orchestrator: ORCHESTRATOR_ID,
+      track: wsGates[0].gate.track,
+      timestamp: new Date().toISOString(),
+      blockers: wsGates.flatMap((w) => w.gate.blockers || []),
+      warnings: wsGates.flatMap((w) => w.gate.warnings || []),
+      workstreams: wsGates.map((w) => ({
+        workstream: w.role,
+        host: w.gate.host || null,
+        status: w.gate.status,
+      })),
+    };
 
-  const outFile = path.join(gatesDir, `${stageDef.stage}.json`);
-  fs.writeFileSync(outFile, JSON.stringify(merged, null, 2) + "\n", "utf8");
-  return { merged: true, file: outFile, gate: merged };
+    const outFile = path.join(gatesDir, `${stageDef.stage}.json`);
+    fs.writeFileSync(outFile, JSON.stringify(merged, null, 2) + "\n", "utf8");
+    setSpanAttributes({
+      "devteam.merge.result": "merged",
+      "devteam.merge.status": aggregate,
+      "devteam.merge.blockers_count": merged.blockers.length,
+      "devteam.merge.warnings_count": merged.warnings.length,
+    });
+    return { merged: true, file: outFile, gate: merged };
+  });
 }
 
 // Walk stages in order, inspect gate files in pipeline/gates/, decide
@@ -184,6 +233,20 @@ function next(opts = {}) {
   const track = opts.track || (opts.config && opts.config.pipeline && opts.config.pipeline.default_track) || (loadConfig(cwd).pipeline.default_track) || "full";
   const stageList = orderedStageNamesForTrack(track);
 
+  return withSpan("pipeline.next", {
+    "devteam.track": track,
+  }, () => {
+    const result = _nextImpl(stageList, gatesDir, track);
+    setSpanAttributes({
+      "devteam.next.action": result.action,
+      "devteam.next.stage": result.stage || undefined,
+      "devteam.next.name": result.name || undefined,
+    });
+    return result;
+  });
+}
+
+function _nextImpl(stageList, gatesDir, track) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);

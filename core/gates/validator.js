@@ -353,6 +353,10 @@ const HALT_FS_CODES = new Set([
 ]);
 
 function runMain() {
+  // Note: main() calls process.exit() on every branch, so wrapping it in
+  // an OTel span here would leak unended spans. Validator runs are
+  // short-lived and exit-on-decision; if we want a span for each
+  // validate, instrument the caller (orchestrator) instead.
   try {
     main();
   } catch (err) {
