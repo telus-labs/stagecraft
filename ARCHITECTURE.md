@@ -1,6 +1,6 @@
-# ai-dev-team — Architecture
+# Stagecraft — Architecture
 
-A model-agnostic pipeline for running an AI dev team (PM → Principal → Build → Review → QA → Deploy → Retro) inside any AI coding tool (Claude Code, Codex, Gemini CLI, plain terminal).
+Stagecraft is a model-agnostic pipeline for running an AI dev team (PM → Principal → Build → Review → QA → Deploy → Retro) inside any AI coding tool (Claude Code, Codex, Gemini CLI, plain terminal). The CLI binary is `devteam`; the project is Stagecraft.
 
 Today this work is forked across two repos (`claude-dev-team`, `codex-dev-team`) that share ~90% of their code and slowly drift. This project replaces both with a single core and per-host adapters.
 
@@ -57,7 +57,7 @@ Key insight: **the core never calls a model.** It emits prompts and validates JS
 ## Proposed directory layout
 
 ```
-ai-dev-team/
+stagecraft/
 ├── README.md
 ├── ARCHITECTURE.md                  ← this file
 ├── VERSION

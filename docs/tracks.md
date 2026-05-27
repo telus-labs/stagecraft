@@ -1,6 +1,6 @@
 # Tracks
 
-A **track** is a named subset of pipeline stages. Picking a track is how you tell ai-dev-team how much rigor a change needs. The six tracks reflect a year+ of operational tuning over which stages are skippable for which change types — they were lifted verbatim from `claude-dev-team`.
+A **track** is a named subset of pipeline stages. Picking a track is how you tell Stagecraft how much rigor a change needs. The six tracks reflect a year+ of operational tuning over which stages are skippable for which change types — they were lifted verbatim from `claude-dev-team`.
 
 You set the active track in `.devteam/config.yml`:
 

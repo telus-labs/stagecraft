@@ -148,4 +148,4 @@ A medium-smart agent with a deep, well-composed tool stack beats a brilliant age
 EU AI Act, US executive orders, SOC 2 controls — everything wants reproducible runs, audit trails, who-decided-what. C4 (reproducible runs), C6 (tamper-evident gate chain), and D1 (tracing) are the work to be ready when this hits hard.
 
 ### The unit is the team, not the model.
-The wager underneath all of this: a coordinated team of specialized agents — each with a role, a tool budget, a gate contract, and shared memory — outperforms a single brilliant model. The model is a substrate. The team is the product. ai-dev-team is a bet on that shape.
+The wager underneath all of this: a coordinated team of specialized agents — each with a role, a tool budget, a gate contract, and shared memory — outperforms a single brilliant model. The model is a substrate. The team is the product. Stagecraft is a bet on that shape.

@@ -1,8 +1,8 @@
 # Testing strategy
 
-ai-dev-team currently has **zero automated tests**. Every contract we've stress-tested in conversation is verified by manual smoke tests, not locked in. This is the single biggest robustness gap.
+**Historical note:** when this doc was first written, Stagecraft had zero automated tests. The tier-1 and tier-2 suites described below are now in place — `npm test` runs 318+ tests covering the contracts called out as ship-blockers. This document is preserved as the strategy document that drove the suite's design, and as a reference for what's still pending in tier 3.
 
-This document proposes how to test the framework, what to cover, and in what order.
+The text below is from the original strategy doc, with strikethroughs and notes added where pieces have since landed.
 
 ## Why this matters now
 

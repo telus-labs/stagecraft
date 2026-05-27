@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ai-dev-team.
+All notable changes to Stagecraft.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [SemVer](https://semver.org).
 

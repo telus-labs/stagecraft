@@ -1,8 +1,18 @@
-# ai-dev-team
+# Stagecraft
 
-A model-agnostic AI dev team pipeline. A single source of truth for templates, schemas, role briefs, and orchestrator logic, plus per-host adapters that lay down host-native surfaces (subagents, slash commands, hooks, role prompts) into your project.
+**A model-agnostic AI dev team pipeline across Claude Code, Codex, and Gemini CLI. Staged work, multi-host peer review, audit gates.**
+
+Stagecraft is a single source of truth for templates, schemas, role briefs, and orchestrator logic, plus per-host adapters that lay down host-native surfaces (subagents, slash commands, hooks, role prompts) into your project.
 
 Today's hosts: **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host adapter. One project, one config, one or more hosts. Stages can route to different hosts — the same pipeline can use Claude for design, Codex for backend, Gemini for QA, Claude for review.
+
+> The CLI binary is `devteam`. Stagecraft is the project; `devteam` is what you type.
+
+## Why "Stagecraft"?
+
+The pipeline is a staged production. PM writes the brief. Principal directs the architecture. Specialist developers each build their part. Reviewers critique. QA tests. The curtain rises on deploy. Each stage has its cast, its script (the rules under `rules/`), and its gate that decides if the show moves on. Multi-host adversarial review is the panel of critics. The discipline of putting all of that together — staged work by specialized roles in a choreographed production — is **stagecraft**.
+
+The vocabulary extends naturally: a *run* is one pipeline invocation, *dress rehearsal* is pre-review (Stage 4a), *curtain call* is the retrospective (Stage 9), and *notes* are peer-review comments. The metaphor isn't decoration — it's how the system thinks.
 
 ## What this gives you
 
@@ -26,7 +36,7 @@ A coordinated team of role-specific subagents running a structured software-deve
 
 ```bash
 # 1. Clone and install
-git clone <this-repo> && cd ai-dev-team && npm install
+git clone <this-repo> && cd stagecraft && npm install
 
 # 2. (Optional) Make devteam available globally
 npm link    # so `devteam` is on your PATH
@@ -114,7 +124,7 @@ Full design notes: [ARCHITECTURE.md](ARCHITECTURE.md). Host-adapter contract: [c
 ## Repository layout
 
 ```
-ai-dev-team/
+stagecraft/
 ├── ARCHITECTURE.md             ← design model + locked decisions
 ├── README.md                   ← you are here
 ├── LICENSE                     ← MIT

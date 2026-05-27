@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Host-neutral context for any LLM working on the `ai-dev-team` codebase itself.
+Host-neutral context for any LLM working on the **Stagecraft** codebase itself. (The CLI binary is `devteam`; the project is Stagecraft.)
 
-If you're using ai-dev-team to drive *another* project's pipeline, this file is not for you — read the [`README.md`](README.md) and [`docs/concepts.md`](docs/concepts.md) instead. This file is for someone editing the framework.
+If you're using Stagecraft to drive *another* project's pipeline, this file is not for you — read the [`README.md`](README.md) and [`docs/concepts.md`](docs/concepts.md) instead. This file is for someone editing the framework.
 
 ## What this is
 
@@ -93,7 +93,7 @@ Common changes and where they go:
 
 ## What the tests currently cover
 
-**Nothing.** ai-dev-team has zero automated tests as of this writing. See [`docs/TESTING.md`](docs/TESTING.md) for the proposed tier-1 suite (9 files). Add tests in lockstep with any contract change.
+Stagecraft has a tier-1 + tier-2 test suite (300+ tests; run `npm test`). See [`docs/TESTING.md`](docs/TESTING.md) for the strategy and tier layout. Add tests in lockstep with any contract change.
 
 ## Open backlog
 

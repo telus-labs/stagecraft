@@ -1,6 +1,6 @@
 # FAQ
 
-Common questions about ai-dev-team. Grows organically; PRs welcome.
+Common questions about Stagecraft. Grows organically; PRs welcome.
 
 ## Setup & install
 
@@ -12,7 +12,7 @@ No, not strictly. The **generic** adapter (`hosts/generic/`) has zero in-host in
 
 Two distinct places:
 
-- **The framework** (this repo, `ai-dev-team/`) is installed once, anywhere. Contains the orchestrator, schemas, role briefs, host adapters.
+- **The framework** (this repo, `stagecraft/`) is installed once, anywhere. Contains the orchestrator, schemas, role briefs, host adapters.
 - **The target project** is your application repo. `devteam init` lays down `.devteam/config.yml`, host-specific install payloads (`.claude/agents/...`), and `pipeline/gates/`.
 
 You can drive many target projects from one framework install. Updating the framework (`git pull`) updates every target on its next `devteam init --force`.
@@ -80,15 +80,15 @@ Not directly. The routing key is the host name (`claude-code`, `codex`). To use 
 
 ### How does this compare to LangGraph / AutoGen / CrewAI?
 
-Different problem space. Those are agent-framework libraries — you write Python (mostly) and they coordinate LLM calls. ai-dev-team is a *pipeline scaffold* for AI coding tools (Claude Code, Codex, Gemini CLI): it installs role prompts and orchestrates which one runs when, but the actual model invocation happens inside the coding tool, not via a framework SDK. If your team already lives in Claude Code or Codex, ai-dev-team meets you there; if you're building a custom agent app, those frameworks are the right tools.
+Different problem space. Those are agent-framework libraries — you write Python (mostly) and they coordinate LLM calls. Stagecraft is a *pipeline scaffold* for AI coding tools (Claude Code, Codex, Gemini CLI): it installs role prompts and orchestrates which one runs when, but the actual model invocation happens inside the coding tool, not via a framework SDK. If your team already lives in Claude Code or Codex, Stagecraft meets you there; if you're building a custom agent app, those frameworks are the right tools.
 
 ### How does this compare to Aider's `/architect` mode or Cursor's composer?
 
-Those are single-session multi-agent modes within one tool. ai-dev-team is a structured *pipeline* with persistent gates, conditional dispatch, multi-host routing, and a stop/resume model that survives across sessions. The trade-off: more setup, more discipline, more durable for non-trivial features. Use Aider's architect mode for quick interactive sessions; use ai-dev-team when you want auditability and stage gates.
+Those are single-session multi-agent modes within one tool. Stagecraft is a structured *pipeline* with persistent gates, conditional dispatch, multi-host routing, and a stop/resume model that survives across sessions. The trade-off: more setup, more discipline, more durable for non-trivial features. Use Aider's architect mode for quick interactive sessions; use Stagecraft when you want auditability and stage gates.
 
 ### How is this different from claude-dev-team or codex-dev-team?
 
-ai-dev-team unifies them into one core. See [ADR 001](adr/001-unification-vs-fork.md) for the full reasoning. Key differences:
+Stagecraft unifies them into one core. See [ADR 001](adr/001-unification-vs-fork.md) for the full reasoning. Key differences:
 
 - One framework, three host adapters (claude-code, codex, generic). No more parity drift between forks.
 - Per-workstream routing: a single pipeline can dispatch different roles to different hosts.
@@ -102,7 +102,7 @@ ai-dev-team unifies them into one core. See [ADR 001](adr/001-unification-vs-for
 
 ### Can I add a project-specific role / stage / skill?
 
-Yes. See [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the recipes. The cleanest approach is to fork ai-dev-team and add your custom roles in your fork's `roles/` — that way your changes survive framework updates.
+Yes. See [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the recipes. The cleanest approach is to fork Stagecraft and add your custom roles in your fork's `roles/` — that way your changes survive framework updates.
 
 ### Can I disable the stoplist?
 

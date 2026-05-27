@@ -1,12 +1,12 @@
 # Gap analysis vs claude-dev-team and codex-dev-team
 
-What the predecessor forks have that ai-dev-team doesn't — yet. Useful for prioritizing documentation, tooling, and CI work after the core migration is complete.
+What the predecessor forks have that Stagecraft doesn't — yet. Useful for prioritizing documentation, tooling, and CI work after the core migration is complete.
 
 ## Documentation gaps
 
-The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files (CHANGELOG, CONTRIBUTING, EXAMPLE, AGENTS.md) that ai-dev-team is missing.
+The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files (CHANGELOG, CONTRIBUTING, EXAMPLE, AGENTS.md) that Stagecraft is missing.
 
-| Doc | claude-dev-team | codex-dev-team | ai-dev-team | Worth porting? |
+| Doc | claude-dev-team | codex-dev-team | Stagecraft | Worth porting? |
 |---|---|---|---|---|
 | `README.md` | 566 lines (heavy) | ~150 lines (light) | ✅ just written (concise) | done |
 | `LICENSE` | MIT | MIT | ✅ MIT | done |
@@ -26,7 +26,7 @@ The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files 
 | `docs/BACKLOG.md` | — | — | ✅ ours | unique to us |
 | `docs/GAP-ANALYSIS.md` | — | — | ✅ this file | unique to us |
 | `docs/TESTING.md` | — | — | ✅ companion (see below) | unique to us |
-| `docs/adr/` | per-decision ADRs | — | ❌ | grow organically; first one could explain "why ai-dev-team" |
+| `docs/adr/` | per-decision ADRs | — | ❌ | grow organically; first one could explain "why Stagecraft" |
 | `docs/audit/` | audit artifacts | — | ❌ | unique to claude's workflow; skip |
 | `docs/migration/v1-to-v2.md` | historical | — | ❌ | irrelevant (we don't have v1) |
 | `docs/parity/` | claude-codex parity tracking | — | ❌ | obsolete (we eliminated the fork) |
@@ -35,7 +35,7 @@ The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files 
 **Suggested next docs (priority order):**
 
 1. **`EXAMPLE.md`** at the root — end-to-end walkthrough of one pipeline run. Highest learning ROI per word.
-2. **`AGENTS.md`** at the root — host-neutral context file for the repo itself (so an LLM working _on_ ai-dev-team knows the structure).
+2. **`AGENTS.md`** at the root — host-neutral context file for the repo itself (so an LLM working _on_ Stagecraft knows the structure).
 3. **`CONTRIBUTING.md`** — how to add a host adapter, a stage, a role, or a skill. Concrete recipes.
 4. **`docs/concepts.md`** — one-sentence definitions of stage / role / workstream / gate / track / adapter / host. The thing you skim before reading anything else.
 5. **`docs/user-guide.md`** — long-form how-to. Lift selectively from claude-dev-team's version, adapt for the multi-host model.
@@ -45,9 +45,9 @@ The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files 
 
 ## Functionality gaps (beyond docs)
 
-Things the forks have implemented that ai-dev-team's MVP doesn't:
+Things the forks have implemented that Stagecraft's MVP doesn't:
 
-| Capability | claude-dev-team | codex-dev-team | ai-dev-team | Notes |
+| Capability | claude-dev-team | codex-dev-team | Stagecraft | Notes |
 |---|---|---|---|---|
 | Bootstrap script (idempotent project initializer) | `bootstrap.sh` + `scripts/bootstrap.js` | same | `devteam init` covers this | DONE (different surface) |
 | Audit workflow (codebase-wide health scan) | `/audit`, `/audit-quick`, `/health-check`, `/roadmap` slash commands | `.codex/skills/audit/` | ❌ | Backlog G/B item |
@@ -77,7 +77,7 @@ Things the forks have implemented that ai-dev-team's MVP doesn't:
 
 This is the biggest gap.
 
-| | claude-dev-team | codex-dev-team | ai-dev-team |
+| | claude-dev-team | codex-dev-team | Stagecraft |
 |---|---|---|---|
 | Test count | 26 | 20 | **0** |
 | Test runner | `node --test` (built-in) | same | (none) |
@@ -87,13 +87,13 @@ Every contract we've stress-tested in the conversation is verified by manual smo
 
 ## Misc artifacts the forks have
 
-- **`AGENTS.md` at root** — the agents/CLAUDE.md context file for the repo itself. We've standardized on `AGENTS.md` as host-neutral but don't have one for `ai-dev-team`'s own repo. An LLM working on this codebase right now has no "Read first" context.
+- **`AGENTS.md` at root** — the agents/CLAUDE.md context file for the repo itself. We've standardized on `AGENTS.md` as host-neutral but don't have one for Stagecraft's own repo. An LLM working on this codebase right now has no "Read first" context.
 - **`VERSION` file at root** — a one-line version stamp. claude-dev-team's bootstrap reads this to stamp `.claude/VERSION` into target projects. We use `package.json#version` instead; should pick one.
 - **`.github/`** — neither fork has CI YAML committed, but the convention is there.
 - **`examples/` directory** — claude-dev-team has one example project. Useful for `devteam init` to point at as a known-good fixture.
 - **`schemas/_framework-contract.js`** — claude-dev-team has a JS module that asserts cross-doc consistency (matched stage numbers, matched rule files, matched skill names). Underpins their `contract.test.js`. Worth porting.
 
-## What ai-dev-team has that the forks don't
+## What Stagecraft has that the forks don't
 
 For symmetry — things we did that they didn't:
 

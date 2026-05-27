@@ -1,6 +1,6 @@
 # examples/
 
-Snapshot of one ai-dev-team pipeline run on a fictional feature ("Add SMS notification opt-in to user settings"). Use it as a reference for what each artifact looks like in practice — not a fixture to clone for a real project (run `devteam init` for that).
+Snapshot of one Stagecraft pipeline run on a fictional feature ("Add SMS notification opt-in to user settings"). Use it as a reference for what each artifact looks like in practice — not a fixture to clone for a real project (run `devteam init` for that).
 
 ## Layout
 
@@ -45,7 +45,7 @@ examples/sms-opt-in/
 ```bash
 # Verify what the gate validator says about the gates here
 cd examples/sms-opt-in
-node /path/to/ai-dev-team/core/gates/validator.js
+node /path/to/stagecraft/core/gates/validator.js
 
 # What does `devteam next` say from this state?
 devteam next --cwd .

@@ -1,13 +1,13 @@
-# Contributing to ai-dev-team
+# Contributing to Stagecraft
 
 Concrete recipes for the four most common kinds of change.
 
-Before anything: read [`AGENTS.md`](AGENTS.md) for the load-bearing contracts. Edits that break them in the wrong way silently corrupt downstream behavior — ai-dev-team currently has no automated tests catching that, so the burden is on you.
+Before anything: read [`AGENTS.md`](AGENTS.md) for the load-bearing contracts. Edits that break them in the wrong way silently corrupt downstream behavior — Stagecraft has a tier-1 test suite that catches most contract regressions, so the burden is on you.
 
 ## Setup
 
 ```bash
-git clone <repo> && cd ai-dev-team
+git clone <repo> && cd stagecraft
 npm install
 ./bin/devteam help    # verify it loads
 ```
@@ -162,7 +162,7 @@ Skills are task-oriented helpers the LLM consults when doing specific tasks (wri
 ## Style guidance
 
 - **No comments-as-documentation in code.** If a fact needs explaining and isn't obvious from the code, put it in a doc, not a multi-paragraph code comment. One-line "why this is here" comments are fine; docstrings aren't.
-- **Strip version numbers from docs.** ai-dev-team has no v1/v2/v3 — those are claude-dev-team's history. If you find a `(v2.X+)` annotation while editing, strip it.
+- **Strip version numbers from docs.** Stagecraft has no v1/v2/v3 — those are claude-dev-team's history. If you find a `(v2.X+)` annotation while editing, strip it.
 - **Host-neutral first.** Anything that could go in shared (`roles/`, `rules/`, `skills/`, `templates/`, `core/`) and be rendered into host-specific paths by an adapter, should. Direct host-specific files only when there's no neutral form.
 - **Path conventions.** `.devteam/` for the shared workspace in target projects. `AGENTS.md` for host-neutral context. `pipeline/` for artifacts. `pipeline/gates/<stage>.<workstream>.json` for workstream gates (dot separator, not hyphen).
 - **No `agent` field.** Contract F removed it. Use `workstream` (role identity), `host` (adapter identity), `orchestrator` (orchestrator+version).

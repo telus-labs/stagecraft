@@ -1,6 +1,6 @@
 # Host Adapter Contract
 
-The minimum a new host (Claude Code, Codex, Gemini CLI, plain terminal, …) must implement to plug into the `ai-dev-team` core.
+The minimum a new host (Claude Code, Codex, Gemini CLI, plain terminal, …) must implement to plug into the Stagecraft core.
 
 The core never calls a model. The adapter is the only place that knows about the host's invocation primitives. Adding a host = implementing this file's contract.
 

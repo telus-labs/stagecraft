@@ -1,6 +1,6 @@
 # Adoption guide
 
-For team leads deciding whether to introduce ai-dev-team to their team. Not a how-to (that's [`user-guide.md`](user-guide.md)) — a "should we do this, and how do we land it?" document.
+For team leads deciding whether to introduce Stagecraft to their team. Not a how-to (that's [`user-guide.md`](user-guide.md)) — a "should we do this, and how do we land it?" document.
 
 ## When this is the right tool
 
@@ -16,7 +16,7 @@ You're a poor fit if:
 
 - The team is one or two people doing exploratory work and a pipeline would slow you down.
 - You're using AI mostly for inline completions or quick fixes — the orchestration overhead doesn't pay off.
-- You don't have a strong distinction between "the work" and "verification of the work." ai-dev-team's value is in gates between roles; if your team works in undifferentiated flow, the gates are friction.
+- You don't have a strong distinction between "the work" and "verification of the work." Stagecraft's value is in gates between roles; if your team works in undifferentiated flow, the gates are friction.
 
 ## What you get
 
@@ -52,7 +52,7 @@ A 2-week pilot answers most adoption questions cheaply.
 
 ### Week 2: real use
 
-6. **Use ai-dev-team for every new feature for one week.** Force the test even if it feels heavy at first. Track:
+6. **Use Stagecraft for every new feature for one week.** Force the test even if it feels heavy at first. Track:
    - Time-to-merge before vs after.
    - Number of bugs caught at peer-review or security-review that would have shipped otherwise.
    - Number of times the pipeline blocked something valid (false-positive stoplist matches, over-strict gate validation).
@@ -93,7 +93,7 @@ You're already doing it informally. Stage 5 just structures it: per-area section
 
 ### "What if the framework changes break our installed projects?"
 
-The framework version is in `package.json#version`. Re-running `devteam init --force` re-renders the install with the new version. The risk is: if the new framework changes a role brief in a way that conflicts with project-specific customization, you lose the customization. Mitigations: (a) customize in the framework, not in target copies (see `CONTRIBUTING.md`); (b) version-control the target's `.claude/agents/` so you can diff after re-install; (c) fork ai-dev-team if you have substantial team-specific customizations.
+The framework version is in `package.json#version`. Re-running `devteam init --force` re-renders the install with the new version. The risk is: if the new framework changes a role brief in a way that conflicts with project-specific customization, you lose the customization. Mitigations: (a) customize in the framework, not in target copies (see `CONTRIBUTING.md`); (b) version-control the target's `.claude/agents/` so you can diff after re-install; (c) fork Stagecraft if you have substantial team-specific customizations.
 
 ### "We use [other AI tool] that isn't supported."
 
@@ -101,7 +101,7 @@ Adding a host adapter is a self-contained ~200-line task. See `CONTRIBUTING.md` 
 
 ### "We don't trust LLM output enough to put it in our codebase."
 
-You're already trusting LLM output if you use Claude Code or Codex. ai-dev-team adds structure to *how* you trust it: peer review by other agents (or humans!), test gates, security gates, sign-off gates. If you're not ready to trust LLM output at all, this tool isn't going to change that — but you probably aren't using Claude Code or Codex in the first place.
+You're already trusting LLM output if you use Claude Code or Codex. Stagecraft adds structure to *how* you trust it: peer review by other agents (or humans!), test gates, security gates, sign-off gates. If you're not ready to trust LLM output at all, this tool isn't going to change that — but you probably aren't using Claude Code or Codex in the first place.
 
 ### "What about cost? Multi-model adversarial review sounds expensive."
 

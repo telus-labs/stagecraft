@@ -1,6 +1,6 @@
 ---
 description: >
-  Run a stage of the ai-dev-team pipeline. Wraps the `devteam` CLI so you
+  Run a stage of the Stagecraft pipeline. Wraps the `devteam` CLI so you
   can dispatch a stage (PM brief, design, build, review, QA, deploy, etc.)
   from inside Claude Code. The CLI emits the role-specific prompt; you
   invoke the matching subagent (under .claude/agents/) to do the work.
@@ -8,7 +8,7 @@ description: >
 
 # /devteam
 
-Drive the ai-dev-team pipeline.
+Drive the Stagecraft pipeline.
 
 ## Input
 
@@ -26,7 +26,7 @@ re-invoke with `stage <name>`.
 ## Behavior
 
 1. Run `devteam <subcommand>` in a Bash tool call. (Install `devteam`
-   globally with `npm link` from the ai-dev-team repo if it's not on the
+   globally with `npm link` from the Stagecraft repo if it's not on the
    user's PATH.)
 2. The CLI prints one stage prompt per workstream (one for single-role
    stages, N for multi-role stages like `build`).
@@ -40,7 +40,7 @@ re-invoke with `stage <name>`.
 5. Report status back to the user and ask whether to proceed to the
    next stage.
 
-## Gate identity (per ai-dev-team contract F)
+## Gate identity (per Stagecraft contract F)
 
 Workstream gates carry: `stage`, `workstream`, `status`, `track`,
 `timestamp`, `blockers`, `warnings`, plus stage-specific fields.

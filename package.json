@@ -1,8 +1,8 @@
 {
-  "name": "ai-dev-team",
+  "name": "stagecraft",
   "version": "0.1.0",
   "private": true,
-  "description": "Model-agnostic AI dev team pipeline. A model-agnostic spine plus per-host adapters; one shared source of truth for templates, schemas, role briefs, and orchestrator logic.",
+  "description": "Stagecraft — a model-agnostic AI dev team pipeline across Claude Code, Codex, and Gemini CLI. Staged work, multi-host peer review, audit gates.",
   "bin": {
     "devteam": "bin/devteam"
   },

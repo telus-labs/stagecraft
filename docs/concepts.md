@@ -1,6 +1,6 @@
 # Concepts
 
-One-sentence definitions of every primitive in ai-dev-team. The thing you skim before reading anything else.
+One-sentence definitions of every primitive in Stagecraft. The thing you skim before reading anything else.
 
 ## Pipeline shape
 

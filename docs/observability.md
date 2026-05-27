@@ -1,6 +1,6 @@
 # Observability
 
-ai-dev-team emits [OpenTelemetry](https://opentelemetry.io) spans for every pipeline operation. Drop them into Jaeger, Tempo, Honeycomb, Datadog, New Relic, or anything else that speaks OTLP/HTTP.
+Stagecraft emits [OpenTelemetry](https://opentelemetry.io) spans for every pipeline operation. Drop them into Jaeger, Tempo, Honeycomb, Datadog, New Relic, or anything else that speaks OTLP/HTTP.
 
 ## Quick start
 

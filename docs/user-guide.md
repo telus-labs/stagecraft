@@ -1,6 +1,6 @@
 # User guide
 
-How to use ai-dev-team day-to-day. This is the long-form companion to:
+How to use Stagecraft day-to-day. This is the long-form companion to:
 
 - [`README.md`](../README.md) — what it is + quick start.
 - [`EXAMPLE.md`](../EXAMPLE.md) — one full pipeline run end-to-end.
@@ -26,8 +26,8 @@ If you've never used it before, read EXAMPLE first.
 
 ```bash
 # 1. Get the framework
-git clone <repo> /path/to/ai-dev-team
-cd /path/to/ai-dev-team
+git clone <repo> /path/to/stagecraft
+cd /path/to/stagecraft
 npm install
 
 # 2. Make the CLI available globally (optional but recommended)
@@ -290,10 +290,10 @@ The Platform role at Stage 8 reads `.devteam/config.yml`'s `deploy.adapter` and 
 
 ## Upgrading
 
-ai-dev-team versions are tracked in `package.json#version`. Upgrade by pulling the latest framework and re-running init in each target project:
+Stagecraft versions are tracked in `package.json#version`. Upgrade by pulling the latest framework and re-running init in each target project:
 
 ```bash
-cd /path/to/ai-dev-team
+cd /path/to/stagecraft
 git pull && npm install
 
 cd ~/projects/my-app

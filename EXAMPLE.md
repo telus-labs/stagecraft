@@ -1,8 +1,8 @@
 # EXAMPLE — One pipeline run, end to end
 
-Walks one feature ("Add SMS notification opt-in to user settings") through the full pipeline. Every command in this doc is real and every output is captured from an actual run.
+Walks one feature ("Add SMS notification opt-in to user settings") through the full Stagecraft pipeline. Every command in this doc is real and every output is captured from an actual run.
 
-If you read one doc to learn ai-dev-team, read this one.
+If you read one doc to learn Stagecraft, read this one.
 
 ## Setup
 
