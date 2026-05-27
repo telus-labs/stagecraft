@@ -58,6 +58,16 @@ Commands:
   ui [--port N] [--open]           Start a local web UI on http://127.0.0.1:3737/
                                    showing pipeline state, gate detail, live
                                    updates via SSE. --open launches the browser.
+  memory <subcommand>              Persistent project memory.
+    ingest                         Index pipeline/* artifacts (brief,
+                                   design-spec, ADRs, retro, etc.) via
+                                   semantic embeddings into .devteam/memory/.
+    query "text" [--limit N]       Semantic search.
+    stats                          What's indexed.
+    clear                          Wipe .devteam/memory/.
+    reindex                        Re-embed everything (after embedder change).
+                                   Local embedder by default; ~150MB model
+                                   downloaded once on first ingest.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -78,6 +88,8 @@ function parseFlags(argv) {
     if (a === "--headless"){ flags.headless = true;     continue; }
     if (a === "--port")    { flags.port    = Number(argv[++i]); continue; }
     if (a === "--open")    { flags.open    = true;      continue; }
+    if (a === "--limit")   { flags.limit   = argv[++i]; continue; }
+    if (a === "--kind")    { flags.kind    = argv[++i]; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -162,6 +174,78 @@ function cmdNext(argv) {
     for (const b of result.blockers) console.log(`     - ${b}`);
   }
   if (result.command) console.log(`   → ${result.command}`);
+}
+
+function cmdMemory(argv) {
+  const sub = argv[0];
+  const rest = argv.slice(1);
+  const { flags, positional } = parseFlags(rest);
+  const cwd = flags.cwd || process.cwd();
+  const mem = require(path.join(__dirname, "..", "core", "memory"));
+
+  if (sub === "ingest") {
+    process.stderr.write(`[memory] ingesting from ${cwd}…\n`);
+    mem.ingest({ cwd })
+      .then((r) => {
+        console.log(`✅ ${r.artifacts} artifact(s) → ${r.chunks} chunk(s)`);
+        console.log(`   embedder: ${r.embedder.modelId} (dim ${r.embedder.dim})`);
+        if (r.skipped.length > 0) {
+          console.log(`   skipped:`);
+          for (const s of r.skipped) console.log(`     - ${s}`);
+        }
+        if (r.artifacts === 0) {
+          console.log(`   no pipeline artifacts found. Run a stage first, or check --cwd.`);
+        }
+      })
+      .catch((err) => { console.error(`devteam memory ingest: ${err.message}`); process.exit(1); });
+    return;
+  }
+  if (sub === "query") {
+    const text = positional.join(" ");
+    if (!text) { console.error("Usage: devteam memory query \"search text\" [--limit N] [--kind brief|adr|...]"); process.exit(2); }
+    mem.query(text, { cwd, limit: flags.limit ? Number(flags.limit) : undefined, kind: flags.kind })
+      .then((results) => {
+        if (flags.json) { console.log(JSON.stringify(results, null, 2)); return; }
+        if (results.length === 0) { console.log("(no matches)"); return; }
+        for (const r of results) {
+          console.log(`\n  ${r.similarity.toFixed(3)}  [${r.kind}] ${r.title} → ${r.heading}`);
+          console.log(`           ${r.source}`);
+          const snippet = r.text.split("\n").slice(0, 3).join(" ").slice(0, 180);
+          console.log(`           ${snippet}${snippet.length >= 180 ? "…" : ""}`);
+        }
+      })
+      .catch((err) => { console.error(`devteam memory query: ${err.message}`); process.exit(1); });
+    return;
+  }
+  if (sub === "stats") {
+    const s = mem.stats({ cwd });
+    if (flags.json) { console.log(JSON.stringify(s, null, 2)); return; }
+    console.log(`Documents: ${s.documents}`);
+    console.log(`Chunks:    ${s.chunks}`);
+    if (s.embedder) console.log(`Embedder:  ${s.embedder.modelId} (dim ${s.embedder.dim})`);
+    console.log(`Schema:    v${s.schemaVersion}`);
+    if (Object.keys(s.by_kind).length > 0) {
+      console.log("By kind:");
+      for (const [k, v] of Object.entries(s.by_kind)) {
+        console.log(`  ${k.padEnd(20)} ${v.documents} doc(s), ${v.chunks} chunk(s)`);
+      }
+    }
+    return;
+  }
+  if (sub === "clear") {
+    mem.clear({ cwd });
+    console.log(`Cleared .devteam/memory/ in ${cwd}`);
+    return;
+  }
+  if (sub === "reindex") {
+    mem.reindex({ cwd })
+      .then((r) => console.log(`Reindexed: ${r.artifacts} artifact(s) → ${r.chunks} chunk(s) via ${r.embedder.modelId}`))
+      .catch((err) => { console.error(`devteam memory reindex: ${err.message}`); process.exit(1); });
+    return;
+  }
+  console.error(`Unknown memory subcommand: ${sub || "(none)"}`);
+  console.error("Usage: devteam memory <ingest|query|stats|clear|reindex>");
+  process.exit(2);
 }
 
 function cmdUI(argv) {
@@ -385,6 +469,7 @@ function main() {
     case "summary":  return cmdSummary(rest);
     case "doctor":   return cmdDoctor(rest);
     case "ui":       return cmdUI(rest);
+    case "memory":   return cmdMemory(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":

@@ -17,6 +17,7 @@
     "release:notes": "node scripts/release.js notes"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.55.0",
     "@opentelemetry/resources": "^1.28.0",

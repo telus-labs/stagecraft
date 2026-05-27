@@ -49,7 +49,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 | D4 | **Per-role per-model performance scores** | 5 | 3 | Track which (role, host) combinations produce gates that pass first-try most often. Surfaces "Codex is better than Claude at backend; Claude is better at design." Drives D5. |
 | D5 | **Adaptive routing** | 5 | 3 | Routing config auto-updates from D4 telemetry. The system learns which model is best at which role. (Builds on D4.) |
 | D6 | **Cost telemetry** | 4 | 2 | Per-run cost breakdown by stage, by host. Pairs with D2/D5 to optimize the cost-per-shipped-feature ratio. |
-| D7 | **Persistent project memory (embeddings index)** | 5 | 4 | Beyond lessons-learned: index every brief, design-spec, ADR, retrospective into a vector store. Future PM can pull "similar past briefs"; future Principal can pull "similar past ADRs." |
+| D7 | ~~**Persistent project memory (embeddings index)**~~ ✅ landed v1 (Unreleased) | 5 | 4 | Per-project semantic memory under `.devteam/memory/`. Local-default embedder (`Xenova/bge-small-en-v1.5` via `@huggingface/transformers`, ~33MB lazy download). JSON backend (git-friendly); `MemoryStore` interface ready for the sqlite-vec backend in v0.3. Indexes briefs, design specs, ADRs, retros, lessons, runbooks, accessibility/observability/security reports. CLI: `devteam memory {ingest,query,stats,clear,reindex}`. Cross-project import deferred. |
 
 ## E. Developer experience
 
@@ -120,7 +120,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 6. ~~**D2 — Gate-pass-rate dashboards** (4 / 2)~~ — ✅ landed (Unreleased).
 7. ~~**F1 — GitHub PR integration** (4 / 3)~~ — ✅ landed (Unreleased).
 8. ~~**E2 — Web UI for pipeline runs** (4 / 4)~~ — ✅ landed (Unreleased).
-9. **D7 — Persistent project memory (embeddings)** (5 / 4) — enables continuity across runs; foundation for G8.
+9. ~~**D7 — Persistent project memory (embeddings)** (5 / 4)~~ — ✅ landed v1 (Unreleased).
 10. ~~**G1 — Multi-model adversarial review** (5 / 3)~~ — ✅ landed (Unreleased).
 
 ---
