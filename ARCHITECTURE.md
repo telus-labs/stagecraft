@@ -162,6 +162,12 @@ routing:
     qa: claude-code
   stages:                           # per-stage override, takes precedence
     stage-08: claude-code           # deploy always on claude-code regardless of role
+  review_fanout:                    # opt-in: stage-05 (peer-review) runs in
+    - claude-code                   # parallel across all listed hosts. Each
+    - codex                         # area × host pair is a separate workstream
+    - gemini-cli                    # (12 workstreams for 4 areas × 3 hosts).
+                                    # Aggregate is pessimistic (any FAIL wins).
+                                    # Default: [] (no fanout).
 ```
 
 Resolution order, highest to lowest: `routing.stages.<stage>` → `routing.roles.<role>` → `routing.default_host`. Unresolvable → orchestrator halts with a clear error.

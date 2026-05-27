@@ -12,6 +12,7 @@ const DEFAULTS = {
     default_host: "generic",
     roles: {},
     stages: {},
+    review_fanout: [],
   },
   pipeline: {
     default_track: "full",
@@ -33,6 +34,7 @@ function loadConfig(cwd = process.cwd()) {
       default_host: parsed.routing?.default_host ?? DEFAULTS.routing.default_host,
       roles: parsed.routing?.roles ?? DEFAULTS.routing.roles,
       stages: parsed.routing?.stages ?? DEFAULTS.routing.stages,
+      review_fanout: Array.isArray(parsed.routing?.review_fanout) ? parsed.routing.review_fanout : [],
     },
     pipeline: {
       default_track: parsed.pipeline?.default_track ?? DEFAULTS.pipeline.default_track,

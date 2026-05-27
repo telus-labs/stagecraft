@@ -66,6 +66,11 @@ const REVIEWER_MAP = {
 
 const KNOWN_AREAS = new Set(["backend", "frontend", "platform", "qa", "deps"]);
 
+// Host-based filenames trigger fanout-mode gate naming. When the
+// reviewer identifier matches a known host, gates are written to
+// stage-05.<area>.<host>.json instead of stage-05.<area>.json.
+const KNOWN_HOSTS = new Set(["claude-code", "codex", "gemini-cli", "generic"]);
+
 const SECTION_HEADER_RE = /^##\s+Review\s+of\s+(\w[\w-]*)\s*$/i;
 const REVIEW_MARKER_RE = /^\s*REVIEW:\s*(APPROVED|CHANGES\s+REQUESTED)\s*$/i;
 
@@ -166,18 +171,30 @@ function reviewerNameFromPath(filePath) {
   return REVIEWER_MAP[m[1]] || m[1];
 }
 
+// Return the host segment when the filename is host-based ("by-codex.md",
+// "by-claude-code.md", etc.); null otherwise. Drives fanout gate naming.
+function hostFromPath(filePath) {
+  const base = path.basename(filePath);
+  const m = base.match(/^by-([\w-]+)\.md$/);
+  if (!m) return null;
+  return KNOWN_HOSTS.has(m[1]) ? m[1] : null;
+}
+
 // ---------------------------------------------------------------------------
 // Gate upsert (locked, atomic write)
 // ---------------------------------------------------------------------------
 
-function applyVerdict({ area, verdict, reviewer }) {
+function applyVerdict({ area, verdict, reviewer, host }) {
   if (!fs.existsSync(GATES_DIR)) fs.mkdirSync(GATES_DIR, { recursive: true });
 
-  const gatePath = path.join(GATES_DIR, `stage-05.${area}.json`);
-  const lockPath = path.join(GATES_DIR, `.stage-05.${area}.lock`);
+  // Fanout mode: host-suffixed gate name (stage-05.<area>.<host>.json).
+  // Non-fanout: canonical per-area gate (stage-05.<area>.json).
+  const baseName = host ? `stage-05.${area}.${host}` : `stage-05.${area}`;
+  const gatePath = path.join(GATES_DIR, `${baseName}.json`);
+  const lockPath = path.join(GATES_DIR, `.${baseName}.lock`);
 
   if (!acquireLock(lockPath)) {
-    console.log(`[approval-derivation] ⚠️  could not acquire lock for ${area} after ${LOCK_RETRIES} retries; skipping`);
+    console.log(`[approval-derivation] ⚠️  could not acquire lock for ${baseName} after ${LOCK_RETRIES} retries; skipping`);
     return;
   }
 
@@ -199,7 +216,11 @@ function applyVerdict({ area, verdict, reviewer }) {
       gate = {
         stage: "stage-05",
         workstream: area,
-        host: HOST,
+        // For fanout gates the host IS the fanout target (the reviewer
+        // is acting AS that host's reviewer). Otherwise it's the host
+        // that ran the actual review session (claude-code by default
+        // since this hook is wired only into claude-code today).
+        host: host || HOST,
         orchestrator: ORCHESTRATOR_ID,
         track: "full",
         status: "FAIL",
@@ -270,9 +291,10 @@ function main() {
     const fullPath = path.join(REVIEW_DIR, file);
     const reviewer = reviewerNameFromPath(fullPath);
     if (!reviewer) continue;
+    const host = hostFromPath(fullPath);  // null unless it's a fanout file
     const verdicts = parseReviewFile(fullPath);
     for (const v of verdicts) {
-      applyVerdict({ area: v.area, verdict: v.verdict, reviewer });
+      applyVerdict({ area: v.area, verdict: v.verdict, reviewer, host });
     }
   }
   process.exit(0);
@@ -288,4 +310,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { main, parseReviewFile, applyVerdict, reviewerNameFromPath };
+module.exports = { main, parseReviewFile, applyVerdict, reviewerNameFromPath, hostFromPath, KNOWN_HOSTS };

@@ -76,7 +76,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 
 These don't fit neatly in impact/effort because their value depends on bets about how the field will evolve. They are the things that would meaningfully differentiate this tool from "just another AI dev pipeline."
 
-### G1. Multi-model adversarial review
+### G1. Multi-model adversarial review ✅ landed (Unreleased)
 For high-stakes changes (auth, payments, IaC), peer-review runs **in parallel** across three different model families, each asked to find the strongest objection. A synthesis pass resolves disagreements. The diversity of model architectures catches things single-family review misses.
 
 ### G2. Closed-loop acceptance criteria → exec spec → tests
@@ -121,7 +121,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 7. ~~**F1 — GitHub PR integration** (4 / 3)~~ — ✅ landed (Unreleased).
 8. ~~**E2 — Web UI for pipeline runs** (4 / 4)~~ — ✅ landed (Unreleased).
 9. **D7 — Persistent project memory (embeddings)** (5 / 4) — enables continuity across runs; foundation for G8.
-10. **G1 — Multi-model adversarial review** (5 / 3) — one of the few items that is *qualitatively* better than what a single team can do.
+10. ~~**G1 — Multi-model adversarial review** (5 / 3)~~ — ✅ landed (Unreleased).
 
 ---
 

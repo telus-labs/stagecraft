@@ -23,14 +23,46 @@ function workstreamId(stage, role, roleCount) {
   return roleCount > 1 ? `${stage}.${role}` : stage;
 }
 
-function buildDescriptor(stageDef, role) {
+// Compute the full dispatch plan for a stage: which (role, host) pairs
+// the orchestrator should invoke, with their workstream ids and gate
+// filenames. Normally there's one entry per role; for peer-review with
+// routing.review_fanout set, each role expands to N entries (one per
+// fanout host), giving N×M total entries.
+//
+// Returns: [ { role, hostName, workstreamId, gateFile } ]
+//
+// hostName is null when fanout is active and the caller should resolve
+// it from the entry's hostName field directly (no routing precedence).
+// For non-fanout, the caller resolves via routing as usual.
+function computeDispatchPlan(stageDef, config) {
+  const fanout = (config && config.routing && Array.isArray(config.routing.review_fanout))
+    ? config.routing.review_fanout
+    : [];
+  const isPeerReview = stageDef.stage === "stage-05" && fanout.length > 0;
+
+  const plan = [];
+  for (const role of stageDef.roles) {
+    if (isPeerReview) {
+      for (const hostName of fanout) {
+        const ws = `${stageDef.stage}.${role}.${hostName}`;
+        plan.push({ role, hostName, workstreamId: ws, gateFile: `${ws}.json`, fanout: true });
+      }
+    } else {
+      const ws = workstreamId(stageDef.stage, role, stageDef.roles.length);
+      plan.push({ role, hostName: null, workstreamId: ws, gateFile: `${ws}.json`, fanout: false });
+    }
+  }
+  return plan;
+}
+
+function buildDescriptor(stageDef, role, opts = {}) {
   const allowedWrites = stageDef.roleWrites?.[role] ?? stageDef.allowedWrites;
   return {
     stage: stageDef.stage,
     name: nameForStage(stageDef.stage),
     role,
     rolesInStage: stageDef.roles,
-    workstreamId: workstreamId(stageDef.stage, role, stageDef.roles.length),
+    workstreamId: opts.workstreamId || workstreamId(stageDef.stage, role, stageDef.roles.length),
     objective: stageDef.objective,
     readFirst: stageDef.readFirst,
     allowedWrites,
@@ -76,27 +108,42 @@ function runStage(stageName, opts = {}) {
     );
   }
 
+  const plan = computeDispatchPlan(stageDef, config);
+
   return withSpan("pipeline.stage", {
     "devteam.stage": stageDef.stage,
     "devteam.stage.name": stageName,
     "devteam.track": ctx.track,
     "devteam.roles": stageDef.roles.join(","),
-    "devteam.workstream_count": stageDef.roles.length,
+    "devteam.workstream_count": plan.length,
+    "devteam.fanout": plan.some((p) => p.fanout) || undefined,
     "devteam.feature": ctx.feature || undefined,
   }, () => {
-    const dispatches = stageDef.roles.map((role) => withSpan("pipeline.workstream", {
+    const dispatches = plan.map((entry) => withSpan("pipeline.workstream", {
       "devteam.stage": stageDef.stage,
-      "devteam.workstream.role": role,
+      "devteam.workstream.role": entry.role,
+      "devteam.workstream.id": entry.workstreamId,
     }, () => {
-      const { hostName, adapter } = resolveAdapter(config, stageDef.stage, role);
-      const descriptor = buildDescriptor(stageDef, role);
+      // For fanout entries the host is fixed by the fanout list; for
+      // normal entries the router resolves via precedence.
+      let hostName, adapter;
+      if (entry.hostName) {
+        hostName = entry.hostName;
+        const { loadAdapter } = require("./router");
+        adapter = loadAdapter(hostName);
+      } else {
+        const resolved = resolveAdapter(config, stageDef.stage, entry.role);
+        hostName = resolved.hostName;
+        adapter = resolved.adapter;
+      }
+      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId });
       const prompt = withSpan("adapter.renderStagePrompt", {
         "devteam.host": hostName,
         "devteam.stage": stageDef.stage,
-        "devteam.workstream.role": role,
+        "devteam.workstream.role": entry.role,
       }, () => adapter.renderStagePrompt(descriptor, ctx));
-      setSpanAttributes({ "devteam.host": hostName, "devteam.workstream.id": descriptor.workstreamId });
-      return { role, host: hostName, descriptor, prompt, adapter };
+      setSpanAttributes({ "devteam.host": hostName });
+      return { role: entry.role, host: hostName, descriptor, prompt, adapter, fanout: entry.fanout };
     }));
 
     return {
@@ -164,24 +211,27 @@ function gateFileFor(stage, workstream, gatesDir) {
 function mergeWorkstreamGates(stageName, opts = {}) {
   const stageDef = getStage(stageName);
   if (!stageDef) throw new Error(`Unknown stage "${stageName}"`);
-  if (stageDef.roles.length === 1) {
-    return { merged: false, reason: "single-role stage; no merge needed" };
+  const config = opts.config || loadConfig(opts.cwd || process.cwd());
+  const plan = computeDispatchPlan(stageDef, config);
+  if (plan.length <= 1) {
+    return { merged: false, reason: "single-workstream stage; no merge needed" };
   }
 
   return withSpan("pipeline.merge", {
     "devteam.stage": stageDef.stage,
     "devteam.stage.name": stageName,
-    "devteam.workstream_count": stageDef.roles.length,
+    "devteam.workstream_count": plan.length,
+    "devteam.fanout": plan.some((p) => p.fanout) || undefined,
   }, () => {
     const gatesDir = opts.gatesDir || path.join(opts.cwd || process.cwd(), "pipeline", "gates");
     const wsGates = [];
-    for (const role of stageDef.roles) {
-      const wsFile = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
+    for (const entry of plan) {
+      const wsFile = path.join(gatesDir, entry.gateFile);
       if (!fs.existsSync(wsFile)) {
-        setSpanAttributes({ "devteam.merge.result": "missing", "devteam.merge.missing_role": role });
+        setSpanAttributes({ "devteam.merge.result": "missing", "devteam.merge.missing": entry.workstreamId });
         return { merged: false, reason: `missing workstream gate: ${wsFile}` };
       }
-      wsGates.push({ role, gate: JSON.parse(fs.readFileSync(wsFile, "utf8")) });
+      wsGates.push({ role: entry.role, host: entry.hostName, gate: JSON.parse(fs.readFileSync(wsFile, "utf8")) });
     }
 
     const statuses = wsGates.map((w) => w.gate.status);
@@ -200,7 +250,7 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       warnings: wsGates.flatMap((w) => w.gate.warnings || []),
       workstreams: wsGates.map((w) => ({
         workstream: w.role,
-        host: w.gate.host || null,
+        host: w.host || w.gate.host || null,
         status: w.gate.status,
       })),
     };
@@ -435,6 +485,7 @@ module.exports = {
   next,
   summary,
   buildDescriptor,
+  computeDispatchPlan,
   ORCHESTRATOR_ID,
   rolesPath,
   templatesPath,

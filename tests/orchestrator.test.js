@@ -128,7 +128,7 @@ describe("orchestrator: mergeWorkstreamGates aggregation", () => {
     const cwd = track(makeTargetProject());
     const r = mergeWorkstreamGates("requirements", { cwd });
     assert.equal(r.merged, false);
-    assert.match(r.reason, /single-role/);
+    assert.match(r.reason, /single-(role|workstream)/);
   });
 
   it("reports missing workstreams without merging", () => {
