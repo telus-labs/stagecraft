@@ -26,7 +26,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ### Security
 
-- The dropped Node 18 matrix entry inherited a `npm audit` advisory in `@opentelemetry/sdk-node` (GHSA-q7rr-3cgh-j5r3 — Prometheus exporter process crash via malformed HTTP request). Stagecraft does not use the Prometheus exporter — traces ship via OTLP/HTTP — so the affected code path is unreachable. The "fix" lands on `@opentelemetry/sdk-node@0.218.x`, a multi-major jump from `0.55.x` with breaking changes throughout the SDK. Deferred to a dedicated OTel upgrade effort. Tracking only.
+- **GHSA-q7rr-3cgh-j5r3 resolved by removing the vulnerable package.** `@opentelemetry/sdk-node` was a convenience wrapper that we only used to wire `OTLPTraceExporter` + `Resource` onto a tracer provider — work that `NodeTracerProvider` (from `@opentelemetry/sdk-trace-node`, already in our deps as stable 1.x) does directly. `core/observability.js` now uses `NodeTracerProvider` + `BatchSpanProcessor` explicitly, and `@opentelemetry/sdk-node` is removed from `package.json`. `npm install` drops 51 transitive packages (including the vulnerable Prometheus exporter). `npm audit` reports `found 0 vulnerabilities` post-change. Production tracing behavior is unchanged: same span shape, same OTLP/HTTP transport, same shutdown flush on `beforeExit` / `SIGINT` / `SIGTERM`.
 
 ---
 

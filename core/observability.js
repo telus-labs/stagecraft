@@ -36,24 +36,32 @@ function maybeInitSDK() {
     return;
   }
   try {
-    const { NodeSDK } = require("@opentelemetry/sdk-node");
+    // We use NodeTracerProvider (sdk-trace-node, stable 1.x) directly
+    // rather than the convenience NodeSDK wrapper (sdk-node, experimental
+    // 0.x). NodeSDK pulls in the Prometheus exporter at install time
+    // (vulnerable per GHSA-q7rr-3cgh-j5r3 < 0.217), and we don't use any
+    // sdk-node feature beyond what NodeTracerProvider already gives us:
+    // resource attribution + batched OTLP export. Dropping sdk-node
+    // eliminates the advisory's package from our dependency tree entirely.
+    const { NodeTracerProvider } = require("@opentelemetry/sdk-trace-node");
+    const { BatchSpanProcessor } = require("@opentelemetry/sdk-trace-base");
     const { OTLPTraceExporter } = require("@opentelemetry/exporter-trace-otlp-http");
     const { Resource } = require("@opentelemetry/resources");
     const { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } = require("@opentelemetry/semantic-conventions");
 
-    const sdk = new NodeSDK({
+    const provider = new NodeTracerProvider({
       resource: new Resource({
         [ATTR_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME || "devteam",
         [ATTR_SERVICE_VERSION]: TRACER_VERSION,
       }),
-      traceExporter: new OTLPTraceExporter(),
+      spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
     });
-    sdk.start();
+    provider.register();
     // Flush on exit so short-lived CLI runs export their spans before
     // the process dies. Without this, last few spans are lost.
-    process.on("beforeExit", () => sdk.shutdown());
-    process.on("SIGINT", () => { sdk.shutdown().finally(() => process.exit(130)); });
-    process.on("SIGTERM", () => { sdk.shutdown().finally(() => process.exit(143)); });
+    process.on("beforeExit", () => provider.shutdown());
+    process.on("SIGINT", () => { provider.shutdown().finally(() => process.exit(130)); });
+    process.on("SIGTERM", () => { provider.shutdown().finally(() => process.exit(143)); });
   } catch (err) {
     // SDK packages missing? Run with no tracing instead of crashing.
     process.stderr.write(`[devteam] OTel SDK init failed: ${err.message}; running without tracing\n`);
