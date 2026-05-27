@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-07.schema.json",
+  "$id": "urn:stagecraft:schema:stage-07",
   "title": "Stage 07 Sign-off Gate",
   "description": "Stage 7 (PM Sign-off) gate. Authored by the pm agent OR by the orchestrator on the auto-fold path when Stage 6 passes cleanly with a 1:1 criterion mapping. The auto_from_stage_06 flag (additional property) discriminates the two paths.",
   "type": "object",

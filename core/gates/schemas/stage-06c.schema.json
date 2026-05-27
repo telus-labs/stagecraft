@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-06c.schema.json",
+  "$id": "urn:stagecraft:schema:stage-06c",
   "title": "Stage 06c Observability Gate",
   "description": "Stage 6c (Observability) gate. Authored by the Platform role. Reads §9 'Observability requirements' from pipeline/brief.md (and any expansion in pipeline/design-spec.md) to extract the metrics / logs / traces the change promised to emit, then verifies each one is actually present in the shipped code. PASS requires zero gaps across all three signal categories. WARN allowed when verified ⊇ required but verification_method is weaker than 'runtime-probe' (i.e. we found references in code but didn't observe them in a real run).",
   "type": "object",

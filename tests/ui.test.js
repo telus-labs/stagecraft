@@ -135,3 +135,48 @@ describe("ui: HTTP server", () => {
     assert.ok(r.status === 403 || r.status === 404);
   });
 });
+
+describe("ui: non-loopback bind guard", () => {
+  const ORIG = process.env.STAGECRAFT_UI_ALLOW_REMOTE;
+  afterEach(() => {
+    if (ORIG === undefined) delete process.env.STAGECRAFT_UI_ALLOW_REMOTE;
+    else process.env.STAGECRAFT_UI_ALLOW_REMOTE = ORIG;
+  });
+
+  it("allows loopback bind without opt-in (127.0.0.1)", async () => {
+    delete process.env.STAGECRAFT_UI_ALLOW_REMOTE;
+    const cwd = track(makeTargetProject());
+    const s = trackServer(await startServer({ port: 0, cwd, host: "127.0.0.1" }));
+    assert.match(s.url, /127\.0\.0\.1/);
+  });
+
+  it("allows loopback bind without opt-in (localhost)", async () => {
+    delete process.env.STAGECRAFT_UI_ALLOW_REMOTE;
+    const cwd = track(makeTargetProject());
+    const s = trackServer(await startServer({ port: 0, cwd, host: "localhost" }));
+    assert.ok(s.url.startsWith("http://"));
+  });
+
+  it("refuses non-loopback bind without STAGECRAFT_UI_ALLOW_REMOTE=1", async () => {
+    delete process.env.STAGECRAFT_UI_ALLOW_REMOTE;
+    const cwd = track(makeTargetProject());
+    await assert.rejects(
+      () => startServer({ port: 0, cwd, host: "0.0.0.0" }),
+      (err) => {
+        assert.equal(err.code, "EREMOTEBIND");
+        assert.match(err.message, /non-loopback/);
+        assert.match(err.message, /STAGECRAFT_UI_ALLOW_REMOTE/);
+        return true;
+      },
+    );
+  });
+
+  it("allows non-loopback bind when STAGECRAFT_UI_ALLOW_REMOTE=1", async () => {
+    process.env.STAGECRAFT_UI_ALLOW_REMOTE = "1";
+    const cwd = track(makeTargetProject());
+    // 0.0.0.0 binds to all interfaces — the server should start; we don't
+    // need to actually fetch through it for this test.
+    const s = trackServer(await startServer({ port: 0, cwd, host: "0.0.0.0" }));
+    assert.ok(s.url.startsWith("http://"));
+  });
+});

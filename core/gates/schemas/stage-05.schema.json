@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-05.schema.json",
+  "$id": "urn:stagecraft:schema:stage-05",
   "title": "Stage 05 Peer Review Gate",
   "description": "Stage 5 (Peer Code Review) gate. Workstream gates land at pipeline/gates/stage-05.<area>.json (one per area: backend, frontend, platform, qa) and the orchestrator merges them into pipeline/gates/stage-05.json. WRITTEN BY THE approval-derivation HOOK ONLY — never authored by an agent. The hook parses pipeline/code-review/by-<reviewer>.md for REVIEW: APPROVED / REVIEW: CHANGES REQUESTED markers and reconciles approvals/changes_requested on every save. PASS when approvals.length >= required_approvals AND changes_requested is empty.",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-09.schema.json",
+  "$id": "urn:stagecraft:schema:stage-09",
   "title": "Stage 09 Retrospective Gate",
   "description": "Stage 9 (Retrospective) gate. Informational — status is always PASS unless the synthesis itself failed. Authored by the principal agent after parallel agent contributions land in pipeline/retrospective.md.",
   "type": "object",

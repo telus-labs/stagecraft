@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/gate.schema.json",
+  "$id": "urn:stagecraft:schema:gate",
   "title": "AI Dev Team Gate",
   "description": "Base contract for every pipeline gate JSON written under pipeline/gates/. Per-stage schemas extend this with stage-specific required fields. Field semantics are defined in .devteam/rules/gates.md; core/gates/validator.js is the authoritative reader. A gate may be a workstream gate (per-role, written by a single adapter) or a stage gate (merged from workstream gates by the orchestrator).",
   "type": "object",

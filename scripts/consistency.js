@@ -148,7 +148,7 @@ function checkSchemaIdsAndDraft() {
     const s = readJSON(`core/gates/schemas/${f}`);
     if (s.$schema === "https://json-schema.org/draft/2020-12/schema") pass(`${f} draft 2020-12`);
     else fail(f, `wrong $schema: ${s.$schema}`);
-    if (s.$id && s.$id.includes("ai-dev-team")) pass(`${f} $id under ai-dev-team`);
+    if (s.$id && /^urn:stagecraft:schema:/.test(s.$id)) pass(`${f} $id is urn:stagecraft:schema:*`);
     else fail(f, `wrong $id: ${s.$id}`);
   }
 }

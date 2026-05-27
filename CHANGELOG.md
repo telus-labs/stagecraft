@@ -12,6 +12,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 - `tests/headless.test.js` (8 tests) — covers `core/adapters/headless.js`: command resolution, env override, missing-command rejection, exit-code propagation, spawn-ENOENT error, gatePath detection, EPIPE swallowing, whitespace splitting.
 - `tests/release.test.js` (7 tests) — covers `scripts/release.js notes`: `[Unreleased]` default, middle section, last-section (no trailing header to anchor to — the regression that bit v0.1.0's tag), missing-version error, blank-line preservation, trailing `---` stripping.
+- `tests/ui.test.js`: 4 new tests for the non-loopback bind guard — accepts loopback (`127.0.0.1`, `localhost`) without opt-in, rejects non-loopback bind with `EREMOTEBIND` unless `STAGECRAFT_UI_ALLOW_REMOTE=1` is set, allows non-loopback with a stderr warning when opt-in is given.
 
 ### Changed
 
@@ -19,6 +20,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - `scripts/release.js notes`: strips the trailing `---` separator from extracted sections. CHANGELOG uses `---` between sections structurally, but it was bleeding into annotated tag messages. Annotated tags built from `release:notes <version>` now end cleanly at the section body.
 - `docs/TESTING.md`: rewritten to reflect current reality (362 tests / 24 files / 81 suites / ~1.5s, tiers 1+2 shipped) instead of the original strategy-doc framing where tiers 1 and 2 were aspirational.
 - `docs/GAP-ANALYSIS.md`: rewritten as a historical-then-current doc. Migration is complete; most listed gaps are closed. The load-bearing section now is the feature inventory of what Stagecraft has that the forks didn't (contracts A/B/C/F, conditionalOn, stage-04b/06b/06c, OTel, memory, fanout, dashboards, PR integration, web UI, secret scanning, consistency lint). For active gap tracking, see `docs/BACKLOG.md`.
+- Schema `$id` URLs: switched from the placeholder `https://example.local/ai-dev-team/<name>.schema.json` to `urn:stagecraft:schema:<name>`. Internal identifiers; the URN form avoids claiming a DNS namespace we don't own. `tests/schemas.test.js` and `scripts/consistency.js` updated to assert the new form.
+- `core/ui/server.js`: refuses to bind to non-loopback hosts unless `STAGECRAFT_UI_ALLOW_REMOTE=1` is set. The UI has no auth, no rate limits, and exposes full pipeline state — making a remote bind a conscious opt-in instead of a typo-distance default. Loopback bind (`127.0.0.1`, `::1`, `localhost`) is unaffected. When opt-in is given, a loud stderr warning prints at startup.
+- OpenTelemetry dependency pins: `^x.y.z` → `~x.y.z` for all `@opentelemetry/*` packages. Pre-1.0 OTel SDK packages have historically shipped breaks in minor releases; tilde restricts to patch-only updates.
+
+### Security
+
+- The dropped Node 18 matrix entry inherited a `npm audit` advisory in `@opentelemetry/sdk-node` (GHSA-q7rr-3cgh-j5r3 — Prometheus exporter process crash via malformed HTTP request). Stagecraft does not use the Prometheus exporter — traces ship via OTLP/HTTP — so the affected code path is unreachable. The "fix" lands on `@opentelemetry/sdk-node@0.218.x`, a multi-major jump from `0.55.x` with breaking changes throughout the SDK. Deferred to a dedicated OTel upgrade effort. Tracking only.
 
 ---
 

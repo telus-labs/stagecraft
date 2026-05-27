@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-04b.schema.json",
+  "$id": "urn:stagecraft:schema:stage-04b",
   "title": "Stage 04b Security Review Gate",
   "description": "Stage 4b (Security Review) gate. Conditional — only written when stage-04a reports security_review_required: true. Authored by the security role; veto: true halts the pipeline regardless of any other gate.",
   "type": "object",

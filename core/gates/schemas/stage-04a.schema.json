@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-04a.schema.json",
+  "$id": "urn:stagecraft:schema:stage-04a",
   "title": "Stage 04a Pre-Review Gate",
   "description": "Stage 4.5a (Pre-Review) gate. Authored by dev-platform after running lint, type-check, and SCA across the merged build output. Stage 5 cannot start until this passes.",
   "type": "object",

@@ -16,10 +16,10 @@ function schemaFor(stageId) {
 
 describe("schemas: structural integrity", () => {
   for (const f of fs.readdirSync(SCHEMAS_DIR).filter((x) => x.endsWith(".schema.json"))) {
-    it(`${f} has draft 2020-12 + $id under ai-dev-team`, () => {
+    it(`${f} has draft 2020-12 + urn:stagecraft:schema $id`, () => {
       const s = JSON.parse(fs.readFileSync(path.join(SCHEMAS_DIR, f), "utf8"));
       assert.equal(s.$schema, "https://json-schema.org/draft/2020-12/schema");
-      assert.match(s.$id, /ai-dev-team/);
+      assert.match(s.$id, /^urn:stagecraft:schema:/);
     });
 
     it(`${f} declares additionalProperties as true (extensible)`, () => {

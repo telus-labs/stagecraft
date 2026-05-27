@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-03.schema.json",
+  "$id": "urn:stagecraft:schema:stage-03",
   "title": "Stage 03 Clarification Gate",
   "description": "Stage 3 (Pre-Build Clarification) gate. The orchestrator (or pm in clarification mode) writes this after resolving any QUESTION: lines in pipeline/context.md.",
   "type": "object",

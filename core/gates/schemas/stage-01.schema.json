@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-01.schema.json",
+  "$id": "urn:stagecraft:schema:stage-01",
   "title": "Stage 01 Requirements Gate",
   "description": "Stage 1 (Requirements) gate. Authored by the pm agent after writing pipeline/brief.md. See .devteam/rules/pipeline.md §Stage 1 for the full contract.",
   "type": "object",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-08.schema.json",
+  "$id": "urn:stagecraft:schema:stage-08",
   "title": "Stage 08 Deploy Gate",
   "description": "Stage 8 (Deploy) gate. Authored by dev-platform after running the selected deploy adapter. PASS requires status PASS AND smoke_tests_passed true. The adapter-specific result lives in an additional 'adapter_result' object; see core/deploy/<adapter>.md for its shape.",
   "type": "object",

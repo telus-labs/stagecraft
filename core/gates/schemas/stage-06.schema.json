@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-06.schema.json",
+  "$id": "urn:stagecraft:schema:stage-06",
   "title": "Stage 06 Tests Gate",
   "description": "Stage 6 (Test & CI) gate. Authored by dev-qa from v2.3 forward (was dev-platform pre-v2.3). When all_acceptance_criteria_met is true AND criterion_to_test_mapping_is_one_to_one is true, the orchestrator auto-folds Stage 7 instead of invoking the PM.",
   "type": "object",

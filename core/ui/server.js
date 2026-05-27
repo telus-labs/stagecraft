@@ -8,6 +8,13 @@
 //     opts.cwd     — pipeline target directory; default process.cwd()
 //     opts.host    — bind host; default "127.0.0.1" (loopback only)
 //     opts.open    — if true, attempt to open the URL in the browser
+//
+// Non-loopback bind requires explicit opt-in via the
+// STAGECRAFT_UI_ALLOW_REMOTE=1 env var. The UI has no auth, no rate
+// limits, and exposes full pipeline state — binding to 0.0.0.0 or any
+// LAN-routable address makes that state available to anyone on the
+// network. The guard exists to make sure a remote bind is a conscious
+// choice, not a typo.
 
 const http = require("node:http");
 const fs = require("node:fs");
@@ -132,11 +139,36 @@ function watchGates(cwd, broker) {
 // HTTP server
 // ---------------------------------------------------------------------------
 
+// Hostnames that are unambiguously loopback. Anything else is treated as
+// "potentially routable" and requires explicit opt-in via STAGECRAFT_UI_ALLOW_REMOTE=1.
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
+function isLoopback(host) {
+  if (!host) return true; // undefined → server picks loopback default
+  return LOOPBACK_HOSTS.has(host);
+}
+
 function startServer(opts = {}) {
   const port = opts.port || Number(process.env.PORT) || 3737;
   const host = opts.host || "127.0.0.1";
   const cwd = opts.cwd || process.cwd();
   const broker = makeBroker();
+
+  if (!isLoopback(host)) {
+    if (process.env.STAGECRAFT_UI_ALLOW_REMOTE !== "1") {
+      const err = new Error(
+        `refusing to bind UI to non-loopback host "${host}" — the UI has no auth and exposes full pipeline state.\n` +
+        `If this is intentional, set STAGECRAFT_UI_ALLOW_REMOTE=1 and re-run. Otherwise use 127.0.0.1.`,
+      );
+      err.code = "EREMOTEBIND";
+      return Promise.reject(err);
+    }
+    process.stderr.write(
+      `\n⚠️  [devteam ui] binding to non-loopback host "${host}". ` +
+      `Pipeline state will be reachable to anyone who can connect to ${host}:${port}. ` +
+      `The UI has no auth.\n\n`,
+    );
+  }
 
   const server = http.createServer((req, res) => {
     const url = req.url || "/";

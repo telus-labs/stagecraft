@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-04.schema.json",
+  "$id": "urn:stagecraft:schema:stage-04",
   "title": "Stage 04 Build Gate",
   "description": "Stage 4 (Build) gate. Workstream gates land at pipeline/gates/stage-04.<role>.json (one per role: backend, frontend, platform, qa) and the orchestrator merges them into pipeline/gates/stage-04.json with a workstreams[] array. Per-workstream gates carry the stage-specific fields below; the merged gate also conforms to base gate.schema.json.",
   "type": "object",

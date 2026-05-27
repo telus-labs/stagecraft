@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.local/ai-dev-team/stage-06b.schema.json",
+  "$id": "urn:stagecraft:schema:stage-06b",
   "title": "Stage 06b Accessibility Audit Gate",
   "description": "Stage 6b (Accessibility Audit) gate. Authored by the QA role after running an axe-core / pa11y / Lighthouse accessibility audit against the changed UI. PASS requires zero critical AND zero serious WCAG violations. WARN allowed when moderate/minor findings exist but no critical/serious. When the change has no UI surface, set audit_skipped_reason and status PASS.",
   "type": "object",
