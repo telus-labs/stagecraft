@@ -28,7 +28,8 @@ It replaces two prior forks (`claude-dev-team`, `codex-dev-team`) that diverged 
 | Dispatch logic: runStage / runStageHeadless / mergeWorkstreamGates / next | `core/orchestrator.js` |
 | Gate validator | `core/gates/validator.js` |
 | Per-stage schemas | `core/gates/schemas/stage-NN.schema.json` |
-| Stoplist, budget, security-heuristic | `core/guards/` |
+| Stoplist, security-heuristic | `core/guards/` |
+| Budget tracking (out-of-band tool) | `scripts/budget.js` |
 | Approval-derivation hook | `core/hooks/approval-derivation.js` |
 | Headless invoke helper (shared across hosts) | `core/adapters/headless.js` |
 | Role briefs (single source of truth) | `roles/*.md` |
@@ -65,7 +66,7 @@ These are the things downstream code, tests, and adapters depend on. Edit only w
 
 ## Decisions deferred (do not solve in the wrong place)
 
-- **Auth, cost limits, model routing inside a host** — that's the host's job, not ours. Budget *tracking* is in `core/guards/budget.js` and is host-neutral; budget *enforcement at the API level* belongs to the host.
+- **Auth, cost limits, model routing inside a host** — that's the host's job, not ours. Budget *tracking* lives in `scripts/budget.js` as an out-of-band tool (`npm run budget`) and is host-neutral; budget *enforcement at the API level* belongs to the host.
 - **Multi-language reach** — Node only for now. See locked decision #11.
 - **Where the orchestrator runs** — user's machine for now. CI / cloud-worker dispatch is in the backlog.
 

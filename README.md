@@ -103,7 +103,7 @@ Host adapter (hosts/<host>/adapter.js)
 Core (model-agnostic spine, never invokes a model)
   - stage definitions + tracks       (core/pipeline/stages.js)
   - gate schemas + validator         (core/gates/)
-  - guards: stoplist, budget, security-heuristic
+  - guards: stoplist, security-heuristic
   - routing + orchestrator           (core/router.js, core/orchestrator.js)
          │
          ▼
@@ -134,7 +134,7 @@ stagecraft/
 │   ├── adapters/               ← host-adapter contract + shared helpers
 │   ├── config.js               ← .devteam/config.yml loader + routing
 │   ├── gates/                  ← validator + per-stage schemas
-│   ├── guards/                 ← stoplist, budget, security-heuristic
+│   ├── guards/                 ← stoplist, security-heuristic
 │   ├── hooks/                  ← approval-derivation (Stage 5)
 │   ├── orchestrator.js         ← runStage, mergeWorkstreamGates, next
 │   ├── pipeline/stages.js      ← STAGES table + STAGES_BY_TRACK

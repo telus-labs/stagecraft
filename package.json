@@ -1,6 +1,6 @@
 {
   "name": "stagecraft",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Stagecraft — a model-agnostic AI dev team pipeline across Claude Code, Codex, and Gemini CLI. Staged work, multi-host peer review, audit gates.",
   "bin": {
@@ -13,6 +13,7 @@
     "pr-pack": "node scripts/pr-pack.js",
     "pr-publish": "node scripts/pr-publish.js",
     "dashboard": "node scripts/dashboard.js",
+    "budget": "node scripts/budget.js",
     "release:check": "node scripts/release.js check",
     "release:notes": "node scripts/release.js notes"
   },

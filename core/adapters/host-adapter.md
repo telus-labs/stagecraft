@@ -138,7 +138,7 @@ A stage definition in `core/pipeline/stages.js` carries `roles: string[]` (1+ ro
 devteam stage build               (user types in terminal OR slash-command wrapper)
   │
   ├─► core/orchestrator loads stage definition (stage-04, roles=[backend, frontend, platform, qa])
-  ├─► core/guards check stoplist, allowed-writes, budget
+  ├─► core/guards check stoplist, allowed-writes
   │
   ├─► for each role in stage.roles:                         ◄── per-workstream dispatch
   │     ├─► core/router picks adapter:

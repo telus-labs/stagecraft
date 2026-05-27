@@ -1,22 +1,29 @@
 #!/usr/bin/env node
 /**
- * Budget tracking for the Claude Dev Team pipeline.
+ * Budget tracking for the Stagecraft pipeline.
  *
  * Usage:
- *   node scripts/budget.js init
- *   node scripts/budget.js update <stageName> <tokens> <elapsedMinutes>
- *   node scripts/budget.js check
+ *   npm run budget -- init
+ *   npm run budget -- update <stageName> <tokens> <elapsedMinutes>
+ *   npm run budget -- check
  *
  * When budget.enabled is false in .devteam/config.yml, all subcommands are no-ops.
+ * Out-of-band tool — not yet auto-invoked by the orchestrator. Callers feed it
+ * token / elapsed numbers from their own telemetry (e.g. OTel spans).
  */
 
 const fs = require("node:fs");
 const path = require("node:path");
 
-const ROOT = process.cwd();
+// Resolve ROOT lazily so exported functions remain callable from tests that
+// chdir() after require(). For the CLI entry path, process.cwd() doesn't
+// change between init and exit, so behavior is unchanged.
+function root() {
+  return process.cwd();
+}
 
 function readConfig() {
-  const configPath = path.join(ROOT, ".devteam", "config.yml");
+  const configPath = path.join(root(), ".devteam", "config.yml");
   if (!fs.existsSync(configPath)) return {};
   const text = fs.readFileSync(configPath, "utf8");
 
@@ -34,11 +41,11 @@ function readConfig() {
 }
 
 function budgetPath() {
-  return path.join(ROOT, "pipeline", "budget.md");
+  return path.join(root(), "pipeline", "budget.md");
 }
 
 function gatesDir() {
-  return path.join(ROOT, "pipeline", "gates");
+  return path.join(root(), "pipeline", "gates");
 }
 
 function parseBudgetMd(text) {
@@ -185,10 +192,11 @@ function cmdCheck() {
   }
 
   // escalate
+  const orchestratorId = `devteam@${require("../package.json").version}`;
   const gate = {
     stage: "stage-budget",
     status: "ESCALATE",
-    agent: "orchestrator",
+    orchestrator: orchestratorId,
     track: "full",
     timestamp: new Date().toISOString(),
     escalation_reason: `Budget exceeded — ${reason}`,

@@ -8,6 +8,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+_No changes yet._
+
+---
+
+## [0.2.0] — 2026-05-27
+
+Ten priority BACKLOG items shipped in a row, plus the rename from `ai-dev-team` to **Stagecraft**. The CLI binary remains `devteam`; only the project identity changed. Public surfaces unchanged from 0.1.0: gate JSON shape, host adapter contract, `.devteam/config.yml` schema. Additive features only — no breaking changes.
+
 ### Added
 
 - **OpenTelemetry tracing** (`docs/BACKLOG.md` D1). Every pipeline operation emits spans: `pipeline.stage`, `pipeline.workstream`, `pipeline.stage.headless`, `pipeline.merge`, `pipeline.next`, `adapter.renderStagePrompt`, `adapter.invoke`. Opt-in via the standard `OTEL_EXPORTER_OTLP_ENDPOINT` env var; no-op tracer when unset (zero overhead). Ships spans via OTLP/HTTP to Jaeger, Tempo, Honeycomb, Datadog Agent, etc.
@@ -33,6 +41,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - **Persistent project memory** (`docs/BACKLOG.md` D7, v1). Per-project semantic memory under `.devteam/memory/`. `devteam memory ingest` indexes briefs / design specs / ADRs / clarification logs / runbooks / test reports / accessibility / observability / security reviews / retrospectives / lessons-learned by splitting at level-2 markdown headings and embedding each chunk. `devteam memory query "text"` returns top-K matches by cosine similarity, ranked, with source path + section heading + snippet + similarity score. Local-default embedder (`Xenova/bge-small-en-v1.5` via `@huggingface/transformers`, ~33MB model lazy-downloaded to `~/.cache/huggingface/`, fully offline thereafter). JSON-backed storage (git-friendly); `MemoryStore` interface ready for the sqlite-vec backend planned for v0.3. Opt-out per artifact via the `stagecraft-no-memory` marker. Re-ingest replaces existing chunks (no duplicate rows). Cross-project import is deferred per D7 decision 3.
 - `core/memory/{embed,chunker,store,index}.js` + `tests/memory.test.js` (22 tests using `DEVTEAM_EMBEDDING_PROVIDER=stub` to keep CI fast and offline; live BGE smoke-tested separately against the example project).
 - Dependency: `@huggingface/transformers ^3.x` (the v3 successor to `@xenova/transformers`).
+- `tests/budget.test.js` (7 tests covering `parseBudgetMd` round-trip, config parsing, init/update/check round-trip, and the contract-F gate emitted on escalation).
+
+### Changed
+
+- **Project rename** `ai-dev-team` → **Stagecraft** (marketing / identity surface only). The CLI binary, config dir (`.devteam/`), gate-file paths, and ORCHESTRATOR_ID prefix (`devteam@<version>`) are all unchanged. README, ARCHITECTURE, AGENTS, CONTRIBUTING, and docs/* reflect the new name and tagline.
+- **Budget tracking relocated** from `core/guards/budget.js` → `scripts/budget.js`. It was never wired into the orchestrator as a runtime guard — it's an out-of-band tracker fed by external telemetry. New `npm run budget` exposes it. Fixed a latent contract-F violation: the gate it writes on escalation now carries `orchestrator: "devteam@<version>"` instead of the legacy `agent:` field. The exported `root()` is now lazy so the script's pure-logic exports can be called from tests after `chdir()`.
 
 ---
 
