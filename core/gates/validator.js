@@ -29,8 +29,19 @@
 const fs = require("fs");
 const path = require("path");
 
-const GATES_DIR = path.join(process.cwd(), "pipeline", "gates");
-const LESSONS_FILE = path.join(process.cwd(), "pipeline", "lessons-learned.md");
+// Resolve gates/lessons paths lazily against the current cwd. The validator
+// is normally spawned as a child process (each invocation gets a fresh cwd
+// from the orchestrator), so module-load caching was historically fine — but
+// caching forecloses any future caller that wants to require() this module
+// and validate against a different cwd. Lazy resolution preserves the
+// subprocess contract and makes the exports testable.
+function gatesDir() {
+  return path.join(process.cwd(), "pipeline", "gates");
+}
+
+function lessonsFile() {
+  return path.join(process.cwd(), "pipeline", "lessons-learned.md");
+}
 
 // Structured-log mode (audit B-23). When LOG_FORMAT=json, the hook emits a
 // single JSON event line on stdout per invocation in addition to the
@@ -146,11 +157,12 @@ function findBypassedEscalations(gateFiles) {
  * an error.
  */
 function findMalformedReinforcedLines() {
-  if (!fs.existsSync(LESSONS_FILE)) return [];
+  const lessonsPath = lessonsFile();
+  if (!fs.existsSync(lessonsPath)) return [];
 
   let content;
   try {
-    content = fs.readFileSync(LESSONS_FILE, "utf8");
+    content = fs.readFileSync(lessonsPath, "utf8");
   } catch {
     return [];
   }
@@ -172,13 +184,14 @@ function findMalformedReinforcedLines() {
 
 /** List gate .json files sorted most-recent first. */
 function listGates() {
+  const dir = gatesDir();
   return fs
-    .readdirSync(GATES_DIR)
+    .readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .map((f) => ({
       name: f,
-      mtime: fs.statSync(path.join(GATES_DIR, f)).mtimeMs,
-      full: path.join(GATES_DIR, f),
+      mtime: fs.statSync(path.join(dir, f)).mtimeMs,
+      full: path.join(dir, f),
     }))
     .sort((a, b) => b.mtime - a.mtime);
 }
@@ -203,7 +216,7 @@ function reportBypassedEscalation(entry) {
 }
 
 function main() {
-  if (!fs.existsSync(GATES_DIR)) {
+  if (!fs.existsSync(gatesDir())) {
     process.exit(0);
   }
 

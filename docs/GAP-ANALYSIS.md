@@ -1,130 +1,104 @@
-# Gap analysis vs claude-dev-team and codex-dev-team
+# Gap analysis — historical
 
-What the predecessor forks have that Stagecraft doesn't — yet. Useful for prioritizing documentation, tooling, and CI work after the core migration is complete.
+This doc was written during migration planning to track what the predecessor forks (`claude-dev-team`, `codex-dev-team`) had that the freshly-spun Stagecraft repo didn't. **The migration is complete.** Most of the gaps listed here are closed.
 
-## Documentation gaps
+For active gap tracking, see [`docs/BACKLOG.md`](BACKLOG.md). This file is retained for historical context and as a feature inventory of what Stagecraft has that the forks didn't.
 
-The claude-dev-team repo carries ~10 docs in `docs/` plus four root-level files (CHANGELOG, CONTRIBUTING, EXAMPLE, AGENTS.md) that Stagecraft is missing.
+---
 
-| Doc | claude-dev-team | codex-dev-team | Stagecraft | Worth porting? |
-|---|---|---|---|---|
-| `README.md` | 566 lines (heavy) | ~150 lines (light) | ✅ just written (concise) | done |
-| `LICENSE` | MIT | MIT | ✅ MIT | done |
-| `ARCHITECTURE.md` | — | — | ✅ ours | unique to us |
-| `CHANGELOG.md` | 14.5 KB, detailed | 10.7 KB | ❌ | **yes** — once we tag the first release |
-| `CONTRIBUTING.md` | 6.7 KB | 6.2 KB | ❌ | **yes** — adapter/role/stage extension guide |
-| `EXAMPLE.md` | 14.5 KB end-to-end walkthrough | 18 KB | ❌ | **yes** — best onboarding tool by a wide margin |
-| `AGENTS.md` (host-neutral context for the repo itself) | 11.3 KB | 4.1 KB | ❌ | **yes** — defines what an LLM working on _this_ repo should know |
-| `docs/user-guide.md` | 1076 lines — comprehensive | — | ❌ | partially; we can be much terser |
-| `docs/adoption-guide.md` | 372 lines — "how to roll this out in your org" | — | ❌ | **yes** — different from user guide; targets a decision-maker |
-| `docs/concepts.md` | 47 lines — one-sentence definitions | — | ❌ | **yes** — quick reference |
-| `docs/faq.md` | 222 lines | — | ❌ | grow organically as questions come |
-| `docs/presentation-notes.md` | 406 lines — talk script | — | ❌ | **yes** if you'll demo this; defer otherwise |
-| `docs/tracks.md` | 114 lines — what each track means | — | ❌ | **yes** — operational reference users need |
-| `docs/brief-template.md`, `design-spec-template.md`, `runbook-template.md` | template *explanations* (not the templates themselves) | — | ❌ | **yes** — docs about how to fill out each artifact |
-| `docs/walkthroughs/stage-04-split-host.md` | — | — | ✅ ours | unique to us |
-| `docs/BACKLOG.md` | — | — | ✅ ours | unique to us |
-| `docs/GAP-ANALYSIS.md` | — | — | ✅ this file | unique to us |
-| `docs/TESTING.md` | — | — | ✅ companion (see below) | unique to us |
-| `docs/adr/` | per-decision ADRs | — | ❌ | grow organically; first one could explain "why Stagecraft" |
-| `docs/audit/` | audit artifacts | — | ❌ | unique to claude's workflow; skip |
-| `docs/migration/v1-to-v2.md` | historical | — | ❌ | irrelevant (we don't have v1) |
-| `docs/parity/` | claude-codex parity tracking | — | ❌ | obsolete (we eliminated the fork) |
-| `docs/releases/` | release notes | — | ❌ | adopt when we cut a release |
+## Status of original gaps (as of v0.2.0)
 
-**Suggested next docs (priority order):**
+### Documentation — all closed
 
-1. **`EXAMPLE.md`** at the root — end-to-end walkthrough of one pipeline run. Highest learning ROI per word.
-2. **`AGENTS.md`** at the root — host-neutral context file for the repo itself (so an LLM working _on_ Stagecraft knows the structure).
-3. **`CONTRIBUTING.md`** — how to add a host adapter, a stage, a role, or a skill. Concrete recipes.
-4. **`docs/concepts.md`** — one-sentence definitions of stage / role / workstream / gate / track / adapter / host. The thing you skim before reading anything else.
-5. **`docs/user-guide.md`** — long-form how-to. Lift selectively from claude-dev-team's version, adapt for the multi-host model.
-6. **`docs/tracks.md`** — what each track skips and why. Operational reference.
-7. **`CHANGELOG.md`** — start tracking from `0.1.0`.
-8. **`docs/adoption-guide.md`** — for team leads deciding whether to use this. Defer until there's a v1 release to point at.
+| Doc | Status |
+|---|---|
+| `README.md`, `LICENSE`, `ARCHITECTURE.md` | ✅ shipped |
+| `CHANGELOG.md` | ✅ shipped — currently `[Unreleased]` + `[0.2.0]` + `[0.1.0]` sections |
+| `CONTRIBUTING.md`, `EXAMPLE.md`, `AGENTS.md` | ✅ shipped at root |
+| `docs/concepts.md`, `docs/tracks.md`, `docs/user-guide.md`, `docs/adoption-guide.md`, `docs/faq.md` | ✅ shipped |
+| `docs/walkthroughs/` | ✅ shipped (stage-04 split-host walkthrough) |
+| `docs/observability.md`, `docs/memory.md` | ✅ shipped (new — didn't exist in forks) |
+| `docs/adr/` | ✅ shipped (`001-unification-vs-fork`, `002-host-adapter-contract`) |
+| `docs/presentation-notes.md`, `docs/audit/`, `docs/migration/`, `docs/parity/`, `docs/releases/` | Not ported — fork-specific or obsolete |
 
-## Functionality gaps (beyond docs)
+### Functionality — almost all closed
 
-Things the forks have implemented that Stagecraft's MVP doesn't:
+| Capability | Status |
+|---|---|
+| Bootstrap script | ✅ `devteam init` |
+| Audit workflow / roadmap workflow | Not ported — backlog G/B item |
+| `scripts/visualize.js` | ✅ shipped |
+| `scripts/pr-pack.js` | ✅ shipped |
+| `scripts/release.js` (check / notes) | ✅ shipped, tested |
+| `scripts/consistency.js` (cross-artifact lint) | ✅ shipped, 170 checks |
+| `scripts/lessons.js` | Not ported — depends on D7 memory follow-on |
+| `scripts/budget.js` | ✅ shipped at scripts/, exposed via `npm run budget` (out-of-band tool) |
+| Checkpoint auto-pass | Not ported |
+| `next`, `summary`, `stages`, `hosts`, `init`, `validate`, `merge`, `doctor`, `ui`, `memory`, `help` | ✅ all shipped |
+| Worktree-based parallel build | ✅ available via `isolation: isolated` in config (host-dependent) |
+| Stoplist enforcement | ✅ wired into `devteam stage` |
+| `parity-check` | Obsolete by design |
 
-| Capability | claude-dev-team | codex-dev-team | Stagecraft | Notes |
-|---|---|---|---|---|
-| Bootstrap script (idempotent project initializer) | `bootstrap.sh` + `scripts/bootstrap.js` | same | `devteam init` covers this | DONE (different surface) |
-| Audit workflow (codebase-wide health scan) | `/audit`, `/audit-quick`, `/health-check`, `/roadmap` slash commands | `.codex/skills/audit/` | ❌ | Backlog G/B item |
-| Roadmap workflow | `/roadmap` + `docs/audit/10-roadmap.md` | — | ❌ | Backlog |
-| Visualize | `scripts/visualize.js` — DOT/Mermaid of stage graph | same | ❌ | Backlog (low-effort) |
-| `pr-pack` (bundle PR summaries) | `scripts/pr-pack.js` | same | ❌ | Backlog |
-| `release` workflow | `scripts/release.js check / notes` | same | ❌ | Backlog (needed for cutting a release) |
-| `parity-check` | yes — checks claude/codex divergence | yes | ❌ | obsolete by design (no fork) |
-| `consistency` (cross-artifact lint) | `scripts/consistency.js` | same | ❌ | **worth porting** — catches drift between stages.js + schemas + docs |
-| `lessons.js` (lessons-learned ops) | yes | yes | ❌ | Backlog (depends on D7 persistent memory) |
-| `budget` tracking at runtime | yes — `npm run budget` | yes | ❌ | `core/guards/budget.js` lifted; not yet wired into CLI |
-| Checkpoint auto-pass (A/B/C) | yes — async-friendly checkpoints | yes | ❌ | Backlog |
-| `claude-team checkpoint <stage>` / status / next / summary CLI subcommands | yes — many | yes | `next`, `merge`, `validate`, `stage`, `hosts`, `init` | partial coverage — `status`, `summary` worth adding |
-| `summary` command | yes — markdown summary of a pipeline run | yes | ❌ | Backlog (high value, low effort) |
-| Worktree-based parallel build | yes — `git worktree` per dev | yes | ❌ | Backlog (`isolation: isolated` mode in config) |
-| Stoplist enforcement at runtime | yes — `scripts/stoplist.js` invoked by CLI | yes | guard exists, not wired | Wire into `devteam stage <name>` |
+### Tests — closed
 
-**Recommended fill-in priority:**
-
-1. `devteam summary` — print a one-screen status report of a pipeline run. Lifted from `scripts/status.js` + `summary.js` in the forks. Small lift, high feedback value.
-2. `devteam doctor` — pre-flight check (verifies install, hosts on PATH, target project layout). Already in the BACKLOG.
-3. Wire stoplist into `devteam stage` — refuse to run lighter tracks when the change description matches a safety keyword.
-4. `devteam visualize` — render stage graph + current state.
-5. `consistency.js` port — catch drift between `stages.js` / schemas / role briefs / rules.
-
-## Test gaps
-
-This is the biggest gap.
-
-| | claude-dev-team | codex-dev-team | Stagecraft |
+| Metric | claude-dev-team | codex-dev-team | Stagecraft (v0.2.0) |
 |---|---|---|---|
-| Test count | 26 | 20 | **0** |
-| Test runner | `node --test` (built-in) | same | (none) |
-| CI integration | implied | implied | (none) |
+| Test count | 26 | 20 | **362** |
+| Test runner | `node --test` | same | same |
+| CI integration | none committed | none committed | ✅ `.github/workflows/test.yml` against Node 20/22/24 |
 
-Every contract we've stress-tested in the conversation is verified by manual smoke tests, not locked in. A test suite is the single biggest robustness gap. See `docs/TESTING.md` for the proposed strategy.
+See [`docs/TESTING.md`](TESTING.md) for the current suite breakdown.
 
-## Misc artifacts the forks have
+### Misc closed
 
-- **`AGENTS.md` at root** — the agents/CLAUDE.md context file for the repo itself. We've standardized on `AGENTS.md` as host-neutral but don't have one for Stagecraft's own repo. An LLM working on this codebase right now has no "Read first" context.
-- **`VERSION` file at root** — a one-line version stamp. claude-dev-team's bootstrap reads this to stamp `.claude/VERSION` into target projects. We use `package.json#version` instead; should pick one.
-- **`.github/`** — neither fork has CI YAML committed, but the convention is there.
-- **`examples/` directory** — claude-dev-team has one example project. Useful for `devteam init` to point at as a known-good fixture.
-- **`schemas/_framework-contract.js`** — claude-dev-team has a JS module that asserts cross-doc consistency (matched stage numbers, matched rule files, matched skill names). Underpins their `contract.test.js`. Worth porting.
+- `AGENTS.md` at root ✅
+- `examples/` directory ✅ (17 example artifacts)
+- `schemas/_framework-contract.js` equivalent — covered by `tests/contract.test.js` + `scripts/consistency.js` ✅
+- `.github/` ✅ (test workflow)
+- `VERSION` file — not adopted; we use `package.json#version` as the single source of truth (read by the ORCHESTRATOR_ID at runtime: `devteam@<version>`)
 
-## What Stagecraft has that the forks don't
+---
 
-For symmetry — things we did that they didn't:
+## What Stagecraft has that the forks didn't
 
-- A single core with per-host adapters (the whole reason this repo exists).
-- `core/adapters/host-adapter.md` — the formal contract.
-- `core/adapters/headless.js` — shared headless-invoke helper.
-- `docs/walkthroughs/stage-04-split-host.md` — a contract stress-test trace.
-- `docs/BACKLOG.md` — explicit roadmap with impact/effort scores.
-- Contract F applied across schemas, role briefs, and the validator: `agent` field removed; `orchestrator` + `host` + `workstream` identity.
-- Generic adapter as a third host — proves the contract is genuinely portable.
-- `conditionalOn` mechanism for conditional stages (currently used by security-review; reusable).
-- Per-role `roleWrites` override in multi-role stages.
-- `stage.subagent` override letting all workstreams of a stage dispatch to a single named subagent (used by peer-review).
+This section is the load-bearing part of this doc — it's the **feature inventory** that makes the rewrite worth it. Use it when explaining why Stagecraft is more than just a rename of the forks.
 
-## Summary: what to do next
+### Architecture
 
-Tight three-tier picture:
+- **Single model-agnostic core** with per-host adapters. No more dual-fork drift. The orchestrator never invokes a model; the adapter is the only place that knows about host invocation primitives.
+- **Formal host-adapter contract** (`core/adapters/host-adapter.md`) — interface declared, capabilities negotiated, gate JSON used as the stable seam between hosts. Adapters can be added without forking core.
+- **Generic adapter** (`hosts/generic/`) — a third reference host with no in-host integration. Proves the contract is genuinely host-neutral rather than Claude/Codex-shaped.
+- **Per-(stage, role) routing** (`routing.stages > routing.roles > routing.default_host`) — a single pipeline run can dispatch different roles in the same stage to different hosts.
+- **Shared headless-invoke helper** (`core/adapters/headless.js`) — every adapter with `capabilities.headless: true` wires `invoke()` to the same code path.
 
-**Tier 1 — ship-blocker for "1.0"**:
-- AGENTS.md, EXAMPLE.md, CONTRIBUTING.md, docs/concepts.md
-- A minimum test suite (see docs/TESTING.md tier 1)
-- `devteam doctor` and `devteam summary`
-- Wire stoplist into `devteam stage`
+### Contracts (in code, tested)
 
-**Tier 2 — for a public release**:
-- docs/user-guide.md, docs/tracks.md
-- CHANGELOG.md, examples/ directory
-- consistency.js port
-- CI workflow (GitHub Actions) running the test suite
+- **Contract A** — per-role `allowedWrites` overrides in multi-role stages.
+- **Contract B** — per-workstream gate decomposition for multi-role stages; pessimistic merge (`ESCALATE > FAIL > WARN > PASS`).
+- **Contract C** — `capabilities.enforces` map declaring where host enforces a core rule (`tool-call-time` vs `post-hoc-audit` vs `prompt-only`). Orchestrator skips audits the host already enforces.
+- **Contract F** — gate identity (`stage`, `workstream`, `orchestrator`, `host`, `status`); legacy `agent` field removed; `orchestrator: "devteam@<version>"` carried on every gate.
+- **`conditionalOn`** — generic mechanism for conditional stages (`{ stage, field, equals }`); currently used by stage-04b security review; reusable.
+- **`stage.subagent` override** — lets all workstreams of a stage dispatch to a single named subagent (used by peer-review).
 
-**Tier 3 — nice to have**:
-- docs/adoption-guide.md, docs/presentation-notes.md, docs/faq.md
-- visualize, pr-pack, release tooling
-- ADR directory for design decisions going forward
+### Stages added beyond the forks
+
+- **Stage 4b security review** (conditional, `qa` role)
+- **Stage 6b accessibility audit** (`qa` role, WCAG-level scoring)
+- **Stage 6c observability gate** (`platform` role, brief §9 verification)
+
+### Tooling new to Stagecraft
+
+- **OpenTelemetry tracing** on every pipeline operation (opt-in via `OTEL_EXPORTER_OTLP_ENDPOINT`).
+- **Persistent semantic memory** (`devteam memory ingest|query|stats|clear|reindex`) with local-default embedder.
+- **Multi-model adversarial peer review** (`routing.review_fanout: [host, host, ...]`) — opt-in N×M fanout for stage-05.
+- **Gate-pass-rate dashboards** (`scripts/dashboard.js`) with multi-project rollup and time windowing.
+- **GitHub PR integration** (`scripts/pr-publish.js`) — PR body sync or one check run per gate.
+- **Web UI** (`devteam ui`) — SSE-backed pipeline state view, gate detail on click.
+- **Secret scanning hook** (`core/hooks/secret-scan.js`) — PreToolUse block on Write/Edit for credentials.
+- **Cross-artifact consistency lint** (`scripts/consistency.js`) — 170 structural checks.
+
+---
+
+## Closing note
+
+The gap-analysis-vs-forks framing is no longer the load-bearing question for Stagecraft. The forks aren't being maintained; they served their purpose as the source material for the unification. The active question is "what do we want next" — that lives in [`docs/BACKLOG.md`](BACKLOG.md).

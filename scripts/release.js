@@ -113,7 +113,12 @@ function notes(version) {
     console.error(`No [${label}] section in CHANGELOG.md`);
     process.exit(1);
   }
-  process.stdout.write(body.join("\n").trim() + "\n");
+  // Strip the trailing `---` separator (and any whitespace around it) that
+  // CHANGELOG.md uses between sections — it's structural to the file but
+  // not part of the section's content. Without this, annotated tag
+  // messages end in a ragged `---`.
+  const cleaned = body.join("\n").trim().replace(/\n*---\s*$/, "");
+  process.stdout.write(cleaned.trimEnd() + "\n");
 }
 
 function usage() {

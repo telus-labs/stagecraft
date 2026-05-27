@@ -8,7 +8,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- `tests/headless.test.js` (8 tests) — covers `core/adapters/headless.js`: command resolution, env override, missing-command rejection, exit-code propagation, spawn-ENOENT error, gatePath detection, EPIPE swallowing, whitespace splitting.
+- `tests/release.test.js` (7 tests) — covers `scripts/release.js notes`: `[Unreleased]` default, middle section, last-section (no trailing header to anchor to — the regression that bit v0.1.0's tag), missing-version error, blank-line preservation, trailing `---` stripping.
+
+### Changed
+
+- `core/gates/validator.js`: lifted `GATES_DIR` / `LESSONS_FILE` from module-load constants to `gatesDir()` / `lessonsFile()` functions. The validator is normally spawned as a subprocess (each invocation has a fresh cwd), so behavior is unchanged in production; the lazy resolution makes the module require()-able from tests and other callers that chdir().
+- `scripts/release.js notes`: strips the trailing `---` separator from extracted sections. CHANGELOG uses `---` between sections structurally, but it was bleeding into annotated tag messages. Annotated tags built from `release:notes <version>` now end cleanly at the section body.
+- `docs/TESTING.md`: rewritten to reflect current reality (362 tests / 24 files / 81 suites / ~1.5s, tiers 1+2 shipped) instead of the original strategy-doc framing where tiers 1 and 2 were aspirational.
+- `docs/GAP-ANALYSIS.md`: rewritten as a historical-then-current doc. Migration is complete; most listed gaps are closed. The load-bearing section now is the feature inventory of what Stagecraft has that the forks didn't (contracts A/B/C/F, conditionalOn, stage-04b/06b/06c, OTel, memory, fanout, dashboards, PR integration, web UI, secret scanning, consistency lint). For active gap tracking, see `docs/BACKLOG.md`.
 
 ---
 
