@@ -77,6 +77,8 @@ These are the things downstream code, tests, and adapters depend on. Edit only w
 - **Idempotent installs.** Every adapter's `install()` must be safe to re-run; second call returns `written: 0, skipped: N`. Force flag overrides.
 - **No comments-as-documentation in code.** If a fact needs explaining and isn't obvious from the code, it goes in `ARCHITECTURE.md`, `host-adapter.md`, or a rule file under `rules/`. One-line "why this is here" comments are fine; multi-paragraph docstrings aren't.
 - **Single source of truth.** Role briefs in `roles/`, rules in `rules/`, skills in `skills/`. Adapters render these into host-specific paths at install time. **Do not edit installed copies in target projects.**
+- **`node:` prefix on built-in imports.** `require("node:fs")`, `require("node:path")`, `require("node:child_process")`. Every JS file in the codebase uses this form.
+- **stdout for primary output; stderr for everything else.** stdout carries the artifact a user reads as the command's main result (rendered prompts, JSON when `--json` is set, gate summaries). stderr carries warnings, errors, side-channel framing (the onboarding preamble printed by `bin/devteam stage`), progress logs. The convention means `devteam stage ... > prompt.md` produces a clean prompt file with all the framing kept out of the redirect. Validator + hooks are the exception: they're exit-code-driven, and their prose goes to stdout (consumed by Claude Code's hook log).
 
 ## Adding things
 

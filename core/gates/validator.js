@@ -26,8 +26,8 @@
  *     pipeline but surface a fix-up opportunity.
  */
 
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 // Resolve gates/lessons paths lazily against the current cwd. The validator
 // is normally spawned as a child process (each invocation gets a fresh cwd

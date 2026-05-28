@@ -380,6 +380,22 @@ If Phase 0 reveals this is a monorepo with multiple apps / services:
 
 Per-subsystem audit outputs go in `docs/audit/<service-name>/` rather than the top level. Phase 3's roadmap consolidates across them.
 
+## Process discipline — verify before promoting
+
+A finding's severity / confidence / "needs fix" status is a **claim about reality**, and claims about reality have to be checked. This is especially true in Phase 2 (security, performance, code quality) where it's tempting to reason from a function signature, a route definition, or a regex pattern without actually running the code.
+
+**Discipline:**
+
+- Any finding promoted past **LOW confidence** must be verified by direct evidence, not signature-only reasoning. Acceptable evidence:
+  - **Live exploit attempt** for security findings (curl the endpoint, write the malicious input, see what the system actually does).
+  - **Code path trace** read end-to-end, not just at the entry point.
+  - **Test run** that exercises the alleged failure mode.
+  - **`git log` / `git blame`** when the finding rests on history.
+- If you can't verify, mark **LOW confidence** and say what you'd need to escalate. "I'd want to attempt the traversal against a running UI" is more useful than promoting on speculation.
+- If verification contradicts the initial finding, **retract it explicitly** in the same phase output — don't silently delete. The reader needs to see the chain (concern → verification → resolution) so they can trust the rest of the report.
+
+This isn't a hypothetical. The Stagecraft self-audit (2026-05-28, see `docs/audit/06-security.md` Finding S5) initially promoted a UI path-traversal concern to "medium severity / needs fix" based on the route definition alone. A live exploit attempt against the running UI returned HTTP 404 because the helper functions validate input with regexes the audit hadn't read. The finding was retracted with the verification trace preserved. **Future audits should not repeat the mistake.**
+
 ## What not to do
 
 - **Don't audit Stagecraft itself with this skill** unless that's literally what you've been asked to do. The audit targets the project Stagecraft was installed into.

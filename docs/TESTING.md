@@ -1,6 +1,6 @@
 # Testing
 
-**Current state (v0.2.0):** **362 tests across 24 files, 81 suites, ~1.5s wall-clock**. Runs offline, no external services. `npm test` is green on Node 20 / 22 / 24 in CI.
+**Current state:** **`npm test` runs the full suite in ~1.5s** — currently around 380 tests across 25+ files, all offline, no external services. CI runs on Node 20 / 22 / 24. (Exact counts in `npm test` output; this doc avoids quoting specific numbers since they drift.)
 
 ## Running the suite
 
