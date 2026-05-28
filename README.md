@@ -182,6 +182,25 @@ devteam hosts
 
 See `bin/devteam help` for the up-to-date list.
 
+## Auditing an existing codebase
+
+Separate from the pipeline (which *builds* features) is the **audit feature**, which *analyzes* an existing codebase end-to-end and produces a prioritized improvement roadmap. Read-only by design — it writes findings, never source code.
+
+Inside Claude Code (after `devteam init --host claude-code`):
+
+```
+/audit                  # full audit: Phases 0-3, ~30-60 min, 11 output files
+/audit-quick            # Phases 0-1 only: ~5-15 min, 6 output files
+/audit src/backend/     # scope to a subtree
+/audit --resume         # continue from the last completed phase
+```
+
+On other hosts (Codex, Gemini CLI, generic), invoke the `auditor` role with the `audit` skill — there's no slash command but the skill is installed to `.codex/skills/audit/` or `.gemini/skills/audit/`.
+
+Output lands under `docs/audit/` in your project: `00-project-context.md` through `10-roadmap.md`, plus a `status.json` for resume capability. The `implement` skill consumes `docs/audit/10-roadmap.md` to pick the next change to work on.
+
+See [`skills/audit/SKILL.md`](skills/audit/SKILL.md) for the phase definitions.
+
 ## Architecture in one diagram
 
 ```

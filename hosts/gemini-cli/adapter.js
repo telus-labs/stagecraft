@@ -32,7 +32,7 @@ const ROLES_DIR = path.join(REPO_ROOT, "roles");
 const RULES_DIR = path.join(REPO_ROOT, "rules");
 const SKILLS_DIR = path.join(REPO_ROOT, "skills");
 
-const ROLES = ["pm", "principal", "backend", "frontend", "platform", "qa", "reviewer", "security"];
+const ROLES = ["pm", "principal", "backend", "frontend", "platform", "qa", "reviewer", "security", "auditor"];
 
 function installRoles(targetDir, opts) {
   const dir = path.join(targetDir, capabilities.rolePromptsDir);

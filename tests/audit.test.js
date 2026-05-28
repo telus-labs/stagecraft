@@ -1,0 +1,143 @@
+// Audit feature — structural integrity tests.
+//
+// Locks the contract that:
+//   - The audit skill, role brief, slash commands, and 11 phase templates
+//     all exist with the expected shape.
+//   - Every host adapter's ROLES list includes "auditor".
+//   - A fresh `devteam init` installs the audit surface for each host.
+
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { makeTargetProject, cleanup, runCLI } = require("./_helpers");
+
+const REPO_ROOT = path.resolve(__dirname, "..");
+
+let _dirs = [];
+function track(cwd) { _dirs.push(cwd); return cwd; }
+test.afterEach?.(() => { _dirs.forEach(cleanup); _dirs = []; });
+
+// node --test 22+ exposes test.afterEach; older versions need a manual hook.
+// Tests below clean their own tempdirs as a backstop.
+
+test("skills/audit/SKILL.md exists with YAML frontmatter", () => {
+  const p = path.join(REPO_ROOT, "skills", "audit", "SKILL.md");
+  assert.ok(fs.existsSync(p), "skills/audit/SKILL.md is missing");
+  const text = fs.readFileSync(p, "utf8");
+  assert.match(text.slice(0, 5), /^---/, "skill must start with YAML frontmatter");
+  assert.match(text, /^name: audit$/m, "skill frontmatter must declare name: audit");
+  assert.match(text, /description:/m, "skill frontmatter must declare description");
+});
+
+test("roles/auditor.md exists and is read-only by design", () => {
+  const p = path.join(REPO_ROOT, "roles", "auditor.md");
+  assert.ok(fs.existsSync(p), "roles/auditor.md is missing");
+  const text = fs.readFileSync(p, "utf8");
+  assert.match(text, /Auditor Role Brief/i);
+  assert.match(text, /read-only/i, "auditor role brief must spell out read-only");
+  assert.doesNotMatch(text, /\bWrites:\s*\n\s*-\s*src\//i, "auditor must not list src/ as writable");
+});
+
+test("claude-code host has /audit and /audit-quick slash commands", () => {
+  const audit = path.join(REPO_ROOT, "hosts", "claude-code", "install", "commands", "audit.md");
+  const quick = path.join(REPO_ROOT, "hosts", "claude-code", "install", "commands", "audit-quick.md");
+  assert.ok(fs.existsSync(audit), "claude-code /audit command is missing");
+  assert.ok(fs.existsSync(quick), "claude-code /audit-quick command is missing");
+  for (const p of [audit, quick]) {
+    const text = fs.readFileSync(p, "utf8");
+    assert.match(text.slice(0, 5), /^---/, `${path.basename(p)} must start with YAML frontmatter`);
+    assert.match(text, /skills\/audit\/SKILL\.md/, `${path.basename(p)} must reference the audit skill`);
+  }
+});
+
+test("templates/audit/ has all 11 phase templates (00 through 10)", () => {
+  const dir = path.join(REPO_ROOT, "templates", "audit");
+  assert.ok(fs.existsSync(dir), "templates/audit/ directory missing");
+  const expected = [
+    "00-project-context-template.md",
+    "01-architecture-template.md",
+    "02-git-history-template.md",
+    "03-compliance-template.md",
+    "04-tests-template.md",
+    "05-documentation-template.md",
+    "06-security-template.md",
+    "07-performance-template.md",
+    "08-code-quality-template.md",
+    "09-backlog-template.md",
+    "10-roadmap-template.md",
+  ];
+  for (const name of expected) {
+    const p = path.join(dir, name);
+    assert.ok(fs.existsSync(p), `templates/audit/${name} is missing`);
+    const text = fs.readFileSync(p, "utf8");
+    assert.match(text, /^# /, `${name} must start with a level-1 heading`);
+  }
+});
+
+test("every host adapter's ROLES (or equivalent) includes 'auditor'", () => {
+  // claude-code uses ROLE_FRONTMATTER (object); codex + gemini-cli use ROLES (array).
+  // Smoke-test by source-grep — the adapters are small enough to inspect directly.
+  const adapters = [
+    "hosts/claude-code/adapter.js",
+    "hosts/codex/adapter.js",
+    "hosts/gemini-cli/adapter.js",
+  ];
+  for (const rel of adapters) {
+    const text = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
+    assert.match(text, /auditor/, `${rel} does not reference "auditor"`);
+  }
+});
+
+test("`devteam init --host claude-code` installs the full audit surface", () => {
+  const cwd = track(makeTargetProject());
+  const r = runCLI(["init", "--host", "claude-code"], { cwd });
+  assert.equal(r.status, 0);
+  for (const rel of [
+    ".claude/skills/audit/SKILL.md",
+    ".claude/commands/audit.md",
+    ".claude/commands/audit-quick.md",
+    ".claude/agents/auditor.md",
+  ]) {
+    assert.ok(
+      fs.existsSync(path.join(cwd, rel)),
+      `claude-code init did not lay down ${rel}`,
+    );
+  }
+});
+
+test("`devteam init --host codex` installs audit skill + auditor role (no slash commands)", () => {
+  const cwd = track(makeTargetProject());
+  const r = runCLI(["init", "--host", "codex"], { cwd });
+  assert.equal(r.status, 0);
+  assert.ok(fs.existsSync(path.join(cwd, ".codex/skills/audit/SKILL.md")));
+  assert.ok(fs.existsSync(path.join(cwd, ".codex/prompts/roles/auditor.md")));
+  // Codex has no slashCommands capability — no commands installed.
+  assert.equal(fs.existsSync(path.join(cwd, ".codex/commands/audit.md")), false);
+});
+
+test("`devteam init --host gemini-cli` installs audit skill + auditor role", () => {
+  const cwd = track(makeTargetProject());
+  const r = runCLI(["init", "--host", "gemini-cli"], { cwd });
+  assert.equal(r.status, 0);
+  assert.ok(fs.existsSync(path.join(cwd, ".gemini/skills/audit/SKILL.md")));
+  assert.ok(fs.existsSync(path.join(cwd, ".gemini/prompts/roles/auditor.md")));
+});
+
+test("the audit skill defines all four phases (0 through 3) and 11 outputs", () => {
+  const text = fs.readFileSync(path.join(REPO_ROOT, "skills", "audit", "SKILL.md"), "utf8");
+  // Four phases.
+  for (const phase of ["Phase 0 — Bootstrap", "Phase 1 — Health Assessment", "Phase 2 — Deep Analysis", "Phase 3 — Roadmap"]) {
+    assert.match(text, new RegExp(phase.replace(/ /g, "\\s+")), `audit skill missing "${phase}"`);
+  }
+  // Eleven outputs.
+  const outputs = [
+    "00-project-context.md", "01-architecture.md", "02-git-history.md",
+    "03-compliance.md", "04-tests.md", "05-documentation.md",
+    "06-security.md", "07-performance.md", "08-code-quality.md",
+    "09-backlog.md", "10-roadmap.md",
+  ];
+  for (const f of outputs) {
+    assert.match(text, new RegExp(f.replace(/\./g, "\\.")), `audit skill doesn't reference ${f}`);
+  }
+});

@@ -101,6 +101,18 @@ See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety 
 | `pipeline/context.md` | Append-only running notes across stages. |
 | `.devteam/memory/` (in target project) | Semantic memory store (opt-in; built by `devteam memory ingest`). |
 
+## Two distinct workflows
+
+Stagecraft does two different kinds of work, with different vocabularies:
+
+1. **Pipeline** — *building* features through 13 staged production steps. The vocabulary above (stage, role, workstream, host, gate, track) applies. Outputs go in `pipeline/`.
+2. **Audit** — *analyzing* an existing codebase, read-only, to produce a prioritized improvement roadmap. Different vocabulary (phases, findings, severity, themes, batches). Outputs go in `docs/audit/`.
+
+The pipeline produces new code. The audit produces analysis of code that exists. Don't confuse them. The same role briefs are NOT used — the auditor role exists separately from the pipeline roles.
+
+When the user says "audit the codebase" → `/audit` or `/audit-quick` (see [`user-guide.md` §Auditing a codebase](user-guide.md#auditing-a-codebase)).
+When the user says "build feature X" → `devteam stage requirements --feature "X"` (see [`EXAMPLE.md`](../EXAMPLE.md)).
+
 ## What you can stop reading now
 
-If you can describe what a **workstream**, **gate**, and **track** are, you have enough to use Stagecraft. Everything else is detail that surfaces when you need it — chase the cross-references when they come up.
+If you can describe what a **workstream**, **gate**, and **track** are, you have enough to use the pipeline. If you know `/audit` produces a `docs/audit/10-roadmap.md` you can act on, you have enough to use the audit. Everything else is detail that surfaces when you need it — chase the cross-references when they come up.

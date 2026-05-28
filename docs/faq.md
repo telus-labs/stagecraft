@@ -336,6 +336,51 @@ Run `devteam validate` for the exact error. Common causes:
 
 The validator caps gates at 1 MB. Real gates are typically <1 KB. If you're hitting the cap, something has gone wrong — usually a huge `blockers` array or a stringified test output that should have been a separate artifact.
 
+## Auditing a codebase
+
+### How do I audit a codebase?
+
+In Claude Code: `/audit` (full) or `/audit-quick` (Phases 0-1 only). On other hosts, invoke the `auditor` role with the `audit` skill (installed at `.codex/skills/audit/` or `.gemini/skills/audit/` after `devteam init`). See [`docs/user-guide.md`](user-guide.md#auditing-a-codebase) for the full reference.
+
+The audit is read-only. It writes findings to `docs/audit/00-project-context.md` through `docs/audit/10-roadmap.md`. It never modifies source code.
+
+### What's the difference between the audit and the pipeline?
+
+The **pipeline** (`devteam stage <name>`) *builds* features through 13 staged production steps with gate JSON between them. Audits are NOT pipeline stages.
+
+The **audit** (`/audit` or `/audit-quick`) *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only.
+
+You'd run the pipeline when you want to ship something. You'd run the audit when you want to understand what's there.
+
+### Can I run an audit on Stagecraft itself?
+
+You can but you usually shouldn't — the audit feature is designed to be invoked from within a target project, against that project's code. If you point it at the Stagecraft framework, you'll get an audit of the framework's own code (which is interesting but not what most users want).
+
+If you genuinely want to audit Stagecraft (e.g. you're contributing): `cd` into the framework and run the audit there. The output lands at `docs/audit/` in the framework repo. Add it to `.gitignore` so audits don't pollute the framework's git history unless you want them to.
+
+### How long does an audit take?
+
+- `/audit-quick` (Phases 0-1): ~5-15 minutes on a medium codebase.
+- `/audit` (Phases 0-3): ~30-60 minutes. Longer for large codebases; deep analysis (security, performance, code quality) does the heavy lifting.
+
+Wall-clock varies by codebase size and how many findings each phase produces. The human checkpoints between phases (after 0, 1, 2) add whatever review time you take.
+
+### What if the audit interrupts mid-run?
+
+The audit writes `docs/audit/status.json` after each phase completes. Run `/audit --resume` to continue from the last completed phase. Phase outputs already on disk aren't re-written.
+
+### Can the audit be re-run as a periodic health check?
+
+Yes. Re-running `/audit` against a project that has previous audit outputs overwrites them with fresh findings. There's no automatic diff between runs (BACKLOG candidate); you'd compare by reading both versions or by version-controlling `docs/audit/` and using `git diff`.
+
+Recommended cadence: re-audit quarterly, after major refactors, after major dependency upgrades, before a release that touches sensitive paths.
+
+### What if I want to add project-specific checks?
+
+Create `docs/audit-extensions.md` in your project. Per phase, describe the project-specific checks to run. The audit reads this file at the start of each phase and appends results under a `## Project-Specific` heading in the relevant phase output file.
+
+Use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventions, custom security policies, internal patterns you want to track.
+
 ## Comparing to /goal and similar features
 
 ### Should I use Stagecraft or Claude Code's `/goal` command?

@@ -31,7 +31,7 @@ const SKILLS_DIR = path.join(REPO_ROOT, "skills");
 
 // Role → filename mapping. Codex uses the bare role name (no `dev-` prefix
 // and no `-engineer` suffix), matching what's already in roles/.
-const ROLES = ["pm", "principal", "backend", "frontend", "platform", "qa", "reviewer", "security"];
+const ROLES = ["pm", "principal", "backend", "frontend", "platform", "qa", "reviewer", "security", "auditor"];
 
 function installRoles(targetDir, opts) {
   const dir = path.join(targetDir, capabilities.rolePromptsDir);

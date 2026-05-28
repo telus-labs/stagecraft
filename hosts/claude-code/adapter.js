@@ -81,6 +81,13 @@ const ROLE_FRONTMATTER = {
     model: "sonnet",
     permissionMode: "acceptEdits",
   },
+  auditor: {
+    name: "auditor",
+    description: "Codebase auditor. Read-only by design — analyzes architecture, health, security, performance, code quality; produces docs/audit/00–10 outputs and a prioritized roadmap. Used by the /audit and /audit-quick slash commands. Never writes source code.",
+    tools: "Read, Glob, Grep, Bash, Write",
+    model: "opus",
+    permissionMode: "acceptEdits",
+  },
 };
 
 function frontmatterFor(role) {

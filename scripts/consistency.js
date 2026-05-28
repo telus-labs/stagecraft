@@ -164,6 +164,30 @@ function checkGateBaseSchemaIdentity() {
   else pass("gate.schema does not require legacy 'agent'");
 }
 
+function checkAuditFeatureIntegrity() {
+  const requiredFiles = [
+    "skills/audit/SKILL.md",
+    "roles/auditor.md",
+    "hosts/claude-code/install/commands/audit.md",
+    "hosts/claude-code/install/commands/audit-quick.md",
+  ];
+  for (const rel of requiredFiles) {
+    if (exists(rel)) pass(`audit: ${rel} exists`);
+    else fail("audit", `missing ${rel}`);
+  }
+  const phases = [
+    "00-project-context", "01-architecture", "02-git-history",
+    "03-compliance", "04-tests", "05-documentation",
+    "06-security", "07-performance", "08-code-quality",
+    "09-backlog", "10-roadmap",
+  ];
+  for (const phase of phases) {
+    const rel = `templates/audit/${phase}-template.md`;
+    if (exists(rel)) pass(`audit template: ${phase}-template.md exists`);
+    else fail("audit", `missing template templates/audit/${phase}-template.md`);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -182,6 +206,7 @@ function main() {
   checkRequiredRulesPresent();
   checkSchemaIdsAndDraft();
   checkGateBaseSchemaIdentity();
+  checkAuditFeatureIntegrity();
 
   if (json) {
     console.log(JSON.stringify({ passes: passes.length, failures }, null, 2));

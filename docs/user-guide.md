@@ -79,7 +79,8 @@ Everything else — which subagent to invoke, which file to write, what schema t
 7. [Persistent memory](#persistent-memory)
 8. [Observability (OpenTelemetry)](#observability-opentelemetry)
 9. [Multi-model adversarial peer review](#multi-model-adversarial-peer-review)
-10. [When things go wrong](#when-things-go-wrong)
+10. [Auditing a codebase](#auditing-a-codebase)
+11. [When things go wrong](#when-things-go-wrong)
 11. [Customizing for your project](#customizing-for-your-project)
 12. [Upgrading](#upgrading)
 13. [What's not covered here](#whats-not-covered-here)
@@ -400,6 +401,55 @@ routing:
 With three hosts and four review areas, you get 4×3 = 12 parallel reviews. The approval-derivation hook recognizes host-based filenames (`pipeline/code-review/by-<host>.md`) and writes gates to a three-segment path (`pipeline/gates/stage-05.<area>.<host>.json`). The merge reads all expected fanout gates and aggregates pessimistically — any FAIL anywhere → merged FAIL.
 
 Default is empty list (off). Opt in via config. The cost is N× peer-review time and N× peer-review LLM cost. The benefit: different models have different blind spots; a bug one model rationalizes, another flags.
+
+## Auditing a codebase
+
+The audit feature is separate from the 13-stage pipeline. Stages *build* features; the audit *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only by design.
+
+### When to use it
+
+- **Onboarding to a new project.** `/audit-quick` in ~10 minutes gets you a project-context doc, architecture map, and git-history picture — enough to start working.
+- **Before a refactor.** Full `/audit` produces a roadmap of what to fix in what order. The `implement` skill consumes `docs/audit/10-roadmap.md` directly.
+- **Before a security review.** Phase 2.1 specifically catches secrets hygiene, injection risks, auth gaps, dependency CVEs.
+- **Periodic health check.** Quarterly or after major changes — re-running `/audit` against an audited project shows what got fixed and what new findings have accumulated.
+
+### How to invoke it
+
+Inside Claude Code (after `devteam init --host claude-code`):
+
+```
+/audit                  # full audit, Phases 0-3, ~30-60 minutes, 11 output files
+/audit-quick            # Phases 0-1 only, ~5-15 minutes, 6 output files
+/audit src/backend/     # scope to a subtree
+/audit --resume         # continue from the last completed phase (uses docs/audit/status.json)
+```
+
+On Codex / Gemini CLI / generic hosts, invoke the `auditor` role with the `audit` skill:
+
+```
+You are the auditor. Read .codex/skills/audit/SKILL.md and run a full audit.
+```
+
+Output lands under `docs/audit/` in your project. Eleven files (00 through 10) plus `status.json`.
+
+### Phases
+
+- **Phase 0 — Bootstrap.** What this project is, architecture map, git history.
+- **Phase 1 — Health assessment.** Convention compliance, test health, documentation gaps.
+- **Phase 2 — Deep analysis.** Security, performance & reliability, code quality.
+- **Phase 3 — Roadmap.** Prioritized backlog (P0/P1/P2/P3/Parked) + sequenced batches.
+
+`/audit` includes human checkpoints between each phase so you can correct course before the deep analysis runs. `/audit-quick` skips Phases 2 and 3 — you can run `/audit --resume` later to complete them.
+
+### Extending an audit
+
+Drop `docs/audit-extensions.md` in your project to add project-specific checks. The audit reads it at the start of each phase and appends extension findings to the relevant phase's output file under a `## Project-Specific` heading. Example use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventions, custom security policies.
+
+### What the audit does NOT do
+
+- It does not modify source code. Findings live in `docs/audit/`; fixing them is the `implement` skill or a `devteam stage` invocation.
+- It does not audit Stagecraft itself unless you explicitly ask. The audit targets the project Stagecraft was installed into.
+- It does not skip phases without a documented reason in `status.json`.
 
 ## When things go wrong
 

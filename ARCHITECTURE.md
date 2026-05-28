@@ -119,13 +119,17 @@ stagecraft/
 │       ├── adapter.js
 │       └── capabilities.json
 │
-├── scripts/
-│   ├── init.js                      ← `devteam init --host claude`
-│   ├── audit.js
-│   ├── parity-check.js              ← validates a target install
-│   └── ...
+├── scripts/                         ← helper scripts (not part of the core)
+│   ├── budget.js                    ← out-of-band budget tracking
+│   ├── consistency.js               ← cross-artifact lint (185 checks)
+│   ├── dashboard.js                 ← gate-pass-rate aggregation
+│   ├── pr-pack.js / pr-publish.js   ← GitHub PR integration
+│   ├── release.js                   ← pre-release checks + notes extraction
+│   └── visualize.js                 ← stage-graph rendering
 └── tests/
 ```
+
+(`devteam init` is implemented in `bin/devteam`, not a standalone script. No `parity-check` exists — Stagecraft is a single core, not parallel forks, so there's nothing to parity-check.)
 
 Notes on what changes vs the two existing repos:
 
