@@ -16,14 +16,21 @@ const path = require("node:path");
 
 const capabilities = require("./capabilities.json");
 const { runHeadless } = require("../../core/adapters/headless");
+const { listRoles, ROLES_DIR } = require("../../core/roles");
+const baseInstall = require("../../core/adapters/base-install");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
-const ROLES_DIR = path.join(REPO_ROOT, "roles");
-const RULES_DIR = path.join(REPO_ROOT, "rules");
-const SKILLS_DIR = path.join(REPO_ROOT, "skills");
+const RULES_DIR = baseInstall.RULES_DIR;
+const SKILLS_DIR = baseInstall.SKILLS_DIR;
 const COMMANDS_SRC = path.join(__dirname, "install", "commands");
 
 // Per-role frontmatter for Claude Code subagent files. The `name` field is
 // the filename stem the agent is invoked under inside Claude Code.
+//
+// The KEYS of this object are role names. They must be a subset of the
+// roles discovered by core/roles.js (which scans roles/*.md). If a brief
+// exists in roles/ but has no ROLE_FRONTMATTER entry, install will warn
+// and skip — claude-code can't render a subagent without frontmatter.
+// Add an entry below to enable a new role under claude-code.
 const ROLE_FRONTMATTER = {
   pm: {
     name: "pm",
@@ -130,6 +137,21 @@ function installRoles(targetDir, opts) {
     ? opts.roles
     : Object.keys(ROLE_FRONTMATTER);
 
+  // Sanity check: every brief in roles/ should have a ROLE_FRONTMATTER
+  // entry, otherwise it's a silent claude-code-only gap (the role would
+  // be installed under codex/gemini but not as a claude-code subagent).
+  // Warn but don't fail — adding the brief without the frontmatter is a
+  // legitimate intermediate state.
+  if (!opts.roles) {
+    const briefsWithoutFrontmatter = listRoles().filter((r) => !ROLE_FRONTMATTER[r]);
+    for (const r of briefsWithoutFrontmatter) {
+      warnings.push(
+        `role "${r}" has a brief at roles/${r}.md but no ROLE_FRONTMATTER entry in hosts/claude-code/adapter.js — ` +
+        `skipped on this host. Add an entry to enable the subagent.`,
+      );
+    }
+  }
+
   for (const role of rolesToInstall) {
     const briefPath = path.join(ROLES_DIR, `${role}.md`);
     if (!fs.existsSync(briefPath)) {
@@ -160,28 +182,6 @@ function installCommands(targetDir, opts) {
   for (const f of fs.readdirSync(COMMANDS_SRC)) {
     const src = path.join(COMMANDS_SRC, f);
     const dest = path.join(commandsDir, f);
-    if (fs.existsSync(dest) && !opts.force) {
-      skipped.push(dest);
-      continue;
-    }
-    fs.copyFileSync(src, dest);
-    written.push(dest);
-  }
-  return { written, skipped, warnings: [] };
-}
-
-function installRules(targetDir, opts) {
-  const rulesDir = path.join(targetDir, ".devteam", "rules");
-  fs.mkdirSync(rulesDir, { recursive: true });
-  const written = [];
-  const skipped = [];
-  if (!fs.existsSync(RULES_DIR)) {
-    return { written, skipped, warnings: [`no rules source at ${RULES_DIR}`] };
-  }
-  for (const f of fs.readdirSync(RULES_DIR)) {
-    if (!f.endsWith(".md")) continue;
-    const src = path.join(RULES_DIR, f);
-    const dest = path.join(rulesDir, f);
     if (fs.existsSync(dest) && !opts.force) {
       skipped.push(dest);
       continue;
@@ -228,32 +228,6 @@ function renderSettingsLocal() {
   };
 }
 
-function installSkills(targetDir, opts) {
-  const written = [];
-  const skipped = [];
-  if (!fs.existsSync(SKILLS_DIR)) {
-    return { written, skipped, warnings: [`no skills source at ${SKILLS_DIR}`] };
-  }
-  const destBase = path.join(targetDir, capabilities.skillsDir);
-  for (const skill of fs.readdirSync(SKILLS_DIR)) {
-    const srcDir = path.join(SKILLS_DIR, skill);
-    if (!fs.statSync(srcDir).isDirectory()) continue;
-    const destDir = path.join(destBase, skill);
-    fs.mkdirSync(destDir, { recursive: true });
-    for (const f of fs.readdirSync(srcDir)) {
-      const src = path.join(srcDir, f);
-      const dest = path.join(destDir, f);
-      if (fs.existsSync(dest) && !opts.force) {
-        skipped.push(dest);
-        continue;
-      }
-      fs.copyFileSync(src, dest);
-      written.push(dest);
-    }
-  }
-  return { written, skipped, warnings: [] };
-}
-
 function installSettings(targetDir, opts) {
   const dir = path.join(targetDir, ".claude");
   fs.mkdirSync(dir, { recursive: true });
@@ -269,8 +243,8 @@ function install(targetDir, opts = {}) {
   const o = { force: false, roles: [], isolation: "in-place", ...opts };
   const roles = installRoles(targetDir, o);
   const commands = installCommands(targetDir, o);
-  const rules = installRules(targetDir, o);
-  const skills = installSkills(targetDir, o);
+  const rules = baseInstall.installRules(targetDir, o);
+  const skills = baseInstall.installSkills(targetDir, capabilities.skillsDir, o);
   const settings = installSettings(targetDir, o);
   return {
     written: [...roles.written, ...commands.written, ...rules.written, ...skills.written, ...settings.written],
@@ -295,26 +269,10 @@ function uninstall(targetDir) {
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
   }
-  const rulesDir = path.join(targetDir, ".devteam", "rules");
-  if (fs.existsSync(rulesDir) && fs.existsSync(RULES_DIR)) {
-    for (const f of fs.readdirSync(RULES_DIR)) {
-      if (!f.endsWith(".md")) continue;
-      const p = path.join(rulesDir, f);
-      if (fs.existsSync(p)) fs.unlinkSync(p);
-    }
-  }
+  baseInstall.uninstallRules(targetDir);
   const settings = path.join(targetDir, ".claude", "settings.local.json");
   if (fs.existsSync(settings)) fs.unlinkSync(settings);
-  const skillsBase = path.join(targetDir, capabilities.skillsDir);
-  if (fs.existsSync(skillsBase) && fs.existsSync(SKILLS_DIR)) {
-    for (const skill of fs.readdirSync(SKILLS_DIR)) {
-      const dir = path.join(skillsBase, skill);
-      if (fs.existsSync(dir)) {
-        for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f));
-        try { fs.rmdirSync(dir); } catch { /* not empty — leave it */ }
-      }
-    }
-  }
+  baseInstall.uninstallSkills(targetDir, capabilities.skillsDir);
 }
 
 function status(targetDir) {

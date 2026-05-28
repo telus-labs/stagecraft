@@ -75,17 +75,28 @@ test("templates/audit/ has all 11 phase templates (00 through 10)", () => {
   }
 });
 
-test("every host adapter's ROLES (or equivalent) includes 'auditor'", () => {
-  // claude-code uses ROLE_FRONTMATTER (object); codex + gemini-cli use ROLES (array).
-  // Smoke-test by source-grep — the adapters are small enough to inspect directly.
-  const adapters = [
-    "hosts/claude-code/adapter.js",
-    "hosts/codex/adapter.js",
-    "hosts/gemini-cli/adapter.js",
-  ];
-  for (const rel of adapters) {
+test("the canonical role list (core/roles.listRoles) includes 'auditor'", () => {
+  // P2-2 of the self-audit moved the role list to core/roles.js (scanned
+  // from roles/*.md). Verify the auditor role is picked up there — and
+  // verify each adapter routes through it instead of carrying its own
+  // hardcoded list.
+  const { listRoles } = require("../core/roles");
+  assert.ok(listRoles().includes("auditor"), "core/roles.listRoles() must include 'auditor'");
+
+  // claude-code still maintains ROLE_FRONTMATTER (with per-role model /
+  // tools metadata) — verify auditor has an entry there too.
+  const claude = fs.readFileSync(path.join(REPO_ROOT, "hosts/claude-code/adapter.js"), "utf8");
+  assert.match(claude, /auditor:\s*\{/, "claude-code/adapter.js must have ROLE_FRONTMATTER entry for auditor");
+
+  // codex + gemini-cli use core/roles.listRoles() — verify the import,
+  // which guarantees they pick up auditor automatically.
+  for (const rel of ["hosts/codex/adapter.js", "hosts/gemini-cli/adapter.js"]) {
     const text = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
-    assert.match(text, /auditor/, `${rel} does not reference "auditor"`);
+    assert.match(
+      text,
+      /require\(['"][^'"]*core\/roles['"]\)/,
+      `${rel} must use core/roles.listRoles() instead of a hardcoded ROLES array`,
+    );
   }
 });
 

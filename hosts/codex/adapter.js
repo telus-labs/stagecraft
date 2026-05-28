@@ -24,14 +24,17 @@ const path = require("node:path");
 
 const capabilities = require("./capabilities.json");
 const { runHeadless } = require("../../core/adapters/headless");
+const { listRoles, ROLES_DIR } = require("../../core/roles");
+const baseInstall = require("../../core/adapters/base-install");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
-const ROLES_DIR = path.join(REPO_ROOT, "roles");
-const RULES_DIR = path.join(REPO_ROOT, "rules");
-const SKILLS_DIR = path.join(REPO_ROOT, "skills");
+const RULES_DIR = baseInstall.RULES_DIR;
+const SKILLS_DIR = baseInstall.SKILLS_DIR;
 
-// Role → filename mapping. Codex uses the bare role name (no `dev-` prefix
-// and no `-engineer` suffix), matching what's already in roles/.
-const ROLES = ["pm", "principal", "backend", "frontend", "platform", "qa", "reviewer", "security", "auditor"];
+// Codex uses the bare role name (no `dev-` prefix, no `-engineer` suffix),
+// matching the filenames in roles/. The list comes from core/roles.js,
+// which scans roles/*.md as the source of truth — adding a role brief
+// there makes it visible here automatically.
+const ROLES = listRoles();
 
 function installRoles(targetDir, opts) {
   const dir = path.join(targetDir, capabilities.rolePromptsDir);
@@ -58,59 +61,11 @@ function installRoles(targetDir, opts) {
   return { written, skipped, warnings };
 }
 
-function installRules(targetDir, opts) {
-  const rulesDir = path.join(targetDir, ".devteam", "rules");
-  fs.mkdirSync(rulesDir, { recursive: true });
-  const written = [];
-  const skipped = [];
-  if (!fs.existsSync(RULES_DIR)) {
-    return { written, skipped, warnings: [`no rules source at ${RULES_DIR}`] };
-  }
-  for (const f of fs.readdirSync(RULES_DIR)) {
-    if (!f.endsWith(".md")) continue;
-    const src = path.join(RULES_DIR, f);
-    const dest = path.join(rulesDir, f);
-    if (fs.existsSync(dest) && !opts.force) {
-      skipped.push(dest);
-      continue;
-    }
-    fs.copyFileSync(src, dest);
-    written.push(dest);
-  }
-  return { written, skipped, warnings: [] };
-}
-
-function installSkills(targetDir, opts) {
-  const written = [];
-  const skipped = [];
-  if (!fs.existsSync(SKILLS_DIR)) {
-    return { written, skipped, warnings: [`no skills source at ${SKILLS_DIR}`] };
-  }
-  const destBase = path.join(targetDir, capabilities.skillsDir);
-  for (const skill of fs.readdirSync(SKILLS_DIR)) {
-    const srcDir = path.join(SKILLS_DIR, skill);
-    if (!fs.statSync(srcDir).isDirectory()) continue;
-    const destDir = path.join(destBase, skill);
-    fs.mkdirSync(destDir, { recursive: true });
-    for (const f of fs.readdirSync(srcDir)) {
-      const src = path.join(srcDir, f);
-      const dest = path.join(destDir, f);
-      if (fs.existsSync(dest) && !opts.force) {
-        skipped.push(dest);
-        continue;
-      }
-      fs.copyFileSync(src, dest);
-      written.push(dest);
-    }
-  }
-  return { written, skipped, warnings: [] };
-}
-
 function install(targetDir, opts = {}) {
   const o = { force: false, roles: [], isolation: "in-place", ...opts };
   const roles = installRoles(targetDir, o);
-  const rules = installRules(targetDir, o);
-  const skills = installSkills(targetDir, o);
+  const rules = baseInstall.installRules(targetDir, o);
+  const skills = baseInstall.installSkills(targetDir, capabilities.skillsDir, o);
   return {
     written: [...roles.written, ...rules.written, ...skills.written],
     skipped: [...roles.skipped, ...rules.skipped, ...skills.skipped],
@@ -126,24 +81,8 @@ function uninstall(targetDir) {
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
   }
-  const rulesDir = path.join(targetDir, ".devteam", "rules");
-  if (fs.existsSync(rulesDir) && fs.existsSync(RULES_DIR)) {
-    for (const f of fs.readdirSync(RULES_DIR)) {
-      if (!f.endsWith(".md")) continue;
-      const p = path.join(rulesDir, f);
-      if (fs.existsSync(p)) fs.unlinkSync(p);
-    }
-  }
-  const skillsBase = path.join(targetDir, capabilities.skillsDir);
-  if (fs.existsSync(skillsBase) && fs.existsSync(SKILLS_DIR)) {
-    for (const skill of fs.readdirSync(SKILLS_DIR)) {
-      const dir = path.join(skillsBase, skill);
-      if (fs.existsSync(dir)) {
-        for (const f of fs.readdirSync(dir)) fs.unlinkSync(path.join(dir, f));
-        try { fs.rmdirSync(dir); } catch { /* not empty — leave it */ }
-      }
-    }
-  }
+  baseInstall.uninstallRules(targetDir);
+  baseInstall.uninstallSkills(targetDir, capabilities.skillsDir);
 }
 
 function status(targetDir) {
