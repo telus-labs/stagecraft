@@ -42,6 +42,217 @@ $ devteam next --cwd "$TARGET"
    → devteam stage requirements
 ```
 
+---
+
+## Your first stage, step by step
+
+Stagecraft is an orchestrator, not a model. **`devteam stage <name>` renders a prompt for your AI tool.** Then it's on you (or `--headless` mode) to feed that prompt to the model. The model writes an artifact + a gate JSON file. The Stagecraft validator reads the gate and either advances the pipeline or halts it.
+
+There are **two ways** to feed the prompt to a model. Both produce the same gate file at the end. Pick whichever fits how you want to work.
+
+### Path A — `--headless` (recommended for first-timers)
+
+One terminal. One command. Watch the model's output stream in your terminal. The gate file appears when the model finishes.
+
+#### What you type
+
+```bash
+devteam stage requirements --feature "Add SMS notification opt-in to user settings" --headless
+```
+
+#### What you see — step by step
+
+**Step 1.** Stagecraft logs that it's dispatching the workstream:
+
+```
+[devteam] dispatching pm → claude-code (headless)
+```
+
+**Step 2.** The orchestrator spawns `claude --print` and pipes the rendered stage prompt to it via stdin. Claude's output streams to your terminal as the model works. You'll see:
+- Claude acknowledging the prompt and reading its `pm` subagent brief.
+- Claude reading the brief template (`templates/brief-template.md`).
+- Claude writing `pipeline/brief.md` section by section.
+- Claude writing the gate JSON (`pipeline/gates/stage-01.json`).
+
+This takes ~20–40 seconds for a small brief on a current Claude model.
+
+**Step 3.** When Claude finishes, Stagecraft reports a one-line summary:
+
+```
+  ✓ pm (claude-code): exit 0, 23154ms → pipeline/gates/stage-01.json
+```
+
+`exit 0` = model finished cleanly. `→ pipeline/gates/stage-01.json` = the gate file got written. If you see `(no gate written)` instead, the model didn't write the gate (re-run the stage, or hand-write the gate).
+
+#### What's on disk now
+
+```bash
+$ ls pipeline/
+brief.md           gates/
+
+$ cat pipeline/brief.md
+# Feature Brief
+
+## Problem
+Customers currently can't disable marketing SMS without contacting support…
+[full brief]
+
+$ cat pipeline/gates/stage-01.json
+{
+  "stage": "stage-01",
+  "workstream": "pm",
+  "host": "claude-code",
+  "orchestrator": "devteam@0.2.0",
+  "status": "PASS",
+  "track": "full",
+  "timestamp": "2026-05-28T14:32:11Z",
+  "blockers": [],
+  "warnings": [],
+  "acceptance_criteria_count": 5,
+  "out_of_scope_items": [...],
+  "required_sections_complete": true
+}
+```
+
+#### What you do next
+
+```bash
+$ devteam next
+▶️ run-stage — design (stage-02)
+   stage not started
+   → devteam stage design
+```
+
+Stagecraft read the stage-01 gate, saw `status: "PASS"`, and reports the next action. Run it:
+
+```bash
+$ devteam stage design --feature "Add SMS notification opt-in" --headless
+```
+
+…and the loop continues. Each stage takes one command. You can step away while the model works (each `--headless` stage is `await`-able).
+
+### Path B — Interactive in Claude Code (two windows)
+
+Useful when you want to *see* what the subagent is doing — watch the file edits, the model's reasoning, intervene mid-stage if needed.
+
+#### What you do — step by step
+
+**Step 1.** In **Terminal 1** (your project directory), render the stage prompt:
+
+```bash
+$ devteam stage requirements --feature "Add SMS notification opt-in to user settings"
+```
+
+#### What you see
+
+A boxed onboarding preamble at the top, then the actual stage prompt:
+
+```
+═══════════════════════════════════════════════════════════════════════
+  Stage stage-01 (requirements) — 1 workstream to dispatch
+═══════════════════════════════════════════════════════════════════════
+
+  The block(s) below are prompts to feed to your model. devteam does
+  NOT call a model — it renders the prompt and validates the gate JSON
+  the model writes back.
+
+  To run this stage, pick one:
+    1. Inside Claude Code: paste the prompt, OR type
+         /devteam stage requirements --feature "Add SMS notification opt-in..."
+    2. Headless from terminal:
+         devteam stage requirements --feature "..." --headless
+
+  When done, each workstream writes pipeline/gates/stage-01*.json.
+  Then run `devteam next` to see what to do next.
+═══════════════════════════════════════════════════════════════════════
+
+────────  workstream: pm  (host: claude-code)  ────────
+# Stage stage-01 — requirements
+Workstream: stage-01 (role: pm, host: claude-code)
+...
+[the actual prompt for the model]
+```
+
+**Step 2.** Open **Claude Code** (the CLI or the desktop app) at the same project root.
+
+If you're using the CLI from a second terminal pane:
+
+```bash
+$ cd /tmp/example-target           # same directory you ran devteam init in
+$ claude
+```
+
+If you're using the desktop app: open the app, point it at the same project root.
+
+**Step 3.** In Claude Code's prompt, type the slash command (Stagecraft installed it at `.claude/commands/devteam.md`):
+
+```
+/devteam stage requirements --feature "Add SMS notification opt-in to user settings"
+```
+
+#### What you see in Claude Code
+
+Claude Code recognizes `/devteam` as a slash command, reads `.claude/commands/devteam.md`, dispatches the PM subagent. You'll see Claude:
+
+1. Acknowledge the slash command and read the `pm` subagent brief (`.claude/agents/pm.md`).
+2. Read the brief template (`templates/brief-template.md`).
+3. Write `pipeline/brief.md` section by section (you'll see the `Write` tool calls).
+4. Write `pipeline/gates/stage-01.json` (another `Write` tool call).
+5. The `Stop` hook fires (Stagecraft installed it at `.claude/settings.local.json`):
+
+```
+[gate-validator] ✅ GATE PASS — stage-01/pm (claude-code)
+```
+
+That last line confirms the validator ran on the gate and it passed. If the gate had failed (`FAIL` or `ESCALATE`), you'd see those statuses and the hook would exit non-zero.
+
+#### What you do next
+
+Switch back to **Terminal 1**:
+
+```bash
+$ devteam next
+▶️ run-stage — design (stage-02)
+   stage not started
+   → devteam stage design
+```
+
+Same as Path A from here. The pipeline state lives in `pipeline/gates/`; both paths populate it identically.
+
+For the next stage, you can switch paths if you want — run `--headless` for stages you trust, switch to interactive Claude Code for stages you want to watch.
+
+### Alternative inside Claude Code: paste the prompt directly
+
+Don't want to use the slash command? Copy everything between the `────────  workstream: pm` divider and the next divider (or end of stage marker), paste it into Claude Code. Claude will recognize the prompt structure and run the PM subagent. The slash command does the same thing — it's just a shortcut.
+
+### What if I run `devteam stage` in a directory that isn't initialized?
+
+Stagecraft warns you before printing the prompt:
+
+```
+⚠️  /path/to/your/dir
+   does not look like an initialised Stagecraft target project (no .devteam/config.yml).
+   The prompt below will reference role briefs / rules / templates that don't exist yet.
+   Run this first to lay them down:
+     devteam init --host claude-code --cwd "/path/to/your/dir"
+```
+
+The prompt still prints (in case you want to read it), but feeding it to a model in an un-init'd directory won't work — the prompt references files (`.claude/agents/pm.md`, `.devteam/rules/`, `templates/`) that don't exist.
+
+### What if Claude doesn't write the gate file?
+
+`devteam next` will keep reporting `run-stage` (or `continue-stage` for multi-role stages with partial completion). Three options:
+
+1. **Re-run the stage.** Most common cause is the model lost context or skipped the gate step. Re-running overwrites cleanly.
+2. **Hand-write the gate.** Look at `rules/gates.md` for the required fields. Write a JSON file at the expected path. Stagecraft doesn't care how the gate got there.
+3. **Escalate.** Write the gate with `status: "ESCALATE"` and a reason in `escalation_reason`. Stagecraft halts cleanly and surfaces the situation.
+
+---
+
+## What each stage does (reference)
+
+The walkthrough above showed the user-facing flow for stage-01. The rest of this document is reference: what each stage's prompt actually contains, what artifact gets written, what's in the gate JSON. Skim or chase the specific stage you care about.
+
 ## Stage 1 — PM writes the brief
 
 ```bash

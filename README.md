@@ -73,25 +73,82 @@ A coordinated team of role-specific subagents running a structured software-deve
 ## Quick start
 
 ```bash
-# 1. Clone and install
-git clone <this-repo> && cd stagecraft && npm install
+# 1. Get the framework (one time, anywhere)
+git clone <this-repo> && cd stagecraft && npm install && npm link
 
-# 2. (Optional) Make devteam available globally
-npm link    # so `devteam` is on your PATH
-
-# 3. Initialize in your target project
+# 2. In your target project — install the host adapter surface
 cd ~/projects/my-app
-devteam init --host claude-code         # or: --host codex / --host claude-code,codex
+devteam init --host claude-code         # or: codex / gemini-cli / claude-code,codex
 
-# 4. Drive the pipeline
-devteam stage requirements --feature "Add SMS notification opt-in"
-# (do the PM work; gate gets written)
-devteam next                            # → "▶️ run-stage design (stage-02)"
-devteam stage design
-# … continue until "🎉 pipeline-complete"
+# 3. Verify
+devteam doctor                           # should be all green
 ```
 
-That's the whole loop. Single-role stages produce one prompt; multi-role stages produce one prompt per role; `devteam merge <stage>` aggregates per-workstream gates into the stage gate when ready.
+Then drive the pipeline. **There are two ways to run a stage.** Pick the one that matches what you want to see:
+
+### Path A — `--headless` (single terminal, simpler — start here)
+
+The orchestrator drives the host CLI for you (`claude --print`, `codex exec`, `gemini`). You type one command, watch model output stream to your terminal, then move on. Best for your first run, CI, and scripted use.
+
+```bash
+devteam stage requirements --feature "Add SMS notification opt-in" --headless
+# [devteam] dispatching pm → claude-code (headless)
+# (model output streams to your terminal as it works)
+#   ✓ pm (claude-code): exit 0, 23000ms → pipeline/gates/stage-01.json
+
+cat pipeline/brief.md                    # the artifact the model wrote
+cat pipeline/gates/stage-01.json          # the gate JSON
+
+devteam next                              # → "▶️ run-stage design (stage-02)"
+devteam stage design --headless           # next stage
+# … keep going until "🎉 pipeline-complete"
+```
+
+One terminal. One command per stage. The gate file appears when the model is done. `devteam next` tells you the next command.
+
+### Path B — Interactive in Claude Code (two windows, see the agent work)
+
+Useful when you want to see what the subagent is doing, watch the file edits, intervene mid-stage. The slash command `/devteam` was installed by `devteam init`.
+
+```bash
+# Terminal 1 (your project dir):
+devteam stage requirements --feature "Add SMS notification opt-in"
+#   → prints a prompt with an onboarding preamble explaining what to do with it
+```
+
+In **Terminal 2** (or a separate window), inside Claude Code at the same project root:
+
+```
+/devteam stage requirements --feature "Add SMS notification opt-in"
+```
+
+Claude Code recognizes the slash command, dispatches the `pm` subagent. You see Claude write `pipeline/brief.md`, then write `pipeline/gates/stage-01.json`. The `Stop` hook fires and validates:
+
+```
+[gate-validator] ✅ GATE PASS — stage-01/pm (claude-code)
+```
+
+Back in Terminal 1:
+
+```bash
+devteam next                              # → "▶️ run-stage design (stage-02)"
+```
+
+Repeat for each stage.
+
+### Which path should I pick?
+
+| | Path A: `--headless` | Path B: interactive in Claude Code |
+|---|---|---|
+| Terminal windows | 1 | 2 (terminal + Claude Code) |
+| You see the agent's work | streamed text in your terminal | full Claude Code UI |
+| Best for | first runs, CI, scripted use, multi-host fanout | watching agents work, mid-stage intervention, debugging a stage |
+| Auth | `claude --version` must work | Claude Code app/CLI logged in |
+| Speed | usually faster (no UI overhead) | usually slower (UI overhead, human pauses) |
+
+**Recommendation for first-timers:** Path A. One terminal, one command per stage, results on disk. You can switch to Path B later when you want to watch a specific stage.
+
+For a complete walked-through example with the actual output you'll see at each step, read **[EXAMPLE.md](EXAMPLE.md)**.
 
 ## What `devteam init` installs
 
