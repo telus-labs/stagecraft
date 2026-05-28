@@ -353,10 +353,170 @@ Every gate carries the contract F identity fields. Every multi-role stage has a 
 
 - **FAIL / ESCALATE branches.** A FAIL gate gives `❌ fix-and-retry` with blockers listed; an ESCALATE gate gives `🚨 resolve-escalation` with the reason. Both halt `next` until the situation is resolved.
 
+## A second example: hotfix track
+
+The example above ran the `full` track — every stage, in order. Real teams pick lighter tracks for smaller changes. Let's walk through a `hotfix` for an outage to show what a different track feels like.
+
+**Scenario:** Production is alerting. The Stripe webhook handler is returning 500s. You've identified the root cause (a null-check missing after a recent dependency bump), and you need to ship a fix in <30 minutes.
+
+The `hotfix` track skips the front-of-pipeline work — requirements / design / clarification — because you already know what's broken. It keeps every downstream safety stage (build → pre-review → security-review → peer-review → qa → accessibility-audit → observability-gate → sign-off → deploy → retrospective). That's 10 stages, but most run fast.
+
+### Configure the track
+
+```bash
+# Edit .devteam/config.yml — change default_track to hotfix, OR pass it inline:
+devteam stage build --feature "Fix Stripe webhook 500 — add null check on event.data.object" --track hotfix
+```
+
+The CLI's preamble identifies the track:
+
+```
+═══════════════════════════════════════════════════════════════════════
+  Stage stage-04 (build) — 4 workstreams to dispatch
+═══════════════════════════════════════════════════════════════════════
+  ... track: hotfix ...
+```
+
+### Stage 4 — Build, fast path
+
+Only backend is actually touched. The other three workstreams (frontend, platform, qa) run anyway because Stage 4 is a 4-role stage by structure — they each produce a one-line PR summary and a PASS gate explaining they're not in scope. Total wall-clock: ~3 minutes if you're running headless across all four.
+
+The backend workstream adds the null-check, writes the test, and produces:
+
+```json
+// pipeline/gates/stage-04.backend.json
+{
+  "stage": "stage-04",
+  "workstream": "backend",
+  "host": "claude-code",
+  "status": "PASS",
+  "track": "hotfix",
+  "blockers": [],
+  "warnings": [],
+  "files_changed": ["src/backend/webhooks/stripe.ts", "src/backend/webhooks/stripe.test.ts"]
+}
+```
+
+After all four workstreams: `devteam merge build` → stage-04 gate, all-PASS.
+
+### Stage 4a — Pre-review
+
+Platform runs lint, tests, dep review, and the security heuristic against the diff. The diff touches `src/backend/webhooks/stripe.ts` — that path includes "stripe" but isn't on the explicit security trigger list. Lint passes; tests pass; security heuristic returns `security_review_required: false`.
+
+```json
+// pipeline/gates/stage-04a.json
+{
+  "stage": "stage-04a",
+  "status": "PASS",
+  "lint_passed": true,
+  "tests_passed": true,
+  "dependency_review_passed": true,
+  "security_review_required": false
+}
+```
+
+`devteam next` skips stage-04b (security review fires only when the prior gate's `security_review_required: true`) and advances to stage-05.
+
+### Stage 5 — Peer review, single-host
+
+For a hotfix, you probably don't want adversarial fanout — the cost-benefit tilts toward "ship fast." A single reviewer across all 4 areas is fine.
+
+Reviewer writes `pipeline/code-review/by-senior.md`:
+
+```markdown
+# Review by senior
+
+## Review of backend
+Null check is correct. Test covers the regression. The fix is the smallest possible change.
+REVIEW: APPROVED
+
+## Review of frontend
+Not in scope for this hotfix.
+REVIEW: APPROVED
+
+## Review of platform
+Not in scope for this hotfix.
+REVIEW: APPROVED
+
+## Review of qa
+Not in scope for this hotfix.
+REVIEW: APPROVED
+```
+
+The PostToolUse hook fires four times, upserting four area gates. With 1 reviewer and a `required_approvals: 1` policy, each area's gate flips to PASS immediately.
+
+### Stages 6, 6b, 6c — Tests, accessibility, observability
+
+- **Stage 6 (QA):** the new test passes; the regression test specifically covers the null-data webhook payload. Gate carries `tests_total: <N+1>`, `tests_passed: <N+1>`, `all_acceptance_criteria_met: true`.
+
+- **Stage 6b (accessibility):** backend-only change → `audit_skipped_reason: "backend-only change, no UI affected"`. Gate writes PASS with the skip reason.
+
+- **Stage 6c (observability):** the brief said the webhook should emit `webhook.stripe.received` and `webhook.stripe.error` metrics. Platform greps the code: both are emitted (the existing emitters were untouched by the fix). Gate writes:
+
+```json
+{
+  "stage": "stage-06c",
+  "status": "PASS",
+  "metrics": {
+    "required": ["webhook.stripe.received", "webhook.stripe.error"],
+    "verified": ["webhook.stripe.received", "webhook.stripe.error"],
+    "gap": []
+  },
+  "verification_method": "code-grep"
+}
+```
+
+### Stage 7 — Auto-fold sign-off
+
+Stage 6 reported `all_acceptance_criteria_met: true` AND a 1:1 criterion-to-test mapping (the "fix the null case" criterion maps to one specific test). The orchestrator auto-folds Stage 7 — no human action — writing:
+
+```json
+{
+  "stage": "stage-07",
+  "status": "PASS",
+  "auto_from_stage_06": true,
+  "pm_signoff": "auto",
+  "platform_signoff": "auto"
+}
+```
+
+`devteam next` advances directly to stage-08.
+
+### Stage 8 — Deploy
+
+Platform follows `core/deploy/<adapter>.md` (whatever your team's deploy adapter is — Kubernetes, Terraform, custom). The gate carries `deploy_adapter`, `smoke_test_passed`, `runbook_referenced`. Stripe webhooks start returning 200s again; the alert clears.
+
+```json
+{
+  "stage": "stage-08",
+  "status": "PASS",
+  "deploy_adapter": "kubernetes",
+  "smoke_test_passed": true,
+  "rollback_executed": false
+}
+```
+
+### Stage 9 — Retrospective
+
+Even hotfixes get a retro. Principal harvests `PATTERN:` lines from Stage 5 reviews (none in this case — single reviewer, straightforward fix), considers what to add to `pipeline/lessons-learned.md`. Likely outcome: add a lesson like `**Lesson:** dependency bumps that touch webhook handlers warrant an extra null-check pass before merge.`
+
+Total wall-clock: ~25 minutes if running mostly user-driven, ~10 minutes if running mostly headless. The audit trail is complete: you can show stakeholders (or your incident review board) exactly what was changed, who approved it, what tests cover it, and how it was deployed.
+
+### What this example demonstrates
+
+- **Tracks scale the process to the change size.** Full track for cross-area features. Hotfix for production incidents. Quick for single-area work. Nano for typos.
+- **Auto-fold prevents busy-work.** Stage 7 sign-off is automatic when Stage 6 reports complete acceptance criteria with a 1:1 test mapping. You don't sign off on what the system already proved.
+- **Conditional stages keep the safety net light.** Security review fires only when pre-review's heuristic flags it. Accessibility audit can be explicitly skipped for backend-only changes (with a reason).
+- **Even hotfixes produce a complete audit trail.** No corner-cutting on the record, just on the front-of-pipeline planning work that doesn't apply to "fix this specific bug now."
+
 ## Where to go next
 
-- [`README.md`](README.md) — CLI surface, install layout.
-- [`docs/concepts.md`](docs/concepts.md) — vocabulary.
+- [`README.md`](README.md) — CLI surface, install layout, First 30 minutes path.
+- [`docs/concepts.md`](docs/concepts.md) — vocabulary in one table.
+- [`docs/user-guide.md`](docs/user-guide.md) — long-form daily-use reference.
+- [`docs/tracks.md`](docs/tracks.md) — which track to pick for which kind of change.
+- [`docs/adoption-guide.md`](docs/adoption-guide.md) — for team leads deciding whether to adopt.
+- [`docs/presentation-notes.md`](docs/presentation-notes.md) — slide deck + speaker notes for pitching this to stakeholders.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — design model + the 11 locked decisions.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — extension recipes (adapter, stage, role, skill).
 - [`docs/walkthroughs/stage-04-split-host.md`](docs/walkthroughs/stage-04-split-host.md) — the stress-test trace that locked the multi-workstream contract.
