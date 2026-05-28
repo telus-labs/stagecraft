@@ -184,3 +184,38 @@ test("splits the headlessCommand on whitespace and passes the tail as args", asy
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }
 });
+
+test("ctx.timeoutMs kills a hung child and reports timedOut: true", async () => {
+  // `sleep 30` would hang the test for 30 seconds without a timeout.
+  // We pass timeoutMs: 200 → kill after 200ms → resolve with timedOut.
+  const ctx = makeCtx({ timeoutMs: 200 });
+  try {
+    const start = Date.now();
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "sleep 30", () =>
+      runHeadless(makeAdapter(), makeDescriptor(), ctx),
+    );
+    const elapsed = Date.now() - start;
+    assert.equal(r.timedOut, true);
+    assert.equal(r.exitCode, null);
+    // Should resolve within a reasonable margin of the timeout (allow up
+    // to ~5s for the SIGKILL grace window in case SIGTERM is ignored).
+    assert.ok(elapsed < 6000, `expected resolution within 6s, took ${elapsed}ms`);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("ctx.timeoutMs: 0 disables the timeout", async () => {
+  // With timeoutMs: 0, even an immediately-resolving command should
+  // succeed (we don't want a 0 to be misread as "kill immediately").
+  const ctx = makeCtx({ timeoutMs: 0 });
+  try {
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", () =>
+      runHeadless(makeAdapter(), makeDescriptor(), ctx),
+    );
+    assert.equal(r.timedOut, false);
+    assert.equal(r.exitCode, 0);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});

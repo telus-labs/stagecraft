@@ -19,6 +19,10 @@ const { withSpan, setSpanAttributes } = require("./observability");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const ORCHESTRATOR_ID = `devteam@${require("../package.json").version}`;
 
+// Produce the workstream identifier for a (stage, role) dispatch.
+// Single-role stages get the bare stage id ("stage-01"); multi-role stages
+// get a dotted form ("stage-04.backend"). The role count is what the caller
+// observed at decomposition time — pass stageDef.roles.length.
 function workstreamId(stage, role, roleCount) {
   return roleCount > 1 ? `${stage}.${role}` : stage;
 }
@@ -100,6 +104,7 @@ function runStage(stageName, opts = {}) {
     cwd,
     isolation: opts.isolation || config.pipeline.isolation,
     orchestrator: ORCHESTRATOR_ID,
+    timeoutMs: typeof opts.timeoutMs === "number" ? opts.timeoutMs : undefined,
   };
 
   if (!isStageInTrack(stageName, ctx.track)) {

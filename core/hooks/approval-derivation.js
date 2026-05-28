@@ -69,6 +69,12 @@ const KNOWN_AREAS = new Set(["backend", "frontend", "platform", "qa", "deps"]);
 // Host-based filenames trigger fanout-mode gate naming. When the
 // reviewer identifier matches a known host, gates are written to
 // stage-05.<area>.<host>.json instead of stage-05.<area>.json.
+//
+// "Known" = an entry here. Adding a new host adapter (under hosts/<name>/)
+// REQUIRES adding the host's name to this set, otherwise the fanout-mode
+// review files written by that host will fall back to the area-only gate
+// path and collide across hosts. Keep this list in sync with the dirs
+// under hosts/.
 const KNOWN_HOSTS = new Set(["claude-code", "codex", "gemini-cli", "generic"]);
 
 const SECTION_HEADER_RE = /^##\s+Review\s+of\s+(\w[\w-]*)\s*$/i;

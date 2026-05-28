@@ -39,9 +39,11 @@ Commands:
                                    pipeline/gates/ workspace.
   stage <name> [--feature "..."]   Render stage prompt(s) for <name>. With
         [--headless]                 --headless, drives each workstream's
-                                   host CLI non-interactively (claude --print,
+        [--timeout-ms N]             host CLI non-interactively (claude --print,
                                    codex exec) and reports exit codes +
-                                   gate paths.
+                                   gate paths. --timeout-ms caps each
+                                   workstream's wall-clock (default 600000,
+                                   i.e. 10 min); pass 0 to disable.
   next [--json]                    Inspect pipeline/gates/ and report what
                                    to do next: run a stage, continue a
                                    partial multi-role stage, merge, fix a
@@ -101,6 +103,7 @@ function parseFlags(argv) {
     if (a === "--force")   { flags.force   = true;      continue; }
     if (a === "--json")    { flags.json    = true;      continue; }
     if (a === "--headless"){ flags.headless = true;     continue; }
+    if (a === "--timeout-ms"){ flags.timeoutMs = Number(argv[++i]); continue; }
     if (a === "--port")    { flags.port    = Number(argv[++i]); continue; }
     if (a === "--open")    { flags.open    = true;      continue; }
     if (a === "--limit")   { flags.limit   = argv[++i]; continue; }
@@ -150,9 +153,12 @@ function cmdStage(argv) {
       .then((result) => {
         let anyFail = false;
         for (const r of result.results) {
-          const ok = r.exitCode === 0 && r.gatePath;
+          const ok = !r.timedOut && r.exitCode === 0 && r.gatePath;
           const gateNote = r.gatePath ? ` → ${path.relative(result.ctx.cwd, r.gatePath)}` : " (no gate written)";
-          console.log(`  ${ok ? "✓" : "✗"} ${r.role} (${r.host}): exit ${r.exitCode}, ${r.durationMs}ms${gateNote}`);
+          const status = r.timedOut
+            ? `TIMEOUT after ${r.durationMs}ms`
+            : `exit ${r.exitCode}, ${r.durationMs}ms`;
+          console.log(`  ${ok ? "✓" : "✗"} ${r.role} (${r.host}): ${status}${gateNote}`);
           if (!ok) anyFail = true;
         }
         process.exit(anyFail ? 1 : 0);
