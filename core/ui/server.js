@@ -149,7 +149,11 @@ function isLoopback(host) {
 }
 
 function startServer(opts = {}) {
-  const port = opts.port || Number(process.env.PORT) || 3737;
+  // `port: 0` is the conventional "let the OS pick a free port" value used
+  // by tests. Treat it as an explicit choice, not falsy fallback bait.
+  const port = typeof opts.port === "number"
+    ? opts.port
+    : (Number(process.env.PORT) || 3737);
   const host = opts.host || "127.0.0.1";
   const cwd = opts.cwd || process.cwd();
   const broker = makeBroker();

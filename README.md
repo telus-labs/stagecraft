@@ -1,12 +1,50 @@
 # Stagecraft
 
-**A model-agnostic AI dev team pipeline across Claude Code, Codex, and Gemini CLI. Staged work, multi-host peer review, audit gates.**
+> *Your Claude session went sideways again. Context reset. The agent forgot the architecture you spent ten minutes explaining. It edited the wrong file, then "fixed" the symptom instead of the cause. You're three hours in and you don't have a brief, a design, tests, or a deployable change — just a chat log.*
 
-Stagecraft is a single source of truth for templates, schemas, role briefs, and orchestrator logic, plus per-host adapters that lay down host-native surfaces (subagents, slash commands, hooks, role prompts) into your project.
+**Stagecraft is an orchestrator that runs your AI coding tool through a structured 13-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage can't start until the gate passes. You see the whole run on disk, auditable, resumable, not in a chat log.
 
-Today's hosts: **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host adapter. One project, one config, one or more hosts. Stages can route to different hosts — the same pipeline can use Claude for design, Codex for backend, Gemini for QA, Claude for review.
+Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the seam.
+
+```bash
+devteam init --host claude-code        # one-time install in your project
+devteam stage requirements --feature "Add SMS notification opt-in"
+# (model writes brief + gate; hooks validate)
+devteam next                           # → "▶️ run-stage design (stage-02)"
+# … 11 more stages, then "🎉 pipeline-complete"
+```
 
 > The CLI binary is `devteam`. Stagecraft is the project; `devteam` is what you type.
+
+## First 30 minutes
+
+If you're evaluating Stagecraft, this is the cheapest path to "does it work for my team?":
+
+1. **(5 min) Install the framework.** `git clone <this-repo> && cd stagecraft && npm install && npm link`. Verify with `devteam --help`.
+2. **(2 min) Initialize a throwaway target project.** `mkdir /tmp/scratch && cd /tmp/scratch && devteam init --host claude-code`. Then `devteam doctor` should be all green.
+3. **(3 min) Read [EXAMPLE.md](EXAMPLE.md).** One feature traced through all 13 stages with real CLI captures. Tells you what each stage actually does.
+4. **(15 min) Run one full pipeline yourself.** `devteam stage requirements --feature "a one-paragraph feature you understand"`. Drop the prompt into Claude Code. Let the PM subagent write the brief. Run `devteam next`. Walk forward through design, build, peer-review, qa, sign-off. Skip deploy if you don't want to actually deploy anything (just write `{"status":"PASS",...}` into the gate by hand).
+5. **(5 min) Inspect the audit trail.** `ls pipeline/gates/` — every stage's outcome on disk. `cat pipeline/brief.md`, `pipeline/design-spec.md`, `pipeline/code-review/by-*.md`. The pipeline is reconstructable from these files alone.
+
+If after 30 minutes you can see how this would help your team, run a 2-week pilot ([adoption-guide.md](docs/adoption-guide.md) has the script). If you can't, drop it — it's not the right tool for every team.
+
+## Documentation map
+
+New here? Read in this order:
+
+1. **[EXAMPLE.md](EXAMPLE.md)** — one full pipeline run traced end-to-end. The single best onboarding artifact.
+2. **[docs/concepts.md](docs/concepts.md)** — six primitives (stage, role, workstream, host, gate, track) in one table.
+3. **[docs/user-guide.md](docs/user-guide.md)** — daily-use reference: running stages, multi-host setups, headless mode, troubleshooting.
+4. **[docs/adoption-guide.md](docs/adoption-guide.md)** — for team leads deciding whether to adopt. Covers pilot, objections, success criteria.
+5. **[docs/presentation-notes.md](docs/presentation-notes.md)** — slide deck + speaker notes for pitching this to a team or stakeholder.
+6. **[docs/tracks.md](docs/tracks.md)** — which of the six tracks to pick.
+7. **[docs/faq.md](docs/faq.md)** — operational questions, common gotchas, comparisons to other tools.
+
+Reference / extension:
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — 11 locked design decisions. Read when you want to know *why*.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — recipes for adding a host, role, stage, or skill.
+- **[core/adapters/host-adapter.md](core/adapters/host-adapter.md)** — the host-adapter contract. ~150 lines; defines everything an adapter must implement.
+- **[docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)** — multi-workstream contract stress-test trace.
 
 ## Why "Stagecraft"?
 

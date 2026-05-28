@@ -1,74 +1,106 @@
 # Concepts
 
-One-sentence definitions of every primitive in Stagecraft. The thing you skim before reading anything else.
+Six primitives make up Stagecraft. Skim this page before reading anything else — every other doc assumes you know these words.
 
-## Pipeline shape
+| Concept | Lives in | Set by | What it is |
+|---|---|---|---|
+| **Stage** | `core/pipeline/stages.js` | The framework | A numbered phase of work (e.g. `stage-01` requirements, `stage-04` build, `stage-09` retrospective). 13 stages total. |
+| **Role** | `roles/<role>.md` | The framework + your customizations | A named seat at the team — `pm`, `principal`, `backend`, `frontend`, `platform`, `qa`, `reviewer`, `security`. A role's brief is the source of truth for what it does, reads, and writes. |
+| **Workstream** | derived at dispatch time | The orchestrator | One dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review) have several. **The workstream is the unit of gate identity.** |
+| **Host** | `hosts/<host>/` | You choose at `devteam init` | The AI tool that actually runs the model: `claude-code`, `codex`, `gemini-cli`, or `generic` (no host). |
+| **Gate** | `pipeline/gates/<stage>*.json` | The model writes it; the validator enforces it | A JSON record of one workstream's (or stage's) outcome. **The stable seam between stages.** Required fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. |
+| **Track** | `core/pipeline/stages.js` | Your `.devteam/config.yml` (`pipeline.default_track`) | Which stages run for this kind of change. Six tracks: `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Tracks shape *which* stages run; never *what* a stage does. |
 
-- **Pipeline** — the ordered sequence of stages that turns a feature request into a deployed, retro'd change.
-- **Stage** — one of 11 numbered phases of the pipeline (e.g. `stage-01` requirements, `stage-04` build). Defined in `core/pipeline/stages.js`.
-- **Sub-stage** — a stage with a letter suffix (`stage-04a` pre-review, `stage-04b` security review) that runs as part of the same broader phase.
-- **Track** — a named subset of stages run for one kind of change (`full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`). Tracks shape *which* stages run; they never change *what* a stage does.
+That's the load-bearing vocabulary. The rest of this page builds on it.
 
-## Work assignment
+---
 
-- **Role** — a named seat at the team (`pm`, `principal`, `backend`, `frontend`, `platform`, `qa`, `reviewer`, `security`). A role has a brief in `roles/<role>.md`.
-- **Workstream** — one dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review, sign-off) have several. The workstream is the unit of gate identity.
-- **Subagent** — the host-native agent the workstream is dispatched to. Usually `subagent = role` (backend workstream → dev-backend subagent), but stages can override (peer-review's `subagent: "reviewer"` sends all four area workstreams to the reviewer subagent).
+## How they compose
 
-## Outputs
+A typical `full`-track run touches every primitive:
 
-- **Artifact** — the markdown deliverable a stage produces (`pipeline/brief.md` for stage-01, `pipeline/design-spec.md` for stage-02, etc.).
-- **Gate** — the JSON file that records a stage's outcome. Required base fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. Workstream gates add `workstream` and `host`. Merged stage gates add a `workstreams[]` array.
+1. You type **`devteam stage requirements --feature "Add SMS opt-in"`**.
+2. The orchestrator decomposes **stage-01** into **one workstream** (single-role) for **role: pm**, looks up the **host** for that workstream in `.devteam/config.yml` (default `claude-code`), and asks the host adapter to render a prompt.
+3. The model writes `pipeline/brief.md` (the artifact) and `pipeline/gates/stage-01.json` (the **gate**) with `status: "PASS"`.
+4. You run **`devteam next`**. It reads the gate, sees PASS, and reports `▶️ run-stage — design (stage-02)`.
+5. Two stages later you hit **stage-04 build**: 4 workstreams (backend / frontend / platform / qa), each potentially dispatched to a different host depending on routing. Each writes its own per-workstream gate (`pipeline/gates/stage-04.backend.json` etc.). `devteam merge build` aggregates them into the stage gate.
+6. The **track** you picked (`full`) is what put all 13 stages on the menu. Picking `nano` would skip everything except build + qa.
+
+The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator never holds state outside of those files.
+
+## Rules of thumb
+
+- **Adding a new specialist seat at the team?** Add a **role** under `roles/<name>.md`.
+- **Adding a new phase of work?** Add a **stage** to `core/pipeline/stages.js`, with a matching schema under `core/gates/schemas/`.
+- **Plugging in a new AI tool?** Add a **host adapter** under `hosts/<name>/`. The contract is in `core/adapters/host-adapter.md`.
+- **Routing a specific role to a specific host?** Edit `routing` in `.devteam/config.yml` (`stages > roles > default_host` — most specific wins).
+- **Want a subset of stages for a particular change size?** Pick a **track**, or define a new one in `STAGES_BY_TRACK`.
+- **Need to record a non-standard outcome?** Add a field to the stage's schema. The validator enforces required fields; everything else is free-form.
+
+---
+
+## Secondary vocabulary
+
+These come up frequently but build on the primitives above:
+
+### Status & state
+
 - **Gate status** — `PASS`, `WARN`, `FAIL`, or `ESCALATE`. WARN is PASS-with-warnings (non-blocking). ESCALATE halts the pipeline; FAIL retries up to a limit then escalates.
+- **Merge** — the orchestrator's post-step on multi-role stages: read all per-workstream gates, aggregate into a stage-level gate. Aggregate status follows `ESCALATE > FAIL > WARN > PASS` (pessimistic).
+- **Artifact** — the markdown deliverable a stage produces (`pipeline/brief.md` for stage-01, `pipeline/design-spec.md` for stage-02, …). Distinct from the gate.
 
-## Routing & dispatch
+### Routing & dispatch
 
-- **Host** — the AI tool that actually runs the model: `claude-code`, `codex`, or `generic` (no-host CLI mode).
-- **Adapter** — the per-host module under `hosts/<host>/` that knows how to install, render prompts for, and (optionally) headlessly drive that host. Implements the contract in `core/adapters/host-adapter.md`.
-- **Capability** — a declaration in `capabilities.json` about what the host supports: `hooks`, `subagents`, `slashCommands`, `worktrees`, `headless`, plus an `enforces` map for `allowed_writes` and `stoplist`.
-- **Routing config** — `.devteam/config.yml` in the target project. Decides which host runs each workstream. Precedence: `routing.stages[stage] → routing.roles[role] → routing.default_host`.
-
-## Core mechanics
-
+- **Adapter** — the per-host module under `hosts/<host>/`. Implements install, renderStagePrompt, status, uninstall, and (optionally) invoke. The orchestrator never knows host-specific details; the adapter is the only layer that does.
+- **Capability** — a flag in `hosts/<host>/capabilities.json` declaring what the host supports: `hooks`, `subagents`, `slashCommands`, `worktrees`, `headless`, plus an `enforces` map saying where each core rule is enforced (`tool-call-time`, `post-hoc-audit`, `prompt-only`).
+- **Subagent** — the host-native agent the workstream is dispatched to. Usually `subagent = role` (the backend workstream → the `dev-backend` subagent). Stages can override this (peer-review's `subagent: "reviewer"` sends all four area workstreams to the same reviewer subagent).
 - **Stage descriptor** — what the orchestrator hands to an adapter to render a prompt: stage id, role, workstream id, objective, files-to-read, allowed-writes, artifact path, template name, gate skeleton.
-- **renderStagePrompt** — adapter method that returns the text the user (or the headless host CLI) consumes to perform the stage.
-- **invoke** — optional adapter method that drives the host CLI non-interactively (`claude --print`, `codex exec`). Only present when `capabilities.headless: true`.
-- **Merge** — the orchestrator's post-step on multi-role stages: read all per-workstream gates, aggregate into the stage-level gate. Status follows `ESCALATE > FAIL > WARN > PASS`.
 
-## Guards & hooks
+### Guards & hooks
 
-- **Stoplist** — a list of phrases (auth, PII, payments, migrations, …) that block lighter tracks from being used. Forces serious changes onto the full pipeline.
-- **Budget gate** — opt-in cap on tokens + wall-clock per pipeline run. On exceed: `escalate` or `warn`.
-- **Security heuristic** — file-path patterns (`src/backend/auth*`, `*secret*`, …) that, when matched by a diff, force the conditional `stage-04b` security review.
-- **Hook** — a Claude Code event handler (Stop / SubagentStop / PostToolUse) wired to a core script. `Stop` runs `validator.js`; `PostToolUse Write|Edit` runs `approval-derivation.js`.
-- **Conditional stage** — a stage that only runs when a prerequisite gate's field has a specific value. Declared via `conditionalOn: { stage, field, equals }` in the stage definition. Currently used by security-review.
+- **Stoplist** — phrases (`auth`, `payments`, `migrations`, …) that block lighter tracks from running. Forces serious changes onto `full` or `hotfix`. Bypass with `--force`.
+- **Security heuristic** — file-path patterns (`src/backend/auth*`, `*secret*`, `*crypto*`, …) that, when matched, set `security_review_required: true` in pre-review's gate. That value triggers the conditional `stage-04b` security review.
+- **Hook** — a Claude Code event handler (`Stop`, `SubagentStop`, `PostToolUse`, `PreToolUse`) wired to a core script. `Stop` runs the validator; `PostToolUse Write|Edit` runs approval-derivation; `PreToolUse Write|Edit` runs secret-scan.
+- **Conditional stage** — a stage that only runs when a prerequisite gate's field has a specific value. Declared via `conditionalOn: { stage, field, equals }` in the stage definition. Currently used by security-review (`stage-04b`).
 
-## Special mechanisms
+### Special mechanisms
 
-- **Approval-derivation** — Stage 5 mechanism: reviewers write per-area `REVIEW: APPROVED` / `REVIEW: CHANGES REQUESTED` markers in `pipeline/code-review/by-<reviewer>.md`; a PostToolUse hook parses them and upserts the per-area workstream gates.
-- **Auto-fold (Stage 7)** — when Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 criterion-to-test mapping, the orchestrator authors Stage 7 PM sign-off directly with `auto_from_stage_06: true`.
-- **Retrospective synthesis** — Stage 9 work: harvest `PATTERN:` lines from Stage 5 reviews, reconcile with the lessons-learned file, promote ≤2 rules per retro, retire stale ones via the auto-age-out rule.
+- **Approval-derivation** — Stage 5's mechanism. Reviewers write per-area `REVIEW: APPROVED` / `REVIEW: CHANGES REQUESTED` markers in `pipeline/code-review/by-<reviewer>.md`; a PostToolUse hook parses them and upserts the per-area workstream gates. You never write Stage 5 gates by hand.
+- **Auto-fold (Stage 7)** — when Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 criterion-to-test mapping, the orchestrator authors Stage 7 sign-off directly with `auto_from_stage_06: true`. No human action.
+- **Retrospective synthesis (Stage 9)** — Principal harvests `PATTERN:` lines from Stage 5 reviews, reconciles with `pipeline/lessons-learned.md`, promotes ≤2 rules per retro, retires stale ones via the auto-age-out rule.
+- **Multi-model adversarial peer review** — opt-in fanout (`routing.review_fanout: [host, host, host]` in config). Stage-05's 4 area workstreams duplicate across N hosts → 4×N parallel reviews; pessimistic merge across all of them.
+- **Persistent memory** — `devteam memory ingest|query` builds a per-project semantic index of briefs, design specs, ADRs, retros, and lessons. Local embedder by default; offline after first download.
+
+---
 
 ## Tracks at a glance
 
-| Track | Stages |
-|---|---|
-| `full` | All 11 (requirements → retrospective) |
-| `quick` | requirements, build, peer-review, qa, sign-off, deploy, retrospective |
-| `nano` | build, qa |
-| `config-only` | build, pre-review, security-review, qa, sign-off, deploy |
-| `dep-update` | build, peer-review, qa, sign-off, deploy |
-| `hotfix` | build, pre-review, security-review, peer-review, qa, sign-off, deploy, retrospective |
+| Track | Stages | When to pick |
+|---|---|---|
+| `full` | All 13 (requirements → retrospective) | Multi-area features, anything touching auth / PII / payments / migrations. |
+| `quick` | requirements, build, peer-review, qa, accessibility-audit, sign-off, deploy, retrospective | Single-area changes with non-trivial scope but no design complexity. |
+| `nano` | build, qa | Typo fixes, comment changes, one-line tweaks. |
+| `config-only` | build, pre-review, security-review, qa, sign-off, deploy | Config / infrastructure changes with no application code. |
+| `dep-update` | build, peer-review, qa, sign-off, deploy | Dependency bumps. Security-review fires if the diff touches sensitive paths. |
+| `hotfix` | build, pre-review, security-review, peer-review, qa, accessibility-audit, observability-gate, sign-off, deploy, retrospective | Production outages. Skips requirements / design / clarification — you already know what's broken — but keeps all the safety stages. |
+
+See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety logic behind track gating.
 
 ## Files at a glance
 
-| File / dir | What lives there |
+| Path | What lives there |
 |---|---|
 | `roles/<role>.md` | Single source of truth for what each role does, reads, writes. |
 | `rules/<topic>.md` | Pipeline rules — `gates.md`, `pipeline.md`, `escalation.md`, `retrospective.md`, etc. |
-| `skills/<skill>/SKILL.md` | Task helpers — `implement`, `review-rubric`, `security-checklist`. |
-| `templates/<artifact>-template.md` | Artifact templates (brief, design-spec, runbook, etc.). |
-| `.devteam/config.yml` (in target) | Routing config + pipeline defaults for that project. |
+| `skills/<skill>/SKILL.md` | Task helpers — `implement`, `review-rubric`, `security-checklist`, `accessibility-audit`, `observability-verification`. |
+| `templates/<artifact>-template.md` | Artifact templates (brief, design-spec, runbook, retrospective, etc.). |
+| `hosts/<host>/` | Per-host adapter: `adapter.js`, `capabilities.json`, `install/` payload. |
+| `.devteam/config.yml` (in target project) | Routing config + pipeline defaults for that project. |
 | `pipeline/gates/<stage>.json` | The merged stage gate. |
 | `pipeline/gates/<stage>.<workstream>.json` | A per-workstream gate for a multi-role stage. |
 | `pipeline/context.md` | Append-only running notes across stages. |
+| `.devteam/memory/` (in target project) | Semantic memory store (opt-in; built by `devteam memory ingest`). |
+
+## What you can stop reading now
+
+If you can describe what a **workstream**, **gate**, and **track** are, you have enough to use Stagecraft. Everything else is detail that surfaces when you need it — chase the cross-references when they come up.
