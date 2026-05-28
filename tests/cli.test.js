@@ -81,6 +81,41 @@ describe("cli: stage", () => {
     assert.match(r.stdout, /workstream: pm/);
     assert.match(r.stdout, /test feature/);
   });
+
+  it("stage prints an onboarding preamble + postamble in user-driven mode", () => {
+    const cwd = track(makeTargetProject());
+    const r = runCLI(["stage", "requirements", "--feature", "test feature"], { cwd });
+    assert.equal(r.status, 0);
+    // Preamble identifies the stage and explains what to do.
+    assert.match(r.stdout, /Stage stage-01 \(requirements\)/);
+    assert.match(r.stdout, /devteam does\s*\n\s*NOT call a model/);
+    assert.match(r.stdout, /Inside Claude Code/);
+    assert.match(r.stdout, /devteam stage requirements --feature "test feature" --headless/);
+    // Postamble points to the next concrete action.
+    assert.match(r.stdout, /Run `devteam next` to advance the pipeline/);
+  });
+
+  it("stage warns when invoked against an un-initialised target directory", () => {
+    // A bare tempdir with no .devteam/config.yml — the user's first-run footgun.
+    const cwd = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "devteam-no-init-"));
+    _dirs.push(cwd);
+    const r = runCLI(["stage", "requirements", "--feature", "x"], { cwd });
+    // The prompt still renders (the CLI is permissive), but a warning fires.
+    assert.match(r.stderr, /does not look like an initialised Stagecraft target project/);
+    assert.match(r.stderr, /devteam init --host claude-code/);
+  });
+
+  it("stage suppresses the onboarding framing under --headless", () => {
+    const cwd = track(makeTargetProject());
+    const r = runCLI(
+      ["stage", "requirements", "--feature", "x", "--headless"],
+      { cwd, env: { ...process.env, DEVTEAM_HEADLESS_COMMAND: "true" } },
+    );
+    // No preamble / postamble in headless mode — the framing would
+    // contaminate any downstream consumer of stdout.
+    assert.doesNotMatch(r.stdout, /devteam does\s*\n\s*NOT call a model/);
+    assert.doesNotMatch(r.stdout, /Run `devteam next` to advance/);
+  });
 });
 
 describe("cli: stoplist guard", () => {

@@ -71,6 +71,21 @@ Commands:
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
+
+Quickstart:
+  1. cd into your target project (NOT the Stagecraft repo).
+  2. devteam init --host claude-code         # lays down rules, roles, hooks
+  3. devteam doctor                          # verify install
+  4. devteam stage requirements --feature "your feature description"
+       — by default, this RENDERS the prompt; you feed it to your model.
+       — inside Claude Code, use /devteam stage <name> instead.
+       — to drive the host CLI automatically: add --headless.
+  5. After the model writes the gate JSON: devteam next  → tells you
+     what to do next (advance, fix, merge, escalate, or done).
+
+devteam never calls a model itself. Adapters under hosts/ are where the
+host-specific glue lives; the orchestrator just renders prompts and
+validates the gate JSON that comes back.
 `);
 }
 
@@ -108,6 +123,19 @@ function cmdStage(argv) {
   }
   // Resolve track and run stoplist if applicable
   const cwd = flags.cwd || process.cwd();
+  // If the target directory isn't initialized, the prompt we're about to
+  // print will reference files (`.claude/agents/<role>.md`, `.devteam/
+  // rules/*.md`, `templates/*-template.md`) that don't exist. Warn loudly
+  // before printing — this is the #1 first-run footgun.
+  if (!flags.headless && !flags.json && !fs.existsSync(path.join(cwd, ".devteam", "config.yml"))) {
+    process.stderr.write(
+      `\n⚠️  ${cwd}\n` +
+      `   does not look like an initialised Stagecraft target project (no .devteam/config.yml).\n` +
+      `   The prompt below will reference role briefs / rules / templates that don't exist yet.\n` +
+      `   Run this first to lay them down:\n` +
+      `     devteam init --host claude-code --cwd "${cwd}"\n\n`,
+    );
+  }
   const track = flags.track || loadConfig(cwd).pipeline.default_track;
   if (STOPLIST_GUARDED_TRACKS.has(track) && !flags.force) {
     const matches = checkStoplist({ description: flags.feature || "", cwd });
@@ -136,11 +164,63 @@ function cmdStage(argv) {
     return;
   }
   const result = runStage(name, flags);
+  printStagePreamble(result, flags);
   for (const ws of result.workstreams) {
     console.log(`\n────────  workstream: ${ws.role}  (host: ${ws.host})  ────────\n`);
     console.log(ws.prompt);
   }
   console.log(`\n────────  end of ${result.stage} (${result.roles.length} workstream${result.roles.length === 1 ? "" : "s"})  ────────`);
+  printStagePostamble(result, flags);
+}
+
+// Onboarding hint printed before the rendered prompt in user-driven mode.
+// Suppressed under --headless (the prompt is piped to a host CLI) and
+// under --json (currently a no-op for stage but reserved). The framing
+// goes to stdout so it's visible alongside the rest of the output in a
+// normal terminal session; if you're piping the prompt somewhere, you
+// already have to filter out the workstream separators.
+function printStagePreamble(result, flags) {
+  if (flags.headless || flags.json) return;
+  const stage = result.stage;
+  const name = result.name;
+  const wsCount = result.roles.length;
+  const wsWord = wsCount === 1 ? "workstream" : "workstreams";
+  const lines = [
+    "",
+    "═══════════════════════════════════════════════════════════════════════",
+    `  Stage ${stage} (${name}) — ${wsCount} ${wsWord} to dispatch`,
+    "═══════════════════════════════════════════════════════════════════════",
+    "",
+    "  The block(s) below are prompts to feed to your model. devteam does",
+    "  NOT call a model — it renders the prompt and validates the gate JSON",
+    "  the model writes back.",
+    "",
+    "  To run this stage, pick one:",
+    "    1. Inside Claude Code: paste the prompt, OR type",
+    `         /devteam stage ${name}${flags.feature ? ` --feature "${flags.feature}"` : ""}`,
+    "    2. Headless from terminal:",
+    `         devteam stage ${name}${flags.feature ? ` --feature "${flags.feature}"` : ""} --headless`,
+    "       (orchestrator pipes the prompt to `claude --print` and waits)",
+    "",
+    `  When done, each workstream writes pipeline/gates/${stage}*.json.`,
+    "  Then run `devteam next` to see what to do next.",
+    "═══════════════════════════════════════════════════════════════════════",
+  ];
+  console.log(lines.join("\n"));
+}
+
+function printStagePostamble(result, flags) {
+  if (flags.headless || flags.json) return;
+  const stage = result.stage;
+  const expected = result.workstreams.length === 1
+    ? `pipeline/gates/${stage}.json`
+    : `pipeline/gates/${stage}.<workstream>.json (then merge into ${stage}.json)`;
+  console.log("");
+  console.log("  Next steps:");
+  console.log(`    1. Feed the prompt(s) above to your host (Claude Code, Codex, Gemini).`);
+  console.log(`    2. The model writes the artifact + ${expected}.`);
+  console.log(`    3. Run \`devteam next\` to advance the pipeline.`);
+  console.log("");
 }
 
 function cmdValidate(argv) {
