@@ -445,6 +445,17 @@ Output lands under `docs/audit/` in your project. Eleven files (00 through 10) p
 
 Drop `docs/audit-extensions.md` in your project to add project-specific checks. The audit reads it at the start of each phase and appends extension findings to the relevant phase's output file under a `## Project-Specific` heading. Example use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventions, custom security policies.
 
+### What the output actually looks like
+
+Stagecraft was audited with this feature against its own codebase on **2026-05-28** as a dogfood run. The 11 phase output files (plus `status.json`) are committed at [`docs/audit/`](audit/) in this repo — read them to see what `/audit` produces, not a synthetic example. Highlights:
+
+- **[`docs/audit/00-project-context.md`](audit/00-project-context.md)** — what Stagecraft is, ~150 lines.
+- **[`docs/audit/01-architecture.md`](audit/01-architecture.md)** — component inventory, dependency graph, data flow, configuration surface. ~330 lines, the longest output.
+- **[`docs/audit/06-security.md`](audit/06-security.md)** — security findings. Includes a real "verify before promoting" lesson: a Finding S5 was initially promoted to "medium severity / needs fix" based on the route signature, then **retracted** when a live curl exploit attempt returned HTTP 404. The verification + retraction is preserved in the file — this is the discipline the audit skill now codifies (see `skills/audit/SKILL.md` § Process discipline).
+- **[`docs/audit/10-roadmap.md`](audit/10-roadmap.md)** — sequenced batches with effort estimates. The self-audit identified 0 P0 items, 5 P1 quick wins, 5 P2 targeted items, 1 P3 strategic item.
+
+Every finding in those files cites file paths and line numbers; severity / effort / confidence ratings are concrete; the verification trace for retracted findings is preserved. That's the standard the skill demands of the output — Stagecraft's own audit met it.
+
 ### What the audit does NOT do
 
 - It does not modify source code. Findings live in `docs/audit/`; fixing them is the `implement` skill or a `devteam stage` invocation.
