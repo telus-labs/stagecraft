@@ -148,7 +148,7 @@ After stage-01 finishes:
   "workstream": "pm",
   "host": "claude-code",
   "status": "PASS",
-  "orchestrator": "devteam@0.2.0",
+  "orchestrator": "devteam@0.4.0",
   "track": "full",
   "timestamp": "2026-05-28T14:32:11Z",
   "blockers": [],

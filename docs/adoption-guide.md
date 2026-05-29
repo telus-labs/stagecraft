@@ -159,9 +159,9 @@ If you're not ready to trust LLM output at all, this tool isn't going to change 
 
 The default config is one host per pipeline. Multi-host is opt-in. Review fanout is opt-in on top of that. None of this is on by default — you turn it on per project as you see value.
 
-Even with multi-host, the cost story usually tilts the right way: models like Codex (and Haiku once we add adaptive routing in BACKLOG D5) are 5–10× cheaper than Opus. Routing the bulk of work to cheaper models while reserving Opus for Principal / Security is a cost *reduction*, not increase. The biggest cost spike is review fanout — that's 3× peer-review cost if you fan across three hosts. Reserve it for high-risk changes (security-sensitive, customer-facing) and don't enable it by default.
+Even with multi-host, the cost story usually works in your favor: models like Codex and Haiku are 5–10× cheaper than Opus. Routing the bulk of work to cheaper models while reserving Opus for Principal / Security is a cost *reduction*, not increase. The biggest cost spike is review fanout (3× peer-review cost if you fan across three hosts). Reserve it for high-risk changes (security-sensitive, customer-facing) and don't enable it by default.
 
-Cost telemetry per stage is BACKLOG D6 — not yet built. Track via your billing dashboards in the meantime.
+Cost telemetry per stage is built in (`npm run dashboard:cost`). Adaptive routing reads that telemetry and suggests config swaps (`npm run routing:suggest`).
 
 ### "What if we want to bypass the pipeline?"
 

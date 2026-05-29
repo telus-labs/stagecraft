@@ -158,7 +158,7 @@ After stage-07 finishes:
 {
   "stage": "stage-07",
   "status": "PASS",
-  "orchestrator": "devteam@0.2.0",
+  "orchestrator": "devteam@0.4.0",
   "track": "full",
   "timestamp": "2026-05-28T16:42:18Z",
   "blockers": [],

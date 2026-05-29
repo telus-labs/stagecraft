@@ -81,7 +81,7 @@ These come up frequently but build on the primitives above:
 
 | Track | Stages | When to pick |
 |---|---|---|
-| `full` | All 13 (requirements → retrospective) | Multi-area features, anything touching auth / PII / payments / migrations. |
+| `full` | All 17 (requirements → retrospective) | Multi-area features, anything touching auth / PII / payments / migrations. |
 | `quick` | requirements, build, peer-review, qa, accessibility-audit, sign-off, deploy, retrospective | Single-area changes with non-trivial scope but no design complexity. |
 | `nano` | build, qa | Typo fixes, comment changes, one-line tweaks. |
 | `config-only` | build, pre-review, security-review, qa, sign-off, deploy | Config / infrastructure changes with no application code. |
@@ -109,7 +109,7 @@ See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety 
 
 Stagecraft does two different kinds of work, with different vocabularies:
 
-1. **Pipeline** — *building* features through 13 staged production steps. The vocabulary above (stage, role, workstream, host, gate, track) applies. Outputs go in `pipeline/`.
+1. **Pipeline** — *building* features through 17 staged production steps. The vocabulary above (stage, role, workstream, host, gate, track) applies. Outputs go in `pipeline/`.
 2. **Audit** — *analyzing* an existing codebase, read-only, to produce a prioritized improvement roadmap. Different vocabulary (phases, findings, severity, themes, batches). Outputs go in `docs/audit/`.
 
 The pipeline produces new code. The audit produces analysis of code that exists. Don't confuse them. The same role briefs are NOT used — the auditor role exists separately from the pipeline roles.

@@ -69,7 +69,7 @@ Stoplist defined in .devteam/rules/pipeline.md §Stage 0.
 
 ## How `devteam next` honors the track
 
-`next` walks **only** the active track's stage list. So on `nano`, after `build` is PASSED, `next` advances directly to `qa` (skipping design/clarification/pre-review/peer-review). On `full`, the walk hits all 11 stages in order.
+`next` walks **only** the active track's stage list. So on `nano`, after `build` is PASSED, `next` advances directly to `qa` (skipping design/clarification/pre-review/peer-review). On `full`, the walk hits all 17 stages in order.
 
 The active track is read from `.devteam/config.yml` (`pipeline.default_track`), with `--track` as an override.
 

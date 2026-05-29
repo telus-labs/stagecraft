@@ -2,7 +2,7 @@
 
 > *Your Claude session went sideways again. Context reset. The agent forgot the architecture you spent ten minutes explaining. It edited the wrong file, then "fixed" the symptom instead of the cause. You're three hours in and you don't have a brief, a design, tests, or a deployable change — just a chat log.*
 
-**Stagecraft is an orchestrator that runs your AI coding tool through a structured 13-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage can't start until the gate passes. You see the whole run on disk, auditable, resumable, not in a chat log.
+**Stagecraft is an orchestrator that runs your AI coding tool through a structured 17-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage can't start until the gate passes. You see the whole run on disk, auditable, resumable, not in a chat log.
 
 Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the seam.
 
@@ -56,13 +56,16 @@ The vocabulary extends naturally: a *run* is one pipeline invocation, *dress reh
 
 A coordinated team of role-specific subagents running a structured software-development pipeline end-to-end:
 
-- **10 stages** — requirements (PM) → design (Principal) → clarification → build (Backend|Frontend|Platform|QA) → pre-review (Platform) → security review (conditional, Security) → peer-review (Reviewer × 4 areas) → tests (QA) → sign-off (PM+Platform) → deploy (Platform, adapter-driven) → retrospective (Principal).
+- **17 stages** — requirements (PM) → design (Principal) → clarification → executable-spec (PM, Gherkin) → build (Backend|Frontend|Platform|QA) → pre-review (Platform) → security review (conditional) → red-team (always-on full+hotfix) → migration-safety (conditional, veto) → peer-review (Reviewer × 4) → qa → accessibility → observability → verification-beyond-tests (full only) → sign-off (PM+Platform) → deploy → retrospective.
 - **6 tracks** — `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Pick by change size.
 - **Per-workstream gate JSON** — every stage writes a machine-readable gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
 - **Per-stage host routing** — `.devteam/config.yml` picks which host runs which role. Single-host install is the same code path as multi-host.
-- **Conditional dispatch** — security review fires only when pre-review's heuristic flags it.
+- **Conditional dispatch** — security review fires only when pre-review's heuristic flags it. Migration-safety fires on data-layer diffs.
+- **Veto stages** — security and migration-safety can halt the pipeline regardless of peer-review approval.
 - **Hooks** (Claude Code) — auto-validate gates on `Stop`/`SubagentStop`; auto-derive Stage 5 approvals from per-area `REVIEW:` markers via PostToolUse.
 - **Headless invocation** — `devteam stage <name> --headless` drives each workstream's host CLI (`claude --print`, `codex exec`) non-interactively.
+- **Reproducibility + replay** — every gate can record `model_version`, `temperature`, `seed`, `system_prompt_hash`, `tools_hash`. `devteam replay <stage>` re-runs and diffs.
+- **Routing learns from data** — `npm run routing:suggest` reads cost + first-try pass rates per (role, host) and proposes config swaps.
 
 ## Prerequisites
 

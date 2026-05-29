@@ -12,7 +12,7 @@ When a PR touches `pipeline/` or `.devteam/`:
 2. **Checks out Stagecraft** at a pinned version (configurable env var).
 3. **Skips cleanly** if the PR doesn't actually include any gates — `pipeline/gates/` empty/absent → workflow short-circuits with a `::notice::` and exits green.
 4. **Validates** every gate file with Stagecraft's validator. Exit codes propagate: 0 PASS/WARN (job stays green), 1 malformed (fail), 2 FAIL gate (fail), 3 ESCALATE (fail — surfaces needs-resolution).
-5. **Posts each gate as a GitHub check run** on the PR head commit via `scripts/pr-publish.js`. PASS→success, WARN→neutral, FAIL/ESCALATE→failure. Reviewers see "10/12 stages passing" in the PR's status bar with click-through to per-stage detail.
+5. **Posts each gate as a GitHub check run** on the PR head commit via `scripts/pr-publish.js`. PASS→success, WARN→neutral, FAIL/ESCALATE→failure. Reviewers see "15/17 stages passing" in the PR's status bar with click-through to per-stage detail.
 6. **Reproducibility drift check** (advisory, doesn't block merge): runs `devteam reproduce` on each gate, surfacing any drift between the recorded `system_prompt_hash` and what would render today.
 
 The deliberate choice **not** to invoke the LLM in CI keeps cost predictable and avoids running the pipeline in a context (no human in the loop) where it doesn't belong.

@@ -2,7 +2,7 @@
 
 Stagecraft records exactly what produced each gate — model version, temperature, seed, max_tokens, a hash of the system prompt, a hash of the tool surface. Six months later, the gate JSON tells you not just *that* a change was made, but *what configuration* made it.
 
-This is the **C4** BACKLOG item. It pairs with E6 (replay, not yet built) and matters concretely for any audit that asks "show me how this change was developed" — SOC 2, EU AI Act, internal compliance reviews.
+This is the **C4** BACKLOG item. It pairs with **E6** (`devteam replay <stage>`, which re-runs a recorded gate and diffs against the original) and matters concretely for any audit that asks "show me how this change was developed" — SOC 2, EU AI Act, internal compliance reviews.
 
 ## What "reproducible" honestly means with LLMs
 
@@ -15,7 +15,7 @@ What it **is**:
 
 - **Auditability.** Six months from now, you can answer "what model, what temperature, what prompt, what tools" with the gate JSON alone. No guessing, no chasing config history.
 - **Drift detection.** Re-render the prompt today, hash it, compare to the gate's hash. Drift means the prompt changed (role brief edited, skill updated, rules file revised). Visible at a glance.
-- **Replay readiness.** With enough recorded fields, replay (E6, future) can recreate the same model invocation. The model itself may still drift, but the *configuration* is preserved.
+- **Replay readiness.** With enough recorded fields, `devteam replay <stage-id>` re-invokes the host with the current config and diffs the result against the original. The model itself may still drift, but the *configuration* is preserved.
 
 ## The recorded fields
 
@@ -53,7 +53,7 @@ The audit-facing tool. Reads `pipeline/gates/<stage-id>.json`, prints what was r
 $ devteam reproduce stage-04.backend
 Reproducibility report — pipeline/gates/stage-04.backend.json
 
-Recorded by orchestrator: devteam@0.2.0
+Recorded by orchestrator: devteam@0.4.0
 Recorded at:              2026-05-15T14:32:11Z
 Stage / workstream / host: stage-04 / backend / codex
 

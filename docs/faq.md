@@ -31,9 +31,9 @@ If a stage isn't appropriate for your change, pick a track that doesn't include 
 
 If you want to skip a stage that *is* in your active track, just don't run it — the orchestrator won't auto-advance unless the gate exists. But `devteam next` will keep pointing at the skipped stage. If you want to mark it as deliberately bypassed, write a gate by hand with `status: "PASS"` and an explanation in `blockers: []` / `warnings: []` (or set up a custom track in `STAGES_BY_TRACK`).
 
-### Do I have to use all 11 stages?
+### Do I have to use all 17 stages?
 
-No. The track system exists precisely to let you opt out of stages per change. The full track has all 11; nano has 2 (build + qa). Pick whatever matches the change's risk profile.
+No. The track system exists precisely to let you opt out of stages per change. The full track has all 17; nano has 2 (build + qa). Pick whatever matches the change's risk profile.
 
 ### Can I author the gate JSON by hand instead of via the LLM?
 
@@ -137,7 +137,12 @@ The role's role brief explicitly says **don't auto-rollback** — the runbook (`
 
 ### Where do I see the cumulative cost of a pipeline run?
 
-The budget guard (`core/guards/budget.js`) is lifted from the predecessors but not yet wired into the CLI. Tracked in the BACKLOG as a follow-up. For now, costs need to be tracked at the host level (Anthropic/OpenAI dashboards).
+Two complementary surfaces:
+
+- `npm run dashboard:cost` rolls up `tokens_in / tokens_out / cost_usd / duration_ms` from every gate in `pipeline/gates/`. Group by host / role / stage.
+- `npm run budget` against a per-project budget config alerts when a run exceeds a configured ceiling.
+
+Both read fields that gates already record (the C4 reproducibility set). Host-level dashboards (Anthropic / OpenAI billing) remain the source of truth for actual invoiced cost.
 
 ## Roadmap
 
@@ -346,7 +351,7 @@ The audit is read-only. It writes findings to `docs/audit/00-project-context.md`
 
 ### What's the difference between the audit and the pipeline?
 
-The **pipeline** (`devteam stage <name>`) *builds* features through 13 staged production steps with gate JSON between them. Audits are NOT pipeline stages.
+The **pipeline** (`devteam stage <name>`) *builds* features through 17 staged production steps with gate JSON between them. Audits are NOT pipeline stages.
 
 The **audit** (`/audit` or `/audit-quick`) *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only.
 
@@ -385,7 +390,7 @@ Use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventio
 
 ### Should I use Stagecraft or Claude Code's `/goal` command?
 
-Both, for different things. `/goal` is a *continuation primitive* — set a session-level condition and the host loops until the condition holds. Stagecraft is a *decomposition primitive* — one feature → 13 stages with defined artifacts and gates.
+Both, for different things. `/goal` is a *continuation primitive* — set a session-level condition and the host loops until the condition holds. Stagecraft is a *decomposition primitive* — one feature → 17 stages with defined artifacts and gates.
 
 They compose: you could plausibly set a `/goal` like "tests pass and lint clean" at the start of stage-04 build, and let Claude loop on it. Then read the gate. We don't emit `/goal` invocations from the adapter today — that's BACKLOG E-series. Manually setting one before running a convergence-shaped stage works fine.
 

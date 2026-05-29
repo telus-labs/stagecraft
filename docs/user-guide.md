@@ -412,7 +412,7 @@ Default is empty list (off). Opt in via config. The cost is N× peer-review time
 
 ## Auditing a codebase
 
-The audit feature is separate from the 13-stage pipeline. Stages *build* features; the audit *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only by design.
+The audit feature is separate from the 17-stage pipeline. Stages *build* features; the audit *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only by design.
 
 ### When to use it
 
