@@ -19,16 +19,27 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 function parseArgs(argv) {
-  const args = { from: [process.cwd()], json: false, by: "stage", since: null };
+  const args = {
+    from: [process.cwd()],
+    json: false,
+    by: "stage",
+    since: null,
+    view: "rate", // "rate" (default) or "cost"
+  };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--from") args.from = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
     else if (argv[i] === "--json") args.json = true;
     else if (argv[i] === "--by") args.by = argv[++i];
+    else if (argv[i] === "--view") args.view = argv[++i];
     else if (argv[i] === "--since") args.since = argv[++i];
     else if (argv[i] === "-h" || argv[i] === "--help") { args.help = true; }
   }
   if (!["stage", "host", "role", "status"].includes(args.by)) {
     process.stderr.write(`Invalid --by ${args.by}. Choose: stage / host / role / status.\n`);
+    process.exit(2);
+  }
+  if (!["rate", "cost"].includes(args.view)) {
+    process.stderr.write(`Invalid --view ${args.view}. Choose: rate / cost.\n`);
     process.exit(2);
   }
   return args;
@@ -128,6 +139,68 @@ function overall(gates) {
   return rec;
 }
 
+// Cost aggregation — sums tokens / dollars / duration per group key.
+// Like aggregate(), expands merged stage gates into workstreams so per-
+// host / per-role attribution is correct.
+function emptyCostRec() {
+  return {
+    count: 0,
+    tokens_in: 0,
+    tokens_out: 0,
+    cost_usd: 0,
+    duration_ms: 0,
+    has_cost: 0,      // how many of count had cost_usd
+    has_tokens: 0,    // how many of count had tokens_in + tokens_out
+    has_duration: 0,  // how many of count had duration_ms
+  };
+}
+
+function bumpCost(rec, w) {
+  rec.count += 1;
+  if (typeof w.tokens_in === "number") { rec.tokens_in += w.tokens_in; rec.has_tokens += 1; }
+  if (typeof w.tokens_out === "number") { rec.tokens_out += w.tokens_out; }
+  if (typeof w.cost_usd === "number") { rec.cost_usd += w.cost_usd; rec.has_cost += 1; }
+  if (typeof w.duration_ms === "number") { rec.duration_ms += w.duration_ms; rec.has_duration += 1; }
+}
+
+function aggregateCost(gates, byKey) {
+  const expanded = [];
+  for (const g of gates) {
+    if (Array.isArray(g.workstreams) && g.workstreams.length > 0) {
+      for (const w of g.workstreams) {
+        expanded.push({ ...w, stage: g.stage, timestamp: g.timestamp, _file: g._file });
+      }
+    } else {
+      expanded.push(g);
+    }
+  }
+  const groups = new Map();
+  for (const g of expanded) {
+    let key;
+    switch (byKey) {
+      case "stage":  key = g.stage || "(no stage)"; break;
+      case "host":   key = g.host || "(no host)"; break;
+      case "role":   key = g.workstream || "(no role)"; break;
+      case "status": key = g.status || "(no status)"; break;
+    }
+    if (!groups.has(key)) groups.set(key, emptyCostRec());
+    bumpCost(groups.get(key), g);
+  }
+  return groups;
+}
+
+function overallCost(gates) {
+  const rec = emptyCostRec();
+  for (const g of gates) {
+    if (Array.isArray(g.workstreams) && g.workstreams.length > 0) {
+      for (const w of g.workstreams) bumpCost(rec, w);
+    } else {
+      bumpCost(rec, g);
+    }
+  }
+  return rec;
+}
+
 function filterSince(gates, sinceIso) {
   if (!sinceIso) return gates;
   const since = new Date(sinceIso).getTime();
@@ -202,6 +275,63 @@ function renderMarkdown(args, allGates, overallRec, grouped) {
 
 function capitalize(s) { return s[0].toUpperCase() + s.slice(1); }
 
+// Format a millisecond duration as the most informative human string.
+function formatDuration(ms) {
+  if (!ms || ms === 0) return "—";
+  if (ms < 1000) return `${ms}ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 60_000).toFixed(1)}m`;
+}
+
+const { formatUsd } = require(path.join("..", "core", "pricing"));
+
+function renderCostMarkdown(args, allGates, overallCostRec, groupedCost) {
+  const out = [];
+  out.push(`# devteam dashboard — cost view\n`);
+  out.push(`Generated: ${new Date().toISOString()}`);
+  out.push(`Sources: ${args.from.map((s) => `\`${s}\``).join(", ")}`);
+  if (args.since) out.push(`Since: ${args.since}`);
+  out.push(`Grouping: ${args.by}`);
+  out.push("");
+
+  out.push(`## Overall`);
+  out.push(`Workstreams counted: ${overallCostRec.count}`);
+  if (overallCostRec.count === 0) {
+    out.push(`\n_No data._`);
+    return out.join("\n") + "\n";
+  }
+  out.push(`With cost data: ${overallCostRec.has_cost} / ${overallCostRec.count}`);
+  out.push(`Total cost: **${formatUsd(overallCostRec.cost_usd)}**`);
+  out.push(`Total tokens: ${overallCostRec.tokens_in.toLocaleString()} in + ${overallCostRec.tokens_out.toLocaleString()} out`);
+  out.push(`Total duration: ${formatDuration(overallCostRec.duration_ms)}`);
+  out.push("");
+
+  out.push(`## By ${args.by}`);
+  out.push("");
+  out.push(`| ${capitalize(args.by)} | # | Cost | Tokens in | Tokens out | Duration | Cost/run |`);
+  out.push(`|---|---:|---:|---:|---:|---:|---:|`);
+  const entries = [...groupedCost.entries()].sort((a, b) => b[1].cost_usd - a[1].cost_usd);
+  for (const [key, rec] of entries) {
+    const meanCost = rec.has_cost > 0 ? rec.cost_usd / rec.has_cost : null;
+    out.push(`| ${key} | ${rec.count} | ${formatUsd(rec.cost_usd)} | ${rec.tokens_in.toLocaleString()} | ${rec.tokens_out.toLocaleString()} | ${formatDuration(rec.duration_ms)} | ${formatUsd(meanCost)} |`);
+  }
+  out.push("");
+  out.push(`_Cost is computed by core/pricing.js from \`tokens_in\` + \`tokens_out\` + \`model\` on each gate. Gates without those fields contribute to the count but not to the cost total — see "With cost data" in the Overall section above._`);
+  return out.join("\n") + "\n";
+}
+
+function renderCostJSON(args, allGates, overallCostRec, groupedCost) {
+  return JSON.stringify({
+    generated_at: new Date().toISOString(),
+    sources: args.from,
+    since: args.since,
+    by: args.by,
+    view: "cost",
+    overall: overallCostRec,
+    groups: [...groupedCost.entries()].map(([key, rec]) => ({ key, ...rec })),
+  }, null, 2);
+}
+
 function renderJSON(args, allGates, overallRec, grouped) {
   return JSON.stringify({
     generated_at: new Date().toISOString(),
@@ -220,14 +350,21 @@ function renderJSON(args, allGates, overallRec, grouped) {
 // ---------------------------------------------------------------------------
 
 function usage() {
-  console.log(`dashboard — gate-pass-rate report
+  console.log(`dashboard — pipeline rollup (pass-rate or cost)
 
 Usage:
-  node scripts/dashboard.js                       Read cwd/pipeline/gates/.
+  node scripts/dashboard.js                       Read cwd/pipeline/gates/ (default --view rate).
   node scripts/dashboard.js --from p1,p2,...      One or more project roots.
   node scripts/dashboard.js --by stage|host|role|status  Group rows. Default: stage.
+  node scripts/dashboard.js --view rate|cost      Default rate; cost requires tokens_in/out/model on gates.
   node scripts/dashboard.js --since YYYY-MM-DD    Filter by gate timestamp.
   node scripts/dashboard.js --json                Machine-readable output.
+
+Cost view note:
+  Cost data is opt-in per gate. The adapter or agent writes tokens_in,
+  tokens_out, and model into the gate JSON; core/pricing.js converts
+  to USD via its pricing table. Gates without those fields are counted
+  but contribute zero to the cost total.
 `);
 }
 
@@ -245,6 +382,14 @@ function main() {
   all = filterSince(all, args.since);
 
   for (const w of warnings) process.stderr.write(`[dashboard] ⚠️  ${w}\n`);
+
+  if (args.view === "cost") {
+    const overallCostRec = overallCost(all);
+    const groupedCost = aggregateCost(all, args.by);
+    if (args.json) console.log(renderCostJSON(args, all, overallCostRec, groupedCost));
+    else console.log(renderCostMarkdown(args, all, overallCostRec, groupedCost));
+    return;
+  }
 
   const overallRec = overall(all);
   const grouped = aggregate(all, args.by);
@@ -266,4 +411,12 @@ module.exports = {
   filterSince,
   renderMarkdown,
   renderJSON,
+  // D6 cost view exports
+  aggregateCost,
+  overallCost,
+  emptyCostRec,
+  bumpCost,
+  renderCostMarkdown,
+  renderCostJSON,
+  formatDuration,
 };

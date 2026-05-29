@@ -245,6 +245,19 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       : statuses.includes("WARN") ? "WARN"
       : "PASS";
 
+    // Roll up per-workstream cost telemetry (D6) when present.
+    // Fields are optional; sum only what's reported. The merged gate
+    // captures totals at stage level + preserves per-workstream detail
+    // inside the workstreams[] array.
+    let totalTokensIn = 0, totalTokensOut = 0, totalCost = 0, totalDuration = 0;
+    let anyCost = false, anyTokens = false, anyDuration = false;
+    for (const w of wsGates) {
+      if (typeof w.gate.tokens_in === "number") { totalTokensIn += w.gate.tokens_in; anyTokens = true; }
+      if (typeof w.gate.tokens_out === "number") { totalTokensOut += w.gate.tokens_out; }
+      if (typeof w.gate.cost_usd === "number") { totalCost += w.gate.cost_usd; anyCost = true; }
+      if (typeof w.gate.duration_ms === "number") { totalDuration += w.gate.duration_ms; anyDuration = true; }
+    }
+
     const merged = {
       stage: stageDef.stage,
       status: aggregate,
@@ -253,12 +266,28 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       timestamp: new Date().toISOString(),
       blockers: wsGates.flatMap((w) => w.gate.blockers || []),
       warnings: wsGates.flatMap((w) => w.gate.warnings || []),
-      workstreams: wsGates.map((w) => ({
-        workstream: w.role,
-        host: w.host || w.gate.host || null,
-        status: w.gate.status,
-      })),
+      workstreams: wsGates.map((w) => {
+        const ws = {
+          workstream: w.role,
+          host: w.host || w.gate.host || null,
+          status: w.gate.status,
+        };
+        // Preserve per-workstream cost data so dashboard.js can attribute
+        // tokens/dollars/duration to (host, role) without re-reading the
+        // workstream gate files.
+        if (typeof w.gate.tokens_in === "number") ws.tokens_in = w.gate.tokens_in;
+        if (typeof w.gate.tokens_out === "number") ws.tokens_out = w.gate.tokens_out;
+        if (typeof w.gate.cost_usd === "number") ws.cost_usd = w.gate.cost_usd;
+        if (typeof w.gate.duration_ms === "number") ws.duration_ms = w.gate.duration_ms;
+        if (typeof w.gate.model === "string") ws.model = w.gate.model;
+        return ws;
+      }),
     };
+
+    // Stage-level totals — only emit when at least one workstream had data.
+    if (anyTokens) { merged.tokens_in = totalTokensIn; merged.tokens_out = totalTokensOut; }
+    if (anyCost) merged.cost_usd = totalCost;
+    if (anyDuration) merged.duration_ms = totalDuration;
 
     const outFile = path.join(gatesDir, `${stageDef.stage}.json`);
     fs.writeFileSync(outFile, JSON.stringify(merged, null, 2) + "\n", "utf8");

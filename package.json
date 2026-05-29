@@ -13,6 +13,7 @@
     "pr-pack": "node scripts/pr-pack.js",
     "pr-publish": "node scripts/pr-publish.js",
     "dashboard": "node scripts/dashboard.js",
+    "dashboard:cost": "node scripts/dashboard.js --view cost --by host",
     "budget": "node scripts/budget.js",
     "release:check": "node scripts/release.js check",
     "release:notes": "node scripts/release.js notes"

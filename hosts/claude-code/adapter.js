@@ -352,6 +352,15 @@ function renderStagePrompt(descriptor, ctx) {
   }, null, 2));
   lines.push("```");
   lines.push(`The orchestrator adds \`"orchestrator": "${ctx.orchestrator}"\` and \`"host": "claude-code"\` at validation time.`);
+  lines.push("");
+  lines.push(`## Optional: cost telemetry`);
+  lines.push(`If you know your token usage for this dispatch, include these fields in the gate JSON:`);
+  lines.push("- `model`: the specific model id you ran on (e.g. `claude-opus-4-7`).");
+  lines.push("- `tokens_in`: total input tokens (prompt + history).");
+  lines.push("- `tokens_out`: total output tokens you generated.");
+  lines.push("- `duration_ms`: wall-clock time for this dispatch.");
+  lines.push("");
+  lines.push("`cost_usd` will be computed by downstream tooling (`scripts/dashboard.js --view cost`) from these fields plus `core/pricing.js`. Omit any field you can't measure.");
   return lines.join("\n");
 }
 

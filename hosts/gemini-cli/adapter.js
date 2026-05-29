@@ -156,6 +156,8 @@ function renderStagePrompt(descriptor, ctx) {
   }, null, 2));
   lines.push("```");
   lines.push(`The orchestrator adds \`"orchestrator": "${ctx.orchestrator}"\` and \`"host": "gemini-cli"\` at validation time.`);
+  lines.push("");
+  lines.push(`Optional cost telemetry: include \`model\`, \`tokens_in\`, \`tokens_out\`, \`duration_ms\` in the gate if measurable. \`scripts/dashboard.js --view cost\` computes USD via \`core/pricing.js\`.`);
   return lines.join("\n");
 }
 
