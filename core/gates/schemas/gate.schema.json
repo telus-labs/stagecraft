@@ -105,6 +105,36 @@
       "type": "number",
       "minimum": 0,
       "description": "Optional. Wall-clock time the dispatch took, in milliseconds. Headless mode stamps this from runHeadless's measured wall-clock; user-driven gates can be filled in by the agent if it tracks duration. Used by D6 cost telemetry and D4 performance scoring."
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Optional (C4 reproducibility). The vendor's exact model-version string, more specific than `model`. Example: `model` = 'claude-opus-4-7', `model_version` = 'claude-opus-4-7-20251104'. Pinning at this granularity is what makes a run reproducible across vendor serving updates."
+    },
+    "temperature": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "Optional (C4 reproducibility). Sampling temperature used for this dispatch. 0 = deterministic-ish; higher = more variation."
+    },
+    "seed": {
+      "type": "integer",
+      "description": "Optional (C4 reproducibility). RNG seed when the host supports seeded sampling (Anthropic API and others do at temperature 0). Not all hosts honor this; recording it is still useful for audit even when the runtime ignored it."
+    },
+    "max_tokens": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Optional (C4 reproducibility). max_tokens parameter passed to the model. Doesn't change determinism but bounds the search space; auditable."
+    },
+    "system_prompt_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Optional (C4 reproducibility). SHA-256 of the rendered system prompt the model received, normalized (trailing whitespace stripped per line). Stamped by the orchestrator when it renders the prompt — the agent doesn't compute its own. Hash drift between two runs of the same stage means the prompt changed (role brief edit, skill update, rule change)."
+    },
+    "tools_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Optional (C4 reproducibility). SHA-256 of the sorted, deduplicated list of tool names available to the model. Drift means the tool surface changed — relevant for replay because the same prompt with a different toolset may produce different decisions."
     }
   },
   "additionalProperties": true

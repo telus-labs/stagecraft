@@ -158,6 +158,13 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push(`The orchestrator adds \`"orchestrator": "${ctx.orchestrator}"\` and \`"host": "gemini-cli"\` at validation time.`);
   lines.push("");
   lines.push(`Optional cost telemetry: include \`model\`, \`tokens_in\`, \`tokens_out\`, \`duration_ms\` in the gate if measurable. \`scripts/dashboard.js --view cost\` computes USD via \`core/pricing.js\`.`);
+
+  // C4 reproducibility — hash this prompt and ask the agent to stamp
+  // the hash + run params into the gate for audit / replay.
+  const { hashSystemPrompt } = require("../../core/reproducibility");
+  const systemPromptHash = hashSystemPrompt(lines.join("\n"));
+  lines.push("");
+  lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
   return lines.join("\n");
 }
 

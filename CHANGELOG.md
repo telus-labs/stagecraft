@@ -8,7 +8,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- **C4 — Reproducible runs (recording half).** Every gate can now carry an audit-complete record of how an AI decision was made: optional fields `model_version`, `temperature`, `seed`, `max_tokens`, `system_prompt_hash`, `tools_hash`. `core/reproducibility.js` ships `sha256`, `hashSystemPrompt` (trailing-whitespace-normalized so the same logical prompt hashes the same across line-ending platforms), `hashTools` (sorted + deduped so tool order doesn't change the hash), `reproducibilityFingerprint`, `compareFingerprints`, and `replayReadiness` (classifies a gate as `full` / `partial` / `incomplete`). All three host adapters compute the system-prompt-hash inline during `renderStagePrompt` and embed it in the gate skeleton hint, so the agent stamps it verbatim instead of re-computing. New `devteam reproduce <stage-id>` subcommand reads a gate, prints recorded fields + readiness classification, and (when possible) re-renders the current prompt to surface hash drift — the answer to "would the same prompt render today?". **Config-side pinning** (`.devteam/config.yml reproducibility.model_pins`) and **actual replay** (E6) are deferred to follow-up commits; this lands the recording layer that both will read from. Strategic value: the gate JSON is now what SOC 2 / EU AI Act compliance reviews ask for — a complete record of what configuration produced each artifact. 24 new tests in `tests/reproducibility.test.js` covering hash determinism + normalization, fingerprint extraction, drift detection, readiness classification, CLI surface, and schema declarations. See `docs/reproducibility.md` for the honest framing of what "reproducible LLM run" actually means (recording vs. determinism).
 
 ---
 
