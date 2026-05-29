@@ -109,6 +109,13 @@ const ROLE_FRONTMATTER = {
     model: "opus",
     permissionMode: "acceptEdits",
   },
+  verifier: {
+    name: "verifier",
+    description: "Verification-beyond-tests reviewer for stage-06d (full track only, runs AFTER stage-06 PASS). Read-only on production code; writes property tests under src/tests/property/ and formal specs under pipeline/formal/. Applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Inventories candidates per code shape, picks methods, runs them, records counterexamples + surviving mutants + invariant violations as blocking findings. Distinct from qa (writes example tests, the floor), red-team (adversarial pre-build-acceptance), reviewer (code-level). Skill: verification-beyond-tests. Tests-pass becomes the floor; this role is the ceiling.",
+    tools: "Read, Glob, Grep, Bash, Write",
+    model: "opus",
+    permissionMode: "acceptEdits",
+  },
 };
 
 function frontmatterFor(role) {

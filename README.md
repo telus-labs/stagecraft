@@ -22,7 +22,7 @@ If you're evaluating Stagecraft, this is the cheapest path to "does it work for 
 
 1. **(5 min) Install the framework.** `git clone <this-repo> && cd stagecraft && npm install && npm link`. Verify with `devteam --help`.
 2. **(2 min) Initialize a throwaway target project.** `mkdir /tmp/scratch && cd /tmp/scratch && devteam init --host claude-code`. Then `devteam doctor` should be all green.
-3. **(3 min) Read [EXAMPLE.md](EXAMPLE.md).** One feature traced through all 16 stages with real CLI captures. Tells you what each stage actually does.
+3. **(3 min) Read [EXAMPLE.md](EXAMPLE.md).** One feature traced through all 17 stages with real CLI captures. Tells you what each stage actually does.
 4. **(15 min) Run one full pipeline yourself.** `devteam stage requirements --feature "a one-paragraph feature you understand"`. Drop the prompt into Claude Code. Let the PM subagent write the brief. Run `devteam next`. Walk forward through design, build, peer-review, qa, sign-off. Skip deploy if you don't want to actually deploy anything (just write `{"status":"PASS",...}` into the gate by hand).
 5. **(5 min) Inspect the audit trail.** `ls pipeline/gates/` — every stage's outcome on disk. `cat pipeline/brief.md`, `pipeline/design-spec.md`, `pipeline/code-review/by-*.md`. The pipeline is reconstructable from these files alone.
 

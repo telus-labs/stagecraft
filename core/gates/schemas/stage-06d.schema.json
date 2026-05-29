@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:stage-06d",
+  "title": "Stage 06d — Verification Beyond Tests",
+  "description": "G7 — property-based testing, mutation testing, and/or formal verification applied to the changed code after stage-06 (qa) PASS. Records WHICH methods were attempted, WHICH were skipped (with reason), and WHAT was found. PASS requires blocking_findings to be empty. Read-only on production code; writes verification-report.md, the gate, and any new property tests under src/tests/property/.",
+  "type": "object",
+  "allOf": [{ "$ref": "urn:stagecraft:schema:gate" }],
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings",
+    "methods_attempted",
+    "methods_skipped",
+    "candidates_inventoried",
+    "findings_count",
+    "blocking_findings"
+  ],
+  "properties": {
+    "methods_attempted": {
+      "type": "array",
+      "description": "Verification methods the verifier actually ran. Subset of [\"property\", \"mutation\", \"formal\"]. Each entry implies a corresponding object (property_based / mutation / formal) populated below. A method that the verifier intended to run but couldn't (e.g. tool not installed) is `attempted_but_blocked` — record it here AND surface a warning.",
+      "items": { "type": "string", "enum": ["property", "mutation", "formal", "attempted_but_blocked:property", "attempted_but_blocked:mutation", "attempted_but_blocked:formal"] }
+    },
+    "methods_skipped": {
+      "type": "array",
+      "description": "Verification methods the verifier deliberately did not run, with reasons. Each entry: { method, reason }. A method with no candidates (\"no pure functions in diff\") is a legitimate skip; \"didn't have time\" is not.",
+      "items": {
+        "type": "object",
+        "required": ["method", "reason"],
+        "properties": {
+          "method": { "type": "string", "enum": ["property", "mutation", "formal"] },
+          "reason": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": true
+      }
+    },
+    "candidates_inventoried": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of functions/modules the verifier classified in Phase 1's inventory table. A run with zero candidates means the diff was all glue/UI — record reasons in methods_skipped[]."
+    },
+    "property_based": {
+      "type": ["object", "null"],
+      "description": "Populated when 'property' is in methods_attempted. null otherwise.",
+      "properties": {
+        "properties_asserted": { "type": "integer", "minimum": 0 },
+        "cases_tried": { "type": "integer", "minimum": 0, "description": "Total cases the framework explored (often 100–10000 per property)." },
+        "counterexamples_found": { "type": "integer", "minimum": 0 },
+        "tool": { "type": "string", "description": "fast-check, hypothesis, proptest, jqwik, ..." }
+      },
+      "additionalProperties": true
+    },
+    "mutation": {
+      "type": ["object", "null"],
+      "description": "Populated when 'mutation' is in methods_attempted. null otherwise.",
+      "properties": {
+        "mutants_generated": { "type": "integer", "minimum": 0 },
+        "mutants_killed": { "type": "integer", "minimum": 0 },
+        "mutants_survived": { "type": "integer", "minimum": 0 },
+        "mutants_timed_out": { "type": "integer", "minimum": 0 },
+        "score": { "type": "number", "minimum": 0, "maximum": 1, "description": "killed / (generated - timed_out). 80% is a defensible new-code threshold; 100% is suspicious." },
+        "threshold": { "type": "number", "minimum": 0, "maximum": 1, "description": "Pre-declared kill-ratio threshold the verifier committed to BEFORE running. Audit-grade: prevents goal-post moving." },
+        "tool": { "type": "string", "description": "stryker, mutmut, mull, pitest, ..." },
+        "target": { "type": "string", "description": "Source path(s) the mutator ran against." }
+      },
+      "additionalProperties": true
+    },
+    "formal": {
+      "type": ["object", "null"],
+      "description": "Populated when 'formal' is in methods_attempted. null otherwise.",
+      "properties": {
+        "property_modeled": { "type": "string" },
+        "spec_path": { "type": "string", "description": "Where the spec lives (src/spec/*.tla, pipeline/formal/*.als, ...)." },
+        "tool": { "type": "string", "description": "TLA+, Alloy, Lean, Coq, fast-spec, ..." },
+        "depth_explored": { "type": "integer", "minimum": 0 },
+        "counterexample_found": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "findings_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total findings across all methods (blocking + non_blocking + methodology)."
+    },
+    "blocking_findings": {
+      "type": "array",
+      "description": "Findings that must be addressed before sign-off. A surviving mutant on a critical path, a property counterexample to a stated invariant, a formal counterexample to a safety property. Non-empty → stage FAIL → implementer addresses → re-run. Analogous to red-team's must_address_before_peer_review[].",
+      "items": {
+        "type": "object",
+        "required": ["method", "summary"],
+        "properties": {
+          "method": { "type": "string", "enum": ["property", "mutation", "formal"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "summary": { "type": "string", "minLength": 1 },
+          "counterexample": { "type": "string", "description": "Verbatim shrunk counterexample or mutation operator." }
+        },
+        "additionalProperties": true
+      }
+    },
+    "non_blocking_findings": {
+      "type": "array",
+      "description": "Known gaps, ticketed follow-ups, edge cases at the limit of the spec. Recorded but don't fail the stage.",
+      "items": { "type": "object", "additionalProperties": true }
+    }
+  },
+  "additionalProperties": true
+}

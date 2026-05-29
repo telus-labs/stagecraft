@@ -277,6 +277,35 @@ const STAGES = {
       verification_method: null,
     },
   },
+  // G7 — verification beyond tests. Runs AFTER stage-06 (qa) PASS:
+  // "tests pass" is the floor, this stage raises the ceiling. Verifier
+  // role applies property-based testing, mutation testing, and/or
+  // formal verification to the changed code. Blocking findings (a
+  // surviving mutant on a critical path, a property counterexample to
+  // a stated invariant, a formal counterexample to a safety property)
+  // halt sign-off. Read-only on production code; writes verification
+  // artefacts + the gate. Track inclusion: full only — the heavy stuff
+  // belongs on the track that explicitly opted into rigour-over-speed.
+  "verification-beyond-tests": {
+    stage: "stage-06d",
+    roles: ["verifier"],
+    objective: "Apply property-based testing, mutation testing, and/or formal verification to the changed code. Run AFTER stage-06 (qa) PASS — tests are the floor, this stage raises the ceiling. Surface counterexamples + surviving mutants + invariant violations as blocking findings.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/spec.feature", "pipeline/test-report.md", "pipeline/red-team-report.md"],
+    allowedWrites: ["pipeline/verification-report.md", "pipeline/gates/stage-06d.json", "pipeline/context.md", "src/tests/property/", "pipeline/formal/"],
+    artifact: "pipeline/verification-report.md",
+    template: "verification-report-template.md",
+    gate: {
+      methods_attempted: [],
+      methods_skipped: [],
+      candidates_inventoried: 0,
+      property_based: null,
+      mutation: null,
+      formal: null,
+      findings_count: 0,
+      blocking_findings: [],
+      non_blocking_findings: [],
+    },
+  },
   "sign-off": {
     stage: "stage-07",
     roles: ["pm", "platform"],
@@ -342,6 +371,7 @@ const ORDERED_STAGE_NAMES = [
   "qa",
   "accessibility-audit",
   "observability-gate",
+  "verification-beyond-tests",
   "sign-off",
   "deploy",
   "retrospective",
@@ -364,6 +394,10 @@ const ORDERED_STAGE_NAMES = [
 // in brief.md to derive scenarios from). Skipped on hotfix (no
 // requirements stage, no brief), nano (no real feature being added),
 // and the non-feature tracks (config-only, dep-update).
+// Verification-beyond-tests (stage-06d, G7) runs on full only — the
+// heavy stuff (property-based / mutation / formal) belongs on the
+// track that explicitly opted into rigour-over-speed. Other tracks
+// rely on stage-06's example tests as their verification floor.
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
   quick:         ["requirements", "executable-spec", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],

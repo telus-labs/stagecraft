@@ -108,6 +108,21 @@ describe("tracks: TRACKS ↔ STAGES_BY_TRACK", () => {
     assert.ok(cl < es && es < bu, `expected clarification(${cl}) < executable-spec(${es}) < build(${bu})`);
   });
 
+  it("full includes verification-beyond-tests (G7 — property/mutation/formal); other tracks exclude it", () => {
+    assert.ok(orderedStageNamesForTrack("full").includes("verification-beyond-tests"));
+    for (const t of ["quick", "nano", "hotfix", "config-only", "dep-update"]) {
+      assert.ok(!orderedStageNamesForTrack(t).includes("verification-beyond-tests"), `${t} should NOT include verification-beyond-tests`);
+    }
+  });
+
+  it("verification-beyond-tests sits after observability-gate and before sign-off", () => {
+    const full = orderedStageNamesForTrack("full");
+    const ob = full.indexOf("observability-gate");
+    const vb = full.indexOf("verification-beyond-tests");
+    const so = full.indexOf("sign-off");
+    assert.ok(ob < vb && vb < so, `expected observability-gate(${ob}) < verification-beyond-tests(${vb}) < sign-off(${so})`);
+  });
+
   it("orderedStageNamesForTrack(unknown) throws with a helpful message", () => {
     assert.throws(() => orderedStageNamesForTrack("bogus"), /Unknown track/);
   });
