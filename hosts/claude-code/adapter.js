@@ -102,6 +102,13 @@ const ROLE_FRONTMATTER = {
     model: "opus",
     permissionMode: "acceptEdits",
   },
+  migrations: {
+    name: "migrations",
+    description: "Migration-safety reviewer for stage-04d (conditional on data-layer diffs). Read-only on code — evaluates schema delta, breaking-change classification, backfill strategy, dual-write strategy, rollback plan + tested status. Writes pipeline/migration-safety.md + stage-04d gate. Has VETO power: a migration without a tested rollback halts the pipeline regardless of peer-review. Distinct from security-engineer (auth/crypto/PII), red-team (general adversarial), reviewer (code-level). Route to a different host than the build agents.",
+    tools: "Read, Glob, Grep, Bash, Write",
+    model: "opus",
+    permissionMode: "acceptEdits",
+  },
 };
 
 function frontmatterFor(role) {

@@ -87,7 +87,7 @@ const STAGES = {
   "pre-review": {
     stage: "stage-04a",
     roles: ["platform"],
-    objective: "Run lint, tests, dependency/license review, and security-trigger checks before peer review.",
+    objective: "Run lint, tests, dependency/license review, and trigger checks for security review (stage-04b) + migration safety (stage-04d) before peer review.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/build-plan.md", "pipeline/pr-*.md"],
     allowedWrites: ["pipeline/pre-review.md", "pipeline/gates/stage-04a.json", "pipeline/context.md"],
     artifact: "pipeline/pre-review.md",
@@ -97,6 +97,7 @@ const STAGES = {
       tests_passed: false,
       dependency_review_passed: false,
       security_review_required: false,
+      migration_safety_required: false,
     },
   },
   "security-review": {
@@ -139,6 +140,40 @@ const STAGES = {
       severity_breakdown: { critical: 0, high: 0, medium: 0, low: 0 },
       must_address_before_peer_review: [],
       noted_for_followup: [],
+    },
+  },
+  "migration-safety": {
+    stage: "stage-04d",
+    roles: ["migrations"],
+    // Conditional stage — fires when stage-04a's pre-review heuristic
+    // sets migration_safety_required: true (data-layer changes in the
+    // diff: schema files, migration directories, ALTER/CREATE/DROP TABLE
+    // DDL, ORM migration files). When the heuristic doesn't fire, this
+    // stage is skipped silently and the pipeline advances to peer-review.
+    //
+    // Has veto power like stage-04b security: a migration without a
+    // tested rollback halts the pipeline regardless of any other
+    // approval. Backfill plans + dual-write strategies + rollback paths
+    // are not optional on changes that touch persistent state.
+    conditionalOn: { stage: "stage-04a", field: "migration_safety_required", equals: true },
+    objective: "Review the migration-safety story for data-layer changes: schema diff, backfill plan, dual-write strategy, rollback plan, and breaking-change blast radius. Has veto power on unsafe migrations.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/pre-review.md", "pipeline/pr-*.md"],
+    allowedWrites: ["pipeline/migration-safety.md", "pipeline/gates/stage-04d.json", "pipeline/context.md"],
+    artifact: "pipeline/migration-safety.md",
+    template: "migration-safety-template.md",
+    gate: {
+      migration_files: [],
+      schema_changes_summary: "",
+      breaking_change: false,
+      backfill_required: false,
+      backfill_strategy: "",
+      dual_write_required: false,
+      dual_write_strategy: "",
+      rollback_plan: "",
+      rollback_tested: false,
+      migration_approved: false,
+      veto: false,
+      triggering_conditions: [],
     },
   },
   "peer-review": {
@@ -270,6 +305,7 @@ const ORDERED_STAGE_NAMES = [
   "pre-review",
   "security-review",
   "red-team",
+  "migration-safety",
   "peer-review",
   "qa",
   "accessibility-audit",
@@ -288,13 +324,16 @@ const ORDERED_STAGE_NAMES = [
 // stage-04a's security_review_required flag at runtime.
 // Red-team (stage-04c) runs unconditionally on full + hotfix — uniform
 // adversarial coverage on non-trivial changes.
+// Migration-safety (stage-04d) is conditional on stage-04a's
+// migration_safety_required flag — fires when the diff touches the
+// data layer (schema files, migrations dir, DDL fragments).
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
   quick:         ["requirements", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
   nano:          ["build", "qa"],
-  "config-only": ["build", "pre-review", "security-review", "qa", "sign-off", "deploy"],
+  "config-only": ["build", "pre-review", "security-review", "migration-safety", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
-  hotfix:        ["build", "pre-review", "security-review", "red-team", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
+  hotfix:        ["build", "pre-review", "security-review", "red-team", "migration-safety", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
 };
 
 function stageNames() {

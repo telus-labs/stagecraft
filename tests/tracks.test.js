@@ -69,6 +69,26 @@ describe("tracks: TRACKS ↔ STAGES_BY_TRACK", () => {
     assert.ok(sr < rt && rt < pr, `expected security-review(${sr}) < red-team(${rt}) < peer-review(${pr})`);
   });
 
+  it("full + hotfix + config-only include migration-safety (conditional on data-layer diffs)", () => {
+    for (const t of ["full", "hotfix", "config-only"]) {
+      assert.ok(orderedStageNamesForTrack(t).includes("migration-safety"), `${t} should include migration-safety`);
+    }
+  });
+
+  it("quick / nano / dep-update do NOT include migration-safety", () => {
+    for (const t of ["quick", "nano", "dep-update"]) {
+      assert.ok(!orderedStageNamesForTrack(t).includes("migration-safety"), `${t} should NOT include migration-safety`);
+    }
+  });
+
+  it("migration-safety sits between red-team and peer-review when both present", () => {
+    const full = orderedStageNamesForTrack("full");
+    const rt = full.indexOf("red-team");
+    const ms = full.indexOf("migration-safety");
+    const pr = full.indexOf("peer-review");
+    assert.ok(rt < ms && ms < pr, `expected red-team(${rt}) < migration-safety(${ms}) < peer-review(${pr})`);
+  });
+
   it("orderedStageNamesForTrack(unknown) throws with a helpful message", () => {
     assert.throws(() => orderedStageNamesForTrack("bogus"), /Unknown track/);
   });

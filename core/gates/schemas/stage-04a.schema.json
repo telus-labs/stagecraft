@@ -26,6 +26,10 @@
     "security_review_required": {
       "type": "boolean",
       "description": "When true, the Stage 4.5b security-engineer review is mandatory before Stage 5; trigger heuristic in scripts/security-heuristic.js."
+    },
+    "migration_safety_required": {
+      "type": "boolean",
+      "description": "Optional. When true, the Stage 04d migration-safety review is mandatory before Stage 5; trigger heuristic in core/guards/migration-heuristic.js fires on schema files, migrations directories, and DDL fragments in the diff. Distinct from security_review_required — a migration may need data-layer review even when no security concerns are raised."
     }
   },
   "additionalProperties": true

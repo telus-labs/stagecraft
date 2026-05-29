@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:stage-04d",
+  "title": "Stage 04d — Migration Safety",
+  "description": "Conditional safety review for changes touching the data layer (schema files, migration directories, ALTER/CREATE/DROP TABLE DDL). Fires when stage-04a's pre-review heuristic sets migration_safety_required: true. Captures backfill plan, dual-write strategy, rollback plan. Has veto power — an unsafe migration halts the pipeline regardless of any other approval.",
+  "type": "object",
+  "allOf": [{ "$ref": "urn:stagecraft:schema:gate" }],
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings",
+    "migration_files",
+    "schema_changes_summary",
+    "breaking_change",
+    "backfill_required",
+    "rollback_plan",
+    "rollback_tested",
+    "migration_approved",
+    "veto",
+    "triggering_conditions"
+  ],
+  "properties": {
+    "migration_files": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Paths in this diff that the migration-heuristic flagged. Includes both path-matched files (migration dirs, schema files) and content-matched files (any file containing ALTER/CREATE/DROP TABLE DDL fragments)."
+    },
+    "schema_changes_summary": {
+      "type": "string",
+      "description": "Plain-English description of what the migration changes — added column, dropped index, renamed table, etc. One paragraph max. The audit-facing 'what is this migration doing' answer."
+    },
+    "breaking_change": {
+      "type": "boolean",
+      "description": "Does this migration require coordination with currently-running code? Dropping a column, narrowing a type, adding NOT NULL without default, renaming a column without a view alias — all breaking. Adding a nullable column or a new table is non-breaking."
+    },
+    "backfill_required": {
+      "type": "boolean",
+      "description": "Does existing data need to be transformed to fit the new schema? Adding a NOT NULL column to a populated table, computing a derived field from existing rows, normalizing data into a new lookup table — all require backfill."
+    },
+    "backfill_strategy": {
+      "type": "string",
+      "description": "If backfill_required is true: HOW will the backfill run? Online (batched job) vs. offline (downtime window). Batch size + rate limit. Idempotency mechanism. Verification step. Concrete commands. If backfill_required is false: this field may be empty."
+    },
+    "dual_write_required": {
+      "type": "boolean",
+      "description": "Will writes need to go to BOTH old and new schemas during a transition window? Common when renaming a column, moving data to a new table, or sharding. The dual-write window lets you roll forward AND back without data loss."
+    },
+    "dual_write_strategy": {
+      "type": "string",
+      "description": "If dual_write_required is true: WHICH writes hit both, how long the window lasts, how the switchover happens, how the read path resolves conflicts. If false: may be empty."
+    },
+    "rollback_plan": {
+      "type": "string",
+      "minLength": 1,
+      "description": "REQUIRED, non-empty. Concrete steps to roll the migration back. 'Run db/migrations/0042_rollback.sql' is acceptable; 'revert the PR' is NOT (because the column may already have been dropped). For irreversible migrations (e.g. DROP TABLE with data loss), the plan describes the recovery procedure from backups + the acceptable data-loss window. An empty rollback_plan auto-vetoes the migration."
+    },
+    "rollback_tested": {
+      "type": "boolean",
+      "description": "Was the rollback actually exercised — staging environment, throwaway database, dry-run script? Untested rollbacks frequently don't work when needed; this field separates documented from verified. A tested rollback is what graduates an emergency call from 'maybe' to 'definitely.'"
+    },
+    "migration_approved": {
+      "type": "boolean",
+      "description": "Migration role's overall approval. PASS gates require this true AND veto false AND non-empty rollback_plan."
+    },
+    "veto": {
+      "type": "boolean",
+      "description": "Veto flag — when true, the pipeline halts at this stage regardless of any other approval. Auto-set true when rollback_plan is empty, rollback_tested is false on a breaking_change, or backfill_strategy is empty when backfill_required is true. Peer-review approvals do NOT override a veto; the migration role must personally re-review the fix."
+    },
+    "triggering_conditions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Why this stage fired — the conditions in stage-04a that triggered the migration-safety review. Auditable trace."
+    }
+  },
+  "additionalProperties": true
+}
