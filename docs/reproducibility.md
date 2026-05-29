@@ -116,15 +116,92 @@ replayReadiness(gate)
 
 ## What this enables now vs later
 
-**Now (this commit):**
+**Now:**
 - Audit: "what configuration produced this artifact?" — answer is in the gate.
 - Drift detection: "would the same prompt render today?" — `devteam reproduce` compares hashes.
-- Compliance evidence: SOC 2 / EU AI Act ask for records of how AI decisions were made. The gate JSON + this tool together are that record.
+- **Re-run with diff:** `devteam replay <stage-id>` re-invokes the host with current config and diffs the new gate against the original (see § Replay below).
+- Compliance evidence: SOC 2 / EU AI Act ask for records of how AI decisions were made. The gate JSON + these tools together are that record.
 
 **Soon (planned):**
 - Config-side pinning: `.devteam/config.yml` `reproducibility.model_pins: { stage-04: claude-opus-4-7-20251104 }`. Adapter reads it and passes to the host. Not yet built (per-host adapter work).
-- Replay (E6): `devteam replay <run-id>` — re-invoke the same stage with the recorded parameters. Depends on this commit's recording layer.
 - Cross-host hash stability: `system_prompt_hash` is host-specific today (each adapter renders slightly differently). A host-neutral prompt hash would let drift detection work across host migrations.
+
+## Replay (E6)
+
+`devteam replay <stage-id>` re-runs a recorded stage against the **current** configuration and writes the result to a non-clobbering path. Honest framing — what replay does and doesn't do:
+
+**What replay does:**
+- Reads the original gate at `pipeline/gates/<stage-id>.json`.
+- Re-renders the prompt for that stage with the current role brief / skill / rules / templates / etc.
+- Invokes the host CLI headlessly (uses the same mechanics as `--headless`).
+- Writes the new gate to `pipeline/gates/replay/<stage-id>.<timestamp>.json` (subdirectory, so it doesn't pollute regular pipeline state).
+- Restores the original gate to its canonical path (the headless run overwrote it during invocation).
+- Diffs the two gates and prints what changed: status, blockers, cost / tokens / duration, reproducibility fields.
+
+**What replay does NOT do:**
+- Pin per-invocation params (temperature, seed, model_version) at the host CLI level. That's separate work — different hosts expose those flags differently. Replay uses *current* config; the diff makes the drift visible.
+- Recover from upstream nondeterminism. The model itself may produce different output for the same prompt + same params. Vendor serving changes drift independently.
+
+**The practical answer it gives:**
+- "Is this stage still producing similar output today?" — a smoke test on a recorded run, six months later.
+- Combined with `devteam reproduce`'s drift check: "exactly what's different between then and now."
+
+### Usage
+
+```bash
+# Dry-run shows the plan + drift check WITHOUT invoking the host.
+$ devteam replay stage-04.backend --dry-run
+
+# Real replay:
+$ devteam replay stage-04.backend
+
+Replay plan — pipeline/gates/stage-04.backend.json
+  Original gate:
+    Recorded at:        2026-05-15T14:32:11Z
+    Host:               codex
+    Model:              gpt-5
+    Temperature:        0.0
+    Replay readiness:   FULL
+  Replay configuration (CURRENT, not pinned):
+    Host:               codex
+  Prompt hash drift:  ⚠️  DRIFT
+    original: sha256:9f86d081…
+    current:  sha256:abc12345…
+    The replay will use the CURRENT prompt — outputs may differ for
+    prompt-level reasons, not just model nondeterminism.
+
+[replay] invoking codex headlessly…
+Replay complete → pipeline/gates/replay/stage-04.backend.2026-11-30T10-15-43-922Z.json
+
+  Status:
+    original → PASS
+    replay   → PASS
+
+  Reproducibility-field drift (2):
+    model_version        drift    gpt-5-20251101 → gpt-5-20261030
+    system_prompt_hash   drift    sha256:9f86d081… → sha256:abc12345…
+
+  Cost / duration:
+    cost_usd        0.64 → 0.71
+    tokens_in       40000 → 41200
+    duration_ms     95000 → 102000
+```
+
+### How replay decides "a new gate was written"
+
+Replay captures the original gate file's mtime before invoking the host, then requires the file's mtime to advance after the invocation. This catches the case where the host CLI exits 0 but writes nothing — without the mtime check, the framework would mistake "no-op" for "success."
+
+### `--dry-run` mode
+
+`devteam replay <stage-id> --dry-run` prints the plan (original metadata, current host, prompt-hash drift) without invoking the host. Good for:
+- Quick audit checks ("would replay match?")
+- CI checks that surface drift without spending LLM dollars
+- Previewing before committing to a real replay
+
+### Output paths
+
+Original gate stays at `pipeline/gates/<stage-id>.json` (restored after the headless run overwrites it).
+Replay gates land at `pipeline/gates/replay/<stage-id>.<iso-timestamp>.json`. The replay subdirectory is deliberately outside what the validator scans — replay gates don't participate in normal pipeline-state decisions.
 
 ## Caveats — be honest about what's recorded
 
