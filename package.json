@@ -14,6 +14,8 @@
     "pr-publish": "node scripts/pr-publish.js",
     "dashboard": "node scripts/dashboard.js",
     "dashboard:cost": "node scripts/dashboard.js --view cost --by host",
+    "performance": "node scripts/performance.js",
+    "routing:suggest": "node scripts/routing-suggest.js",
     "budget": "node scripts/budget.js",
     "release:check": "node scripts/release.js check",
     "release:notes": "node scripts/release.js notes"

@@ -70,14 +70,28 @@ Lookup is exact-match first, then prefix-match — so a dated model id like `cla
 
 **The pricing is an estimate, not an invoice.** Prices change; update `core/pricing.js` periodically. Authoritative billing lives in each provider's dashboard.
 
-## What cost data unlocks
+## What cost data unlocks (D4 + D5)
 
-D6 alone answers "where did the money go" — but it's the data layer for two follow-on features:
+D6 is the data layer; **D4 and D5 are now built** and turn the data into decisions:
 
-- **D4 — Per-role per-model performance scores.** For each `(role, host)` pair, compute first-try pass rate, mean retries, mean cost. Surfaces "Codex is cheaper than Claude at backend AND passes first try more often."
-- **D5 — Adaptive routing.** Take D4's data, recommend or auto-apply routing changes. `devteam routing suggest` outputs a YAML diff for `.devteam/config.yml`.
+- **D4 — Per-role per-model performance scores** (`npm run performance` / `scripts/performance.js`). For each `(role, host)` pair, computes first-try pass rate, mean retries, mean cost, **cost per pass** (unit cost of a successful dispatch). Headlines pairwise comparisons when 2+ hosts are seen for a role.
+- **D5 — Adaptive routing** (`npm run routing:suggest` / `scripts/routing-suggest.js`). Reads the same gates, compares against the current `.devteam/config.yml`, proposes role-level routing changes. Minimum dispatch threshold (5 default) + minimum pass-rate delta (10pp default) prevent recommendations on noisy data. Outputs a YAML diff by default; `--apply` rewrites the config after a confirmation prompt.
 
-Together they realize the "diversity beats monoculture" bet from `docs/BACKLOG.md` — the system learns which model is best at which role, not by guessing but by measuring.
+Together they realize the "diversity beats monoculture" bet — the system learns which model is best at which role, not by guessing but by measuring. Try it:
+
+```bash
+# Look at performance so far:
+npm run performance
+
+# See what routing changes are recommended:
+npm run routing:suggest
+
+# Apply them (will prompt first):
+npm run routing:suggest -- --apply
+
+# Apply without prompting (CI usage):
+npm run routing:suggest -- --apply --yes
+```
 
 ## Limitations
 
