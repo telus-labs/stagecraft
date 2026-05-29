@@ -110,6 +110,29 @@ const STAGES = {
       triggering_conditions: [],
     },
   },
+  "red-team": {
+    stage: "stage-04c",
+    roles: ["red-team"],
+    // Always runs on tracks where it's included (full + hotfix). Not
+    // conditional like stage-04b — the goal is uniform adversarial
+    // coverage on non-trivial changes. Lighter tracks (quick / nano /
+    // config-only / dep-update) skip stage-04c by design.
+    //
+    // Diversity matters: route red-team to a different host than the
+    // builders (`routing.roles.red-team` in .devteam/config.yml).
+    objective: "Adversarial review of what was just built. Enumerate concrete attack scenarios, hostile inputs, race conditions, abuse cases, scale failures, downstream effects, and observability gaps the spec didn't cover. Produces must-fix items the implementer addresses before Stage 5 peer review begins.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/pr-*.md", "pipeline/pre-review.md", "pipeline/security-review.md"],
+    allowedWrites: ["pipeline/red-team-report.md", "pipeline/gates/stage-04c.json", "pipeline/context.md"],
+    artifact: "pipeline/red-team-report.md",
+    template: "red-team-report-template.md",
+    gate: {
+      surfaces_walked: [],
+      findings_count: 0,
+      severity_breakdown: { critical: 0, high: 0, medium: 0, low: 0 },
+      must_address_before_peer_review: [],
+      noted_for_followup: [],
+    },
+  },
   "peer-review": {
     stage: "stage-05",
     // Workstreams are AREAS being reviewed, not the role doing the
@@ -238,6 +261,7 @@ const ORDERED_STAGE_NAMES = [
   "build",
   "pre-review",
   "security-review",
+  "red-team",
   "peer-review",
   "qa",
   "accessibility-audit",
@@ -254,13 +278,15 @@ const ORDERED_STAGE_NAMES = [
 // observability sections per .devteam/rules/gates.md §Stage 01.
 // Security-review (stage-04b) is in the lists but conditional on
 // stage-04a's security_review_required flag at runtime.
+// Red-team (stage-04c) runs unconditionally on full + hotfix — uniform
+// adversarial coverage on non-trivial changes.
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
   quick:         ["requirements", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
   nano:          ["build", "qa"],
   "config-only": ["build", "pre-review", "security-review", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
-  hotfix:        ["build", "pre-review", "security-review", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
+  hotfix:        ["build", "pre-review", "security-review", "red-team", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
 };
 
 function stageNames() {

@@ -92,7 +92,10 @@ describe("next: conditional dispatch", () => {
     for (const s of ["stage-01","stage-02","stage-03","stage-04"]) seedGate(cwd, s, { status: "PASS" });
     seedGate(cwd, "stage-04a", { status: "PASS", security_review_required: false });
     const r = next({ cwd });
-    assert.equal(r.name, "peer-review", "expected to skip security-review and land on peer-review");
+    // Skip security-review (conditional) and land on red-team (always-on
+    // for full track). stage-04c sits between stage-04b and stage-05 since
+    // G4 landed.
+    assert.equal(r.name, "red-team", "expected to skip security-review and land on red-team");
   });
 
   it("stage-04b runs when stage-04a.security_review_required is true", () => {

@@ -87,8 +87,8 @@ PM writes natural-language criteria. The orchestrator generates an executable sp
 ### G3. Production feedback loop
 Post-deploy, monitor error rate / latency / conversion for N days. Synthesize observations back into the brief for the next iteration. The retrospective stage no longer asks "what did we learn building it?" — it asks "what happened in prod?"
 
-### G4. Red-team role between build and peer-review
-A dedicated subagent whose job is to break what was just built. Inputs: the spec + the impl + sandbox access. Outputs: attack scenarios the spec didn't cover. Backend must address before peer-review. Adversarial-by-design.
+### G4. Red-team role between build and peer-review ✅ landed (Unreleased)
+A dedicated `red-team` role and `stage-04c`. Walks 10 attack surfaces (input boundaries, state, sequence, integrations, auth-edges, resource exhaustion, failure modes mid-operation, abuse cases, downstream effects, observability gaps) and produces concrete reproducers — not vibes. Triages findings by severity × likelihood × scope; the `must_address_before_peer_review` array is the gate's `blockers`, blocking Stage 5 until cleared. Always-on for `full` + `hotfix` tracks; skipped on lighter tracks. New skill `skills/red-team/SKILL.md` carries the methodology. Schema `core/gates/schemas/stage-04c.schema.json` enforces the gate shape. ROLE_FRONTMATTER entry on claude-code; codex / gemini-cli / generic pick the role up automatically via `core/roles.listRoles()`. Diversity-aware: the role brief and skill recommend routing red-team to a DIFFERENT host than the build agents for maximum independence.
 
 ### G5. Multi-modal stages
 Design specs include architecture diagrams (images). Stage 2 (design) and Stage 5 (review) accept image inputs. Principal can output a system diagram, not just prose. Visual reasoning is no longer a separate workflow.

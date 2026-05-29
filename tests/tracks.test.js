@@ -49,6 +49,26 @@ describe("tracks: TRACKS ↔ STAGES_BY_TRACK", () => {
     assert.ok(!orderedStageNamesForTrack("dep-update").includes("security-review"));
   });
 
+  it("full + hotfix include red-team (always-on adversarial review)", () => {
+    assert.ok(orderedStageNamesForTrack("full").includes("red-team"));
+    assert.ok(orderedStageNamesForTrack("hotfix").includes("red-team"));
+  });
+
+  it("nano / quick / config-only / dep-update do NOT include red-team", () => {
+    assert.ok(!orderedStageNamesForTrack("nano").includes("red-team"));
+    assert.ok(!orderedStageNamesForTrack("quick").includes("red-team"));
+    assert.ok(!orderedStageNamesForTrack("config-only").includes("red-team"));
+    assert.ok(!orderedStageNamesForTrack("dep-update").includes("red-team"));
+  });
+
+  it("red-team sits between security-review and peer-review when both present", () => {
+    const full = orderedStageNamesForTrack("full");
+    const sr = full.indexOf("security-review");
+    const rt = full.indexOf("red-team");
+    const pr = full.indexOf("peer-review");
+    assert.ok(sr < rt && rt < pr, `expected security-review(${sr}) < red-team(${rt}) < peer-review(${pr})`);
+  });
+
   it("orderedStageNamesForTrack(unknown) throws with a helpful message", () => {
     assert.throws(() => orderedStageNamesForTrack("bogus"), /Unknown track/);
   });

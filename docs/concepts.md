@@ -4,7 +4,7 @@ Six primitives make up Stagecraft. Skim this page before reading anything else �
 
 | Concept | Lives in | Set by | What it is |
 |---|---|---|---|
-| **Stage** | `core/pipeline/stages.js` | The framework | A numbered phase of work (e.g. `stage-01` requirements, `stage-04` build, `stage-09` retrospective). 13 stages total. |
+| **Stage** | `core/pipeline/stages.js` | The framework | A numbered phase of work (e.g. `stage-01` requirements, `stage-04` build, `stage-09` retrospective). 14 stages total (including sub-stages 4a/4b/4c, 6b, 6c). |
 | **Role** | `roles/<role>.md` | The framework + your customizations | A named seat at the team — `pm`, `principal`, `backend`, `frontend`, `platform`, `qa`, `reviewer`, `security`. A role's brief is the source of truth for what it does, reads, and writes. |
 | **Workstream** | derived at dispatch time | The orchestrator | One dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review) have several. **The workstream is the unit of gate identity.** |
 | **Host** | `hosts/<host>/` | You choose at `devteam init` | The AI tool that actually runs the model: `claude-code`, `codex`, `gemini-cli`, or `generic` (no host). |
@@ -24,7 +24,7 @@ A typical `full`-track run touches every primitive:
 3. The model writes `pipeline/brief.md` (the artifact) and `pipeline/gates/stage-01.json` (the **gate**) with `status: "PASS"`.
 4. You run **`devteam next`**. It reads the gate, sees PASS, and reports `▶️ run-stage — design (stage-02)`.
 5. Two stages later you hit **stage-04 build**: 4 workstreams (backend / frontend / platform / qa), each potentially dispatched to a different host depending on routing. Each writes its own per-workstream gate (`pipeline/gates/stage-04.backend.json` etc.). `devteam merge build` aggregates them into the stage gate.
-6. The **track** you picked (`full`) is what put all 13 stages on the menu. Picking `nano` would skip everything except build + qa.
+6. The **track** you picked (`full`) is what put all 14 stages on the menu. Picking `nano` would skip everything except build + qa.
 
 The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator never holds state outside of those files.
 
@@ -69,6 +69,7 @@ These come up frequently but build on the primitives above:
 - **Auto-fold (Stage 7)** — when Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 criterion-to-test mapping, the orchestrator authors Stage 7 sign-off directly with `auto_from_stage_06: true`. No human action.
 - **Retrospective synthesis (Stage 9)** — Principal harvests `PATTERN:` lines from Stage 5 reviews, reconciles with `pipeline/lessons-learned.md`, promotes ≤2 rules per retro, retires stale ones via the auto-age-out rule.
 - **Multi-model adversarial peer review** — opt-in fanout (`routing.review_fanout: [host, host, host]` in config). Stage-05's 4 area workstreams duplicate across N hosts → 4×N parallel reviews; pessimistic merge across all of them.
+- **Red team (stage-04c)** — adversarial-by-design role between build (Stage 4) and peer review (Stage 5). Always-on for `full` + `hotfix` tracks. Walks 10 attack surfaces (input boundaries, state, sequence, integrations, auth edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps) and produces concrete reproducers. `must_address_before_peer_review` items block Stage 5 until the implementer addresses them. Distinct from security-engineer (narrower remit, conditional, has veto) and reviewer (general code review). Diversity matters — route to a different host than the build agents. See `skills/red-team/SKILL.md` for methodology.
 - **Persistent memory** — `devteam memory ingest|query` builds a per-project semantic index of briefs, design specs, ADRs, retros, and lessons. Local embedder by default; offline after first download.
 
 ---
@@ -82,7 +83,7 @@ These come up frequently but build on the primitives above:
 | `nano` | build, qa | Typo fixes, comment changes, one-line tweaks. |
 | `config-only` | build, pre-review, security-review, qa, sign-off, deploy | Config / infrastructure changes with no application code. |
 | `dep-update` | build, peer-review, qa, sign-off, deploy | Dependency bumps. Security-review fires if the diff touches sensitive paths. |
-| `hotfix` | build, pre-review, security-review, peer-review, qa, accessibility-audit, observability-gate, sign-off, deploy, retrospective | Production outages. Skips requirements / design / clarification — you already know what's broken — but keeps all the safety stages. |
+| `hotfix` | build, pre-review, security-review, red-team, peer-review, qa, accessibility-audit, observability-gate, sign-off, deploy, retrospective | Production outages. Skips requirements / design / clarification — you already know what's broken — but keeps all the safety stages. |
 
 See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety logic behind track gating.
 

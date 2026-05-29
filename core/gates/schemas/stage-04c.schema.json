@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:stage-04c",
+  "title": "Stage 04c — Red Team",
+  "description": "Adversarial review of what was built. Walks attack surfaces (input boundaries, state, sequence, integrations, auth-edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps), produces concrete reproducers, and triages findings by severity × likelihood × scope. The `must_address_before_peer_review` array names items the implementer MUST address before Stage 5; non-empty → status FAIL. Runs on full + hotfix tracks only.",
+  "type": "object",
+  "allOf": [{ "$ref": "urn:stagecraft:schema:gate" }],
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings",
+    "surfaces_walked",
+    "findings_count",
+    "severity_breakdown",
+    "must_address_before_peer_review",
+    "noted_for_followup"
+  ],
+  "properties": {
+    "surfaces_walked": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Which of the 10 attack surfaces the red-team explicitly considered. Names from the skill: input_boundaries, state_boundaries, sequence_boundaries, integration_boundaries, auth_edges, resource_exhaustion, failure_modes, abuse_cases, downstream_effects, observability_gaps. Empty surfaces (where nothing applied or nothing found) should still appear here — the explicit list is auditable."
+    },
+    "findings_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total findings written into pipeline/red-team-report.md (sum of must-fix + should-fix + noted-for-followup)."
+    },
+    "severity_breakdown": {
+      "type": "object",
+      "required": ["critical", "high", "medium", "low"],
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "high":     { "type": "integer", "minimum": 0 },
+        "medium":   { "type": "integer", "minimum": 0 },
+        "low":      { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false,
+      "description": "Counts of findings by severity across all scopes (must-fix + should-fix + noted)."
+    },
+    "must_address_before_peer_review": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "likelihood", "summary"],
+        "properties": {
+          "id":         { "type": "string", "description": "Stable id of the finding within the report, e.g. 'RT-3'." },
+          "severity":   { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "likelihood": { "type": "string", "enum": ["expected", "plausible", "theoretical"] },
+          "surface":    { "type": "string", "description": "Which surface this finding came from." },
+          "summary":    { "type": "string", "description": "One-line description; the full reproducer lives in red-team-report.md." }
+        },
+        "additionalProperties": true
+      },
+      "description": "Items the implementer MUST address before Stage 5 peer review. Promotion rule (from the red-team skill): severity ≥ high AND likelihood ≥ plausible AND scope = must-fix. Non-empty → gate status FAIL. Each item also appears in the base gate's `blockers` array."
+    },
+    "noted_for_followup": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "summary"],
+        "properties": {
+          "id":       { "type": "string" },
+          "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+          "surface":  { "type": "string" },
+          "summary":  { "type": "string" }
+        },
+        "additionalProperties": true
+      },
+      "description": "Findings out-of-scope for this PR but worth tracking. Surfaced to Stage 9 retrospective for pattern-spotting; can be promoted to follow-up tickets via the team's normal process."
+    }
+  },
+  "additionalProperties": true
+}

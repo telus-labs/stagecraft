@@ -95,6 +95,13 @@ const ROLE_FRONTMATTER = {
     model: "opus",
     permissionMode: "acceptEdits",
   },
+  "red-team": {
+    name: "red-team",
+    description: "Adversarial reviewer for stage-04c. Read-only on code — finds concrete attack scenarios, hostile inputs, race conditions, abuse cases, scale failures, downstream effects, observability gaps the spec didn't cover. Writes pipeline/red-team-report.md + stage-04c gate. Distinct from security-engineer (narrower auth/crypto/PII remit, conditional, has veto) and reviewer (code review at stage-05). Route to a DIFFERENT host than the build agents for maximum independence.",
+    tools: "Read, Glob, Grep, Bash, Write",
+    model: "opus",
+    permissionMode: "acceptEdits",
+  },
 };
 
 function frontmatterFor(role) {
