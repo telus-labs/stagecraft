@@ -65,6 +65,34 @@ const STAGES = {
       scope_changed: false,
     },
   },
+  // G2 — closed-loop AC → exec spec → tests. Authored by PM after
+  // clarification but before build. The artifact (pipeline/spec.feature)
+  // is the canonical bridge between brief.md acceptance criteria and
+  // QA's tests: every AC-N in brief.md maps to one Scenario tagged
+  // @AC-N in the .feature file, and QA's stage-06 mapping must in
+  // turn map each Scenario to a test. Drift between the three is
+  // detected by `devteam spec verify` and surfaced via the gate's
+  // `drift` field. The stage shares the `pm` role rather than
+  // introducing a new one — the same brain that authored ACs is the
+  // right brain to translate them into scenarios.
+  "executable-spec": {
+    stage: "stage-03b",
+    roles: ["pm"],
+    objective: "Translate the brief's numbered acceptance criteria into Gherkin scenarios (one Scenario per AC-N, tagged @AC-N). Verify zero drift between brief.md, spec.feature, and any test references. The .feature file becomes the canonical contract that QA's tests must map to.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/clarification-log.md"],
+    allowedWrites: ["pipeline/spec.feature", "pipeline/gates/stage-03b.json", "pipeline/context.md"],
+    artifact: "pipeline/spec.feature",
+    template: "spec-template.feature",
+    gate: {
+      criteria_count: 0,
+      scenarios_count: 0,
+      criteria_to_scenario_mapping: [],
+      all_criteria_mapped: false,
+      orphan_scenarios: [],
+      orphan_criteria: [],
+      drift: false,
+    },
+  },
   build: {
     stage: "stage-04",
     roles: ["backend", "frontend", "platform", "qa"],
@@ -201,8 +229,8 @@ const STAGES = {
   qa: {
     stage: "stage-06",
     roles: ["qa"],
-    objective: "Verify every acceptance criterion with a one-to-one test mapping and report results.",
-    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md"],
+    objective: "Verify every acceptance criterion with a one-to-one test mapping and report results. When stage-03b has run, every Scenario in pipeline/spec.feature must also map to at least one test — the AC→Scenario→test chain is the G2 contract.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/spec.feature"],
     allowedWrites: ["src/tests/", "pipeline/test-report.md", "pipeline/gates/stage-06.json", "pipeline/context.md"],
     artifact: "pipeline/test-report.md",
     template: "test-report-template.md",
@@ -213,6 +241,9 @@ const STAGES = {
       tests_failed: 0,
       failing_tests: [],
       criterion_to_test_mapping_is_one_to_one: false,
+      scenarios_total: 0,
+      scenarios_covered: 0,
+      all_scenarios_have_tests: false,
     },
   },
   "accessibility-audit": {
@@ -301,6 +332,7 @@ const ORDERED_STAGE_NAMES = [
   "requirements",
   "design",
   "clarification",
+  "executable-spec",
   "build",
   "pre-review",
   "security-review",
@@ -327,9 +359,14 @@ const ORDERED_STAGE_NAMES = [
 // Migration-safety (stage-04d) is conditional on stage-04a's
 // migration_safety_required flag — fires when the diff touches the
 // data layer (schema files, migrations dir, DDL fragments).
+// Executable-spec (stage-03b, G2) runs on full + quick — the tracks
+// that also run `requirements` (and therefore have a numbered AC list
+// in brief.md to derive scenarios from). Skipped on hotfix (no
+// requirements stage, no brief), nano (no real feature being added),
+// and the non-feature tracks (config-only, dep-update).
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
-  quick:         ["requirements", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
+  quick:         ["requirements", "executable-spec", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
   nano:          ["build", "qa"],
   "config-only": ["build", "pre-review", "security-review", "migration-safety", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],

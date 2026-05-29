@@ -89,6 +89,25 @@ describe("tracks: TRACKS ↔ STAGES_BY_TRACK", () => {
     assert.ok(rt < ms && ms < pr, `expected red-team(${rt}) < migration-safety(${ms}) < peer-review(${pr})`);
   });
 
+  it("full + quick include executable-spec (G2 — AC→Scenario→test bridge)", () => {
+    assert.ok(orderedStageNamesForTrack("full").includes("executable-spec"));
+    assert.ok(orderedStageNamesForTrack("quick").includes("executable-spec"));
+  });
+
+  it("hotfix / nano / config-only / dep-update do NOT include executable-spec", () => {
+    for (const t of ["hotfix", "nano", "config-only", "dep-update"]) {
+      assert.ok(!orderedStageNamesForTrack(t).includes("executable-spec"), `${t} should NOT include executable-spec`);
+    }
+  });
+
+  it("executable-spec sits after clarification and before build (on tracks that include both)", () => {
+    const full = orderedStageNamesForTrack("full");
+    const cl = full.indexOf("clarification");
+    const es = full.indexOf("executable-spec");
+    const bu = full.indexOf("build");
+    assert.ok(cl < es && es < bu, `expected clarification(${cl}) < executable-spec(${es}) < build(${bu})`);
+  });
+
   it("orderedStageNamesForTrack(unknown) throws with a helpful message", () => {
     assert.throws(() => orderedStageNamesForTrack("bogus"), /Unknown track/);
   });

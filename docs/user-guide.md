@@ -217,6 +217,8 @@ devteam merge build
 
 - **Stage 3 — Clarification (PM).** Resolves any open questions from design before build starts. Skipped on `quick` and `nano` tracks.
 
+- **Stage 3b — Executable spec (PM, G2).** Runs on `full` + `quick` after clarification. PM translates each numbered `AC-N` in `pipeline/brief.md` into one Gherkin scenario in `pipeline/spec.feature`, tagged `@AC-N`. Use `devteam spec generate` to scaffold the file from the brief (one tagged Scenario per AC with TODO Given/When/Then placeholders) and `devteam spec verify` to drift-check brief.md ↔ spec.feature ↔ test-report.md. Gate carries `criteria_count`, `scenarios_count`, the full `criteria_to_scenario_mapping` array, `all_criteria_mapped`, and `drift`. PASS requires `drift: false` AND `all_criteria_mapped: true`. The .feature file becomes the canonical contract that QA's tests must map to in stage-06.
+
 - **Stage 4 — Build (4 workstreams).** Backend / Frontend / Platform / QA each write to their owned source dir and produce a PR summary. **Each workstream sees a narrower `allowedWrites`** — backend cannot write `src/frontend/`. Per-workstream gates at `pipeline/gates/stage-04.<role>.json`; `devteam merge build` aggregates.
 
 - **Stage 4a — Pre-review (Platform).** Lint, type-check, dep review, security heuristic. Gate carries `lint_passed`, `tests_passed`, `dependency_review_passed`, `security_review_required`. The last flag conditionally triggers Stage 4b.

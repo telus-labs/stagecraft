@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:stage-03b",
+  "title": "Stage 03b — Executable Spec",
+  "description": "G2 closed-loop contract: every numbered acceptance criterion (AC-N) in brief.md maps to one Gherkin Scenario in pipeline/spec.feature tagged @AC-N. The gate records the count + mapping. Drift between brief.md and spec.feature is structurally caught here; drift between spec.feature and tests is caught at stage-06. PASS requires all_criteria_mapped=true AND drift=false.",
+  "type": "object",
+  "allOf": [{ "$ref": "urn:stagecraft:schema:gate" }],
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings",
+    "criteria_count",
+    "scenarios_count",
+    "criteria_to_scenario_mapping",
+    "all_criteria_mapped",
+    "orphan_scenarios",
+    "orphan_criteria",
+    "drift"
+  ],
+  "properties": {
+    "criteria_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of numbered AC-N entries found in pipeline/brief.md. Zero means the brief is missing or unnumbered — surface as a blocker."
+    },
+    "scenarios_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of Scenario: / Scenario Outline: blocks parsed from pipeline/spec.feature."
+    },
+    "criteria_to_scenario_mapping": {
+      "type": "array",
+      "description": "Audit trail of which AC maps to which Scenario(s). Each entry: { criterion_id: 'AC-N', scenarios: [scenario_name, ...] }. An AC-N with an empty scenarios array indicates an orphan criterion (also reported in orphan_criteria for fast access).",
+      "items": {
+        "type": "object",
+        "required": ["criterion_id", "scenarios"],
+        "properties": {
+          "criterion_id": { "type": "string", "pattern": "^AC-\\d+$" },
+          "scenarios": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": true
+      }
+    },
+    "all_criteria_mapped": {
+      "type": "boolean",
+      "description": "True iff every AC-N in brief.md has at least one Scenario tagged @AC-N in spec.feature. Required for stage-03b PASS — false forces FAIL."
+    },
+    "orphan_scenarios": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Scenario names in spec.feature that don't reference an AC-N tag. Either tag them, remove them, or document why they're untagged. A non-empty list means drift."
+    },
+    "orphan_criteria": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "AC-N entries in brief.md that have no Scenario in spec.feature. A non-empty list means drift — either add a scenario or remove the AC."
+    },
+    "drift": {
+      "type": "boolean",
+      "description": "True iff `devteam spec verify` found any of: orphan_criteria, orphan_scenarios, duplicate AC numbers in brief, unknown AC refs in tests. PASS requires drift=false."
+    }
+  },
+  "additionalProperties": true
+}

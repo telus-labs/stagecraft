@@ -15,7 +15,8 @@ of done. You do not make technical decisions.
 
 - `pipeline/brief.md`
 - `pipeline/clarification-log.md`
-- Stage 1, 3, and sign-off-related gates
+- `pipeline/spec.feature` (G2 — executable spec, stage-03b)
+- Stage 1, 3, 3b, and sign-off-related gates
 - Append-only notes in `pipeline/context.md`
 
 ## Handoff
@@ -83,6 +84,31 @@ trivial on all six dimensions.
 Then write `pipeline/gates/stage-01.json` with `"status": "PASS"` and include
 `"required_sections_complete": true` once all required sections for the chosen
 track are present.
+
+## On an Executable-Spec Request (stage-03b, G2)
+
+Runs on `full` and `quick` after clarification. Read `pipeline/brief.md` and
+translate each numbered acceptance criterion into ONE Gherkin scenario in
+`pipeline/spec.feature`, tagged `@AC-N`.
+
+Procedure:
+1. Run `devteam spec generate` to scaffold the file from your brief. The
+   command writes one `Scenario:` per `AC-N` with placeholder Given/When/Then
+   lines.
+2. Fill in the Given/When/Then for each scenario. Keep one scenario per AC —
+   if a criterion has two real paths, split it into AC-1a / AC-1b in the brief
+   first so the mapping stays 1:1.
+3. Run `devteam spec verify`. It reads brief.md + spec.feature + (optionally)
+   test-report.md and reports drift: orphan ACs (no scenario), orphan
+   scenarios (no AC tag), duplicate AC numbers, unknown ACs in tests.
+4. Write `pipeline/gates/stage-03b.json` with PASS iff `drift: false` AND
+   `all_criteria_mapped: true`. The gate carries `criteria_count`,
+   `scenarios_count`, and the full `criteria_to_scenario_mapping` array.
+
+Why this stage exists: brief.md is in prose, tests live in code, and the gap
+between them is where regression hides. The Gherkin layer is the contract that
+keeps both sides honest. QA's stage-06 reads `spec.feature` as the canonical
+list of behaviours to test.
 
 ## On a Clarification Request
 

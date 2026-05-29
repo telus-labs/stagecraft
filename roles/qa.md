@@ -43,6 +43,12 @@ Before any test authoring or review work, read:
    plan at least one test that exercises it. Map one-to-one where possible —
    §3.1 → test "…ac1…", §3.2 → test "…ac2…". This mapping enables the
    sign-off auto-fold.
+2a. If `pipeline/spec.feature` exists (stage-03b ran), it is the canonical
+   list of behaviours to test. Every `Scenario:` in the file must have at
+   least one test mapped to it. The Scenario name + `@AC-N` tag are how the
+   test-report mapping table cross-references back to the brief. Run
+   `devteam spec verify` after writing test-report.md to catch drift between
+   brief / spec / report.
 3. Append an `## Assumptions` block to `pipeline/context.md` for non-obvious
    test choices (e.g. "assuming deterministic clock via clock-injection;
    otherwise flaky on CI"). Per coding-principles §1.

@@ -26,7 +26,7 @@ describe("next: walks through full track", () => {
 
   it("multi-role partial → continue-stage with completed/remaining", () => {
     const cwd = track(makeTargetProject());
-    for (const s of ["stage-01", "stage-02", "stage-03"]) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b"]) {
       seedGate(cwd, s, { status: "PASS" });
     }
     seedGate(cwd, "stage-04.backend", { workstream: "backend", host: "claude-code", status: "PASS" });
@@ -39,7 +39,7 @@ describe("next: walks through full track", () => {
 
   it("multi-role complete but not merged → merge action", () => {
     const cwd = track(makeTargetProject());
-    for (const s of ["stage-01", "stage-02", "stage-03"]) seedGate(cwd, s, { status: "PASS" });
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b"]) seedGate(cwd, s, { status: "PASS" });
     for (const role of ["backend", "frontend", "platform", "qa"]) {
       seedGate(cwd, `stage-04.${role}`, { workstream: role, host: "claude-code", status: "PASS" });
     }
@@ -89,7 +89,7 @@ describe("next: walks through full track", () => {
 describe("next: conditional dispatch", () => {
   it("stage-04b skipped when stage-04a.security_review_required is false", () => {
     const cwd = track(makeTargetProject());
-    for (const s of ["stage-01","stage-02","stage-03","stage-04"]) seedGate(cwd, s, { status: "PASS" });
+    for (const s of ["stage-01","stage-02","stage-03","stage-03b","stage-04"]) seedGate(cwd, s, { status: "PASS" });
     seedGate(cwd, "stage-04a", { status: "PASS", security_review_required: false });
     const r = next({ cwd });
     // Skip security-review (conditional) and land on red-team (always-on
@@ -100,7 +100,7 @@ describe("next: conditional dispatch", () => {
 
   it("stage-04b runs when stage-04a.security_review_required is true", () => {
     const cwd = track(makeTargetProject());
-    for (const s of ["stage-01","stage-02","stage-03","stage-04"]) seedGate(cwd, s, { status: "PASS" });
+    for (const s of ["stage-01","stage-02","stage-03","stage-03b","stage-04"]) seedGate(cwd, s, { status: "PASS" });
     seedGate(cwd, "stage-04a", { status: "PASS", security_review_required: true });
     const r = next({ cwd });
     assert.equal(r.action, "run-stage");

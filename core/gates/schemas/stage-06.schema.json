@@ -13,6 +13,20 @@
     "criterion_to_test_mapping_is_one_to_one"
   ],
   "properties": {
+    "scenarios_total": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "G2: Number of Scenario blocks in pipeline/spec.feature (zero when stage-03b did not run, e.g. on hotfix/nano tracks). Set by QA from the stage-03b gate or by re-parsing the .feature file."
+    },
+    "scenarios_covered": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "G2: Number of Scenarios that have at least one test mapped to them in test-report.md's mapping table."
+    },
+    "all_scenarios_have_tests": {
+      "type": "boolean",
+      "description": "G2: True iff every Scenario in spec.feature has a corresponding test. When stage-03b ran AND this is false, mark stage-06 FAIL. When stage-03b did not run (no spec.feature), set this true (vacuously)."
+    },
     "all_acceptance_criteria_met": {
       "type": "boolean",
       "description": "Every brief acceptance criterion has at least one passing test. Required for the Stage 7 auto-fold."
