@@ -54,7 +54,9 @@ function makeRecord({ source, kind, title, heading, text, embedding, embedderInf
 class JSONMemoryStore {
   constructor(opts = {}) {
     this.cwd = opts.cwd || process.cwd();
-    this.dir = path.join(this.cwd, ".devteam", "memory");
+    // `dir` overrides the default per-project path. Used by the org-shared
+    // store (rooted at ~/.stagecraft/memory/) to share the same backend.
+    this.dir = opts.dir || path.join(this.cwd, ".devteam", "memory");
   }
   _ensureDir() { fs.mkdirSync(this.dir, { recursive: true }); }
   _shardFile(kind) { return path.join(this.dir, `chunks-${kind}.json`); }
@@ -159,17 +161,23 @@ class JSONMemoryStore {
       }
     }
     candidates.sort((a, b) => b.similarity - a.similarity);
-    return candidates.slice(0, limit).map((c) => ({
-      similarity: Number(c.similarity.toFixed(4)),
-      id: c.rec.id,
-      doc_id: c.rec.doc_id,
-      kind: c.rec.kind,
-      source: c.rec.source,
-      title: c.rec.title,
-      heading: c.rec.heading,
-      text: c.rec.text,
-      timestamp: c.rec.timestamp,
-    }));
+    return candidates.slice(0, limit).map((c) => {
+      const out = {
+        similarity: Number(c.similarity.toFixed(4)),
+        id: c.rec.id,
+        doc_id: c.rec.doc_id,
+        kind: c.rec.kind,
+        source: c.rec.source,
+        title: c.rec.title,
+        heading: c.rec.heading,
+        text: c.rec.text,
+        timestamp: c.rec.timestamp,
+      };
+      // Optional fields that pass through when present (set by the
+      // promote() flow for org-store records).
+      if (c.rec.project_cwd) out.project_cwd = c.rec.project_cwd;
+      return out;
+    });
   }
 }
 

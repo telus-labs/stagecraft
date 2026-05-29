@@ -32,7 +32,13 @@ const STAGES = {
   design: {
     stage: "stage-02",
     roles: ["principal"],
-    objective: "Convert approved requirements into an implementable architecture and explicit decisions.",
+    // G8 — architectural continuity. Principal queries org-shared
+    // memory for prior ADRs before designing. The role brief
+    // (roles/principal.md) walks the procedure; the gate records
+    // which ADRs were consulted (adrs_consulted) and which were
+    // explicitly superseded (adrs_superseded) so future audits can
+    // verify the architecture didn't silently drift.
+    objective: "Convert approved requirements into an implementable architecture and explicit decisions. Consult org-shared ADRs from prior projects before drafting; honor or explicitly supersede prior commitments.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md"],
     allowedWrites: ["pipeline/design-spec.md", "pipeline/adr/", "pipeline/gates/stage-02.json", "pipeline/context.md"],
     artifact: "pipeline/design-spec.md",
@@ -41,6 +47,8 @@ const STAGES = {
       arch_approved: false,
       pm_approved: false,
       adr_count: 0,
+      adrs_consulted: [],
+      adrs_superseded: [],
     },
   },
   clarification: {

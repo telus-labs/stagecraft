@@ -20,10 +20,23 @@
 // "stagecraft-no-memory" anywhere in its body is skipped.
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { chunkByHeading, extractTitle } = require("./chunker");
 const { getEmbedder } = require("./embed");
 const { JSONMemoryStore, makeRecord } = require("./store");
+
+// Org-shared memory: a second store rooted in the user's home dir,
+// shared across all projects on this machine. Per BACKLOG D3 + G8 —
+// "the architect always remembers" via cross-project ADR + lessons
+// access. The path is overridable via STAGECRAFT_ORG_MEMORY_DIR for
+// testing and for users who want to point at a shared network mount.
+const ORG_MEMORY_DIR = process.env.STAGECRAFT_ORG_MEMORY_DIR
+  || path.join(os.homedir(), ".stagecraft", "memory");
+
+function newOrgStore() {
+  return new JSONMemoryStore({ dir: ORG_MEMORY_DIR });
+}
 
 // Map artifact path (relative to project cwd) → memory "kind".
 const ARTIFACT_KINDS = {
@@ -166,4 +179,117 @@ async function reindex(opts = {}) {
   return ingest(opts);
 }
 
-module.exports = { ingest, query, stats, clear, reindex, discoverArtifacts, ARTIFACT_KINDS };
+// ---------------------------------------------------------------------------
+// Org-shared memory (D3 + G8)
+// ---------------------------------------------------------------------------
+//
+// The org store is a second JSONMemoryStore rooted at ORG_MEMORY_DIR
+// (~/.stagecraft/memory/ by default). It uses the same schema and the
+// same embedder as the per-project store, so promotions are 1:1 copies
+// of records into the shared pool.
+//
+// Promotion is explicit: nothing flows to org memory automatically.
+// `devteam memory promote <kind>` (e.g. `promote adr`, `promote
+// lessons-learned`) copies a project's records of that kind into the
+// org store. This makes the trust boundary explicit — only artifacts a
+// team intentionally shares end up cross-project.
+
+/**
+ * Promote records from a per-project store to the org store.
+ * Default `kinds = ["adr", "lessons-learned"]` — the two artifact
+ * kinds whose value compounds across projects (architectural decisions
+ * + reinforced lessons).
+ *
+ * Returns { promoted: { <kind>: count, ... }, skipped: [...] }.
+ */
+function promote(opts = {}) {
+  const cwd = opts.cwd || process.cwd();
+  const kinds = opts.kinds || ["adr", "lessons-learned"];
+  const project = new JSONMemoryStore({ cwd });
+  const org = newOrgStore();
+
+  const promoted = {};
+  const skipped = [];
+
+  // Copy meta only if the org store doesn't have one yet — the org
+  // store inherits the first promoter's embedder model.
+  const projectMeta = project.loadMeta();
+  if (projectMeta && !org.loadMeta()) {
+    org.saveMeta(projectMeta);
+  }
+
+  // Detect embedder mismatch before promoting; refuse if the project's
+  // vectors are from a different model than the org store. Avoids
+  // mixing incompatible vector dimensions in one shard.
+  const orgMeta = org.loadMeta();
+  if (orgMeta && projectMeta && projectMeta.embedder.modelId !== orgMeta.embedder.modelId) {
+    return {
+      promoted: {},
+      skipped: [],
+      error: `embedder mismatch: project uses ${projectMeta.embedder.modelId}, org pool uses ${orgMeta.embedder.modelId}. Run \`devteam memory reindex\` in this project (or in the org pool) first.`,
+    };
+  }
+
+  for (const kind of kinds) {
+    const projectShard = project._loadShard(kind);
+    if (projectShard.length === 0) {
+      skipped.push(kind);
+      continue;
+    }
+    // Group by doc_id so upsertDoc replaces atomically.
+    const byDoc = new Map();
+    for (const rec of projectShard) {
+      if (!byDoc.has(rec.doc_id)) byDoc.set(rec.doc_id, []);
+      byDoc.get(rec.doc_id).push({
+        ...rec,
+        // Tag the record with the source project so org-queries can
+        // attribute results back to the originating project.
+        project_cwd: cwd,
+      });
+    }
+    let count = 0;
+    for (const [/* docId */, records] of byDoc) {
+      // The first record's `source` field is the path (e.g.
+      // "pipeline/adr/0001-foo.md"). Re-project it to the
+      // project-qualified form for org storage so multiple projects'
+      // ADRs don't collide on path.
+      const source = `${cwd}#${records[0].source}`;
+      org.upsertDoc(source, kind, records.map((r) => ({ ...r, source })));
+      count += records.length;
+    }
+    promoted[kind] = count;
+  }
+
+  return { promoted, skipped, dir: ORG_MEMORY_DIR };
+}
+
+/** Query the org-shared store. Same interface as query(). */
+async function queryOrg(text, opts = {}) {
+  const store = newOrgStore();
+  const embedder = await getEmbedder();
+  const meta = store.loadMeta();
+  if (meta && meta.embedder && meta.embedder.modelId !== embedder.modelId) {
+    process.stderr.write(
+      `[memory] note: org store was indexed with ${meta.embedder.modelId} but the current embedder is ${embedder.modelId}. ` +
+      `Results will be poor until both stores use the same embedder.\n`,
+    );
+  }
+  const q = await embedder.embed(text);
+  return store.query(q, { limit: opts.limit, kind: opts.kind });
+}
+
+/** Stats on the org store. */
+function statsOrg() {
+  return newOrgStore().stats();
+}
+
+/** Wipe the org store (rare; mostly for tests). */
+function clearOrg() {
+  newOrgStore().clear();
+}
+
+module.exports = {
+  ingest, query, stats, clear, reindex, discoverArtifacts, ARTIFACT_KINDS,
+  // D3 — cross-project memory
+  promote, queryOrg, statsOrg, clearOrg, newOrgStore, ORG_MEMORY_DIR,
+};

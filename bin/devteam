@@ -64,12 +64,24 @@ Commands:
     ingest                         Index pipeline/* artifacts (brief,
                                    design-spec, ADRs, retro, etc.) via
                                    semantic embeddings into .devteam/memory/.
-    query "text" [--limit N]       Semantic search.
-    stats                          What's indexed.
-    clear                          Wipe .devteam/memory/.
+    query "text" [--limit N]       Semantic search. Add --org to query
+       [--kind <k>] [--org]        the org-shared store at
+                                   ~/.stagecraft/memory/.
+    stats [--org]                  What's indexed (project or org).
+    clear [--org]                  Wipe per-project (or org) store.
     reindex                        Re-embed everything (after embedder change).
                                    Local embedder by default; ~150MB model
                                    downloaded once on first ingest.
+    promote [<kinds...>]           D3 — copy this project's records to
+                                   the org-shared store. Default kinds:
+                                   adr + lessons-learned. Architectural
+                                   continuity (G8) reads from there.
+  architecture lookup "<topic>"    G8 — query the org-shared store for
+       [--limit N] [--kind adr|    prior ADRs (or lessons) on a topic.
+        lessons-learned]            Principal consults this before designing
+                                   so prior commitments are honored or
+                                   explicitly superseded — architecture
+                                   doesn't drift because the architect remembers.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -108,6 +120,7 @@ function parseFlags(argv) {
     if (a === "--open")    { flags.open    = true;      continue; }
     if (a === "--limit")   { flags.limit   = argv[++i]; continue; }
     if (a === "--kind")    { flags.kind    = argv[++i]; continue; }
+    if (a === "--org")     { flags.org     = true;      continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -288,14 +301,20 @@ function cmdMemory(argv) {
   }
   if (sub === "query") {
     const text = positional.join(" ");
-    if (!text) { console.error("Usage: devteam memory query \"search text\" [--limit N] [--kind brief|adr|...]"); process.exit(2); }
-    mem.query(text, { cwd, limit: flags.limit ? Number(flags.limit) : undefined, kind: flags.kind })
+    if (!text) { console.error("Usage: devteam memory query \"search text\" [--limit N] [--kind brief|adr|...] [--org]"); process.exit(2); }
+    const queryFn = flags.org ? mem.queryOrg : mem.query;
+    const queryArgs = flags.org
+      ? [text, { limit: flags.limit ? Number(flags.limit) : undefined, kind: flags.kind }]
+      : [text, { cwd, limit: flags.limit ? Number(flags.limit) : undefined, kind: flags.kind }];
+    queryFn(...queryArgs)
       .then((results) => {
         if (flags.json) { console.log(JSON.stringify(results, null, 2)); return; }
         if (results.length === 0) { console.log("(no matches)"); return; }
+        if (flags.org) process.stderr.write(`[memory] querying org-shared store at ${mem.ORG_MEMORY_DIR}\n`);
         for (const r of results) {
           console.log(`\n  ${r.similarity.toFixed(3)}  [${r.kind}] ${r.title} → ${r.heading}`);
           console.log(`           ${r.source}`);
+          if (r.project_cwd) console.log(`           (project: ${r.project_cwd})`);
           const snippet = r.text.split("\n").slice(0, 3).join(" ").slice(0, 180);
           console.log(`           ${snippet}${snippet.length >= 180 ? "…" : ""}`);
         }
@@ -304,8 +323,9 @@ function cmdMemory(argv) {
     return;
   }
   if (sub === "stats") {
-    const s = mem.stats({ cwd });
+    const s = flags.org ? mem.statsOrg() : mem.stats({ cwd });
     if (flags.json) { console.log(JSON.stringify(s, null, 2)); return; }
+    if (flags.org) console.log(`Org store at: ${mem.ORG_MEMORY_DIR}`);
     console.log(`Documents: ${s.documents}`);
     console.log(`Chunks:    ${s.chunks}`);
     if (s.embedder) console.log(`Embedder:  ${s.embedder.modelId} (dim ${s.embedder.dim})`);
@@ -319,8 +339,13 @@ function cmdMemory(argv) {
     return;
   }
   if (sub === "clear") {
-    mem.clear({ cwd });
-    console.log(`Cleared .devteam/memory/ in ${cwd}`);
+    if (flags.org) {
+      mem.clearOrg();
+      console.log(`Cleared org store at ${mem.ORG_MEMORY_DIR}`);
+    } else {
+      mem.clear({ cwd });
+      console.log(`Cleared .devteam/memory/ in ${cwd}`);
+    }
     return;
   }
   if (sub === "reindex") {
@@ -329,8 +354,81 @@ function cmdMemory(argv) {
       .catch((err) => { console.error(`devteam memory reindex: ${err.message}`); process.exit(1); });
     return;
   }
+  if (sub === "promote") {
+    // Default: promote ADRs and lessons-learned. Override with positional
+    // kinds, e.g. `devteam memory promote adr` or `promote adr design-spec`.
+    const kinds = positional.length > 0 ? positional : ["adr", "lessons-learned"];
+    const r = mem.promote({ cwd, kinds });
+    if (r.error) {
+      console.error(`devteam memory promote: ${r.error}`);
+      process.exit(1);
+    }
+    const total = Object.values(r.promoted).reduce((s, n) => s + n, 0);
+    if (total === 0) {
+      console.log(`No chunks promoted. Run \`devteam memory ingest\` first, then retry.`);
+      if (r.skipped.length > 0) console.log(`  (no records for kinds: ${r.skipped.join(", ")})`);
+      return;
+    }
+    console.log(`✅ Promoted ${total} chunk(s) to ${r.dir}:`);
+    for (const [kind, count] of Object.entries(r.promoted)) {
+      console.log(`   ${kind}: ${count}`);
+    }
+    if (r.skipped.length > 0) console.log(`   skipped (no records): ${r.skipped.join(", ")}`);
+    return;
+  }
   console.error(`Unknown memory subcommand: ${sub || "(none)"}`);
-  console.error("Usage: devteam memory <ingest|query|stats|clear|reindex>");
+  console.error("Usage: devteam memory <ingest|query|stats|clear|reindex|promote>");
+  console.error("       --org on query/stats/clear targets the org-shared store");
+  process.exit(2);
+}
+
+// G8 — architecture continuity. Thin wrapper around the org-memory
+// ADR query. Same shape as `devteam memory query --org --kind adr`
+// but with a friendlier name + a "lookup" subcommand the Principal
+// role brief points at.
+function cmdArchitecture(argv) {
+  const sub = argv[0];
+  const rest = argv.slice(1);
+  const { flags, positional } = parseFlags(rest);
+  const mem = require(path.join(__dirname, "..", "core", "memory"));
+
+  if (sub === "lookup") {
+    const text = positional.join(" ");
+    if (!text) {
+      console.error("Usage: devteam architecture lookup \"<topic>\" [--limit N] [--kind adr|lessons-learned]");
+      process.exit(2);
+    }
+    const kind = flags.kind || "adr"; // architecture-flavored default
+    mem.queryOrg(text, { limit: flags.limit ? Number(flags.limit) : 5, kind })
+      .then((results) => {
+        if (flags.json) { console.log(JSON.stringify(results, null, 2)); return; }
+        if (results.length === 0) {
+          console.log(`(no prior ${kind} entries match "${text}" in the org store at ${mem.ORG_MEMORY_DIR})`);
+          console.log(`Record this in the new design's "Prior commitments considered" section as "none — query returned no related results".`);
+          return;
+        }
+        process.stderr.write(`[architecture] org store at ${mem.ORG_MEMORY_DIR}\n`);
+        console.log(`Prior ${kind} entries relevant to "${text}":\n`);
+        for (const r of results) {
+          console.log(`  ${r.similarity.toFixed(3)}  ${r.title} → ${r.heading}`);
+          console.log(`           ${r.source}`);
+          if (r.project_cwd) console.log(`           (project: ${r.project_cwd})`);
+          const snippet = r.text.split("\n").slice(0, 4).join(" ").slice(0, 220);
+          console.log(`           ${snippet}${snippet.length >= 220 ? "…" : ""}`);
+          console.log("");
+        }
+        console.log(`Cite the relevant ones in the new design's "Prior commitments considered" section. If a prior ADR conflicts with the new design, either follow it OR write a new ADR with Supersedes: <id> and a rationale.`);
+      })
+      .catch((err) => { console.error(`devteam architecture lookup: ${err.message}`); process.exit(1); });
+    return;
+  }
+
+  console.error(`Unknown architecture subcommand: ${sub || "(none)"}`);
+  console.error("Usage: devteam architecture lookup \"<topic>\" [--limit N] [--kind adr|lessons-learned]");
+  console.error("");
+  console.error("Equivalent to `devteam memory query --org --kind adr \"<topic>\"` — the Principal");
+  console.error("role brief uses this name when prompting designers to consult prior commitments");
+  console.error("(BACKLOG G8 architectural continuity).");
   process.exit(2);
 }
 
@@ -556,6 +654,7 @@ function main() {
     case "doctor":   return cmdDoctor(rest);
     case "ui":       return cmdUI(rest);
     case "memory":   return cmdMemory(rest);
+    case "architecture": return cmdArchitecture(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":

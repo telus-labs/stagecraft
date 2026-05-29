@@ -22,6 +22,24 @@
       "type": "integer",
       "minimum": 0,
       "description": "Number of ADR files written under pipeline/adr/ during this design pass."
+    },
+    "adrs_consulted": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional (G8 architectural continuity). Prior ADR identifiers Principal consulted via `devteam memory query --org --kind adr` before drafting. Empty array means greenfield-by-record. Use the form '<project-cwd>#pipeline/adr/NNNN-slug.md' to match how the org store keys records."
+    },
+    "adrs_superseded": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["adr", "rationale"],
+        "properties": {
+          "adr":       { "type": "string", "description": "The prior ADR id being superseded." },
+          "rationale": { "type": "string", "description": "Why the prior decision no longer holds — what changed, what was learned." }
+        },
+        "additionalProperties": true
+      },
+      "description": "Optional (G8). Prior ADRs this design explicitly retires. Silent disagreement with prior ADRs is forbidden; this array is the audit trail."
     }
   },
   "additionalProperties": true

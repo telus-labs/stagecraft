@@ -291,3 +291,115 @@ Cheapest SMS provider for our volume.`);
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// D3 — org-shared memory (cross-project lessons + ADRs)
+// ---------------------------------------------------------------------------
+
+describe("memory: org-shared store (D3)", () => {
+  // Each test gets its own org dir to avoid polluting the real ~/.stagecraft/.
+  let origOrgDir;
+  let testOrgDirs = [];
+  function withOrgDir() {
+    const d = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "stagecraft-org-"));
+    testOrgDirs.push(d);
+    process.env.STAGECRAFT_ORG_MEMORY_DIR = d;
+    // Reset the require cache so the module re-reads ORG_MEMORY_DIR.
+    delete require.cache[require.resolve(path.join(REPO_ROOT, "core", "memory"))];
+    return require(path.join(REPO_ROOT, "core", "memory"));
+  }
+  before(() => { origOrgDir = process.env.STAGECRAFT_ORG_MEMORY_DIR; });
+  afterEach(() => {
+    for (const d of testOrgDirs) { try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* */ } }
+    testOrgDirs = [];
+    if (origOrgDir === undefined) delete process.env.STAGECRAFT_ORG_MEMORY_DIR;
+    else process.env.STAGECRAFT_ORG_MEMORY_DIR = origOrgDir;
+    delete require.cache[require.resolve(path.join(REPO_ROOT, "core", "memory"))];
+  });
+
+  it("promote(): default kinds copy adr + lessons-learned from a project to the org store", async () => {
+    const mem = withOrgDir();
+    const cwd = track(makeTargetProject({ gates: false }));
+    writeArtifact(cwd, "pipeline/adr/001-pick-twilio.md",
+      "# ADR 001 — Pick Twilio\n\n## Context\n\nWe evaluated SMS providers including Twilio, MessageBird, and AWS SNS. Each has tradeoffs across price, deliverability, and developer experience.\n\n## Decision\n\nUse Twilio for v1 because it has the cleanest API and the best deliverability in our target geos. Revisit when volume justifies a custom carrier integration.\n");
+    writeArtifact(cwd, "pipeline/lessons-learned.md",
+      "# Lessons learned\n\n## L001 — Brief §9 wording\n\n**Reinforced:** 2 (last: 2026-05-01)\n**Rule:** when the brief uses 'notify', clarify channel (email / SMS / push / inline) before Stage 2 design.\n**Why:** ambiguous 'notify' wording caused two clarification rounds at Stage 3 last sprint.\n**How to apply:** PM raises a CLARIFY: line in pipeline/context.md if 'notify' appears without a channel qualifier.\n");
+    await mem.ingest({ cwd });
+
+    const r = mem.promote({ cwd });
+    assert.ok(r.promoted.adr > 0, `expected ADR chunks promoted, got ${JSON.stringify(r)}`);
+    assert.ok(r.promoted["lessons-learned"] > 0, `expected lessons-learned chunks promoted, got ${JSON.stringify(r)}`);
+    assert.equal(r.error, undefined);
+
+    // Org-store stats reflect the promoted content.
+    const s = mem.statsOrg();
+    assert.ok(s.documents > 0);
+    assert.ok(s.by_kind.adr.documents >= 1);
+    assert.ok(s.by_kind["lessons-learned"].documents >= 1);
+  });
+
+  it("promote() with explicit kinds copies only those", async () => {
+    const mem = withOrgDir();
+    const cwd = track(makeTargetProject({ gates: false }));
+    writeArtifact(cwd, "pipeline/adr/001-x.md",
+      "# ADR 001 — Async retry policy\n\n## Decision\n\nUse exponential backoff with jitter for all retry loops; cap at 5 attempts; record retries in OTel spans for visibility.\n");
+    writeArtifact(cwd, "pipeline/lessons-learned.md",
+      "# Lessons\n\n## L001 — Schema migrations\n\n**Reinforced:** 0\n**Rule:** dual-write before backfill on any column rename.\n**Why:** rollbacks during deploy are impossible if writes are already going to the new column only.\n");
+    await mem.ingest({ cwd });
+    const r = mem.promote({ cwd, kinds: ["adr"] });
+    assert.ok(r.promoted.adr > 0);
+    assert.equal(r.promoted["lessons-learned"], undefined);
+  });
+
+  it("queryOrg() returns records from the org store with project_cwd tagging", async () => {
+    const mem = withOrgDir();
+    const cwd = track(makeTargetProject({ gates: false }));
+    writeArtifact(cwd, "pipeline/adr/001-pagination.md",
+      "# ADR 001 — Pagination style\n\n## Context\n\nWe need to pick offset vs cursor pagination for all new list endpoints across the product. Offset is simpler but breaks under deep pagination at scale.\n\n## Decision\n\nCursor-based across all new APIs. Cursors are opaque base64-encoded structs; clients treat them as tokens.\n");
+    await mem.ingest({ cwd });
+    mem.promote({ cwd });
+
+    const results = await mem.queryOrg("pagination decision", { limit: 5 });
+    assert.ok(results.length > 0, "expected org query to return results");
+    assert.ok(results[0].project_cwd, "org records must carry project_cwd attribution");
+    assert.equal(results[0].project_cwd, cwd);
+  });
+
+  it("promote() is idempotent — re-promoting the same project does not duplicate", async () => {
+    const mem = withOrgDir();
+    const cwd = track(makeTargetProject({ gates: false }));
+    writeArtifact(cwd, "pipeline/adr/001-x.md",
+      "# ADR 001 — Test ADR\n\n## Decision\n\nUse the convention X consistently across the codebase to avoid drift between teams.\n");
+    await mem.ingest({ cwd });
+    mem.promote({ cwd });
+    const after1 = mem.statsOrg().chunks;
+    mem.promote({ cwd });
+    const after2 = mem.statsOrg().chunks;
+    assert.equal(after1, after2, "idempotent promote should not duplicate chunks");
+  });
+
+  it("statsOrg / clearOrg manage the org store independently of per-project", async () => {
+    const mem = withOrgDir();
+    const cwd = track(makeTargetProject({ gates: false }));
+    writeArtifact(cwd, "pipeline/adr/001-x.md",
+      "# ADR 001\n\n## Decision\n\nThis is a placeholder ADR with enough body to make the chunker happy and keep tests deterministic across embedder backends.\n");
+    await mem.ingest({ cwd });
+    mem.promote({ cwd });
+    assert.ok(mem.statsOrg().chunks > 0);
+    mem.clearOrg();
+    assert.equal(mem.statsOrg().chunks, 0);
+    // Project store is untouched.
+    assert.ok(mem.stats({ cwd }).chunks > 0);
+  });
+
+  it("promote() reports nothing-to-do when no records of the requested kind exist", async () => {
+    const mem = withOrgDir();
+    const cwd = track(makeTargetProject({ gates: false }));
+    // No ADRs ingested.
+    writeArtifact(cwd, "pipeline/brief.md", SAMPLE_BRIEF);
+    await mem.ingest({ cwd });
+    const r = mem.promote({ cwd, kinds: ["adr"] });
+    assert.deepEqual(r.skipped, ["adr"]);
+    assert.deepEqual(r.promoted, {});
+  });
+});

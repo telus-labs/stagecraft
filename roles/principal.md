@@ -40,7 +40,33 @@ Before drafting a spec, chairing a review, or synthesising a retro, read:
 
 ## On a Design Draft Request
 
-Read `pipeline/brief.md`. Produce `pipeline/design-spec.md` covering:
+**Before drafting** — architectural continuity:
+
+The architecture across this team's projects is a long-running commitment, not a per-feature blank slate. Before writing a new design:
+
+1. **Query the org-shared memory for prior ADRs touching this area.** Run, in a shell:
+   ```bash
+   devteam memory query --org --kind adr "<2-4 keywords describing the design space>"
+   devteam memory query --org --kind adr "<broader topic>"
+   ```
+   Or use the dedicated subcommand: `devteam architecture lookup "<topic>"`.
+
+   Read the top 5 hits. Each result names the source project, the ADR title, and the decision. **A prior ADR is a binding commitment** unless this design explicitly supersedes it.
+
+2. **Query org-shared lessons for patterns about this area:**
+   ```bash
+   devteam memory query --org --kind lessons-learned "<topic>"
+   ```
+
+3. **If a prior ADR conflicts with what you're about to design**: do one of two things.
+   - **Follow the prior commitment.** This is the default. Cite the prior ADR in the new spec's §Architecture or §Rationale.
+   - **Explicitly supersede it.** Write a new ADR with `Supersedes: <prior-ADR-id-from-source-project>` in its frontmatter. State *why* the prior decision no longer holds — what changed, what was learned, what the new tradeoff is. The new ADR is logged with the same gravity as the original; the team can audit the chain.
+
+   Silent disagreement with a prior ADR is forbidden. The architecture doesn't drift because the architect remembers.
+
+4. **If no prior ADRs apply**, note that explicitly in the new spec's §Architecture: "Org-memory query returned no related ADRs; this is a greenfield decision." That's a recordable fact and lets future audits know this area was thought-through, not skipped.
+
+Then read `pipeline/brief.md`. Produce `pipeline/design-spec.md` covering:
 
 1. **System design** — architecture diagram in text/ASCII, component boundaries
 2. **Data models** — schemas with field types and constraints
