@@ -93,6 +93,13 @@ Commands:
                                    <timestamp>.json. --dry-run prints the
                                    plan + drift check without invoking the
                                    host.
+  ci install [--ci <type>]         F4 — drop a CI workflow template into
+       [--out <dir>] [--force]      the target project. Currently supports
+                                   --ci github-actions (the default). The
+                                   workflow validates pipeline/gates/ + posts
+                                   each gate as a GitHub check run on PRs.
+                                   It does NOT run the pipeline itself in CI.
+  ci show [--ci <type>]            Print the workflow template to stdout.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -133,6 +140,8 @@ function parseFlags(argv) {
     if (a === "--kind")    { flags.kind    = argv[++i]; continue; }
     if (a === "--org")     { flags.org     = true;      continue; }
     if (a === "--dry-run") { flags.dryRun  = true;      continue; }
+    if (a === "--ci")      { flags.ci      = argv[++i]; continue; }
+    if (a === "--out")     { flags.out     = argv[++i]; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -785,6 +794,73 @@ function cmdReplay(argv) {
     });
 }
 
+// F4 — CI runner integration. Currently only `install` for GitHub
+// Actions. Drops the workflow template into the target project's
+// .github/workflows/.
+//
+// The workflow itself does NOT run the pipeline in CI — running an LLM
+// pipeline on every PR is costly and the pipeline is meant to be human-
+// driven anyway. Instead the workflow VALIDATES + PUBLISHES whatever
+// gate JSON the PR already contains, so reviewers see "10/12 stages
+// passing" in the PR's status bar. See the template's comment block
+// for the rationale.
+function cmdCi(argv) {
+  const sub = argv[0];
+  const rest = argv.slice(1);
+  const { flags } = parseFlags(rest);
+
+  if (sub === "install") {
+    const ci = flags.ci || "github-actions";
+    if (ci !== "github-actions") {
+      console.error(`Unknown CI system "${ci}". Supported: github-actions.`);
+      process.exit(2);
+    }
+    const cwd = flags.cwd || process.cwd();
+    const sourceFile = path.join(__dirname, "..", "templates", "ci", "github-actions", "stagecraft-pr-checks.yml");
+    const targetDir = flags.out || path.join(cwd, ".github", "workflows");
+    const targetFile = path.join(targetDir, "stagecraft-pr-checks.yml");
+
+    if (!fs.existsSync(sourceFile)) {
+      console.error(`Stagecraft workflow template not found at ${sourceFile}`);
+      process.exit(1);
+    }
+    fs.mkdirSync(targetDir, { recursive: true });
+    if (fs.existsSync(targetFile) && !flags.force) {
+      console.error(`Workflow already exists at ${path.relative(cwd, targetFile)}. Use --force to overwrite.`);
+      process.exit(1);
+    }
+    fs.copyFileSync(sourceFile, targetFile);
+    console.log(`✅ Installed ${path.relative(cwd, targetFile)}`);
+    console.log("");
+    console.log("Next steps:");
+    console.log("  1. Edit the STAGECRAFT_REPO + STAGECRAFT_REF env vars at the top of the");
+    console.log("     workflow file to point at your fork / pinned version.");
+    console.log("  2. Commit + push the workflow file.");
+    console.log("  3. Open a PR that touches pipeline/gates/ to see the workflow run.");
+    console.log("");
+    console.log("What the workflow does (see file header for full detail):");
+    console.log("  - Validates pipeline/gates/*.json with Stagecraft's validator");
+    console.log("  - Posts each gate as a GitHub check run on the PR head");
+    console.log("  - Runs `devteam reproduce` on each gate as an advisory drift check");
+    console.log("  - Skips cleanly when the PR doesn't touch pipeline/");
+    return;
+  }
+
+  if (sub === "show") {
+    const ci = flags.ci || "github-actions";
+    const sourceFile = path.join(__dirname, "..", "templates", "ci", "github-actions", "stagecraft-pr-checks.yml");
+    if (ci !== "github-actions") { console.error(`Unknown CI: ${ci}`); process.exit(2); }
+    console.log(fs.readFileSync(sourceFile, "utf8"));
+    return;
+  }
+
+  console.error(`Unknown ci subcommand: ${sub || "(none)"}`);
+  console.error("Usage:");
+  console.error("  devteam ci install [--ci github-actions] [--out <dir>] [--force]");
+  console.error("  devteam ci show    [--ci github-actions]");
+  process.exit(2);
+}
+
 function cmdUI(argv) {
   const { flags } = parseFlags(argv);
   const { startServer } = require(path.join(__dirname, "..", "core", "ui", "server"));
@@ -1010,6 +1086,7 @@ function main() {
     case "architecture": return cmdArchitecture(rest);
     case "reproduce": return cmdReproduce(rest);
     case "replay":   return cmdReplay(rest);
+    case "ci":       return cmdCi(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":

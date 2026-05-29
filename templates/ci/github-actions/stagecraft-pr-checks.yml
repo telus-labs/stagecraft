@@ -1,0 +1,121 @@
+# Stagecraft pipeline checks on every PR.
+#
+# Purpose: when a pull request includes pipeline/ gate JSON files, this
+# workflow validates them and surfaces each as a GitHub check run on the
+# PR head — so reviewers see "10/12 stages passing" in the PR's status
+# bar, with click-through to per-stage detail.
+#
+# What it does NOT do: it does NOT run the pipeline itself in CI. The
+# pipeline runs locally (where the AI tools live + the developer's
+# attention is). CI's job is to validate + publish what the local run
+# produced. This is the model claude-dev-team established and Stagecraft
+# keeps — see docs/BACKLOG.md F4.
+#
+# Customization:
+#   - STAGECRAFT_REPO    The git repo to fetch Stagecraft from.
+#   - STAGECRAFT_REF     The Stagecraft version to pin (tag or sha).
+#                        Pinning a version means the workflow doesn't
+#                        silently change when Stagecraft does.
+#
+# Drop this file at .github/workflows/stagecraft-pr-checks.yml in your
+# target project. Either `devteam ci install` lays it down, or copy it
+# manually.
+
+name: stagecraft pr-checks
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      # Only run when something in pipeline/ changed — no point validating
+      # gates that haven't moved. Trim or expand to taste.
+      - 'pipeline/**'
+      - '.devteam/**'
+
+permissions:
+  contents: read
+  checks: write         # needed to post check runs
+  pull-requests: write  # needed if you also want to update the PR body
+
+jobs:
+  validate-and-publish:
+    name: validate gates + post checks
+    runs-on: ubuntu-latest
+    env:
+      # CUSTOMIZE — point at your Stagecraft fork / release.
+      STAGECRAFT_REPO: anthropics/stagecraft
+      STAGECRAFT_REF:  v0.3.0
+    steps:
+      - name: Check out the target project
+        uses: actions/checkout@v5
+        with:
+          # Need the PR head commit, not the merge commit — gates are
+          # tied to specific commit SHAs.
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check out Stagecraft
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ env.STAGECRAFT_REPO }}
+          ref: ${{ env.STAGECRAFT_REF }}
+          path: .stagecraft
+
+      - name: Set up Node 22 (matches Stagecraft CI)
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: .stagecraft/package-lock.json
+
+      - name: Install Stagecraft dependencies
+        working-directory: .stagecraft
+        run: npm ci
+
+      - name: Skip cleanly when no gates are present
+        id: gates_present
+        run: |
+          if [ -d "pipeline/gates" ] && [ -n "$(ls -A pipeline/gates 2>/dev/null)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No pipeline/gates/ in this PR. Skipping gate validation."
+          fi
+
+      - name: Validate gates (Stagecraft's own validator)
+        if: steps.gates_present.outputs.present == 'true'
+        run: node .stagecraft/core/gates/validator.js
+        # Exit codes:
+        #   0 — PASS / WARN (job stays green)
+        #   1 — gate is malformed (job fails)
+        #   2 — FAIL gate (job fails — surface the broken stage)
+        #   3 — ESCALATE gate (job fails — needs human resolution)
+
+      - name: Post each gate as a check run on the PR head
+        if: steps.gates_present.outputs.present == 'true'
+        env:
+          # Stagecraft's pr-publish.js uses the `gh` CLI; the runner-
+          # default GITHUB_TOKEN with `checks: write` is enough.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node .stagecraft/scripts/pr-publish.js \
+            --mode checks \
+            --pr "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}"
+
+      - name: Reproducibility drift check (advisory)
+        if: steps.gates_present.outputs.present == 'true'
+        continue-on-error: true   # advisory, don't block merge on drift alone
+        run: |
+          # For each gate that recorded system_prompt_hash (C4), run
+          # devteam reproduce and surface drift as a warning. Doesn't
+          # invoke the host CLI; it's a static re-render comparison.
+          for gate in pipeline/gates/*.json; do
+            [ -e "$gate" ] || continue
+            stage_id=$(basename "$gate" .json)
+            # Skip the merged stage gates' replay-subdirs etc.
+            case "$stage_id" in
+              replay) continue ;;
+            esac
+            echo "--- $stage_id ---"
+            node .stagecraft/bin/devteam reproduce "$stage_id" || true
+          done
