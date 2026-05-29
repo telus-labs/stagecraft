@@ -8,6 +8,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+_No changes yet._
+
+---
+
+## [0.3.0] — 2026-05-29
+
+Twenty commits since `v0.2.0`. All four "differentiating bets" from `docs/BACKLOG.md` are now operational — this release marks the line between "structured AI dev pipeline" and "structured AI dev pipeline that learns, remembers, and includes an adversary."
+
+| Bet | What ships it (✓ across all four) |
+|---|---|
+| **Diversity beats monoculture** | G1 (peer-review fanout, v0.2.0) + **G4 (red team, this release)** + **D4/D5 (adaptive routing, this release)** |
+| **Evals are the rate-limit** | D1 (OTel, v0.2.0) + D2 (dashboards, v0.2.0) + **D6 (cost telemetry, this release)** |
+| **Memory + persistence** | D7 (per-project, v0.2.0) + **D3 (cross-project) + G8 (architecture continuity, this release)** |
+| **The unit is the team, not the model** | **G4 sharpens it (this release)** + the whole architecture |
+
+The arc of this release: measure what each model costs (D6) → score which model is best at which role (D4) → recommend config swaps (D5) → add an adversary that breaks what was just built (G4) → share architectural decisions across projects (D3) → make the architect remember (G8). No new breaks to gate JSON shape, host adapter contract, or `.devteam/config.yml` schema — additive throughout. Public surfaces unchanged from 0.2.0.
+
 ### Added
 
 - **D3 + G8 — Cross-project memory + architecture continuity.** Two BACKLOG items shipped together because G8 reads from the foundation D3 lays.
