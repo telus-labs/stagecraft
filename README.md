@@ -46,6 +46,18 @@ Reference / extension:
 - **[core/adapters/host-adapter.md](core/adapters/host-adapter.md)** — the host-adapter contract. ~150 lines; defines everything an adapter must implement.
 - **[docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)** — multi-workstream contract stress-test trace.
 
+Feature deep-dives:
+- **[docs/FEATURES.md](docs/FEATURES.md)** — every shipped feature, organized by area. Start here to see what Stagecraft does.
+- **[docs/cost.md](docs/cost.md)** — cost tracking, the pricing table, and the budget workflow.
+- **[docs/memory.md](docs/memory.md)** — persistent project memory: embedder options, `.gitignore` note, org-shared store.
+- **[docs/observability.md](docs/observability.md)** — OpenTelemetry span schema and collector setup.
+- **[docs/reproducibility.md](docs/reproducibility.md)** — audit trail: gate fingerprint fields, replay readiness, drift detection.
+- **[docs/ci.md](docs/ci.md)** — GitHub Actions workflow: template, environment variables, PR check runs.
+- **[docs/migration-safety.md](docs/migration-safety.md)** — veto criteria, gate fields, and what triggers the migration heuristic.
+- **[docs/red-team.md](docs/red-team.md)** — 10 attack surfaces, gate fields, routing, and how it differs from security review.
+- **[docs/spec-authoring.md](docs/spec-authoring.md)** — writing AC-N criteria, scaffolding the spec file, drift detection.
+- **[docs/verification-beyond-tests.md](docs/verification-beyond-tests.md)** — property-based, mutation, and formal verification: candidates, gate fields, skip policy.
+
 ## Why "Stagecraft"?
 
 The pipeline is a staged production. PM writes the brief. Principal directs the architecture. Specialist developers each build their part. Reviewers critique. QA tests. The curtain rises on deploy. Each stage has its cast, its script (the rules under `rules/`), and its gate that decides if the show moves on. Multi-host adversarial review is the panel of critics. The discipline of putting all of that together — staged work by specialized roles in a choreographed production — is **stagecraft**.

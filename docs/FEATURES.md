@@ -46,20 +46,22 @@ Stage sequence for the `full` track:
 | Stage | Role |
 |---|---|
 | requirements | PM |
-| clarification | PM |
 | design | Principal |
+| clarification | PM |
 | executable-spec | PM |
-| build | Backend / Frontend / Infra |
+| build | Backend / Frontend / Platform / QA |
+| pre-review | Platform |
+| security-review *(conditional)* | Security |
 | red-team | Red-team |
+| migration-safety *(conditional, has veto)* | Migrations |
 | peer-review | Reviewer |
-| QA | QA |
+| qa | QA |
 | accessibility-audit | QA |
 | observability-gate | Platform |
-| sign-off | PM |
-| migration-safety | Migrations |
+| verification-beyond-tests | Verifier |
+| sign-off | PM + Platform |
 | deploy | Platform |
-| post-deploy | Platform |
-| retrospective | PM |
+| retrospective | Principal |
 
 ### Tracks — right-size the pipeline to the change
 
@@ -103,6 +105,8 @@ Fires conditionally when the heuristic detects data-layer changes (migration fil
 - Walks six questions per migration: what it does, breaking or not, backfill required, dual-write required, rollback plan, rollback tested
 - **Has veto power**: an empty rollback plan, an untested rollback on a breaking change, or a missing backfill strategy each auto-veto and halt the pipeline — regardless of who approved the change
 
+See [`docs/migration-safety.md`](migration-safety.md) for the veto criteria, gate fields, and routing guidance.
+
 ---
 
 ## Safety and auditability
@@ -124,6 +128,8 @@ Gates optionally record the full reproducibility fingerprint for any stage: `mod
 - `devteam reproduce <stage-id>` reads a gate, classifies replay readiness (full / partial / incomplete), prints recorded fields, and re-renders the current prompt to surface hash drift
 - Designed to satisfy SOC 2 and EU AI Act audit requirements: the gate JSON is a complete record of how an AI decision was made
 
+See [`docs/reproducibility.md`](reproducibility.md) for the gate fields, replay readiness classification, and drift-detection details.
+
 ---
 
 ## Observability and learning
@@ -137,6 +143,8 @@ Gates record `tokens_in`, `tokens_out`, `cost_usd`, `model`, and `duration_ms` p
 - `npm run dashboard:cost` (or `scripts/dashboard.js --view cost`) rolls up by host, role, or stage
 - Pricing table covers Claude, GPT, and Gemini families with exact and prefix-match lookup
 - Workstream-level detail preserved in `workstreams[]` so host/role attribution is correct
+
+See [`docs/cost.md`](cost.md) for the pricing table, dashboard flags, and budget workflow.
 
 ### OpenTelemetry tracing — every workstream emits spans
 
@@ -170,6 +178,8 @@ Per-project semantic memory under `.devteam/memory/`. Uses a local embedder (`Xe
 
 - Indexes briefs, design specs, ADRs, retros, lessons, runbooks, and audit reports
 - `devteam memory ingest`, `query`, `stats`, `clear`, `reindex`
+
+See [`docs/memory.md`](memory.md) for embedder options, the `.gitignore` note, and the opt-out marker.
 
 ### Org-shared lessons-learned — knowledge that travels across projects
 
@@ -255,6 +265,8 @@ Auto-detects repo and PR from the current branch. `--dry-run` previews without A
 - Skips cleanly when the PR doesn't touch `pipeline/`
 - `devteam ci show` previews the template before installing
 
+See [`docs/ci.md`](ci.md) for the full workflow template and environment variable reference.
+
 ---
 
 ## Advanced AI capabilities
@@ -278,6 +290,8 @@ The PM writes numbered acceptance criteria (`AC-N`) in `pipeline/brief.md`. The 
 
 Catches orphan ACs, orphan scenarios, duplicate AC numbers, and unknown AC refs in tests. `devteam spec generate` scaffolds the `.feature` file from the brief.
 
+See [`docs/spec-authoring.md`](spec-authoring.md) for how to write AC-N criteria, scaffold the spec file, and interpret drift reports.
+
 ### Red-team stage — adversarial review before peer-review
 
 A dedicated `red-team` role runs between build and peer-review on `full` and `hotfix` tracks. It is explicitly routed to a different host than the build agents.
@@ -285,6 +299,8 @@ A dedicated `red-team` role runs between build and peer-review on `full` and `ho
 - Walks 10 attack surfaces: input boundaries, state, sequence, integrations, auth edges, resource exhaustion, failure modes mid-operation, abuse cases, downstream effects, observability gaps
 - Produces concrete reproducers, not observations; triage by severity × likelihood × scope
 - `must_address_before_peer_review[]` in the gate blocks stage-05 until cleared
+
+See [`docs/red-team.md`](red-team.md) for the 10 attack surfaces, gate fields, and how it differs from the conditional security review (stage 4b).
 
 ### Verification beyond tests — make "tests pass" a floor, not a ceiling
 
@@ -295,6 +311,8 @@ Full-track-only stage that runs after QA passes. The `verifier` role applies thr
 - **Formal verification** (TLA+ / Alloy / Lean) — optional, for functions where correctness is non-negotiable
 
 A surviving mutant on a critical path, a property counterexample, or a formal counterexample populates `blocking_findings[]` and fails the stage. Skipped methods require a stated reason — "didn't have time" is not accepted.
+
+See [`docs/verification-beyond-tests.md`](verification-beyond-tests.md) for candidate identification, gate fields, and skip-reason policy.
 
 ### Architecture continuity — the architect always remembers
 
