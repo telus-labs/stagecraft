@@ -108,6 +108,54 @@ function loadGate(fullPath) {
   }
 }
 
+/**
+ * Auto-inject orchestrator and host fields if the model omitted them.
+ *
+ * The stage prompt tells models "the orchestrator adds orchestrator and host at
+ * validation time." This is that injection point. We patch the gate on disk so
+ * the file is canonical after validation, not just in memory.
+ *
+ * Returns true if the file was rewritten.
+ */
+function autoInjectMetadata(gate, gateFilePath) {
+  let modified = false;
+
+  if (!("orchestrator" in gate)) {
+    try {
+      const pkgPath = path.join(__dirname, "..", "..", "package.json");
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      gate.orchestrator = `devteam@${pkg.version}`;
+      modified = true;
+    } catch {
+      // Injection failed — leave orchestrator absent so missingRequired catches it.
+    }
+  }
+
+  if (!("host" in gate)) {
+    // Resolve from the project config if available; fall back to the primary host.
+    let host = "claude-code";
+    try {
+      const cfgPath = path.join(process.cwd(), ".devteam", "config.yml");
+      const raw = fs.readFileSync(cfgPath, "utf8");
+      const m = raw.match(/^\s*host\s*:\s*(\S+)/m);
+      if (m) host = m[1];
+    } catch {
+      // Config absent or unreadable — use default.
+    }
+    gate.host = host;
+    modified = true;
+  }
+
+  if (modified) {
+    fs.writeFileSync(gateFilePath, JSON.stringify(gate, null, 2) + "\n", "utf8");
+    console.log(
+      `[gate-validator] ℹ️  auto-injected metadata into ${path.basename(gateFilePath)}`,
+    );
+  }
+
+  return modified;
+}
+
 /** Validate required fields. Returns an array of missing field names. */
 function missingRequired(gate) {
   return REQUIRED_FIELDS.filter((k) => !(k in gate));
@@ -257,6 +305,9 @@ function main() {
     );
     process.exit(1);
   }
+
+  // Inject orchestrator/host before checking required fields.
+  autoInjectMetadata(gate, latest.full);
 
   const missing = missingRequired(gate);
   if (missing.length > 0) {
