@@ -336,6 +336,52 @@ devteam stage retrospective --headless
 # 🎉 pipeline-complete
 ```
 
+Run `devteam summary` at any point to see the full pipeline state. After a completed run it looks like this:
+
+```
+Pipeline complete — soc2-collect v1.0.0-beta.1
+
+All 9 stages finished with PASS or WARN:
+
+┌───────────────────────┬────────┬────────────────────────────────────────────────────────────────────────────────┐
+│         Stage         │ Status │                                  Key outcome                                   │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 01 requirements       │ PASS   │ 23 ACs, 33 CC controls confirmed                                               │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 02 design             │ PASS   │ Architecture, 5 ADRs, data-driven control mapping                              │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 03 clarification      │ PASS   │ All 10 OQs resolved, no scope changes                                          │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 03b executable-spec   │ PASS   │ 23 Gherkin scenarios 1:1 with ACs                                              │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 04 build              │ PASS   │ 6 collectors + engine + output; 170 tests                                      │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 04a–04c               │ PASS   │ 7 blocking findings fixed (OOM cap, secret redaction, log injection,           │
+│ pre/sec/red-team      │        │ exit codes, Config observability)                                              │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 05 peer review        │ PASS   │ 2 blocking findings fixed (dry-run exit code, GitHub org member role)          │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 06 QA test execution  │ WARN   │ 184/184 tests pass; 16/23 ACs integration-only deferred                        │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 06b accessibility     │ PASS   │ Auto-skipped — pure CLI, no UI                                                 │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 06c observability     │ PASS   │ All design-spec §7 log events verified present                                 │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 06d verification      │ PASS   │ 14 fast-check property tests, 0 counterexamples                                │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 07 sign-off           │ PASS   │ PM signed off; runbook written                                                 │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 08 deploy             │ WARN   │ npm publish --dry-run successful; npm pkg fix resolves bin validation warning  │
+├───────────────────────┼────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ 09 retrospective      │ PASS   │ 6 lessons promoted to pipeline/lessons-learned.md                              │
+└───────────────────────┴────────┴────────────────────────────────────────────────────────────────────────────────┘
+
+Source state: 184/184 tests passing. Build clean. Ready for npm publish --tag beta --access public once npm
+credentials are available.
+```
+
+Two WARNs, zero FAILs: QA deferred 16 integration-only ACs (expected — no live AWS/GitHub in CI), and deploy ran as a dry-run. Both are documented in the gates and are not blockers for shipping.
+
 ---
 
 ## What the output looks like
