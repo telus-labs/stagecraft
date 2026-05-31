@@ -176,6 +176,8 @@ Three artifacts, in order:
 2. **`docs/concepts.md`** — six primitives in a table. Glance before the example, refer back later.
 3. **A 30-minute walkthrough** using [`docs/presentation-notes.md`](presentation-notes.md). Run it as part of new-hire onboarding.
 
+For a deeper example of what the full pipeline produces on a real, non-trivial problem: [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md) — builds a SOC 2 evidence collector CLI through all 17 stages, including conditional stages (security review, migration safety), adversarial peer review, and property-based testing.
+
 After that, the first real change they ship goes through the pipeline with a buddy. By their third pipeline run, they're independent.
 
 ## What success looks like

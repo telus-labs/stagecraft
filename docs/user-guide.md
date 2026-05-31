@@ -611,6 +611,7 @@ Custom edits to the target's installed files (`.claude/agents/`, `.devteam/rules
 - Backlog of next ideas — [`docs/BACKLOG.md`](BACKLOG.md).
 - Test strategy and what's covered — [`docs/TESTING.md`](TESTING.md).
 - A stress-test of the multi-workstream contract — [`docs/walkthroughs/stage-04-split-host.md`](walkthroughs/stage-04-split-host.md).
+- A full 17-stage showcase (SOC 2 evidence collector) — [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md).
 - The pitch deck — [`docs/presentation-notes.md`](presentation-notes.md).
 - Adoption case + objections — [`docs/adoption-guide.md`](adoption-guide.md).
 - Common operational questions — [`docs/faq.md`](faq.md).
