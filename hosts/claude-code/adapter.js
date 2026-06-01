@@ -392,39 +392,14 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push("```");
   lines.push(`The orchestrator adds \`"orchestrator": "${ctx.orchestrator}"\` and \`"host": "claude-code"\` at validation time.`);
   lines.push("");
-  lines.push(`## Optional: cost telemetry`);
-  lines.push(`If you know your token usage for this dispatch, include these fields in the gate JSON:`);
-  lines.push("- `model`: the specific model id you ran on (e.g. `claude-opus-4-7`).");
-  lines.push("- `tokens_in`: total input tokens (prompt + history).");
-  lines.push("- `tokens_out`: total output tokens you generated.");
-  lines.push("- `duration_ms`: wall-clock time for this dispatch.");
-  lines.push("");
-  lines.push("`cost_usd` will be computed by downstream tooling (`scripts/dashboard.js --view cost`) from these fields plus `core/pricing.js`. Omit any field you can't measure.");
+  lines.push(`Optional cost telemetry: include \`model\`, \`tokens_in\`, \`tokens_out\`, \`duration_ms\` in the gate if measurable. \`scripts/dashboard.js --view cost\` computes USD via \`core/pricing.js\`.`);
 
-  // C4 reproducibility — hash this very prompt and include the hash in
-  // the gate skeleton hint so the agent records it verbatim. Computing
-  // the hash AFTER all prior lines are pushed (excluding this block)
-  // gives us a stable input — adding the C4 block to the prompt itself
-  // doesn't change the hash because the hash is computed BEFORE that
-  // block is appended.
+  // C4 — hash computed here (before the C4 line is appended) so the hash
+  // is stable: it covers everything the agent reads, but not the hash itself.
   const { hashSystemPrompt } = require("../../core/reproducibility");
-  const promptUpToHere = lines.join("\n");
-  const systemPromptHash = hashSystemPrompt(promptUpToHere);
+  const systemPromptHash = hashSystemPrompt(lines.join("\n"));
   lines.push("");
-  lines.push(`## Optional: reproducibility (C4)`);
-  lines.push("For audit trails and replay, include these fields in the gate JSON when known:");
-  lines.push("- `model_version`: vendor's exact version string (e.g. `claude-opus-4-7-20251104`). Distinct from `model`.");
-  lines.push("- `temperature`: sampling temperature used (number).");
-  lines.push("- `seed`: RNG seed if your host supports seeded sampling.");
-  lines.push("- `max_tokens`: max_tokens parameter passed to the model.");
-  lines.push("- `tools_hash`: sha256 of the sorted list of tool names you had access to (use `core/reproducibility.hashTools`).");
-  lines.push("");
-  lines.push("**Stamp this field verbatim into the gate** — it's the hash of the prompt you're reading right now:");
-  lines.push("```json");
-  lines.push(`"system_prompt_hash": "${systemPromptHash}"`);
-  lines.push("```");
-  lines.push("");
-  lines.push("Recording these fields makes the run auditable — `devteam reproduce <stage>` can later compare against current config and surface drift.");
+  lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
   return lines.join("\n");
 }
 

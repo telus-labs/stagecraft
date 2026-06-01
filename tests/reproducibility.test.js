@@ -280,7 +280,7 @@ test("claude-code renderStagePrompt includes a system_prompt_hash in the gate sk
   };
   const ctx = { track: "full", feature: "x", orchestrator: "devteam@test" };
   const prompt = adapter.renderStagePrompt(descriptor, ctx);
-  assert.match(prompt, /## Optional: reproducibility \(C4\)/);
+  assert.match(prompt, /Optional reproducibility \(C4\)/);
   assert.match(prompt, /system_prompt_hash/);
   assert.match(prompt, /sha256:[0-9a-f]{64}/);
 });

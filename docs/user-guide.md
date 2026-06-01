@@ -648,6 +648,23 @@ Skipped stages are silently passed over by `devteam next` and shown as `skipped 
 
 Note that `skip_stages` accepts stage names (e.g. `red-team`, `verification-beyond-tests`), not stage IDs (e.g. `stage-04c`). Run `devteam stages` to see valid names.
 
+### Controlling token cost
+
+Each stage prompt is sized mainly by three things you control:
+
+**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Prune it between features — keep the last few decisions and trim history that's already reflected in the code.
+
+**2. Role routing.** Opus costs ~5× more per token than Sonnet, and Sonnet costs more than Haiku. Assign expensive models only to the roles that need them: Principal and Security for architecture rulings, Sonnet or cheaper for build workstreams. See [Multi-host setups](#multi-host-setups).
+
+**3. Stage selection.** Stages like `verification-beyond-tests` and `red-team` spawn long-running Opus agents. Use `skip_stages` or `--track quick` to skip them on incremental changes where the risk profile is low.
+
+```yaml
+# .devteam/config.yml
+pipeline:
+  skip_stages:
+    - verification-beyond-tests  # skip on UI-only changes
+```
+
 ### Stoplist
 
 `core/guards/stoplist.js` has the patterns. Adding project-specific stoplist phrases isn't yet a first-class config option — the BACKLOG flags this as a follow-up. For now, edit the file directly (changes survive `devteam init` since the file is in the framework, not the target).
