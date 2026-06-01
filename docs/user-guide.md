@@ -316,6 +316,37 @@ for this role or run interactively (omit --headless).
 
 You can mix: `devteam stage requirements` user-driven, then `devteam stage build --headless` once you trust the build stage to run unattended.
 
+### Running the full pipeline unattended
+
+Loop `devteam next --json` to advance through stages automatically. The loop halts on FAIL, ESCALATE, or anything that needs a human decision:
+
+```bash
+while true; do
+  read -r action name < <(devteam next --json | jq -r '[.action, .name // ""] | @tsv')
+  case "$action" in
+    run-stage)        devteam stage "$name" --headless ;;
+    pipeline-complete) echo "Pipeline complete"; break ;;
+    *)                echo "Needs human: $action${name:+ ($name)}"; break ;;
+  esac
+done
+```
+
+`devteam next --json` returns `action: "fix-and-retry"` on FAIL and `action: "resolve-escalation"` on ESCALATE — both fall through to the `*)` branch and halt the loop. MERGE stages (`action: "merge"`) also halt; run `devteam merge <stage>` and re-enter the loop.
+
+To handle merge automatically:
+
+```bash
+while true; do
+  read -r action name < <(devteam next --json | jq -r '[.action, .name // ""] | @tsv')
+  case "$action" in
+    run-stage)         devteam stage "$name" --headless ;;
+    merge)             devteam merge "$name" ;;
+    pipeline-complete) echo "Pipeline complete"; break ;;
+    *)                 echo "Needs human: $action${name:+ ($name)}"; break ;;
+  esac
+done
+```
+
 ### Headless timeout
 
 The default headless timeout is 10 minutes per workstream. Slow stages (red-team, verification-beyond-tests) can exceed this. Pass `--timeout-ms` to override:
