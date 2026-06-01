@@ -156,6 +156,60 @@ function autoInjectMetadata(gate, gateFilePath) {
   return modified;
 }
 
+/**
+ * When a red-team gate FAILs, prepend its must-fix blockers to
+ * pipeline/context.md so the next build re-run sees them explicitly.
+ *
+ * Uses HTML comment markers so the section can be replaced (not
+ * duplicated) on subsequent red-team FAIL cycles.
+ */
+function injectRedTeamBlockers(gate, cwd) {
+  if (gate.stage !== "stage-04c" || gate.status !== "FAIL") return;
+  const items = gate.must_address_before_peer_review;
+  if (!Array.isArray(items) || items.length === 0) return;
+
+  const contextPath = path.join(cwd, "pipeline", "context.md");
+  if (!fs.existsSync(contextPath)) return;
+
+  const BEGIN = "<!-- devteam:red-team-blockers:begin -->";
+  const END   = "<!-- devteam:red-team-blockers:end -->";
+
+  const itemLines = items.map((item) => {
+    const id  = item.id       ? `**${item.id}**` : "";
+    const sev = item.severity ? ` [${item.severity}/${item.likelihood || "?"}]` : "";
+    const sum = item.summary  || JSON.stringify(item);
+    return `- ${id}${sev}: ${sum}`;
+  });
+
+  const section = [
+    BEGIN,
+    "## IMMEDIATE: Red-Team Blockers — Fix Before Peer Review",
+    "",
+    "The following must-fix items from stage-04c MUST be addressed in the next build re-run.",
+    "Use `devteam stage build --patch --from red-team` to scope build agents to these items only.",
+    "Do not proceed to peer review until all are resolved.",
+    "",
+    ...itemLines,
+    "",
+    `_Last updated by gate-validator: ${new Date().toISOString()}_`,
+    END,
+  ].join("\n");
+
+  let content = fs.readFileSync(contextPath, "utf8");
+  if (content.includes(BEGIN)) {
+    const startIdx = content.indexOf(BEGIN);
+    const endIdx   = content.indexOf(END) + END.length;
+    content = content.slice(0, startIdx) + section + content.slice(endIdx);
+  } else {
+    content = section + "\n\n" + content;
+  }
+
+  fs.writeFileSync(contextPath, content, "utf8");
+  console.log(
+    `[gate-validator] ℹ️  red-team blockers (${items.length}) written to pipeline/context.md`,
+  );
+}
+
 /** Validate required fields. Returns an array of missing field names. */
 function missingRequired(gate) {
   return REQUIRED_FIELDS.filter((k) => !(k in gate));
@@ -371,6 +425,7 @@ function main() {
   }
 
   if (status === "FAIL") {
+    injectRedTeamBlockers(gate, process.cwd());
     console.log(`[gate-validator] ❌ GATE FAIL — ${stageLabel} (${producer})`);
     if (Array.isArray(gate.blockers) && gate.blockers.length > 0) {
       console.log(`[gate-validator] Blockers:`);

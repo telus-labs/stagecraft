@@ -347,6 +347,28 @@ while true; do
 done
 ```
 
+### Scoped re-runs after red-team FAIL (--patch)
+
+When red-team FAILs, running a full build re-run risks touching unrelated code and introducing new findings. `--patch` scopes build agents to only the items in the failed stage's `must_address_before_peer_review` list:
+
+```bash
+devteam stage build --patch --from red-team --headless
+```
+
+The flag reads `pipeline/gates/stage-04c.json`, extracts the blockers, and injects a **PATCH MODE** section at the top of the prompt — before the objective — so agents see exactly what to fix and are instructed not to touch anything else.
+
+`--from` defaults to `red-team` and accepts any stage name. The gate for that stage must already exist in `pipeline/gates/`.
+
+Note: when red-team writes a FAIL gate, the validator automatically writes the blockers into `pipeline/context.md` (between `<!-- devteam:red-team-blockers:begin -->` markers) so they persist across re-runs. `--patch` reads from the gate itself and is additive — you get both the context.md signal and the explicit prompt scope.
+
+After the patch build, continue the usual chain:
+
+```bash
+devteam stage pre-review --headless
+devteam stage security-review --headless   # if still required
+devteam stage red-team --headless          # verifies fixes
+```
+
 ### Headless timeout
 
 The default headless timeout is 10 minutes per workstream. Slow stages (red-team, verification-beyond-tests) can exceed this. Pass `--timeout-ms` to override:

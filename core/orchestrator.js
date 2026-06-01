@@ -105,6 +105,7 @@ function runStage(stageName, opts = {}) {
     isolation: opts.isolation || config.pipeline.isolation,
     orchestrator: ORCHESTRATOR_ID,
     timeoutMs: typeof opts.timeoutMs === "number" ? opts.timeoutMs : undefined,
+    patchItems: Array.isArray(opts.patchItems) && opts.patchItems.length > 0 ? opts.patchItems : null,
   };
 
   if (!isStageInTrack(stageName, ctx.track)) {

@@ -186,20 +186,22 @@ The pipeline state is **only** the JSON files in `pipeline/gates/`. There's no h
 
 ### Red-team failed — what do I re-run?
 
-Red-team FAIL means `must_address_before_peer_review` is non-empty. For **code problems**, you don't fix the code yourself — re-running `devteam stage build` is the fix. The build agents read `pipeline/red-team-report.md` as part of their context and implement the fixes. Then re-run the full pre-review group in order:
+Red-team FAIL means `must_address_before_peer_review` is non-empty. When the gate is written, the validator automatically injects the blockers into `pipeline/context.md` so the next build re-run sees them. Use `--patch` to also scope the build agents explicitly to those items:
 
 ```bash
-devteam stage build --headless
+devteam stage build --patch --from red-team --headless
 devteam stage pre-review --headless
 devteam stage security-review --headless   # if still required by pre-review
 devteam stage red-team --headless          # verifies the fixes
 ```
 
+`--patch` reads the blockers from `pipeline/gates/stage-04c.json` and injects a PATCH MODE section into the prompt — agents are told to fix only the named items and leave everything else alone. This reduces the risk of a full build re-run introducing new findings.
+
 `devteam next` returns `fix-and-retry` when red-team fails — it won't walk you through the build re-run automatically, because it can't distinguish code fixes from documentation fixes. The re-run sequence is always manual.
 
 For **documentation-only findings** (e.g. "this permission isn't explained in the IAM policy comments"), you can re-run red-team directly without rebuilding.
 
-If the finding requires a design decision before the build agents can act (e.g. "the permission set is fundamentally too broad — what's the minimum viable scope?"), drop a note in `pipeline/context.md` before re-running build. That file is read first by every stage and is the intended channel for human direction between stages.
+If a finding requires a design decision before the build agents can act (e.g. "the permission set is fundamentally too broad — what's the minimum viable scope?"), add a note to `pipeline/context.md` before re-running build. That file is read first by every stage and is the intended channel for human direction between stages.
 
 ### Can I roll back to an earlier stage?
 

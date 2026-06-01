@@ -343,6 +343,24 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push(`Workstream: ${descriptor.workstreamId} (role: ${descriptor.role}, host: claude-code)`);
   lines.push(`Track: ${ctx.track}`);
   if (ctx.feature) lines.push(`Feature: ${ctx.feature}`);
+  if (ctx.patchItems && ctx.patchItems.length > 0) {
+    lines.push("");
+    lines.push("## ⚠️  PATCH MODE — targeted fix only");
+    lines.push("");
+    lines.push("This is a scoped re-run. Fix ONLY the items listed below.");
+    lines.push("Do not regenerate, refactor, or touch any file not named in these items.");
+    lines.push("Update test files only if an item explicitly requires it.");
+    lines.push("");
+    for (const item of ctx.patchItems) {
+      if (typeof item === "string") {
+        lines.push(`- ${item}`);
+      } else {
+        const id  = item.id       ? `**${item.id}**` : "";
+        const sev = item.severity ? ` [${item.severity}]` : "";
+        lines.push(`- ${id}${sev}: ${item.summary || JSON.stringify(item)}`);
+      }
+    }
+  }
   lines.push("");
   lines.push(`Use the **${agentName}** subagent (\`.claude/agents/${agentName}.md\`) for this workstream.`);
   lines.push("");

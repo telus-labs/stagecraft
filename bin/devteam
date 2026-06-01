@@ -16,7 +16,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { runStage, runStageHeadless, mergeWorkstreamGates, next, summary } = require(path.join(__dirname, "..", "core", "orchestrator"));
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
-const { stageNames } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
+const { stageNames, getStage } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
 const { checkStoplist, explainMatches } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
 
@@ -40,10 +40,13 @@ Commands:
   stage <name> [--feature "..."]   Render stage prompt(s) for <name>. With
         [--headless]                 --headless, drives each workstream's
         [--timeout-ms N]             host CLI non-interactively (claude --print,
-                                   codex exec) and reports exit codes +
+        [--patch [--from <stage>]]   codex exec) and reports exit codes +
                                    gate paths. --timeout-ms caps each
                                    workstream's wall-clock (default 600000,
                                    i.e. 10 min); pass 0 to disable.
+                                   --patch scopes build agents to the
+                                   must_address_before_peer_review items from
+                                   the named stage's gate (default: red-team).
   next [--json]                    Inspect pipeline/gates/ and report what
                                    to do next: run a stage, continue a
                                    partial multi-role stage, merge, fix a
@@ -144,6 +147,8 @@ function parseFlags(argv) {
     if (a === "--json")    { flags.json    = true;      continue; }
     if (a === "--headless"){ flags.headless = true;     continue; }
     if (a === "--timeout-ms"){ flags.timeoutMs = Number(argv[++i]); continue; }
+    if (a === "--patch")  { flags.patch = true;      continue; }
+    if (a === "--from")   { flags.from  = argv[++i]; continue; }
     if (a === "--port")    { flags.port    = Number(argv[++i]); continue; }
     if (a === "--open")    { flags.open    = true;      continue; }
     if (a === "--limit")   { flags.limit   = argv[++i]; continue; }
@@ -193,6 +198,29 @@ function cmdStage(argv) {
       process.exit(2);
     }
   }
+  if (flags.patch) {
+    const fromName = flags.from || "red-team";
+    const fromDef  = getStage(fromName);
+    const stageId  = fromDef ? fromDef.stage : fromName;
+    const gatePath = path.join(cwd, "pipeline", "gates", `${stageId}.json`);
+    if (fs.existsSync(gatePath)) {
+      try {
+        const gate  = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+        const items = gate.must_address_before_peer_review;
+        if (Array.isArray(items) && items.length > 0) {
+          flags.patchItems = items;
+          process.stderr.write(`[devteam] --patch: ${items.length} item(s) from ${fromName} gate\n`);
+        } else {
+          process.stderr.write(`[devteam] --patch: no must_address_before_peer_review in ${stageId}.json — running full build\n`);
+        }
+      } catch {
+        process.stderr.write(`[devteam] --patch: could not read ${gatePath} — running full build\n`);
+      }
+    } else {
+      process.stderr.write(`[devteam] --patch: ${stageId}.json not found — running full build\n`);
+    }
+  }
+
   if (flags.headless) {
     runStageHeadless(name, flags)
       .then((result) => {
