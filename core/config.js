@@ -17,6 +17,7 @@ const DEFAULTS = {
   pipeline: {
     default_track: "full",
     isolation: "in-place",
+    skip_stages: [],
   },
 };
 
@@ -39,6 +40,7 @@ function loadConfig(cwd = process.cwd()) {
     pipeline: {
       default_track: parsed.pipeline?.default_track ?? DEFAULTS.pipeline.default_track,
       isolation: parsed.pipeline?.isolation ?? DEFAULTS.pipeline.isolation,
+      skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
     },
     _source: "file",
     _path: p,
@@ -77,6 +79,7 @@ function renderDefaultConfig(hosts) {
   lines.push("pipeline:");
   lines.push("  default_track: full");
   lines.push("  isolation: in-place");
+  lines.push("  # skip_stages: []     # stage names to skip, e.g. [red-team]");
   lines.push("");
   return lines.join("\n");
 }

@@ -314,13 +314,15 @@ function mergeWorkstreamGates(stageName, opts = {}) {
 function next(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const gatesDir = path.join(cwd, "pipeline", "gates");
-  const track = opts.track || (opts.config && opts.config.pipeline && opts.config.pipeline.default_track) || (loadConfig(cwd).pipeline.default_track) || "full";
+  const config = opts.config || loadConfig(cwd);
+  const track = opts.track || config.pipeline.default_track || "full";
+  const skipStages = config.pipeline.skip_stages || [];
   const stageList = orderedStageNamesForTrack(track);
 
   return withSpan("pipeline.next", {
     "devteam.track": track,
   }, () => {
-    const result = _nextImpl(stageList, gatesDir, track);
+    const result = _nextImpl(stageList, gatesDir, track, skipStages);
     setSpanAttributes({
       "devteam.next.action": result.action,
       "devteam.next.stage": result.stage || undefined,
@@ -330,10 +332,13 @@ function next(opts = {}) {
   });
 }
 
-function _nextImpl(stageList, gatesDir, track) {
+function _nextImpl(stageList, gatesDir, track, skipStages = []) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
+
+    // Explicitly skipped via pipeline.skip_stages in config.
+    if (skipStages.includes(stageName)) continue;
 
     // Conditional stages: skip when the prerequisite gate's named field
     // is not equal to the required value. The prerequisite gate must
@@ -429,7 +434,9 @@ function _nextImpl(stageList, gatesDir, track) {
 function summary(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const gatesDir = path.join(cwd, "pipeline", "gates");
-  const track = opts.track || (opts.config && opts.config.pipeline && opts.config.pipeline.default_track) || (loadConfig(cwd).pipeline.default_track) || "full";
+  const config = opts.config || loadConfig(cwd);
+  const track = opts.track || config.pipeline.default_track || "full";
+  const skipStages = config.pipeline.skip_stages || [];
   const stageList = orderedStageNamesForTrack(track);
 
   const rows = [];
@@ -441,6 +448,12 @@ function summary(opts = {}) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
+
+    // Explicitly skipped via pipeline.skip_stages.
+    if (skipStages.includes(stageName)) {
+      rows.push({ stage: stageDef.stage, name: stageName, state: "skipped", reason: "pipeline.skip_stages" });
+      continue;
+    }
 
     // Check conditional first
     if (stageDef.conditionalOn) {

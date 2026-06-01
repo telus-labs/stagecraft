@@ -316,6 +316,17 @@ for this role or run interactively (omit --headless).
 
 You can mix: `devteam stage requirements` user-driven, then `devteam stage build --headless` once you trust the build stage to run unattended.
 
+### Headless timeout
+
+The default headless timeout is 10 minutes per workstream. Slow stages (red-team, verification-beyond-tests) can exceed this. Pass `--timeout-ms` to override:
+
+```bash
+devteam stage red-team --headless --timeout-ms 1800000   # 30 min
+devteam stage red-team --headless --timeout-ms 0          # no cap
+```
+
+The timeout is per workstream, not per stage — a multi-role stage with three parallel workstreams gets 3 × N ms total wall-clock.
+
 ### Stubbing for tests
 
 Set `DEVTEAM_HEADLESS_COMMAND=cat` to bypass the real host CLI:
@@ -568,6 +579,21 @@ Edit `.devteam/config.yml`. Routing precedence is `stages > roles > default_host
 ### Track
 
 Edit `pipeline.default_track` in `.devteam/config.yml`. See [`docs/tracks.md`](tracks.md) for what each track skips.
+
+### Skipping specific stages
+
+If a stage is consistently slow, not relevant to your project type, or you want to defer it, add it to `pipeline.skip_stages` in `.devteam/config.yml`:
+
+```yaml
+pipeline:
+  default_track: full
+  skip_stages:
+    - red-team
+```
+
+Skipped stages are silently passed over by `devteam next` and shown as `skipped (pipeline.skip_stages)` in `devteam summary`. No gate file is required. The skip applies to all runs in the project — use `--track` for per-run exclusions instead.
+
+Note that `skip_stages` accepts stage names (e.g. `red-team`, `verification-beyond-tests`), not stage IDs (e.g. `stage-04c`). Run `devteam stages` to see valid names.
 
 ### Stoplist
 
