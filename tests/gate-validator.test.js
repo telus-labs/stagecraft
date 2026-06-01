@@ -64,18 +64,20 @@ describe("gate-validator: exit codes", () => {
 });
 
 describe("gate-validator: contract F required fields", () => {
-  it("rejects gate missing orchestrator", () => {
+  it("auto-injects orchestrator when missing and passes", () => {
     const cwd = track(makeTargetProject());
     const file = path.join(cwd, "pipeline", "gates", "stage-01.json");
     fs.writeFileSync(file, JSON.stringify({
       stage: "stage-01", status: "PASS",
-      // missing: orchestrator
+      // missing: orchestrator — validator should inject it
       track: "full", timestamp: "2026-05-26T00:00:00Z",
       blockers: [], warnings: [],
     }));
     const r = runValidator(cwd);
-    assert.equal(r.status, 1);
-    assert.match(r.stderr + r.stdout, /missing fields.*orchestrator/);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /auto-injected metadata/);
+    const patched = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.match(patched.orchestrator, /^devteam@/);
   });
 
   it("accepts a workstream gate with workstream + host", () => {
