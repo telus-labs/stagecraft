@@ -185,15 +185,14 @@ async function runStageHeadless(stageName, opts = {}) {
     "devteam.stage.name": stageName,
     "devteam.workstream_count": plan.workstreams.length,
   }, async () => {
-    const results = [];
-    for (const ws of plan.workstreams) {
+    const results = await Promise.all(plan.workstreams.map(async (ws) => {
       process.stderr.write(`[devteam] dispatching ${ws.role} → ${ws.host} (headless)\n`);
       const r = await withSpan("adapter.invoke", {
         "devteam.host": ws.host,
         "devteam.workstream.role": ws.role,
         "devteam.workstream.id": ws.descriptor.workstreamId,
       }, async (span) => {
-        const out = await ws.adapter.invoke(ws.descriptor, plan.ctx);
+        const out = await ws.adapter.invoke(ws.descriptor, plan.ctx, ws.prompt);
         if (span) span.setAttributes({
           "devteam.invoke.exit_code": out.exitCode,
           "devteam.invoke.duration_ms": out.durationMs,
@@ -201,8 +200,8 @@ async function runStageHeadless(stageName, opts = {}) {
         });
         return out;
       });
-      results.push({ role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r });
-    }
+      return { role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r };
+    }));
     return { stage: plan.stage, name: stageName, roles: plan.roles, results, ctx: plan.ctx };
   });
 }

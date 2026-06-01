@@ -25,7 +25,7 @@ const { spawn } = require("node:child_process");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
-function runHeadless(adapter, descriptor, ctx) {
+function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   const declared = adapter.capabilities && adapter.capabilities.headlessCommand;
   const override = process.env.DEVTEAM_HEADLESS_COMMAND;
   const cmdString = override || declared;
@@ -35,7 +35,7 @@ function runHeadless(adapter, descriptor, ctx) {
     ));
   }
 
-  const prompt = adapter.renderStagePrompt(descriptor, ctx);
+  const prompt = preRenderedPrompt || adapter.renderStagePrompt(descriptor, ctx);
   const gatePath = path.join(ctx.cwd, "pipeline", "gates", `${descriptor.workstreamId}.json`);
   const [bin, ...args] = cmdString.split(/\s+/);
   const start = Date.now();

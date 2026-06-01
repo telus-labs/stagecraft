@@ -167,8 +167,8 @@ function renderStagePrompt(descriptor, ctx) {
   return lines.join("\n");
 }
 
-function invoke(descriptor, ctx) {
-  return runHeadless(module.exports, descriptor, ctx);
+function invoke(descriptor, ctx, preRenderedPrompt) {
+  return runHeadless(module.exports, descriptor, ctx, preRenderedPrompt);
 }
 
 module.exports = {

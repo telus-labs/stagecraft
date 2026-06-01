@@ -25,27 +25,38 @@ function configPath(cwd) {
   return path.join(cwd, ".devteam", "config.yml");
 }
 
+const _cache = new Map();
+function clearConfigCache() { _cache.clear(); }
+
 function loadConfig(cwd = process.cwd()) {
-  const p = configPath(cwd);
-  if (!fs.existsSync(p)) return { ...DEFAULTS, _source: "defaults", _path: p };
-  const raw = fs.readFileSync(p, "utf8");
-  const parsed = yaml.load(raw) || {};
-  return {
-    routing: {
-      default_host: parsed.routing?.default_host ?? DEFAULTS.routing.default_host,
-      roles: parsed.routing?.roles ?? DEFAULTS.routing.roles,
-      stages: parsed.routing?.stages ?? DEFAULTS.routing.stages,
-      review_fanout: Array.isArray(parsed.routing?.review_fanout) ? parsed.routing.review_fanout : [],
-    },
-    pipeline: {
-      default_track: parsed.pipeline?.default_track ?? DEFAULTS.pipeline.default_track,
-      isolation: parsed.pipeline?.isolation ?? DEFAULTS.pipeline.isolation,
-      skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
-    },
-    _source: "file",
-    _path: p,
-    _raw: parsed,
-  };
+  const resolved = path.resolve(cwd);
+  if (_cache.has(resolved)) return _cache.get(resolved);
+  const p = configPath(resolved);
+  let result;
+  if (!fs.existsSync(p)) {
+    result = { ...DEFAULTS, _source: "defaults", _path: p };
+  } else {
+    const raw = fs.readFileSync(p, "utf8");
+    const parsed = yaml.load(raw) || {};
+    result = {
+      routing: {
+        default_host: parsed.routing?.default_host ?? DEFAULTS.routing.default_host,
+        roles: parsed.routing?.roles ?? DEFAULTS.routing.roles,
+        stages: parsed.routing?.stages ?? DEFAULTS.routing.stages,
+        review_fanout: Array.isArray(parsed.routing?.review_fanout) ? parsed.routing.review_fanout : [],
+      },
+      pipeline: {
+        default_track: parsed.pipeline?.default_track ?? DEFAULTS.pipeline.default_track,
+        isolation: parsed.pipeline?.isolation ?? DEFAULTS.pipeline.isolation,
+        skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
+      },
+      _source: "file",
+      _path: p,
+      _raw: parsed,
+    };
+  }
+  _cache.set(resolved, result);
+  return result;
 }
 
 function resolveHost(config, stage, role) {
@@ -94,4 +105,4 @@ function writeConfigIfAbsent(cwd, hosts, opts = {}) {
   return { written: true, path: p };
 }
 
-module.exports = { loadConfig, resolveHost, configPath, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS };
+module.exports = { loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS };
