@@ -204,6 +204,99 @@ describe("gate-validator: QA build blocker injection", () => {
   });
 });
 
+describe("gate-validator: blocker section cleanup on resolve", () => {
+  function makeProjectWithContext(cwd, contextContent = "# Context\n\nProject notes.\n") {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "context.md"), contextContent);
+  }
+
+  it("strips the qa-build-blockers section when stage-04.qa becomes PASS", () => {
+    const cwd = track(makeTargetProject());
+    // Simulate a prior FAIL that injected blockers, plus normal context content.
+    makeProjectWithContext(cwd,
+      "<!-- devteam:qa-build-blockers:begin -->\n" +
+      "## IMMEDIATE: QA Build Failures — Fix Before Re-Running QA\n\n" +
+      "- old bug\n\n" +
+      "<!-- devteam:qa-build-blockers:end -->\n\n" +
+      "# Context\n\nProject notes that should survive.\n");
+    seedGate(cwd, "stage-04.qa", {
+      stage: "stage-04", workstream: "qa", status: "PASS", blockers: [],
+    });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.doesNotMatch(ctx, /qa-build-blockers/, "marker section must be gone");
+    assert.doesNotMatch(ctx, /IMMEDIATE: QA Build Failures/, "heading must be gone");
+    assert.doesNotMatch(ctx, /old bug/, "stale blocker must be gone");
+    assert.match(ctx, /# Context/, "rest of context.md must survive");
+    assert.match(ctx, /Project notes that should survive/);
+  });
+
+  it("strips the red-team-blockers section when stage-04c becomes PASS", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd,
+      "<!-- devteam:red-team-blockers:begin -->\n" +
+      "## IMMEDIATE: Red-Team Blockers — Fix Before Peer Review\n\n" +
+      "- **R-1** [high/likely]: cited race condition\n\n" +
+      "<!-- devteam:red-team-blockers:end -->\n\n" +
+      "# Context\n");
+    seedGate(cwd, "stage-04c", { stage: "stage-04c", status: "PASS" });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.doesNotMatch(ctx, /red-team-blockers/);
+    assert.doesNotMatch(ctx, /Red-Team Blockers/);
+    assert.match(ctx, /# Context/);
+  });
+
+  it("strips on WARN as well as PASS (resolved-with-warnings counts as resolved)", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd,
+      "<!-- devteam:red-team-blockers:begin -->\nold blocker\n<!-- devteam:red-team-blockers:end -->\n\n# Context\n");
+    seedGate(cwd, "stage-04c", { stage: "stage-04c", status: "WARN", warnings: ["minor"] });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.doesNotMatch(ctx, /red-team-blockers/);
+  });
+
+  it("is a no-op when context.md has no injected section", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd, "# Context\n\nProject notes only.\n");
+    seedGate(cwd, "stage-04c", { stage: "stage-04c", status: "PASS" });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.equal(ctx, "# Context\n\nProject notes only.\n");
+  });
+
+  it("is a no-op when context.md does not exist", () => {
+    const cwd = track(makeTargetProject());
+    // No context.md
+    seedGate(cwd, "stage-04c", { stage: "stage-04c", status: "PASS" });
+    assert.doesNotThrow(() => runValidator(cwd));
+  });
+
+  it("does not strip when the gate's stage is unrelated (e.g. stage-04.backend PASS)", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd,
+      "<!-- devteam:qa-build-blockers:begin -->\nQA bug\n<!-- devteam:qa-build-blockers:end -->\n\n# Context\n");
+    seedGate(cwd, "stage-04.backend", {
+      stage: "stage-04", workstream: "backend", status: "PASS",
+    });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.match(ctx, /qa-build-blockers:begin/, "QA blockers must NOT be cleared by an unrelated backend PASS");
+  });
+
+  it("logs the strip to stdout", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd,
+      "<!-- devteam:qa-build-blockers:begin -->\nstale\n<!-- devteam:qa-build-blockers:end -->\n");
+    seedGate(cwd, "stage-04.qa", {
+      stage: "stage-04", workstream: "qa", status: "PASS", blockers: [],
+    });
+    const r = runValidator(cwd);
+    assert.match(r.stdout, /QA build-blockers section cleared/);
+  });
+});
+
 describe("gate-validator: bypassed escalation halts", () => {
   it("an old ESCALATE with a newer gate after it exits 3", () => {
     const cwd = track(makeTargetProject());
