@@ -1,3 +1,4 @@
 node_modules/
 *.bak
 .DS_Store
+.README.md.swp
