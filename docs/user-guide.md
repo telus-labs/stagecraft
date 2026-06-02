@@ -743,11 +743,9 @@ A stage gate has `status: ESCALATE`. Use escalation when:
 - The change scope has grown beyond what the brief covers and a human must decide whether to re-scope or proceed
 - A veto-capable stage (security review, migration safety) found a concern that needs human judgement
 
-The pipeline cannot advance until you resolve it. Read the gate's `escalation_reason` and `decision_needed` fields, make the call, then either:
+The pipeline cannot advance until you resolve it. The summary is: read the gate's `escalation_reason` and `decision_needed`, make the call, then either rewrite the gate to `PASS`/`WARN`/`FAIL` or use `devteam restart <stage>` to clear it and re-run the originating stage.
 
-- Rewrite the gate to `PASS` or `WARN` (you've resolved the escalation) and re-run `devteam next`.
-- Rewrite to `FAIL` if the resolution is "yes, this is a blocker" — then fix and retry.
-- Leave it as `ESCALATE` if the pipeline correctly halted and the work shouldn't continue.
+For the full procedure — what to read in what order, how to invoke the Principal role for a binding ruling, how to encode must-fix vs defer decisions, common gotchas — see **[`docs/runbooks/escalation.md`](runbooks/escalation.md)**. That's the operational playbook; this section is the one-paragraph version.
 
 ### Stoplist blocked my change
 
