@@ -273,12 +273,13 @@ See [`docs/ci.md`](ci.md) for the full workflow template and environment variabl
 
 These stages go beyond what conventional dev pipelines can enforce. They're only possible because the pipeline is AI-native — the AI isn't just writing code, it's doing work that no static tool could do.
 
-### Multi-model adversarial review — diversity as a correctness strategy
+### Multi-model peer review — diversity as a correctness strategy
 
-For `full` and `hotfix` tracks, peer-review dispatches to three different model families in parallel. Each is asked to find the strongest objection to the change. A synthesis pass resolves disagreements.
+When `routing.review_fanout` is configured, Stage 5 (peer-review) duplicates each of the four area reviews across the listed hosts in parallel. 4 areas × 3 hosts = 12 parallel reviews; merge is pessimistic (any FAIL blocks the stage).
 
-- Different training data means different blind spots — the diversity is the point
-- Routed to different hosts than the build agents by design
+- Different training data means different blind spots — the diversity comes from model family, not from changing the rubric
+- Each reviewer applies the same four-principles rubric; the cross-model signal is what makes this load-bearing
+- This is execution-diversity, not method-diversity — for adversarial *method*, see the Red-team stage below
 
 ### Closed-loop acceptance criteria → spec → tests — drift caught structurally
 

@@ -78,8 +78,8 @@ A living list of work beyond the initial migration. Organized into seven buckets
 
 These don't fit neatly in impact/effort because their value depends on bets about how the field will evolve. They are the things that would meaningfully differentiate this tool from "just another AI dev pipeline."
 
-### G1. Multi-model adversarial review ✅ landed (Unreleased)
-For high-stakes changes (auth, payments, IaC), peer-review runs **in parallel** across three different model families, each asked to find the strongest objection. A synthesis pass resolves disagreements. The diversity of model architectures catches things single-family review misses.
+### G1. Multi-model peer review ✅ landed (Unreleased)
+For high-stakes changes (auth, payments, IaC), peer-review runs **in parallel** across three different model families. Each reviewer applies the same four-principles rubric — the diversity is execution-diversity (different training data, different blind spots), not method-diversity. Pessimistic merge: any FAIL anywhere blocks the stage. The diversity of model architectures catches things single-family review misses. (Method diversity — a different role applying a different methodology — is what stage-04c red-team is for.)
 
 ### G2. Closed-loop acceptance criteria → exec spec → tests ✅ landed (Unreleased)
 PM writes numbered acceptance criteria (`AC-N`) in `pipeline/brief.md`. A new stage `stage-03b` (executable-spec) translates each into one Gherkin scenario in `pipeline/spec.feature`, tagged `@AC-N`. QA's stage-06 then maps each scenario 1:1 to a test in the report. The chain — brief → spec → tests — is drift-checked by `devteam spec verify` (CLI), and structurally enforced by the stage-03b gate (`drift`, `all_criteria_mapped` fields) plus the extended stage-06 gate (`scenarios_total`, `scenarios_covered`, `all_scenarios_have_tests`). New `core/spec/gherkin.js` parser + `core/spec/verify.js` drift detector; `devteam spec generate` scaffolds the .feature file from the brief (one tagged Scenario per AC with TODO Given/When/Then placeholders). New duty on the `pm` role (no new role needed — the PM that wrote ACs is the right brain to translate them); new `skills/spec-authoring/SKILL.md` walks the five-phase procedure with Given/When/Then guidance. Track inclusion: `full` + `quick` (the tracks with a requirements stage); skipped on `hotfix`/`nano`/`config-only`/`dep-update`. Drift types caught: orphan ACs, orphan scenarios, duplicate AC numbers, unknown AC refs in tests. `--strict` mode also fails when one AC is mapped by multiple scenarios.
@@ -123,7 +123,7 @@ By impact/effort ratio, with bias toward high-impact even when expensive:
 7. ~~**F1 — GitHub PR integration** (4 / 3)~~ — ✅ landed (Unreleased).
 8. ~~**E2 — Web UI for pipeline runs** (4 / 4)~~ — ✅ landed (Unreleased).
 9. ~~**D7 — Persistent project memory (embeddings)** (5 / 4)~~ — ✅ landed v1 (Unreleased).
-10. ~~**G1 — Multi-model adversarial review** (5 / 3)~~ — ✅ landed (Unreleased).
+10. ~~**G1 — Multi-model peer review** (5 / 3)~~ — ✅ landed (Unreleased).
 
 ---
 
@@ -135,7 +135,7 @@ Six bets about where software development is going, and how this project should 
 Don't optimize for today's model limits. Design the contract assuming 10× capability in 2 years. The schema (gate JSON), the seam (per-workstream gates merged to stage), and the routing layer should outlive the specific models we route to.
 
 ### 2. Diversity beats monoculture.
-Single-model agentic systems are giving way to multi-model coordinated systems. The right answer for any non-trivial task involves 2–3 different model families. Our routing layer is already built for this; the next step is *making diversity load-bearing* (G1 adversarial review, D4/D5 adaptive routing).
+Single-model agentic systems are giving way to multi-model coordinated systems. The right answer for any non-trivial task involves 2–3 different model families. Our routing layer is already built for this; the next step is *making diversity load-bearing* (G1 multi-model peer review, D4/D5 adaptive routing).
 
 ### 3. Evals are the rate-limit.
 You can't ship what you can't measure. The pipeline produces structured gate JSON precisely so we can build evals on top. Every refinement should make the gate richer / more measurable. D1/D2/D4 are all expressions of this bet.

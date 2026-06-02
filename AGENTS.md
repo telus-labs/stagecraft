@@ -100,7 +100,7 @@ Stagecraft has a tier-1 + tier-2 test suite (300+ tests; run `npm test`). See [`
 
 ## Open backlog
 
-[`docs/BACKLOG.md`](docs/BACKLOG.md) — bucketed list of next ideas with impact/effort scores. Top items: OpenTelemetry per-stage tracing, secret-scanning hook, Gemini CLI adapter, accessibility audit stage, gate-pass-rate dashboards, GitHub PR integration, web UI, persistent embeddings-indexed memory, multi-model adversarial review.
+[`docs/BACKLOG.md`](docs/BACKLOG.md) — bucketed list of next ideas with impact/effort scores. Top items: OpenTelemetry per-stage tracing, secret-scanning hook, Gemini CLI adapter, accessibility audit stage, gate-pass-rate dashboards, GitHub PR integration, web UI, persistent embeddings-indexed memory, multi-model peer review.
 
 ## Working on this codebase
 

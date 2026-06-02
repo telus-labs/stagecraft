@@ -244,7 +244,7 @@ pipeline:
 
 > "Precedence: stages > roles > default_host. Most specific wins. The deploy override on stage-08 says 'no matter who the role is, run deploy on Claude Code', which you want if your runbook has Claude-specific instructions."
 
-> "`review_fanout` is the adversarial review option. Set it to a list of three hosts and Stage 5 duplicates across all of them. Four areas times three hosts gives twelve parallel reviews. Different models tend to flag different things."
+> "`review_fanout` is the multi-model peer-review option. Set it to a list of three hosts and Stage 5 duplicates across all of them. Four areas times three hosts gives twelve parallel reviews. Different models tend to flag different things. Method diversity — a separate role applying a different methodology — is what stage-04c red-team is for; this is the execution-diversity counterpart."
 
 > "Default is empty. You don't pay the 3× cost unless you ask for it."
 
