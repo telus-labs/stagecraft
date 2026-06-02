@@ -28,6 +28,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadConfig } = require("../config.js");
 
 // Resolve gates/lessons paths lazily against the current cwd. The validator
 // is normally spawned as a child process (each invocation gets a fresh cwd
@@ -132,15 +133,16 @@ function autoInjectMetadata(gate, gateFilePath) {
   }
 
   if (!("host" in gate)) {
-    // Resolve from the project config if available; fall back to the primary host.
-    let host = "claude-code";
+    // Resolve from the project config's routing.default_host. When config is
+    // absent loadConfig returns the framework default ("generic"), which is
+    // the right fallback — a workstream gate that omits its host gives the
+    // orchestrator no host-specific information to attribute, so the neutral
+    // "generic" classification is more honest than guessing claude-code.
+    let host;
     try {
-      const cfgPath = path.join(process.cwd(), ".devteam", "config.yml");
-      const raw = fs.readFileSync(cfgPath, "utf8");
-      const m = raw.match(/^\s*host\s*:\s*(\S+)/m);
-      if (m) host = m[1];
+      host = loadConfig(process.cwd()).routing.default_host;
     } catch {
-      // Config absent or unreadable — use default.
+      host = "generic";
     }
     gate.host = host;
     modified = true;

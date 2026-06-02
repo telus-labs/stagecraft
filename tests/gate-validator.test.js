@@ -85,6 +85,40 @@ describe("gate-validator: contract F required fields", () => {
     seedGate(cwd, "stage-04.backend", { workstream: "backend", host: "codex", status: "PASS" });
     assert.equal(runValidator(cwd).status, 0);
   });
+
+  it("auto-injects host from routing.default_host when missing", () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: codex\npipeline:\n  default_track: full\n",
+    }));
+    const file = path.join(cwd, "pipeline", "gates", "stage-01.json");
+    fs.writeFileSync(file, JSON.stringify({
+      stage: "stage-01", status: "PASS",
+      orchestrator: "devteam@test",
+      // missing: host — validator should pick it up from config.routing.default_host
+      track: "full", timestamp: "2026-05-26T00:00:00Z",
+      blockers: [], warnings: [],
+    }));
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    const patched = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.equal(patched.host, "codex");
+  });
+
+  it("auto-inject defaults host to 'generic' when no config present", () => {
+    const cwd = track(makeTargetProject({ config: false }));
+    fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+    const file = path.join(cwd, "pipeline", "gates", "stage-01.json");
+    fs.writeFileSync(file, JSON.stringify({
+      stage: "stage-01", status: "PASS",
+      orchestrator: "devteam@test",
+      track: "full", timestamp: "2026-05-26T00:00:00Z",
+      blockers: [], warnings: [],
+    }));
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    const patched = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.equal(patched.host, "generic");
+  });
 });
 
 describe("gate-validator: QA build blocker injection", () => {
