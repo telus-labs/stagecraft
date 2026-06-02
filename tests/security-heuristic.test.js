@@ -1,8 +1,29 @@
-const { describe, it } = require("node:test");
+const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { REPO_ROOT } = require("./_helpers");
-const { needsSecurityReview } = require(path.join(REPO_ROOT, "core", "guards", "security-heuristic"));
+const { needsSecurityReview, analyze, contentFindings } =
+  require(path.join(REPO_ROOT, "core", "guards", "security-heuristic"));
+
+let _dirs = [];
+function tmpdir() {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-sec-heur-"));
+  _dirs.push(d);
+  return d;
+}
+afterEach(() => {
+  for (const d of _dirs) try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
+  _dirs = [];
+});
+
+function writeFile(dir, relPath, content) {
+  const full = path.join(dir, relPath);
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, content);
+  return full;
+}
 
 describe("security-heuristic: needsSecurityReview", () => {
   it("flags auth paths", () => {
@@ -70,5 +91,113 @@ describe("security-heuristic: needsSecurityReview", () => {
   it("accepts custom patterns", () => {
     const r = needsSecurityReview(["src/billing/invoice.js"], [/billing/i]);
     assert.equal(r.length, 1);
+  });
+
+  // Audit Tier-3: paths the prior version missed.
+  it("flags login / logout / signup paths even when not under auth/", () => {
+    assert.equal(needsSecurityReview(["src/users/login.ts"]).length, 1, "src/users/login.ts must trigger");
+    assert.equal(needsSecurityReview(["src/handlers/logout.go"]).length, 1, "src/handlers/logout.go must trigger");
+    assert.equal(needsSecurityReview(["src/api/signup.py"]).length, 1, "src/api/signup.py must trigger");
+  });
+
+  it("flags identity / permission / session paths even when not under auth/", () => {
+    assert.equal(needsSecurityReview(["src/handlers/identity.ts"]).length, 1);
+    assert.equal(needsSecurityReview(["src/middleware/permission-check.js"]).length, 1);
+    assert.equal(needsSecurityReview(["src/lib/session-store.ts"]).length, 1);
+  });
+});
+
+describe("security-heuristic: content scanning", () => {
+  it("flags a file that imports bcrypt (path doesn't say auth)", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/users/store.ts", `import bcrypt from "bcrypt";\nexport async function hash(p) { return bcrypt.hash(p, 10); }\n`);
+    const hits = contentFindings(f);
+    assert.ok(hits.includes("password-hash"), `expected password-hash; got: ${hits.join(", ")}`);
+  });
+
+  it("flags a file that signs JWTs (path doesn't say auth)", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/handlers/issue.ts", `import jwt from "jsonwebtoken";\nexport function issueToken(u) { return jwt.sign({ sub: u.id }, secret); }\n`);
+    const hits = contentFindings(f);
+    assert.ok(hits.includes("jwt"), `expected jwt; got: ${hits.join(", ")}`);
+  });
+
+  it("flags crypto.createCipheriv usage", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/lib/encrypt.js", `const crypto = require("crypto");\nconst c = crypto.createCipheriv("aes-256-gcm", key, iv);\n`);
+    const hits = contentFindings(f);
+    assert.ok(hits.includes("crypto-primitive"));
+    assert.ok(hits.includes("crypto-algorithm"));
+  });
+
+  it("flags authz function calls", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/middleware/check.ts", `function guard(req, res, next) {\n  if (!hasPermission(req.user, "admin")) return res.status(403).end();\n  next();\n}\n`);
+    const hits = contentFindings(f);
+    assert.ok(hits.includes("authz-check"));
+  });
+
+  it("flags SQL string concatenation (advisory)", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/data/lookup.js", `const sql = "SELECT * FROM users WHERE id = " + userId;\n`);
+    const hits = contentFindings(f);
+    assert.ok(hits.includes("sql-concat"));
+  });
+
+  it("does NOT flag a clean utility file with no security-relevant content", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/utils/format.ts", `export function pluralize(n, word) { return n === 1 ? word : word + "s"; }\n`);
+    const hits = contentFindings(f);
+    assert.deepEqual(hits, []);
+  });
+
+  it("skips files larger than the size cap", () => {
+    const d = tmpdir();
+    const huge = "x".repeat(2_000_000) + "\nimport bcrypt from 'bcrypt';\n";
+    const f = writeFile(d, "src/generated/blob.js", huge);
+    const hits = contentFindings(f);
+    assert.deepEqual(hits, [], "oversized files should be skipped, not OOM the scanner");
+  });
+
+  it("does not throw on missing or unreadable files", () => {
+    assert.deepEqual(contentFindings("/tmp/does-not-exist-stagecraft-test-xyz.ts"), []);
+  });
+});
+
+describe("security-heuristic: analyze (structured output)", () => {
+  it("returns separate path and content findings with attribution", () => {
+    const d = tmpdir();
+    const storeFile = writeFile(d, "src/users/store.ts", `import bcrypt from "bcrypt";\n`);
+    const fmtFile   = writeFile(d, "src/utils/format.ts", `export function f(x) { return x.toString(); }\n`);
+    const dockFile  = writeFile(d, "Dockerfile", `FROM node:20\n`);
+
+    const r = analyze([storeFile, fmtFile, dockFile]);
+    assert.equal(r.required, true);
+
+    const pathFindings = r.findings.filter((f) => f.kind === "path");
+    const contentFindingsList = r.findings.filter((f) => f.kind === "content");
+
+    // Dockerfile matched on path
+    assert.ok(pathFindings.some((f) => f.file === dockFile));
+    // bcrypt import matched on content (path users/store.ts isn't in PATH_PATTERNS)
+    assert.ok(contentFindingsList.some((f) => f.file === storeFile && f.label === "password-hash"));
+    // format.ts shouldn't appear anywhere
+    assert.ok(!r.findings.some((f) => f.file === fmtFile));
+  });
+
+  it("returns required:false when nothing matches", () => {
+    const d = tmpdir();
+    const fmtFile = writeFile(d, "src/utils/format.ts", `export function f(x) { return x; }\n`);
+    const r = analyze([fmtFile, path.join(d, "README.md")]);
+    assert.equal(r.required, false);
+    assert.deepEqual(r.findings, []);
+  });
+
+  it("can disable content scanning via opts.scanContent: false", () => {
+    const d = tmpdir();
+    const f = writeFile(d, "src/users/store.ts", `import bcrypt from "bcrypt";\n`);
+    const r = analyze([f], { scanContent: false });
+    // Path doesn't match PATH_PATTERNS, content scan is off → no findings
+    assert.equal(r.required, false);
   });
 });
