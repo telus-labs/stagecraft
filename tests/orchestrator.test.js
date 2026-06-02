@@ -139,6 +139,24 @@ describe("orchestrator: mergeWorkstreamGates aggregation", () => {
     assert.equal(r.merged, false);
     assert.match(r.reason, /missing workstream gate/);
   });
+
+  it("reports a clear error when a workstream gate is malformed JSON (no crash)", () => {
+    const cwd = track(makeTargetProject());
+    const fs = require("node:fs");
+    // Seed three valid + one truncated
+    seedGate(cwd, "stage-04.frontend", { workstream: "frontend", host: "claude-code", status: "PASS" });
+    seedGate(cwd, "stage-04.platform", { workstream: "platform", host: "claude-code", status: "PASS" });
+    seedGate(cwd, "stage-04.qa", { workstream: "qa", host: "claude-code", status: "PASS" });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "gates", "stage-04.backend.json"),
+      '{"stage":"stage-04","workstream":"back', // truncated mid-emit
+      "utf8",
+    );
+    const r = mergeWorkstreamGates("build", { cwd });
+    assert.equal(r.merged, false);
+    assert.match(r.reason, /unreadable workstream gate/);
+    assert.match(r.reason, /backend/);
+  });
 });
 
 describe("orchestrator: runStageHeadless --skip-completed", () => {

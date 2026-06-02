@@ -787,7 +787,12 @@ function cmdReplay(argv) {
       fs.writeFileSync(wsResult.gatePath, JSON.stringify(originalGate, null, 2) + "\n");
 
       // Diff the gates.
-      const newGate = JSON.parse(newGateRaw);
+      let newGate;
+      try { newGate = JSON.parse(newGateRaw); }
+      catch (err) {
+        process.stderr.write(`[replay] host wrote malformed JSON to ${wsResult.gatePath}: ${err.message}\n`);
+        process.exit(1);
+      }
       const newFp = reproducibilityFingerprint(newGate);
       const diff = require(path.join(__dirname, "..", "core", "reproducibility"))
         .compareFingerprints(originalFp, newFp);

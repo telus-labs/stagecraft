@@ -108,6 +108,20 @@ describe("next: conditional dispatch", () => {
   });
 });
 
+describe("next: malformed gate handling", () => {
+  it("returns fix-and-retry with a clear error when a stage gate is malformed", () => {
+    const cwd = track(makeTargetProject());
+    const fs = require("node:fs");
+    const gatePath = path.join(cwd, "pipeline", "gates", "stage-01.json");
+    fs.writeFileSync(gatePath, '{"stage":"stage-01","status":"PA', "utf8"); // truncated mid-emit
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "requirements");
+    assert.ok(Array.isArray(r.blockers) && r.blockers.length > 0, "blockers populated");
+    assert.match(r.blockers[0], /unreadable|malformed/i);
+  });
+});
+
 describe("next: track filtering", () => {
   it("nano track starts at build (skips requirements/design/clarification)", () => {
     const cwd = track(makeTargetProject({
