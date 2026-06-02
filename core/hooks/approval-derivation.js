@@ -260,9 +260,14 @@ function applyVerdict({ area, verdict, reviewer, host }) {
     const hasBlockers = gate.changes_requested.length > 0;
     gate.status = hasEnough && !hasBlockers ? "PASS" : "FAIL";
     gate.timestamp = new Date().toISOString();
-    // Re-stamp identity in case we read a legacy gate.
-    gate.orchestrator = ORCHESTRATOR_ID;
-    gate.host = HOST;
+    // Backfill identity for legacy gates that predate the field, but do NOT
+    // overwrite. For fanout gates, gate.host was set at creation to the
+    // fanout target host (e.g. "codex") — clobbering it to HOST here would
+    // misattribute every subsequent review update from this hook to
+    // claude-code. The host field is set once when the gate is created and
+    // is never mutated afterwards.
+    gate.orchestrator = gate.orchestrator || ORCHESTRATOR_ID;
+    gate.host = gate.host || host || HOST;
 
     const tmpPath = `${gatePath}.tmp.${process.pid}`;
     fs.writeFileSync(tmpPath, JSON.stringify(gate, null, 2) + "\n");

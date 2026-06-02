@@ -127,4 +127,59 @@ describe("approval-derivation: gate upsert (end-to-end)", () => {
     const g = readGate(cwd, "stage-05.frontend");
     assert.equal(g.approvals.length, 1);
   });
+
+  it("preserves host on fanout gate across subsequent updates", () => {
+    // Bug: every re-run of the hook re-stamped gate.host = HOST
+    // ("claude-code"), clobbering the fanout target the gate was created
+    // with. Subsequent peer-review attribution silently misrouted to
+    // claude-code regardless of which host actually ran the review.
+    const cwd = track(makeTargetProject());
+    // Create the fanout gate (filename is a known-host name, so the hook
+    // takes the fanout path and writes stage-05.frontend.codex.json).
+    writeReview(cwd, "by-codex.md", "## Review of frontend\nLGTM\nREVIEW: APPROVED\n");
+    runHook(cwd);
+    const g1 = readGate(cwd, "stage-05.frontend.codex");
+    assert.ok(g1, "fanout gate not written");
+    assert.equal(g1.host, "codex");
+
+    // Update the gate — same reviewer flips to CHANGES_REQUESTED. The
+    // line 209 branch (existing gate read) fires; host must NOT be
+    // clobbered.
+    writeReview(cwd, "by-codex.md", "## Review of frontend\nwait\nREVIEW: CHANGES REQUESTED\n");
+    runHook(cwd);
+    const g2 = readGate(cwd, "stage-05.frontend.codex");
+    assert.equal(g2.host, "codex", "host clobbered to claude-code on update — regression");
+    assert.equal(g2.changes_requested.length, 1);
+  });
+
+  it("backfills host on a legacy gate that omits the field", () => {
+    // Re-stamp behavior for legacy gates: if the existing gate predates
+    // the host-field requirement, the hook should add it on next update
+    // (using the inferred host, or HOST as final fallback) rather than
+    // leaving the field absent and failing validation.
+    const cwd = track(makeTargetProject());
+    fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "gates", "stage-05.frontend.json"),
+      JSON.stringify({
+        stage: "stage-05",
+        workstream: "frontend",
+        // host: omitted on purpose
+        orchestrator: "devteam@old",
+        track: "full",
+        status: "FAIL",
+        timestamp: "2026-01-01T00:00:00Z",
+        blockers: [],
+        warnings: [],
+        area: "frontend",
+        approvals: [],
+        changes_requested: [],
+        required_approvals: 2,
+      }, null, 2),
+    );
+    writeReview(cwd, "by-backend.md", "## Review of frontend\nLGTM\nREVIEW: APPROVED\n");
+    runHook(cwd);
+    const g = readGate(cwd, "stage-05.frontend");
+    assert.equal(g.host, "claude-code", "legacy gate should be backfilled with HOST");
+  });
 });
