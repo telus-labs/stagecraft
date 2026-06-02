@@ -518,6 +518,45 @@ devteam stage security-review --headless   # if still required
 devteam stage red-team --headless          # verifies fixes
 ```
 
+### Fixing QA failures within build
+
+When QA's workstream gate within Stage 4 is FAIL, the bugs belong to the other build roles — typically backend or platform. The validator automatically writes the QA blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
+
+**Step 1 — Delete the affected gates.** Leave passing workstreams' gates on disk; `--skip-completed` will skip those automatically.
+
+```bash
+rm pipeline/gates/stage-04.backend.json   # owns the express.static bug
+rm pipeline/gates/stage-04.platform.json  # owns the Dockerfile bug
+rm pipeline/gates/stage-04.qa.json        # QA must re-verify after fixes
+rm pipeline/gates/stage-04.json           # merged gate must be rebuilt
+```
+
+**Step 2 — Re-run with `--patch` and `--skip-completed`.**
+
+```bash
+devteam stage build --patch --from stage-04.qa --skip-completed --headless
+devteam merge build
+devteam next
+```
+
+`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a **PATCH MODE** section at the top of each dispatched prompt, telling agents to fix only the listed items. `--skip-completed` skips dispatching any workstream whose gate file already exists — so frontend, which passed, never gets re-run.
+
+The agents see: the QA blockers already in `context.md` (written by the validator when QA's gate was first validated), plus the explicit PATCH MODE list in the prompt. Both signals reinforce the same fix targets.
+
+**Manual alternative.** If you need to direct the bugs more explicitly than the auto-injected blockers allow, edit `pipeline/context.md` before re-running to add role-specific instructions:
+
+```markdown
+## QA findings — build re-run required
+
+**dev-backend** must fix:
+- `express.static` points to `public/` which doesn't exist; frontend is at `src/frontend/`
+
+**dev-platform** must fix:
+- Dockerfile CMD references `src/server.js`; server is at `src/backend/server.js`
+```
+
+Then re-run as above. The manual additions and the auto-injected blocker block coexist in `context.md`.
+
 ### Headless timeout
 
 The default headless timeout is 10 minutes per workstream. Slow stages (red-team, verification-beyond-tests) can exceed this. Pass `--timeout-ms` to override:

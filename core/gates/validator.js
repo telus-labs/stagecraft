@@ -210,6 +210,57 @@ function injectRedTeamBlockers(gate, cwd) {
   );
 }
 
+/**
+ * When the QA workstream gate within build (stage-04.qa.json) FAILs,
+ * write its blockers into pipeline/context.md so the implementation
+ * roles (backend, platform, etc.) see them on the next build re-run.
+ *
+ * Uses HTML comment markers so the section is replaced, not duplicated,
+ * across repeated QA FAIL cycles.
+ */
+function injectQABuildBlockers(gate, cwd) {
+  if (gate.stage !== "stage-04" || gate.workstream !== "qa" || gate.status !== "FAIL") return;
+  const items = gate.blockers;
+  if (!Array.isArray(items) || items.length === 0) return;
+
+  const contextPath = path.join(cwd, "pipeline", "context.md");
+  if (!fs.existsSync(contextPath)) return;
+
+  const BEGIN = "<!-- devteam:qa-build-blockers:begin -->";
+  const END   = "<!-- devteam:qa-build-blockers:end -->";
+
+  const itemLines = items.map((item) => `- ${item}`);
+
+  const section = [
+    BEGIN,
+    "## IMMEDIATE: QA Build Failures — Fix Before Re-Running QA",
+    "",
+    "The following bugs were found by QA (stage-04.qa) and must be fixed by the",
+    "responsible implementation roles before QA can re-verify. Delete the gate files",
+    "for the owning roles and QA, then re-run:",
+    "  `devteam stage build --patch --from stage-04.qa --skip-completed --headless`",
+    "",
+    ...itemLines,
+    "",
+    `_Last updated by gate-validator: ${new Date().toISOString()}_`,
+    END,
+  ].join("\n");
+
+  let content = fs.readFileSync(contextPath, "utf8");
+  if (content.includes(BEGIN)) {
+    const startIdx = content.indexOf(BEGIN);
+    const endIdx   = content.indexOf(END) + END.length;
+    content = content.slice(0, startIdx) + section + content.slice(endIdx);
+  } else {
+    content = section + "\n\n" + content;
+  }
+
+  fs.writeFileSync(contextPath, content, "utf8");
+  console.log(
+    `[gate-validator] ℹ️  QA build blockers (${items.length}) written to pipeline/context.md`,
+  );
+}
+
 /** Validate required fields. Returns an array of missing field names. */
 function missingRequired(gate) {
   return REQUIRED_FIELDS.filter((k) => !(k in gate));
@@ -426,6 +477,7 @@ function main() {
 
   if (status === "FAIL") {
     injectRedTeamBlockers(gate, process.cwd());
+    injectQABuildBlockers(gate, process.cwd());
     console.log(`[gate-validator] ❌ GATE FAIL — ${stageLabel} (${producer})`);
     if (Array.isArray(gate.blockers) && gate.blockers.length > 0) {
       console.log(`[gate-validator] Blockers:`);

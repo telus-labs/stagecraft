@@ -180,12 +180,20 @@ async function runStageHeadless(stageName, opts = {}) {
       throw new Error(`host "${ws.host}" declares headless: true but exports no invoke()`);
     }
   }
+  const gatesDir = path.join(plan.ctx.cwd, "pipeline", "gates");
   return withSpan("pipeline.stage.headless", {
     "devteam.stage": plan.stage,
     "devteam.stage.name": stageName,
     "devteam.workstream_count": plan.workstreams.length,
   }, async () => {
     const results = await Promise.all(plan.workstreams.map(async (ws) => {
+      if (opts.skipCompleted) {
+        const gateFile = path.join(gatesDir, `${ws.descriptor.workstreamId}.json`);
+        if (fs.existsSync(gateFile)) {
+          process.stderr.write(`[devteam] --skip-completed: ${ws.role} already has a gate, skipping\n`);
+          return { role: ws.role, host: ws.host, descriptor: ws.descriptor, skipped: true, exitCode: 0, gatePath: gateFile, durationMs: 0 };
+        }
+      }
       process.stderr.write(`[devteam] dispatching ${ws.role} → ${ws.host} (headless)\n`);
       const r = await withSpan("adapter.invoke", {
         "devteam.host": ws.host,

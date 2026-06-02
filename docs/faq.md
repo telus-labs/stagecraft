@@ -348,6 +348,26 @@ Two recovery options:
 
 If neither works: write the gate with `status: "ESCALATE"`, fill `escalation_reason` with what happened, and run `devteam next` — it'll route you to `resolve-escalation` and the pipeline halts cleanly until you decide.
 
+### QA found implementation bugs during the build stage — how do I get the right agents to fix them?
+
+QA's workstream gate will have `status: FAIL` with the bugs in `blockers[]`. When the validator runs, it automatically writes those blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
+
+Delete the affected gates, then use `--patch` and `--skip-completed`:
+
+```bash
+rm pipeline/gates/stage-04.backend.json   # if backend owns a bug
+rm pipeline/gates/stage-04.platform.json  # if platform owns a bug
+rm pipeline/gates/stage-04.qa.json        # QA must re-verify
+rm pipeline/gates/stage-04.json           # merged gate
+
+devteam stage build --patch --from stage-04.qa --skip-completed --headless
+devteam merge build
+```
+
+`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a PATCH MODE block into each dispatched prompt. `--skip-completed` skips any workstream whose gate file still exists on disk — so frontend (which passed) never gets re-dispatched.
+
+See [Fixing QA failures within build](user-guide.md#fixing-qa-failures-within-build) in the user guide for the full workflow including manual `context.md` editing when you need more explicit role assignments.
+
 ### A multi-role stage has one workstream stuck and the others are done — what do I do?
 
 `devteam next` will report `continue-stage` with the specific role still pending. You have three options:

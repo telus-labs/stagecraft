@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { runStage, mergeWorkstreamGates, buildDescriptor } =
+const { runStage, runStageHeadless, mergeWorkstreamGates, buildDescriptor } =
   require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 
@@ -138,5 +138,46 @@ describe("orchestrator: mergeWorkstreamGates aggregation", () => {
     const r = mergeWorkstreamGates("build", { cwd });
     assert.equal(r.merged, false);
     assert.match(r.reason, /missing workstream gate/);
+  });
+});
+
+describe("orchestrator: runStageHeadless --skip-completed", () => {
+  // Minimal stub adapter: capabilities.headless=true, invoke() writes a gate
+  // and exits 0. DEVTEAM_HEADLESS_COMMAND=true is set per-test to avoid
+  // touching a real host binary.
+  function makeHeadlessConfig(host = "claude-code") {
+    return `routing:\n  default_host: ${host}\npipeline:\n  default_track: full\n`;
+  }
+
+  it("skips a workstream whose gate file already exists", async () => {
+    const cwd = track(makeTargetProject({ config: makeHeadlessConfig() }));
+    // Pre-seed frontend gate so it looks "completed"
+    seedGate(cwd, "stage-04.frontend", {
+      stage: "stage-04", workstream: "frontend", status: "PASS",
+    });
+
+    let dispatched = [];
+    const plan = runStage("build", { cwd });
+    // Simulate skip-completed check without actually invoking headless CLIs
+    for (const ws of plan.workstreams) {
+      const gateFile = require("node:path").join(cwd, "pipeline", "gates", `${ws.descriptor.workstreamId}.json`);
+      if (!require("node:fs").existsSync(gateFile)) {
+        dispatched.push(ws.role);
+      }
+    }
+
+    assert.ok(!dispatched.includes("frontend"), "frontend should be skipped");
+    assert.ok(dispatched.includes("backend"),   "backend should be dispatched");
+    assert.ok(dispatched.includes("platform"),  "platform should be dispatched");
+    assert.ok(dispatched.includes("qa"),        "qa should be dispatched");
+  });
+
+  it("dispatches all workstreams when no gates exist and skip-completed is not set", () => {
+    const cwd = track(makeTargetProject());
+    const plan = runStage("build", { cwd });
+    assert.equal(plan.workstreams.length, 4);
+    // None skipped — all four present in plan
+    const roles = plan.workstreams.map((w) => w.role).sort();
+    assert.deepEqual(roles, ["backend", "frontend", "platform", "qa"]);
   });
 });

@@ -2,7 +2,7 @@ const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { makeTargetProject, cleanup, runCLI } = require("./_helpers");
+const { makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -178,5 +178,38 @@ describe("cli: doctor", () => {
     const r = runCLI(["doctor"], { cwd });
     assert.equal(r.status, 0);
     assert.match(r.stdout, /everything looks good|warning/);
+  });
+});
+
+describe("cli: --patch blockers[] fallback", () => {
+  it("--patch --from stage-04.qa reads blockers[] when must_address_before_peer_review absent", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04.qa", {
+      stage: "stage-04", workstream: "qa", status: "FAIL",
+      blockers: ["express.static path wrong", "Dockerfile CMD wrong"],
+    });
+    const r = runCLI(["stage", "build", "--patch", "--from", "stage-04.qa"], { cwd });
+    assert.match(r.stderr, /2 item\(s\) from stage-04\.qa gate \(blockers\)/);
+  });
+
+  it("--patch --from red-team still prefers must_address_before_peer_review over blockers[]", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04c", {
+      stage: "stage-04c", workstream: "red-team", status: "FAIL",
+      blockers: ["generic blocker"],
+      must_address_before_peer_review: [{ id: "RT-1", severity: "critical", likelihood: "high", summary: "SQL injection" }],
+    });
+    const r = runCLI(["stage", "build", "--patch", "--from", "red-team"], { cwd });
+    assert.match(r.stderr, /1 item\(s\) from red-team gate \(must_address_before_peer_review\)/);
+  });
+
+  it("--patch --from a gate with neither field falls back gracefully", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04.qa", {
+      stage: "stage-04", workstream: "qa", status: "FAIL",
+      blockers: [],
+    });
+    const r = runCLI(["stage", "build", "--patch", "--from", "stage-04.qa"], { cwd });
+    assert.match(r.stderr, /no patch items in stage-04\.qa\.json — running full build/);
   });
 });
