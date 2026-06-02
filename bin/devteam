@@ -1476,6 +1476,12 @@ async function cmdRuling(argv) {
       resolve(1);
     });
     child.on("close", (code) => resolve(code === null ? 1 : code));
+    // Swallow EPIPE: if the spawned host exits before consuming our
+    // stdin (e.g. `false` in tests, or any host that errors before
+    // reading the prompt), the unbuffered write raises EPIPE which
+    // becomes an unhandled-error crash on Node 20/22. Node 24 silently
+    // ignores it. Matching core/adapters/headless.js → runHeadless.
+    child.stdin.on("error", () => { /* swallow EPIPE when child exits early */ });
     child.stdin.write(prompt);
     child.stdin.end();
   });
