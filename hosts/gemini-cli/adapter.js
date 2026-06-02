@@ -135,36 +135,14 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push(`## Read first`);
   for (const f of descriptor.readFirst) lines.push(`- ${f}`);
   lines.push("");
-  lines.push(`## Allowed writes (advisory — gemini-cli enforces this in prompt only; the gate validator catches violations post-hoc)`);
+  const { allowedWritesCaption, appendGateFooter } = require("../../core/adapters/render-helpers");
+  lines.push(allowedWritesCaption(capabilities.enforces.allowed_writes, capabilities.displayName || "gemini-cli"));
   for (const f of descriptor.allowedWrites) lines.push(`- ${f}`);
   lines.push("");
   lines.push(`## Artifact`);
   lines.push(`Produce \`${descriptor.artifact}\` using \`templates/${descriptor.template}\`.`);
   lines.push("");
-  lines.push(`## Gate to write`);
-  lines.push(`Write to \`pipeline/gates/${descriptor.workstreamId}.json\`. You provide:`);
-  lines.push("```json");
-  lines.push(JSON.stringify({
-    stage: descriptor.stage,
-    workstream: descriptor.role,
-    status: "PASS|WARN|FAIL|ESCALATE",
-    track: ctx.track,
-    timestamp: "<ISO-8601>",
-    blockers: [],
-    warnings: [],
-    ...descriptor.expectedGate,
-  }, null, 2));
-  lines.push("```");
-  lines.push(`The orchestrator adds \`"orchestrator": "${ctx.orchestrator}"\` and \`"host": "gemini-cli"\` at validation time.`);
-  lines.push("");
-  lines.push(`Optional cost telemetry: include \`model\`, \`tokens_in\`, \`tokens_out\`, \`duration_ms\` in the gate if measurable. \`scripts/dashboard.js --view cost\` computes USD via \`core/pricing.js\`.`);
-
-  // C4 reproducibility — hash this prompt and ask the agent to stamp
-  // the hash + run params into the gate for audit / replay.
-  const { hashSystemPrompt } = require("../../core/reproducibility");
-  const systemPromptHash = hashSystemPrompt(lines.join("\n"));
-  lines.push("");
-  lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
+  appendGateFooter(lines, descriptor, ctx, "gemini-cli");
   return lines.join("\n");
 }
 
