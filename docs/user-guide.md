@@ -136,7 +136,46 @@ devteam next            # "what's next?"
 devteam stage <name>    # "run that stage"
 ```
 
-After every stage's gate is written (by the LLM, via the host's hooks, or manually), `devteam next` tells you what comes next: `run-stage`, `continue-stage` (multi-role partial), `merge`, `fix-and-retry`, `resolve-escalation`, or `pipeline-complete`.
+### What is a gate?
+
+A **gate** is a JSON file the model writes to `pipeline/gates/` at the end of each stage. It's the contract between stages: the orchestrator reads it to decide whether the pipeline can advance, and the validator checks it for correctness. Required fields on every gate:
+
+```json
+{
+  "stage": "stage-01",
+  "workstream": "pm",
+  "status": "PASS",
+  "track": "full",
+  "timestamp": "2026-05-01T12:00:00Z",
+  "orchestrator": "devteam@0.4.0",
+  "host": "claude-code",
+  "blockers": [],
+  "warnings": []
+}
+```
+
+`orchestrator` and `host` are auto-injected by the validator — the model doesn't need to write them. Stage-specific fields (like `acceptance_criteria_count` or `security_approved`) are documented in each stage's schema under `core/gates/schemas/`.
+
+**Gate statuses:**
+- **PASS** — stage complete; pipeline advances.
+- **WARN** — stage complete with concerns; pipeline advances but the warning is preserved in the merged gate.
+- **FAIL** — stage did not meet its criteria; `devteam next` returns `fix-and-retry`. The `blockers[]` array explains what must be fixed. Re-run the stage; the new gate overwrites the old one.
+- **ESCALATE** — a human decision is required before the pipeline can advance (e.g. the model isn't confident enough to PASS or FAIL; the change scope grew; a security finding is ambiguous). The pipeline halts until you resolve it — see [resolve-escalation](#devteam-next-says-resolve-escalation).
+
+You can hand-edit a gate file if the model got something wrong. Just keep the required fields and write valid JSON — the validator will tell you what's missing.
+
+### `devteam next` actions explained
+
+After every stage's gate is written, `devteam next` inspects `pipeline/gates/` and returns one of:
+
+| Action | Meaning | What to do |
+|---|---|---|
+| `run-stage` | Stage not started | `devteam stage <name> [--headless]` |
+| `continue-stage` | Multi-role stage partly done — some workstreams still pending | Run the remaining role's workstream |
+| `merge` | All workstreams of a multi-role stage done, no merged gate yet | `devteam merge <stage>` |
+| `fix-and-retry` | Merged gate (or single-role gate) has `status: FAIL` | Address the blockers, re-run the stage |
+| `resolve-escalation` | Gate has `status: ESCALATE` | Read `escalation_reason`, make the call, rewrite the gate |
+| `pipeline-complete` | All stages in the track have PASS or WARN | Done |
 
 For a snapshot of where the pipeline is right now:
 
@@ -209,6 +248,17 @@ devteam merge build
 
 `devteam next` will tell you when a merge is needed — you don't have to remember.
 
+### Conditional stages
+
+Some stages only run when a preceding stage's gate sets a specific flag. The orchestrator checks these automatically — `devteam next` silently skips a conditional stage whose condition isn't met and moves on.
+
+| Stage | Condition |
+|---|---|
+| 4b — Security review | `stage-04a.security_review_required: true` (set by pre-review heuristic when auth/crypto/PII/secret/infra patterns are found) |
+| 4d — Migration safety | `stage-04a.migration_safety_required: true` (set when the diff touches schema files, migration directories, or DDL fragments) |
+
+All other stages run unconditionally on their track. If you want to verify whether a conditional stage will run for your current diff, inspect the pre-review (stage-04a) gate after it's written.
+
 ### Per-stage details
 
 - **Stage 1 — Requirements (PM).** PM writes `pipeline/brief.md` from `templates/brief-template.md`. Gate carries `acceptance_criteria_count`, `out_of_scope_items`, `required_sections_complete`.
@@ -239,7 +289,7 @@ devteam merge build
 
 - **Stage 6d — Verification beyond tests (Verifier, full-only, G7).** Runs AFTER stage-06 (qa) PASS. New `verifier` role applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Read-only on production code; writes property tests under `src/tests/property/` and formal specs under `pipeline/formal/`. Gate carries `methods_attempted[]`, `methods_skipped[{method, reason}]`, `candidates_inventoried`, per-method stats (`property_based` / `mutation` / `formal`), `findings_count`, `blocking_findings[]`. **A surviving mutant on a critical path, a property counterexample to a stated invariant, or a formal counterexample to a safety property → FAIL.** Tooling not installed → method is `attempted_but_blocked:<method>` (recorded honestly, surfaces a warning). Track inclusion: `full` only — the heavy stuff opted into rigour-over-speed; other tracks rely on stage-06 example tests as their verification floor. See `skills/verification-beyond-tests/SKILL.md` for the five-phase procedure and `roles/verifier.md` for the role contract.
 
-- **Stage 7 — Sign-off (PM + Platform).** PM signs off on QA results; Platform prepares `pipeline/runbook.md`. **Auto-fold:** if Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 mapping, the orchestrator writes Stage 7 directly with `auto_from_stage_06: true`.
+- **Stage 7 — Sign-off (PM + Platform).** PM signs off on QA results; Platform prepares `pipeline/runbook.md`. **Auto-fold:** if Stage 6 reports `all_acceptance_criteria_met: true` AND `criterion_to_test_mapping_is_one_to_one: true`, the orchestrator writes Stage 7's gate automatically with `auto_from_stage_06: true` — you don't run Stage 7 manually. This is intentional: if QA proved every criterion was met with a 1:1 test, sign-off is automatic. If you run Stage 6 and then see Stage 7 already has a gate, that's why.
 
 - **Stage 8 — Deploy (Platform, adapter-driven).** Platform reads `.devteam/config.yml`'s `deploy.adapter` setting, follows `core/deploy/<adapter>.md`. **Do not auto-rollback on FAIL** — the runbook names the rollback procedure; a human decides whether to roll back or investigate.
 
@@ -247,42 +297,141 @@ devteam merge build
 
 ## Multi-host setups
 
-Install multiple hosts side-by-side:
+### What "host" means
+
+A *host* is the AI coding CLI that Stagecraft hands work to: Claude Code (`claude`), Codex CLI (`codex`), or Gemini CLI (`gemini`). Stagecraft never calls a model API directly. It renders a stage prompt and pipes it to the host, which manages the model invocation, tool permissions, and output capture itself.
+
+**Host and model are two different things.** Which host you route to determines which CLI runs. Which model *that CLI uses* is configured inside the host — not in Stagecraft. For Claude Code, the `model:` field in each agent file (`.claude/agents/<role>.md`) controls this. For Codex and Gemini, it's their own settings.
+
+This distinction matters when you're optimizing cost or comparing model quality: you can run Opus for some roles and Sonnet for others without changing hosts at all, purely by editing the agent frontmatter. You only need multiple hosts when you want to mix CLIs — Claude Code for some roles, Codex for others.
+
+### Why use multiple hosts?
+
+**Cost.** Opus-class models cost roughly 5× more per token than Sonnet. Multi-host lets you route expensive models only to the roles that justify the price — typically Principal, Security, and Red-team for their reasoning demands — and cheaper models for the bulk of implementation work. Net cost on a full pipeline run typically drops 30–50%.
+
+**Model diversity.** Different models have different blind spots. A bug Claude rationalizes as acceptable, Codex or Gemini might flag. Routing specific roles to specific models captures independent opinions without manual effort. The formalized version of this — where every code-review area runs on all configured hosts in parallel — is [adversarial peer review](#multi-model-adversarial-peer-review). Neither of these happens automatically: red-team routes to `default_host` unless you add a `roles: red-team:` override, and adversarial peer review is off unless you set `review_fanout`.
+
+**Tool fit.** Claude Code is strong on design, complex review, and reasoning about architecture. Codex CLI is fast at backend implementation. Gemini CLI is inexpensive for pattern-matching tasks like QA. Use the right tool for the job.
+
+### Setting up multiple hosts
+
+Install both adapters in one command:
 
 ```bash
 devteam init --host claude-code,codex
 ```
 
-Both adapters install their surfaces; rules (under `.devteam/rules/`) are shared (the second adapter sees them already on disk and skips). Then edit `.devteam/config.yml`:
+What this does, in sequence, for each host:
+- Lays down its role prompt files (`.claude/agents/` for claude-code, `.codex/prompts/roles/` for codex)
+- Installs slash commands, hooks, rules, and skills where the host supports them
+- Skips files already written by an earlier host in the list (rules in `.devteam/rules/` are shared between hosts and only written once)
+
+The config file (`.devteam/config.yml`) is written once, with the first host as the default:
 
 ```yaml
 routing:
-  default_host: claude-code      # everything routes here unless overridden
-  roles:
-    backend: codex                # backend goes to Codex
-  stages:
-    stage-08: claude-code         # deploy always on claude-code, regardless of role
+  default_host: claude-code
 ```
 
-Precedence: `routing.stages > routing.roles > routing.default_host`.
+**Installing both hosts does not automatically split work between them.** Until you edit the config, every stage routes to `default_host` — in this case, claude-code. Codex's installed files sit on disk unused. The pipeline behaves identically to `devteam init --host claude-code` until you add `roles:` or `stages:` overrides.
 
-Result: `devteam stage build` produces 4 workstream prompts, one of which (backend) points at `.codex/prompts/roles/backend.md` while the other three point at `.claude/agents/dev-<role>.md`. The merge step is unchanged — gates from different hosts merge through the same JSON seam. The merged stage gate's `workstreams[]` array preserves the `host` field per row.
+### Configuring routing
 
-### Why split hosts?
+Edit `.devteam/config.yml` to override the default for specific roles or stages:
 
-Three reasons people do this in practice:
+```yaml
+routing:
+  default_host: claude-code        # fallback for anything not matched below
 
-1. **Cost.** Route the bulk of work (backend, frontend, QA) to a cheaper model and reserve the expensive one (Opus) for Principal + Security. Net cost typically drops 30–50%.
-2. **Specialization.** Claude is usually best at design + review; Codex is fast at backend implementation; Gemini is cheap at QA pattern-matching. Pick the right model per role.
-3. **Independence.** A bug Claude rationalizes as fine, Codex might catch. Diverse models = diverse blind spots. Multi-host adversarial review (see below) is the formalized version of this.
+  roles:
+    backend: codex                 # backend workstream → Codex CLI
+    frontend: codex
+    platform: codex
+    qa: codex
+    # principal, security, pm, red-team, migrations → claude-code (inherits default)
 
-### Why NOT split hosts?
+  stages:
+    stage-08: claude-code          # deploy always on claude-code, regardless of role
+```
 
-- **Setup overhead.** Each host CLI must be installed and authenticated. If your team has only Claude Code, multi-host adds friction with no value.
-- **Debugging.** When a stage fails, "which model's fault" is a question you have to answer.
-- **Cost telemetry.** Tracking spend across two billing dashboards is harder than one. (BACKLOG D6 will add per-stage cost telemetry; until then, it's manual.)
+Routing precedence: **`stages` → `roles` → `default_host`**. The stage-level override is useful for stages where a specific host is required regardless of which role is dispatched there — for example, always running deploy on the host whose agent has deployment credentials.
 
-Default to single-host. Reach for multi-host when you have a specific reason.
+When a stage with multiple workstreams runs, each workstream is independently routed. `devteam stage build` (four workstreams: backend, frontend, platform, QA) with the config above routes all four to Codex. `devteam stage design` (Principal role) routes to Claude Code. The gate merge is host-agnostic — the orchestrator reads JSON files, and the merged gate's `workstreams[]` array records `"host"` per row so you can see which CLI handled what.
+
+### Choosing models within a single host
+
+If you're using only Claude Code and want different models per role, you don't need multi-host at all. The installed agent files already have model tiers set:
+
+```yaml
+# .claude/agents/principal.md  (written by devteam init)
+---
+name: principal
+model: opus          # claude-opus — architecture rulings, design sign-off
+---
+```
+
+```yaml
+# .claude/agents/dev-backend.md
+---
+name: dev-backend
+model: sonnet        # claude-sonnet — implementation
+---
+```
+
+To change a model for a specific role, edit that agent file directly. Re-running `devteam init --host claude-code --force` regenerates all agent files from the framework defaults, so keep custom model overrides in mind if you re-init.
+
+For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft.
+
+### Common configurations
+
+**Cost-optimized: Opus for reasoning, Codex for implementation**
+
+This is the most common split. Claude Code runs the roles that require sustained reasoning (Principal, Security, Red-team, PM). Codex runs the high-volume implementation and QA workstreams.
+
+```yaml
+routing:
+  default_host: claude-code     # principal, security, pm, red-team, migrations
+  roles:
+    backend: codex
+    frontend: codex
+    platform: codex
+    qa: codex
+```
+
+**Locked deploy: implementation on one host, deploy always on another**
+
+Useful when your deploy host needs specific credentials or tool permissions that other workstreams shouldn't have.
+
+```yaml
+routing:
+  default_host: codex
+  stages:
+    stage-08: claude-code       # deploy on claude-code; everything else on codex
+```
+
+**Adversarial peer review: run every review area on multiple models simultaneously**
+
+`review_fanout` defaults to an empty list — Stage 5 runs as a single-host review on `default_host` unless you opt in:
+
+```yaml
+routing:
+  default_host: claude-code
+  review_fanout: [claude-code, codex, gemini-cli]
+```
+
+With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model adversarial peer review](#multi-model-adversarial-peer-review) for the full picture.
+
+### Multi-host in headless mode
+
+Headless mode (`--headless`) works normally in multi-host setups. Each workstream spawns its own host CLI process; they run concurrently within a stage. Every host you route work to must support headless (all three shipped adapters do). In an unattended pipeline loop, mixed-host stages produce gates through the same seam and advance the pipeline normally.
+
+### When single-host is the right call
+
+- **Your team only has one CLI installed.** Multi-host requires authenticating each CLI separately. If everyone uses Claude Code, there's no upside.
+- **Debugging costs.** When a multi-host stage fails, the first question is "which model caused this?" That's an extra diagnostic step. Single-host failures are easier to attribute.
+- **Spend visibility.** Two CLIs mean two billing accounts. Per-stage cost attribution across hosts requires correlating two dashboards.
+
+Default to single-host. Add a second host when you have a specific cost, diversity, or tool-fit reason that justifies the extra setup.
 
 ## Headless mode
 
@@ -542,14 +691,24 @@ You typo'd a stage or host name. Use `devteam stages` and `devteam hosts` to see
 
 ### `devteam next` says `fix-and-retry`
 
-A stage gate has `status: FAIL`. The blockers are listed in `devteam next`'s output. Address them, re-run the stage, let the new gate overwrite the old one. The orchestrator counts retries via the `retry_number` field; after a few rounds of retry without resolution, the gate should be escalated.
+A stage gate has `status: FAIL`. The blockers are listed in `devteam next`'s output. Address them, re-run the stage, let the new gate overwrite the old one.
+
+If you re-run the same stage more than once without resolution, the model should increment `retry_number` and fill `this_attempt_differs_by` — a non-empty string describing what changed between this attempt and the last. The validator enforces this: a gate with `retry_number >= 1` and an empty or missing `this_attempt_differs_by` is rejected. This prevents silent retry loops where the model just writes the same failing gate again.
+
+If you've retried several times without progress, consider writing a gate with `status: ESCALATE` — it means "a human decision is needed" rather than "fix the code and retry."
 
 ### `devteam next` says `resolve-escalation`
 
-A stage gate has `status: ESCALATE`. The pipeline cannot advance until the escalation is resolved. Read the gate's `escalation_reason` field, make the call, then either:
+A stage gate has `status: ESCALATE`. Use escalation when:
+- The model can't determine PASS or FAIL without human input (e.g. an ambiguous security finding)
+- The change scope has grown beyond what the brief covers and a human must decide whether to re-scope or proceed
+- A veto-capable stage (security review, migration safety) found a concern that needs human judgement
 
-- Rewrite the gate to `PASS` (you've resolved the escalation) and re-run `devteam next`.
-- Or stop — escalation is the right outcome and the pipeline correctly halted.
+The pipeline cannot advance until you resolve it. Read the gate's `escalation_reason` and `decision_needed` fields, make the call, then either:
+
+- Rewrite the gate to `PASS` or `WARN` (you've resolved the escalation) and re-run `devteam next`.
+- Rewrite to `FAIL` if the resolution is "yes, this is a blocker" — then fix and retry.
+- Leave it as `ESCALATE` if the pipeline correctly halted and the work shouldn't continue.
 
 ### Stoplist blocked my change
 

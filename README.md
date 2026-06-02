@@ -23,7 +23,12 @@ If you're evaluating Stagecraft, this is the cheapest path to "does it work for 
 1. **(5 min) Install the framework.** `git clone <this-repo> && cd stagecraft && npm install && npm link`. Verify with `devteam --help`.
 2. **(2 min) Initialize a throwaway target project.** `mkdir /tmp/scratch && cd /tmp/scratch && devteam init --host claude-code`. Then `devteam doctor` should be all green.
 3. **(3 min) Read [EXAMPLE.md](EXAMPLE.md).** One feature traced through all 17 stages with real CLI captures. Tells you what each stage actually does.
-4. **(15 min) Run one full pipeline yourself.** `devteam stage requirements --feature "a one-paragraph feature you understand"`. Drop the prompt into Claude Code. Let the PM subagent write the brief. Run `devteam next`. Walk forward through design, build, peer-review, qa, sign-off. Skip deploy if you don't want to actually deploy anything (just write `{"status":"PASS",...}` into the gate by hand).
+4. **(15 min) Run one full pipeline yourself.** The simplest path: run each stage with `--headless` and let the orchestrator drive Claude Code directly.
+   ```bash
+   devteam stage requirements --feature "a one-paragraph feature you understand" --headless
+   devteam next   # tells you the next command to run
+   ```
+   Walk forward through design, build, peer-review, qa, sign-off. For deploy, write the gate by hand if you don't want to actually deploy: `echo '{"stage":"stage-08","status":"PASS","track":"full","timestamp":"'$(date -u +%FT%TZ)'","blockers":[],"warnings":[]}' > pipeline/gates/stage-08.json`.
 5. **(5 min) Inspect the audit trail.** `ls pipeline/gates/` — every stage's outcome on disk. `cat pipeline/brief.md`, `pipeline/design-spec.md`, `pipeline/code-review/by-*.md`. The pipeline is reconstructable from these files alone.
 
 If after 30 minutes you can see how this would help your team, run a 2-week pilot ([adoption-guide.md](docs/adoption-guide.md) has the script). If you can't, drop it — it's not the right tool for every team.
@@ -83,8 +88,8 @@ A coordinated team of role-specific subagents running a structured software-deve
 ## Prerequisites
 
 - Node.js ≥ 18
-- At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), or just a terminal (generic adapter only)
-- Git (recommended; the pipeline writes artifacts under `pipeline/`)
+- At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), **Gemini CLI** (`gemini --version` works), or just a terminal (generic adapter — prompts rendered for manual use, no automation)
+- Git (recommended for version-controlling artifacts; the pipeline itself does not require it)
 
 ## Quick start
 
@@ -186,17 +191,23 @@ For multi-host (`--host claude-code,codex`): both surfaces installed side-by-sid
 
 ## CLI reference
 
-```
-devteam init --host <name>[,<name>...] [--force]
-devteam stage <name> [--feature "..."] [--headless]
-devteam next [--json]
-devteam merge <stage>
-devteam validate
-devteam stages
-devteam hosts
-```
+| Command | What it does |
+|---|---|
+| `devteam init --host <name>[,<name>...]` | Install host adapter(s) into the current project; write `.devteam/config.yml` |
+| `devteam stage <name> [--feature "..."] [--headless]` | Render (and optionally execute) a stage prompt; `--headless` drives the host CLI automatically |
+| `devteam next [--json]` | Report the next action the pipeline needs (run-stage, merge, fix-and-retry, resolve-escalation, pipeline-complete) |
+| `devteam merge <stage>` | Aggregate per-workstream gate files into a single merged stage gate (required after multi-role stages) |
+| `devteam validate` | Run the gate validator manually against the current gate directory |
+| `devteam summary` | One-screen view of all stages: pass/warn/fail/escalate/pending per stage and workstream |
+| `devteam stages` | List all stages and their stage IDs |
+| `devteam hosts` | List available host adapters |
+| `devteam doctor` | Check that the install is healthy: hooks wired, agent files present, host CLIs on PATH |
+| `devteam reproduce <stage>` | Replay a past gate and compare reproducibility fields |
+| `devteam ui` | Open the web dashboard (live gate view, cost, performance charts) |
+| `devteam spec generate` | Scaffold `pipeline/spec.feature` from AC-N criteria in `pipeline/brief.md` |
+| `devteam spec verify` | Check `pipeline/spec.feature` for drift against the brief |
 
-See `bin/devteam help` for the up-to-date list.
+See `devteam help` for the up-to-date list with flags.
 
 ## Auditing an existing codebase
 
@@ -211,7 +222,13 @@ Inside Claude Code (after `devteam init --host claude-code`):
 /audit --resume         # continue from the last completed phase
 ```
 
-On other hosts (Codex, Gemini CLI, generic), invoke the `auditor` role with the `audit` skill — there's no slash command but the skill is installed to `.codex/skills/audit/` or `.gemini/skills/audit/`.
+On other hosts, no slash command exists, but the `audit` skill is installed when you run `devteam init`. Run the stage prompt for the `auditor` role directly:
+
+```bash
+devteam stage audit --headless    # drives codex / gemini-cli automatically
+# or interactive:
+devteam stage audit               # prints the auditor prompt; paste into your tool
+```
 
 Output lands under `docs/audit/` in your project: `00-project-context.md` through `10-roadmap.md`, plus a `status.json` for resume capability. The `implement` skill consumes `docs/audit/10-roadmap.md` to pick the next change to work on.
 
