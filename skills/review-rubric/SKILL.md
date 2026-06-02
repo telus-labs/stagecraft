@@ -1,3 +1,8 @@
+---
+name: review-rubric
+description: "Standard code review checklist for all reviewers. Load this when performing a peer review at Stage 5. Covers spec compliance, correctness, security, test coverage, readability, and performance. Defines what constitutes APPROVED vs CHANGES_REQUESTED and how to write review findings."
+---
+
 # Review Rubric
 
 Use this skill when performing a code review. It defines the standard

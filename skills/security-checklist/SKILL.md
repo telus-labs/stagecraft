@@ -1,3 +1,8 @@
+---
+name: security-checklist
+description: "Security review checklist. Load this during design review, implementation, and code review. Every item is a potential BLOCKER if violated. Covers input validation, authentication/authorisation, data handling, secrets management, dependency hygiene, and logging. Use alongside the security role brief at Stage 4b."
+---
+
 # Security Checklist
 
 Load this skill during design review, implementation, and code review.

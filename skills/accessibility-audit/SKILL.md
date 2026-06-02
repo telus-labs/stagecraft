@@ -1,3 +1,8 @@
+---
+name: accessibility-audit
+description: "Run a WCAG accessibility audit on UI changes at Stage 6b. Uses axe-core, pa11y, or Lighthouse to check affected pages and components. Produces pipeline/accessibility-report.md and writes the stage-06b gate. Use when a change touched frontend UI. Skip (with audit_skipped_reason) for backend-only or doc-only changes."
+---
+
 # Accessibility audit
 
 Use this skill at Stage 6b (after QA) when the change touched UI. Audits the affected pages/components for WCAG violations using axe-core, pa11y, or Lighthouse. Produces `pipeline/accessibility-report.md` and writes `pipeline/gates/stage-06b.json`.

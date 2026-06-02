@@ -1,3 +1,8 @@
+---
+name: api-conventions
+description: "Project-wide API design standards. Load this when designing or implementing REST endpoints, request/response shapes, status codes, versioning, or pagination. Defines conventions for resource naming, HTTP method usage, error response format, and header requirements."
+---
+
 # API Conventions
 
 Load this skill when designing or implementing API endpoints.

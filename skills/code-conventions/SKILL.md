@@ -1,3 +1,8 @@
+---
+name: code-conventions
+description: "Project-wide coding standards for naming, formatting, error handling, security, and testing. Load this when writing or reviewing code. Covers all layers (files, functions, classes, constants, database columns) and languages in use. Do not duplicate these rules in agent prompts — load this skill instead."
+---
+
 # Code Conventions
 
 This skill contains project-wide coding standards. Agents load this when

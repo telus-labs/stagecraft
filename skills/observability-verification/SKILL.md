@@ -1,3 +1,8 @@
+---
+name: observability-verification
+description: "Verify at Stage 6c that every metric, log, and trace promised in the design-spec is actually emitted by the shipped code. Runs on full and hotfix tracks only. Produces the stage-06c gate. Use when the platform role owns observability sign-off after build and QA."
+---
+
 # Observability verification
 
 Use this skill at Stage 6c (observability gate) to verify that every metric, log, and trace the design-spec promised is actually emitted by the shipped code. The most common failure mode this catches: a design says "we'll emit a counter `feature_x_changes_total`" and the code never adds it.
