@@ -75,13 +75,25 @@ Write `pipeline/gates/stage-04a.json`:
   "timestamp": "<ISO>",
   "track": "<track>",
   "lint_passed": true,
+  "tests_passed": true,
   "type_check_passed": true,
   "sca_findings": { "high": 0, "critical": 0 },
+  "dependency_review_passed": true,
   "security_review_required": false,
   "blockers": [],
   "warnings": []
 }
 ```
+
+**Orchestrator-stamped fields.** The orchestrator runs the configured lint
+and test commands itself after this stage and overwrites `lint_passed` and
+`tests_passed` based on what it actually observes (exit code 0 vs non-zero).
+The stamp records the result in `_orchestrator_stamped` for audit. If
+your assertion disagrees with what the orchestrator observes (e.g., you
+wrote `lint_passed: true` but the lint command returns non-zero), the
+orchestrator's truth wins and the gate's status flips to FAIL. Be
+honest in your initial write — `devteam verify stage-04a` will catch a
+lie, and the audit trail will record both your claim and the override.
 
 If any check fails, the owning dev is invoked to fix. Stage 5 peer review
 does not start until this gate passes.

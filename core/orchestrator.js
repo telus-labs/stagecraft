@@ -217,6 +217,38 @@ async function runStageHeadless(stageName, opts = {}) {
       });
       return { role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r };
     }));
+
+    // Orchestrator-stamped verification. For stages where the gate
+    // claims something the orchestrator can verify (stage-04a:
+    // lint+tests; stage-06: tests + AC mapping), run the actual
+    // commands and stamp what was observed. Skipped when the gate
+    // doesn't exist yet (model wrote nothing) or when the stage isn't
+    // stampable. Failures here log but don't block — the validator
+    // will catch a malformed gate on its own. opts.stamp === false
+    // disables this entirely (used by tests that don't want to run
+    // real lint/test commands).
+    if (opts.stamp !== false) {
+      const { STAMPABLE_STAGES, stamp } = require("./verify/stamp");
+      // Single-role stages produce one gate at stage-XX.json (no role
+      // suffix). For now, stamping only applies to single-role stages
+      // (stage-04a, stage-06). Multi-role stages would need per-role
+      // stamping, which isn't in scope here.
+      if (STAMPABLE_STAGES.has(plan.stage) && plan.workstreams.length === 1) {
+        try {
+          const stampResult = await stamp(plan.ctx.cwd, plan.stage);
+          if (!stampResult.ok) {
+            process.stderr.write(`[devteam] orchestrator stamping: ${stampResult.error}\n`);
+          } else if (stampResult.stamp.status_overridden) {
+            process.stderr.write(
+              `[devteam] orchestrator verification flipped status: ${stampResult.stamp.status_overridden.from} → ${stampResult.stamp.status_overridden.to}\n`,
+            );
+          }
+        } catch (err) {
+          process.stderr.write(`[devteam] orchestrator stamping failed: ${err.message}\n`);
+        }
+      }
+    }
+
     return { stage: plan.stage, name: stageName, roles: plan.roles, results, ctx: plan.ctx };
   });
 }

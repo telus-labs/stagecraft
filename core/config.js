@@ -18,6 +18,12 @@ const DEFAULTS = {
     default_track: "full",
     isolation: "in-place",
     skip_stages: [],
+    // verify: optional. Holds orchestrator-stamped verification commands
+    // for stages that the orchestrator can verify directly (stage-04a
+    // and stage-06 today). Absent means "discover from package.json
+    // scripts or skip"; explicit null on a field means "skip even if
+    // discoverable." See core/verify/runner.js → resolveCommands.
+    verify: {},
   },
 };
 
@@ -49,6 +55,7 @@ function loadConfig(cwd = process.cwd()) {
         default_track: parsed.pipeline?.default_track ?? DEFAULTS.pipeline.default_track,
         isolation: parsed.pipeline?.isolation ?? DEFAULTS.pipeline.isolation,
         skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
+        verify: (parsed.pipeline && typeof parsed.pipeline.verify === "object" && parsed.pipeline.verify !== null) ? parsed.pipeline.verify : {},
       },
       _source: "file",
       _path: p,
@@ -91,6 +98,9 @@ function renderDefaultConfig(hosts) {
   lines.push("  default_track: full");
   lines.push("  isolation: in-place");
   lines.push("  # skip_stages: []     # stage names to skip, e.g. [red-team]");
+  lines.push("  # verify:             # orchestrator-stamped verification commands");
+  lines.push("  #   lint_command: \"npm run lint\"   # override; defaults to package.json scripts.lint");
+  lines.push("  #   test_command: \"npm test\"      # override; set to null to disable");
   lines.push("");
   return lines.join("\n");
 }
