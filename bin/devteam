@@ -59,6 +59,14 @@ Commands:
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
                                    by host hooks (e.g. Claude Code Stop).
   merge <stage>                    Merge per-workstream gates into stage gate.
+  restart <stage> [--cascade]      Clear a stage's gate(s) so the pipeline can
+       [--keep-context]            re-run it. With --cascade, also clears every
+       [--dry-run]                 stage that comes after this one in the active
+                                   track. By default also strips that stage's
+                                   injected blocker sections from pipeline/
+                                   context.md (--keep-context to preserve them).
+                                   Use after an ESCALATE or FAIL to re-run from
+                                   a specific point.
   summary [--json]                 One-screen pipeline state report.
   doctor                           Pre-flight check: install integrity,
                                    target layout, config validity, adapter
@@ -171,6 +179,8 @@ function parseFlags(argv) {
     if (a === "--ci")      { flags.ci      = argv[++i]; continue; }
     if (a === "--out")     { flags.out     = argv[++i]; continue; }
     if (a === "--strict")  { flags.strict  = true;      continue; }
+    if (a === "--cascade") { flags.cascade = true;      continue; }
+    if (a === "--keep-context") { flags.keepContext = true; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -1126,6 +1136,160 @@ function cmdSummary(argv) {
   }
 }
 
+// Strip a section between HTML-comment markers from a file, idempotently.
+// Returns true if the file was rewritten. Duplicates the contract that
+// core/gates/validator.js uses for its strip-on-resolve path; both must
+// stay in sync. Both call sites are short so the duplication is
+// acceptable; a future PR can extract this into core/context/blockers.js
+// if a third caller appears.
+function stripMarkedSection(filePath, beginMarker, endMarker) {
+  if (!fs.existsSync(filePath)) return false;
+  const content = fs.readFileSync(filePath, "utf8");
+  if (!content.includes(beginMarker)) return false;
+  const startIdx = content.indexOf(beginMarker);
+  const endIdx = content.indexOf(endMarker);
+  if (endIdx < 0) return false;
+  let after = content.slice(endIdx + endMarker.length);
+  after = after.replace(/^\n+/, "\n");
+  const next = content.slice(0, startIdx) + after.replace(/^\n+/, "");
+  fs.writeFileSync(filePath, next, "utf8");
+  return true;
+}
+
+// `devteam restart <stage> [--cascade] [--keep-context] [--dry-run]`
+// Clears a stage's gate(s) so the pipeline can re-run it. By default,
+// also strips any injected blocker sections in pipeline/context.md
+// that originated from this stage. Tier-4: this is what users reach
+// for after an ESCALATE or FAIL when they want to re-do work from a
+// specific point.
+function cmdRestart(argv) {
+  const { positional, flags } = parseFlags(argv);
+  const stageInput = positional[0];
+  if (!stageInput) {
+    console.error("Usage: devteam restart <stage> [--cascade] [--keep-context] [--dry-run]");
+    console.error("");
+    console.error("Clear a stage's gate file(s) so the pipeline can re-run it.");
+    console.error("");
+    console.error("Arguments:");
+    console.error("  <stage>          Stage name (e.g. 'peer-review') or id (e.g. 'stage-05').");
+    console.error("");
+    console.error("Flags:");
+    console.error("  --cascade        Also clear every stage that comes AFTER this one in the");
+    console.error("                   active track. Use when you want to undo a chain of work.");
+    console.error("                   Default: clear only the named stage.");
+    console.error("  --keep-context   Don't strip injected blocker sections from");
+    console.error("                   pipeline/context.md. Default: strip the section(s) this");
+    console.error("                   stage injected (red-team-blockers for stage-04c,");
+    console.error("                   qa-build-blockers for stage-04.qa).");
+    console.error("  --dry-run        Print what would be deleted/stripped without doing it.");
+    console.error("");
+    console.error("After restart, run `devteam next` to see the new starting point.");
+    process.exit(2);
+  }
+
+  const cwd = flags.cwd || process.cwd();
+  const gatesDir = path.join(cwd, "pipeline", "gates");
+  if (!fs.existsSync(gatesDir)) {
+    console.error(`No pipeline/gates/ at ${cwd} — nothing to restart.`);
+    process.exit(1);
+  }
+
+  // Resolve <stage> to a stage definition. Accept either the friendly
+  // name ('peer-review') or the gate-id ('stage-05'); errored input is
+  // user-actionable.
+  const { STAGES, getStage, orderedStageNamesForTrack } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
+  const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
+  let stageName = stageInput;
+  let stageDef = getStage(stageInput);
+  if (!stageDef) {
+    // Maybe the user passed a stage id; map it back to the friendly name.
+    for (const [name, def] of Object.entries(STAGES)) {
+      if (def && def.stage === stageInput) { stageName = name; stageDef = def; break; }
+    }
+  }
+  if (!stageDef) {
+    console.error(`Unknown stage "${stageInput}".`);
+    console.error(`Known stages: ${Object.keys(STAGES).join(", ")}`);
+    process.exit(2);
+  }
+
+  // Collect files to delete. The named stage's merged gate + any
+  // per-workstream gates. With --cascade, also every later stage's gates.
+  const config = loadConfig(cwd);
+  const track = flags.track || config.pipeline.default_track || "full";
+  const trackStages = orderedStageNamesForTrack(track);
+  const startIdx = trackStages.indexOf(stageName);
+  // If the stage isn't on the active track, we still allow restart of
+  // just that stage's files (no cascade target list). Cascade only
+  // makes sense within the active track.
+  const stagesToClear = (flags.cascade && startIdx >= 0)
+    ? trackStages.slice(startIdx).map((n) => getStage(n))
+    : [stageDef];
+
+  const toDelete = [];
+  for (const def of stagesToClear) {
+    const merged = path.join(gatesDir, `${def.stage}.json`);
+    if (fs.existsSync(merged)) toDelete.push(merged);
+    for (const role of def.roles) {
+      const ws = path.join(gatesDir, `${def.stage}.${role}.json`);
+      if (fs.existsSync(ws)) toDelete.push(ws);
+    }
+  }
+
+  // Decide which injected sections to strip. Each known injection
+  // is owned by a specific stage; we only strip when the stage being
+  // restarted owns the section.
+  const contextPath = path.join(cwd, "pipeline", "context.md");
+  const toStrip = [];
+  if (!flags.keepContext) {
+    const stripCandidates = [
+      { stageId: "stage-04c", section: "red-team-blockers" },
+      { stageId: "stage-04",  section: "qa-build-blockers", workstream: "qa" },
+    ];
+    const clearedIds = new Set(stagesToClear.map((d) => d.stage));
+    // The qa-build-blockers are injected by stage-04.qa specifically, but
+    // restart of stage-04 (the whole build stage) clears qa too; restart
+    // of just qa via stage-04.qa input isn't a separate pathway today.
+    for (const c of stripCandidates) {
+      if (clearedIds.has(c.stageId)) toStrip.push(c.section);
+    }
+  }
+
+  // Report and act.
+  if (flags.dryRun) {
+    console.log(`Would restart: ${stageName} (${stageDef.stage})${flags.cascade ? " — with cascade" : ""}`);
+    console.log("Would delete:");
+    if (toDelete.length === 0) console.log("  (no gate files for these stages)");
+    for (const f of toDelete) console.log(`  rm ${path.relative(cwd, f)}`);
+    if (toStrip.length > 0) {
+      console.log(`Would strip from pipeline/context.md:`);
+      for (const s of toStrip) console.log(`  - ${s} section`);
+    }
+    console.log("");
+    console.log("Re-run without --dry-run to apply. Then `devteam next` to see what runs first.");
+    return;
+  }
+
+  for (const f of toDelete) {
+    fs.unlinkSync(f);
+    console.log(`Removed ${path.relative(cwd, f)}`);
+  }
+  for (const section of toStrip) {
+    const stripped = stripMarkedSection(
+      contextPath,
+      `<!-- devteam:${section}:begin -->`,
+      `<!-- devteam:${section}:end -->`,
+    );
+    if (stripped) console.log(`Stripped ${section} section from pipeline/context.md`);
+  }
+  if (toDelete.length === 0 && toStrip.length === 0) {
+    console.log(`Nothing to clear: stage ${stageName} has no gates and no injected blockers.`);
+  } else {
+    console.log("");
+    console.log(`Restarted ${stageName}${flags.cascade ? " + downstream" : ""}. Next: \`devteam next\`.`);
+  }
+}
+
 function cmdMerge(argv) {
   const { positional, flags } = parseFlags(argv);
   const stageName = positional[0];
@@ -1340,6 +1504,7 @@ function main() {
     case "next":     return cmdNext(rest);
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);
+    case "restart":  return cmdRestart(rest);
     case "summary":  return cmdSummary(rest);
     case "doctor":   return cmdDoctor(rest);
     case "ui":       return cmdUI(rest);
