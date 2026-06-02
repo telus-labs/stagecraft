@@ -385,6 +385,92 @@ function next(opts = {}) {
   });
 }
 
+// Are any of a multi-role stage's per-workstream gates present? Used by
+// the auto-fold path to avoid clobbering work the PM/Platform agents
+// have already started.
+function workstreamGatesExistFor(stageDef, gatesDir) {
+  if (stageDef.roles.length <= 1) return false;
+  return stageDef.roles.some((role) =>
+    fs.existsSync(path.join(gatesDir, `${stageDef.stage}.${role}.json`)),
+  );
+}
+
+// Stage 7 auto-fold. Returns { ok: boolean, reason?, acCount? }.
+// Preconditions verified by the orchestrator itself (no model trust):
+//   1. stage-06.json exists and PASSed
+//   2. brief.md has at least one AC-N entry
+//   3. test-report.md exists
+//   4. every AC-N in brief.md is mentioned in test-report.md
+// On success, writes pipeline/gates/stage-07.json with
+// auto_from_stage_06: true and the required gate fields.
+function tryAutoFoldSignOff(cwd, gatesDir, track) {
+  const stage06Path = path.join(gatesDir, "stage-06.json");
+  if (!fs.existsSync(stage06Path)) {
+    return { ok: false, reason: "stage-06 gate missing" };
+  }
+  const { gate: stage06, error: stage06Err } = loadGateSafe(stage06Path);
+  if (stage06Err) return { ok: false, reason: `stage-06 unreadable: ${stage06Err}` };
+  if (stage06.status !== "PASS") {
+    return { ok: false, reason: `stage-06 status is ${stage06.status}, not PASS` };
+  }
+
+  // Re-verify the AC→test mapping ourselves. The QA agent may have
+  // claimed all_acceptance_criteria_met: true; we check.
+  const { extractAcsFromBrief, extractAcsFromReport } = require("./verify/stamp");
+  const briefPath = path.join(cwd, "pipeline", "brief.md");
+  const reportPath = path.join(cwd, "pipeline", "test-report.md");
+  if (!fs.existsSync(briefPath)) {
+    return { ok: false, reason: "pipeline/brief.md missing (auto-fold needs a brief with AC-N entries)" };
+  }
+  if (!fs.existsSync(reportPath)) {
+    return { ok: false, reason: "pipeline/test-report.md missing" };
+  }
+  const briefAcs = extractAcsFromBrief(fs.readFileSync(briefPath, "utf8"));
+  if (briefAcs.length === 0) {
+    return { ok: false, reason: "brief.md has no AC-N entries — auto-fold requires explicit criteria" };
+  }
+  const reportAcs = new Set(extractAcsFromReport(fs.readFileSync(reportPath, "utf8")));
+  const unmapped = briefAcs.filter((ac) => !reportAcs.has(ac));
+  if (unmapped.length > 0) {
+    return { ok: false, reason: `unmapped AC(s): ${unmapped.join(", ")}` };
+  }
+
+  // 1:1 mapping claim. We've already confirmed every AC is mentioned in
+  // the report; the QA agent's `criterion_to_test_mapping_is_one_to_one`
+  // is an additional uniqueness claim we can't fully verify without
+  // parsing the AC|Test table structurally. Trust the gate field here —
+  // mis-claiming 1:1 when it isn't is a Stage 5 reviewer concern.
+  if (stage06.criterion_to_test_mapping_is_one_to_one !== true) {
+    return { ok: false, reason: "stage-06 criterion_to_test_mapping_is_one_to_one is not true" };
+  }
+
+  const runbookPath = path.join(cwd, "pipeline", "runbook.md");
+  const runbookExists = fs.existsSync(runbookPath);
+
+  const stage07Path = path.join(gatesDir, "stage-07.json");
+  const gate = {
+    stage: "stage-07",
+    status: "PASS",
+    orchestrator: ORCHESTRATOR_ID,
+    track,
+    timestamp: new Date().toISOString(),
+    blockers: [],
+    warnings: runbookExists ? [] : ["pipeline/runbook.md not yet authored — Stage 8 will require it"],
+    pm_signoff: true,
+    deploy_requested: true,
+    runbook_referenced: runbookExists,
+    auto_from_stage_06: true,
+    auto_fold: {
+      ac_count: briefAcs.length,
+      criteria: briefAcs,
+      stamped_at: new Date().toISOString(),
+      stamper: `devteam@${require("../package.json").version}`,
+    },
+  };
+  fs.writeFileSync(stage07Path, JSON.stringify(gate, null, 2) + "\n", "utf8");
+  return { ok: true, acCount: briefAcs.length };
+}
+
 function _nextImpl(stageList, gatesDir, track, skipStages = []) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
@@ -392,6 +478,27 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
 
     // Explicitly skipped via pipeline.skip_stages in config.
     if (skipStages.includes(stageName)) continue;
+
+    // Stage 7 auto-fold. When Stage 6 cleanly satisfies the AC→test
+    // contract, the orchestrator writes stage-07.json itself with
+    // auto_from_stage_06: true, skipping the PM+Platform sign-off
+    // workstreams. Verified — not trusted: we re-derive the AC list
+    // from brief.md and the AC→test mapping from test-report.md
+    // ourselves, rather than rubber-stamping the QA agent's claim.
+    // See docs/concepts.md → "Auto-fold (Stage 7)" for the rationale.
+    if (stageName === "sign-off"
+        && !fs.existsSync(stageGatePath)
+        && !workstreamGatesExistFor(stageDef, gatesDir)) {
+      const cwd = path.resolve(gatesDir, "..", "..");
+      const folded = tryAutoFoldSignOff(cwd, gatesDir, track);
+      if (folded.ok) {
+        process.stderr.write(
+          `[devteam] stage 7 auto-folded: stage 6 satisfied the AC→test contract (${folded.acCount} criteria mapped)\n`,
+        );
+        // Fall through — stageGatePath now exists; the status check
+        // below will see PASS and advance to deploy.
+      }
+    }
 
     // Conditional stages: skip when the prerequisite gate's named field
     // is not equal to the required value. The prerequisite gate must
