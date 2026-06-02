@@ -198,13 +198,20 @@ For multi-host (`--host claude-code,codex`): both surfaces installed side-by-sid
 | `devteam init --host <name>[,<name>...]` | Install host adapter(s) into the current project; write `.devteam/config.yml` |
 | `devteam stage <name> [--feature "..."] [--headless]` | Render (and optionally execute) a stage prompt; `--headless` drives the host CLI automatically |
 | `devteam next [--json]` | Report the next action the pipeline needs (run-stage, merge, fix-and-retry, resolve-escalation, pipeline-complete) |
+| `devteam restart <stage> [--cascade] [--keep-context] [--dry-run]` | Clear a stage's gate(s) so the pipeline can re-run it. With `--cascade`, also clears every stage that comes after. Use after FAIL/ESCALATE. See [docs/runbooks/escalation.md](docs/runbooks/escalation.md). |
+| `devteam ruling --topic "..." [--context <paths>] [--target-gate <gate>] [--headless]` | Dispatch the Principal subagent for an ad-hoc ruling outside the normal stage flow. Writes a `PRINCIPAL-RULING:` line to `pipeline/context.md`; no gate is touched. |
 | `devteam merge <stage>` | Aggregate per-workstream gate files into a single merged stage gate (required after multi-role stages) |
 | `devteam validate` | Run the gate validator manually against the current gate directory |
+| `devteam verify <stage-id> [--json]` | Orchestrator-stamped verification. For stage-04a (lint+tests) and stage-06 (tests + AC mapping), runs the configured commands and stamps the gate with what was actually observed. Flips status to FAIL if the orchestrator's truth disagrees with the model's claim. |
 | `devteam summary` | One-screen view of all stages: pass/warn/fail/escalate/pending per stage and workstream |
 | `devteam stages` | List all stages and their stage IDs |
 | `devteam hosts` | List available host adapters |
 | `devteam doctor` | Check that the install is healthy: hooks wired, agent files present, host CLIs on PATH |
-| `devteam reproduce <stage>` | Replay a past gate and compare reproducibility fields |
+| `devteam reproduce <stage-id> [--json]` | Read a past gate and report replay readiness — which reproducibility fields are recorded, what's missing, whether the current prompt's hash matches what the gate captured. |
+| `devteam replay <stage-id> [--dry-run] [--json]` | Re-run a recorded stage against the current config; diff the result across status, blockers, cost, tokens, duration, reproducibility fields. New gate goes to `pipeline/gates/replay/`. |
+| `devteam ci install [--ci github-actions] [--out <dir>] [--force]` | Drop a CI workflow template into the target project's `.github/workflows/`. The workflow validates gates and posts each as a GitHub check run on PRs. Does NOT run the LLM pipeline in CI by design. |
+| `devteam memory <ingest\|query\|stats\|promote\|clear> [--org]` | Persistent project memory: ingest briefs/ADRs/lessons; query by similarity. `--org` targets the cross-project shared store at `~/.stagecraft/memory/`. |
+| `devteam architecture lookup "<topic>"` | Friendlier wrapper around `memory query --org --kind adr`. Surfaces prior ADRs at design time so architecture decisions don't silently re-litigate. |
 | `devteam ui` | Open the web dashboard (live gate view, cost, performance charts) |
 | `devteam spec generate` | Scaffold `pipeline/spec.feature` from AC-N criteria in `pipeline/brief.md` |
 | `devteam spec verify` | Check `pipeline/spec.feature` for drift against the brief |

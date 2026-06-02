@@ -82,7 +82,17 @@ If the escalation needs Principal judgment specifically — common for cross-cut
 > ## Principal Rulings section.
 ```
 
-**Headless:** *(this is the one current gap — there's no `devteam ruling` command yet; see [BACKLOG](../BACKLOG.md). For now use the interactive path or hand-write the ruling.)*
+**Headless:**
+
+```bash
+devteam ruling \
+  --topic "F-12 must-fix vs defer (TypeError mis-classification at server.js:46)" \
+  --context pipeline/red-team-report.md,pipeline/code-review/by-platform.md \
+  --target-gate pipeline/gates/stage-05.json \
+  --headless
+```
+
+Routes via `routing.roles.principal` (or `routing.default_host` if not set), dispatches the Principal subagent against the cited context, and waits for the ruling to land in `pipeline/context.md`. Refuses cleanly if the routed host doesn't support `--headless`.
 
 The ruling format that the rest of the pipeline knows how to read:
 
