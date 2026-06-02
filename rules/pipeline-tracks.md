@@ -4,7 +4,8 @@ This file covers track routing, the safety stoplist, the budget gate,
 and async-friendly checkpoints — everything the orchestrator decides
 *before* invoking Stage 1. The pipeline definition itself lives in
 `pipeline-core.md` (Stages 1–3, 9, durations) and `pipeline-build.md`
-(Stages 4–8). The full index is in `pipeline.md`.
+(Stages 4–8 — index that points at each per-stage file). The full
+index is in `pipeline.md`.
 
 ## Stage 0 — Routing + budget (orchestrator, pre-stage)
 
@@ -84,7 +85,7 @@ B-13 (audit 2026-05-07), `devteam` enforces the stoplist
 programmatically by refusing the lighter tracks on description or diff
 matches; `--force` overrides for false positives.
 
-The rules in `pipeline-build.md` describe the **full** track. Lighter-track
+The rules in `pipeline-build.md` and the per-stage `stage-NN.md` files describe the **full** track. Lighter-track
 deltas live in the track's own command file
 (`.devteam/commands/{track}.md`). When a gate in a lighter track differs
 from the full-track definition (for example, Stage 5 needing only one

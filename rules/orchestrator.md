@@ -26,10 +26,13 @@ clear ownership and a single accountable author for its gate.
 
 ## Pipeline
 
-Full pipeline definition (split into three files):
+Full pipeline definition:
 - `.devteam/rules/pipeline-tracks.md` — Stage 0: track routing + stoplist + budget + async checkpoints
 - `.devteam/rules/pipeline-core.md` — Stages 1, 2, 3, 9 + duration expectations
-- `.devteam/rules/pipeline-build.md` — Stages 4–8
+- `.devteam/rules/pipeline-build.md` — Stages 4–8 INDEX. Each stage's rules
+  live in its own `stage-NN.md` (e.g. `stage-04.md`, `stage-05.md`,
+  `stage-08.md`). Load the specific stage file when you dispatch that stage;
+  you do not need to load all nine build stages at startup.
 
 Index and rationale: `.devteam/rules/pipeline.md`.
 Gate schema: see `.devteam/rules/gates.md`
@@ -41,8 +44,10 @@ Compaction instructions: see `.devteam/rules/compaction.md`
 ## Startup
 
 Before any pipeline run:
-1. Read all three pipeline rule files (`pipeline-tracks.md`, `pipeline-core.md`,
-   `pipeline-build.md`) and `.devteam/rules/coding-principles.md`
+1. Read `pipeline-tracks.md`, `pipeline-core.md`, and `coding-principles.md`.
+   Read `pipeline-build.md` (the index — small, lists what stages exist and
+   which file each lives in). Do NOT eagerly load every `stage-NN.md` —
+   load each as you dispatch its stage.
 2. If `pipeline/lessons-learned.md` exists, read it — it is durable guidance
    from past runs. Include its full content in every agent invocation prompt
    under a `## Lessons from past runs` heading rather than telling agents to
