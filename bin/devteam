@@ -67,6 +67,13 @@ Commands:
                                    context.md (--keep-context to preserve them).
                                    Use after an ESCALATE or FAIL to re-run from
                                    a specific point.
+  ruling --topic "..."             Dispatch the Principal subagent for an ad-hoc
+       [--context paths]           ruling outside the normal stage flow. Used to
+       [--target-gate path]        resolve escalations that need a Principal call
+       [--headless]                without re-running the originating stage. The
+                                   ruling lands in pipeline/context.md as a
+                                   PRINCIPAL-RULING line; no gate is written.
+                                   See docs/runbooks/escalation.md.
   summary [--json]                 One-screen pipeline state report.
   doctor                           Pre-flight check: install integrity,
                                    target layout, config validity, adapter
@@ -181,6 +188,9 @@ function parseFlags(argv) {
     if (a === "--strict")  { flags.strict  = true;      continue; }
     if (a === "--cascade") { flags.cascade = true;      continue; }
     if (a === "--keep-context") { flags.keepContext = true; continue; }
+    if (a === "--topic")   { flags.topic   = argv[++i]; continue; }
+    if (a === "--context") { flags.context = argv[++i]; continue; }
+    if (a === "--target-gate") { flags.targetGate = argv[++i]; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -1305,6 +1315,179 @@ function cmdMerge(argv) {
   console.log(`Merged → ${result.file} (status: ${result.gate.status})`);
 }
 
+// Render a Principal-ruling prompt — instructs the Principal subagent
+// to read the cited context, weigh the question, and write a
+// PRINCIPAL-RULING line into pipeline/context.md. Used by cmdRuling.
+function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
+  const lines = [
+    "# Principal Ruling Request",
+    "",
+    `**Topic:** ${topic}`,
+    "",
+    "You are the Principal Engineer. Your role brief lives at the",
+    "installed path for the current host (`.claude/agents/principal.md`,",
+    "`.codex/prompts/roles/principal.md`, or",
+    "`.gemini/prompts/roles/principal.md`).",
+    "",
+    "Your task is to issue a binding ruling on the topic above.",
+    "**This is not a pipeline stage — there is no gate to write.** The",
+    "ruling is an artifact for the user, who decides whether to act on",
+    "it (must-fix → `devteam restart <stage>`; defer → hand-edit the",
+    "escalating gate to PASS/WARN with a `warnings[]` entry).",
+    "",
+    "## Read first",
+    "",
+    "- `pipeline/context.md` — current pipeline state and any prior",
+    "  `PRINCIPAL-RULING:` lines you've already issued",
+  ];
+  for (const p of contextPaths) lines.push(`- \`${p}\``);
+  if (targetGate) {
+    lines.push(`- \`${targetGate}\` — the escalating gate that prompted this`);
+    lines.push("  request. Read `escalation_reason` and `decision_needed`.");
+  }
+  lines.push("");
+  lines.push("Plus any source files those documents cite (e.g. a finding at");
+  lines.push("`src/backend/server.js:46` means you should open that file at");
+  lines.push("that line).");
+  lines.push("");
+  lines.push("## What to write");
+  lines.push("");
+  lines.push("Append to `pipeline/context.md` under a `## Principal Rulings`");
+  lines.push("section (create the section if it doesn't exist). Format:");
+  lines.push("");
+  lines.push("```markdown");
+  lines.push("## Principal Rulings");
+  lines.push("");
+  lines.push(`PRINCIPAL-RULING: ${topic} → <your decision in 5-10 words>`);
+  lines.push("");
+  lines.push("<one-paragraph rationale — name the specific finding(s), the");
+  lines.push("tradeoff you weighed, and the recommended next action. If");
+  lines.push("must-fix: name the stage to restart and what to scope to. If");
+  lines.push("defer: name the ticket/marker that should track the follow-up.>");
+  lines.push("```");
+  lines.push("");
+  lines.push("Use crisp, concrete language. \"Must-fix because the wrong");
+  lines.push("error class ships a lie to ops dashboards\" beats \"this seems");
+  lines.push("important.\" Cite the file:line or finding ID where applicable.");
+  lines.push("");
+  lines.push("## What NOT to do");
+  lines.push("");
+  lines.push("- Do not edit the escalating gate's status. That's the user's");
+  lines.push("  call after reading your ruling.");
+  lines.push("- Do not invoke any other subagent. This is a single Principal");
+  lines.push("  ruling, not a re-run of the originating stage.");
+  lines.push("- Do not write new source code. Read-only on `src/`.");
+  lines.push("");
+  lines.push("When done, exit. The user will read `pipeline/context.md` and");
+  lines.push("decide how to encode your ruling via `devteam restart` or a");
+  lines.push("hand-edit. See `docs/runbooks/escalation.md` for the full flow.");
+  return lines.join("\n");
+}
+
+// `devteam ruling --topic "..." [--context paths] [--target-gate path] [--headless]`
+// Dispatches the Principal subagent for an ad-hoc ruling — outside the
+// normal stage flow. Used to resolve escalations that need Principal
+// judgment without re-running an entire stage. The ruling lands in
+// pipeline/context.md as a PRINCIPAL-RULING line; no gate is written.
+async function cmdRuling(argv) {
+  const { flags } = parseFlags(argv);
+  if (!flags.topic) {
+    console.error("Usage: devteam ruling --topic \"...\" [--context <paths>] [--target-gate <path>] [--headless]");
+    console.error("");
+    console.error("Dispatch the Principal subagent for an ad-hoc ruling — outside the");
+    console.error("normal stage flow. Used to resolve escalations that need a Principal");
+    console.error("judgment without re-running the originating stage.");
+    console.error("");
+    console.error("Flags:");
+    console.error("  --topic        Required. Short description of what to rule on.");
+    console.error("  --context      Comma-separated list of files Principal should read");
+    console.error("                 (e.g. pipeline/red-team-report.md,pipeline/code-review/by-platform.md).");
+    console.error("  --target-gate  Path to the escalating gate file. Principal will");
+    console.error("                 read its escalation_reason and decision_needed.");
+    console.error("  --headless     Pipe the prompt through the Principal-routed host's");
+    console.error("                 headless command. Default: print the prompt for user-driven use.");
+    console.error("");
+    console.error("Output: Principal writes a `## Principal Rulings` section into pipeline/context.md.");
+    console.error("This does NOT change the escalating gate's status. After reading the ruling, use");
+    console.error("`devteam restart <stage>` (must-fix) or hand-edit the gate (defer) to act on it.");
+    console.error("");
+    console.error("See `docs/runbooks/escalation.md` for the full flow.");
+    process.exit(2);
+  }
+
+  const cwd = flags.cwd || process.cwd();
+  const topic = flags.topic;
+  const contextPaths = flags.context ? flags.context.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  const targetGate = flags.targetGate;
+
+  const prompt = renderPrincipalRulingPrompt(topic, contextPaths, targetGate);
+
+  if (!flags.headless) {
+    // User-driven mode: print the prompt for paste-into-host.
+    const onboarding = [
+      "════════════════════════════════════════════════════════════════════",
+      `  Principal-ruling prompt for: ${topic}`,
+      "  Paste the prompt below into your AI tool with the Principal",
+      "  subagent active. The Principal will write its ruling into",
+      "  pipeline/context.md under `## Principal Rulings`.",
+      "════════════════════════════════════════════════════════════════════",
+      "",
+    ].join("\n");
+    process.stderr.write(onboarding);
+    console.log(prompt);
+    return;
+  }
+
+  // Headless mode: pipe through the Principal-routed host's CLI.
+  const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
+  const { loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
+  const config = loadConfig(cwd);
+  const principalHost = (config.routing.roles && config.routing.roles.principal)
+    || config.routing.default_host;
+  let adapter;
+  try {
+    adapter = loadAdapter(principalHost);
+  } catch (err) {
+    console.error(`Could not load adapter "${principalHost}" for principal role: ${err.message}`);
+    process.exit(1);
+  }
+  if (!adapter.capabilities || !adapter.capabilities.headless) {
+    console.error(`Principal host "${principalHost}" does not support --headless (capabilities.headless is false).`);
+    console.error("Run without --headless to print the prompt for interactive use.");
+    process.exit(1);
+  }
+
+  const declared = adapter.capabilities.headlessCommand;
+  const override = process.env.DEVTEAM_HEADLESS_COMMAND;
+  const cmdString = override || declared;
+  if (!cmdString) {
+    console.error(`Host "${principalHost}" declares no headlessCommand.`);
+    process.exit(1);
+  }
+
+  const { spawn } = require("node:child_process");
+  const [bin, ...args] = cmdString.split(/\s+/);
+  process.stderr.write(`[devteam] dispatching principal-ruling → ${principalHost} (headless)\n`);
+
+  const exitCode = await new Promise((resolve) => {
+    const child = spawn(bin, args, { cwd, stdio: ["pipe", "inherit", "inherit"] });
+    child.on("error", (err) => {
+      process.stderr.write(`[devteam] spawn error: ${err.message}\n`);
+      resolve(1);
+    });
+    child.on("close", (code) => resolve(code === null ? 1 : code));
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
+
+  if (exitCode === 0) {
+    process.stderr.write(`[devteam] principal-ruling complete. Read pipeline/context.md for the ruling.\n`);
+  } else {
+    process.stderr.write(`[devteam] principal-ruling exited ${exitCode}\n`);
+    process.exit(exitCode);
+  }
+}
+
 function cmdHosts() {
   const hosts = listHosts();
   if (hosts.length === 0) {
@@ -1505,6 +1688,7 @@ function main() {
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);
     case "restart":  return cmdRestart(rest);
+    case "ruling":   return cmdRuling(rest);
     case "summary":  return cmdSummary(rest);
     case "doctor":   return cmdDoctor(rest);
     case "ui":       return cmdUI(rest);
