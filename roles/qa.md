@@ -114,6 +114,18 @@ Before any test authoring or review work, read:
    acceptance criterion has a dedicated test and no test covers multiple
    criteria with distinct verify conditions. When in doubt, set `false`.
 
+   **Orchestrator-stamped fields.** After you write this gate, the
+   orchestrator runs the configured test command itself and parses
+   `pipeline/test-report.md` to cross-check that every `AC-N` from
+   `pipeline/brief.md` is mapped to at least one test row. If the
+   test command exits non-zero, or any AC is unmapped, the orchestrator
+   overrides `all_acceptance_criteria_met` to `false`, adds a structured
+   blocker, and flips the gate's status to FAIL. The override is
+   recorded in `_orchestrator_stamped`. Be honest in your initial
+   write — `devteam verify stage-06` will catch a discrepancy and the
+   audit trail will record both your claim and the orchestrator's
+   observation.
+
 4. On failure: identify the owning dev from the failing-test path and set
    `"assigned_retry_to"` accordingly. The orchestrator re-invokes that dev.
 
