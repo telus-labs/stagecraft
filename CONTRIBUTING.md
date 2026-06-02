@@ -80,10 +80,7 @@ You want to insert a new stage (e.g. an accessibility audit between QA and sign-
 
 5. **Update `rules/gates.md`** with a section under `## Stage-Specific Extra Fields` documenting the gate body for the new stage.
 
-6. **Update `rules/pipeline*.md`** to describe what the stage does and what triggers it. The relevant file:
-   - `pipeline-core.md` — stages 1, 2, 3, 9
-   - `pipeline-build.md` — stages 4 through 8
-   - `pipeline-tracks.md` — anything that varies by track
+6. **Add a per-stage rules file** at `rules/stage-NN.md` (e.g. `stage-04d.md` for a new sub-stage between 4c and 5). Add a row to the index table in `rules/pipeline-build.md` pointing at it. For stages 1–3 or 9, append the section to `pipeline-core.md` instead. For track-level behavior, edit `pipeline-tracks.md`.
 
 7. **If the stage needs a new role**, see Recipe 3.
 

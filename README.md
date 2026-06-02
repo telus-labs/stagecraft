@@ -179,7 +179,7 @@ For `--host claude-code` in a target project:
 | Path | Contents |
 |---|---|
 | `.devteam/config.yml` | Routing config — which host handles which role/stage |
-| `.devteam/rules/*.md` | Pipeline, gate, escalation, retrospective rules (10 docs) |
+| `.devteam/rules/*.md` | Pipeline, gate, escalation, retrospective rules (10 top-level docs + per-stage `stage-NN.md` files) |
 | `.claude/agents/*.md` | Role subagents with Claude Code YAML frontmatter (12) |
 | `.claude/skills/*/SKILL.md` | Task helpers — implement, review-rubric, security-checklist, etc. (13) |
 | `.claude/commands/devteam.md` | Slash command wrapper |
@@ -291,7 +291,7 @@ stagecraft/
 │   ├── pipeline/stages.js      ← STAGES table + STAGES_BY_TRACK
 │   └── router.js               ← per-(stage, role) host resolution
 ├── roles/                      ← single source of truth for role briefs (12)
-├── rules/                      ← pipeline rules docs (10)
+├── rules/                      ← pipeline rules docs (10 top-level + 9 per-stage)
 ├── skills/                     ← task-oriented helpers (13)
 ├── templates/                  ← artifact templates (15)
 ├── hosts/                      ← per-host adapters

@@ -109,7 +109,7 @@ devteam init --host claude-code        # or codex / gemini-cli / claude-code,cod
 my-app/
 ├── .devteam/
 │   ├── config.yml              ← routing + track defaults
-│   └── rules/                  ← 10 rule docs (pipeline, gates, escalation, …)
+│   └── rules/                  ← 10 top-level rule docs + per-stage stage-NN.md files
 ├── .claude/                    ← (or .codex/, .gemini/, depending on host)
 │   ├── agents/                 ← 12 role subagents
 │   ├── skills/                 ← 13 task helpers (implement, review-rubric, …)

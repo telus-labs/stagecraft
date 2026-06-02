@@ -3,8 +3,9 @@
 Stages with mostly single-agent flows: requirements (PM), design
 (Principal), pre-build clarification, and the post-deploy
 retrospective. Stage Duration Expectations live here too. The
-build/review/test/deploy stages live in `pipeline-build.md`. Track
-routing and the safety stoplist live in `pipeline-tracks.md`.
+build/review/test/deploy stages live in `pipeline-build.md` (which
+indexes the per-stage `stage-NN.md` files). Track routing and the
+safety stoplist live in `pipeline-tracks.md`.
 
 ## Stage 1 — Requirements (PM)
 
