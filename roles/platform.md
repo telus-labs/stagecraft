@@ -48,8 +48,32 @@ Before build, test, or review work, read:
 4. Write or update any supporting infra config (`.env.example`, nginx config, etc.).
    Keep changes inside `src/infra/` and root compose/env files; cross-boundary
    edits need a `CONCERN:` line first (coding-principles §3).
-5. Finish `pipeline/pr-platform.md`. Include `## Out of Scope — Noticed`.
-6. Write `pipeline/gates/stage-04-platform.json` with `"status": "PASS"`.
+5. Finish `pipeline/pr-platform.md`. Include `## Out of Scope — Noticed`. Also:
+
+   - **`## Verify`** — required before writing a PASS gate. One bullet per
+     infrastructure criterion you claim to have satisfied, in this exact shape:
+
+     ```markdown
+     ## Verify
+
+     - **AC-7**: docker-compose brings the stack up cleanly
+       - `docker compose up --wait`
+       - → `Network created`, `Container api healthy`, `Container db healthy`,
+         exit 0 after 14s
+     - **AC-8**: nginx forwards /api to backend on port 3000
+       - `curl -i http://localhost/api/health`
+       - → `HTTP/1.1 200 OK`, body `{"status":"ok"}`, no nginx 502
+     ```
+
+     Each bullet ties one acceptance-criterion ID to (a) the exact command you
+     ran and (b) the observed output — `docker compose ps` output, a
+     `curl -i` response, a health-check status. Not "infra is set up." A PASS
+     gate whose `## Verify` is empty, missing, or lists ACs you didn't
+     actually exercise is invalid and will be flagged at peer review.
+6. Write `pipeline/gates/stage-04-platform.json` with `"status": "PASS"`. PASS
+   is only honest when every AC has a `## Verify` bullet with a real command
+   and a real observed output. If even one AC is unverified, the right status
+   is FAIL or escalate back to the PM for clarification — not PASS.
 
 ## On a Pre-Review Task (Stage 4a pre-review gate)
 
