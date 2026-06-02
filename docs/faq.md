@@ -321,7 +321,7 @@ See [`docs/BACKLOG.md`](BACKLOG.md). Top items by impact/effort:
 3. Gemini CLI host adapter (third real host).
 4. Accessibility audit stage.
 5. Persistent project memory (embeddings-indexed).
-6. Multi-model adversarial peer review.
+6. Multi-model peer review.
 
 ### When will this hit 1.0?
 

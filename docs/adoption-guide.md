@@ -131,7 +131,7 @@ You're already doing it informally. Stage 5 just structures it: per-area section
 
 If your team is small enough that informal review works (1–2 people), skip Stage 5 by picking `nano` / `dep-update`. If your team is >3 people, structured review pays off via the audit trail alone — six months later, the question "did anyone actually review this?" has a definitive answer.
 
-The other benefit, often missed: multi-host adversarial review. With `review_fanout` configured, Stage 5 runs across 2–3 different models. Different models catch different bugs. This is a capability you cannot replicate with human review alone, and it's structurally cheap (the cost is wall-clock time and LLM dollars; the bugs caught more than pay back).
+The other benefit, often missed: multi-model peer review. With `review_fanout` configured, Stage 5 runs across 2–3 different models. Different models catch different bugs. This is a capability you cannot replicate with human review alone, and it's structurally cheap (the cost is wall-clock time and LLM dollars; the bugs caught more than pay back). For *method* diversity — a role applying a different methodology, not a different model — that's what stage-04c red-team is for.
 
 ### "What if the framework changes break our installed projects?"
 
@@ -155,7 +155,7 @@ You're already trusting LLM output if you use Claude Code or Codex. Stagecraft a
 
 If you're not ready to trust LLM output at all, this tool isn't going to change that — but you probably aren't using Claude Code or Codex in the first place. The right move there is to keep using AI for autocomplete and not orchestration.
 
-### "What about cost? Multi-model adversarial review sounds expensive."
+### "What about cost? Multi-model peer review sounds expensive."
 
 The default config is one host per pipeline. Multi-host is opt-in. Review fanout is opt-in on top of that. None of this is on by default — you turn it on per project as you see value.
 
@@ -176,7 +176,7 @@ Three artifacts, in order:
 2. **`docs/concepts.md`** — six primitives in a table. Glance before the example, refer back later.
 3. **A 30-minute walkthrough** using [`docs/presentation-notes.md`](presentation-notes.md). Run it as part of new-hire onboarding.
 
-For a deeper example of what the full pipeline produces on a real, non-trivial problem: [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md) — builds a SOC 2 evidence collector CLI through all 17 stages, including conditional stages (security review, migration safety), adversarial peer review, and property-based testing.
+For a deeper example of what the full pipeline produces on a real, non-trivial problem: [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md) — builds a SOC 2 evidence collector CLI through all 17 stages, including conditional stages (security review, migration safety), multi-model peer review, and property-based testing.
 
 After that, the first real change they ship goes through the pipeline with a buddy. By their third pipeline run, they're independent.
 

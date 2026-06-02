@@ -1,6 +1,6 @@
 # Methodology
 
-Stagecraft enforces **ATDD with phase-gate progression and adversarial review**. Every feature traces from an acceptance criterion through a Gherkin scenario through a named test — and can't move to the next phase until the gate for the current one passes. Adversarial roles (red-team, peer-review) are structurally guaranteed to run, not left to chance.
+Stagecraft enforces **ATDD with phase-gate progression, an adversarial red-team, and multi-role peer review**. Every feature traces from an acceptance criterion through a Gherkin scenario through a named test — and can't move to the next phase until the gate for the current one passes. The red-team role is structurally separate from the build roles and runs by default; peer review runs across four area reviewers (and optionally across multiple model families) on every change.
 
 ---
 
@@ -40,17 +40,17 @@ See [`docs/concepts.md`](concepts.md) → *Gate* and [`docs/migration-safety.md`
 
 ---
 
-## 3. Adversarial layers
+## 3. Review layers
 
-Two roles exist specifically to find problems, not build features:
+The pipeline runs two distinct review layers between build and sign-off. They have different roles, different methods, and different success criteria — conflating them is a source of false confidence.
 
-**Red-team (Stage 4c)** — runs after build, before peer-review. Walks 10 attack surfaces (input boundaries, state machines, sequence assumptions, integrations, auth edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps) and produces concrete reproducers. Items listed under `must_address_before_peer_review` block Stage 5 until the implementer addresses them. Always-on for `full` and `hotfix` tracks. Route to a different host than the build agents — diversity of model matters.
+**Adversarial review — Red-team (Stage 4c).** Runs after build, before peer-review. The red-team role is *constitutionally separate* from build roles and exists specifically to find the strongest objections to the change. Walks 10 attack surfaces (input boundaries, state machines, sequence assumptions, integrations, auth edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps) and produces concrete reproducers — not vibes. Items listed under `must_address_before_peer_review` block Stage 5 until the implementer addresses them. Always-on for `full` and `hotfix` tracks. Route to a different host than the build agents — diversity of model matters because the adversarial signal comes from a reviewer with different training data than the builder.
 
-**Peer-review (Stage 5)** — four area-specific reviewers (`reviewer-backend`, `reviewer-frontend`, `reviewer-platform`, `reviewer-qa`) each produce an independent review. With multi-model fanout enabled, Stage 5 duplicates across N hosts and aggregates pessimistically. Patterns that survive all reviewers are promoted to `pipeline/lessons-learned.md` at retrospective; the Principal then decides whether to encode them as pipeline rules.
+**Peer review (Stage 5).** Four area-specific reviewers (`reviewer-backend`, `reviewer-frontend`, `reviewer-platform`, `reviewer-qa`) each produce an independent review against the four coding principles. With `routing.review_fanout` configured, Stage 5 duplicates across N hosts (multi-model peer review) and aggregates pessimistically — any FAIL anywhere blocks the stage. Patterns that survive all reviewers are promoted to `pipeline/lessons-learned.md` at retrospective; the Principal then decides whether to encode them as pipeline rules.
 
-The adversarial structure is not a prompt technique — it's a role topology. The red-team role is constitutionally separate from the build roles and has no incentive to approve its own work.
+The two layers serve different purposes: Stage 4c hunts for *attacks the author didn't think of* with a different method (the 10 surfaces walkthrough). Stage 5 checks for *principles the author didn't apply* with the standard reviewer rubric. Both have value; calling Stage 5 "adversarial" by itself would overclaim — the diversity it gets is execution-diversity (different model families), not method-diversity.
 
-See [`docs/red-team.md`](red-team.md) for the attack-surface methodology.
+See [`docs/red-team.md`](red-team.md) for the attack-surface methodology and [`docs/user-guide.md`](user-guide.md) → *Multi-model peer review* for fanout configuration.
 
 ---
 

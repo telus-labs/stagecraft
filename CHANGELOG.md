@@ -30,7 +30,7 @@ JSON, the adapter contract, or `.devteam/config.yml`.
 
 - **`docs/FEATURES.md`** — every shipped feature organized by area. Single source of truth for "what does Stagecraft do?", separate from the methodology doc ("why does it do it that way?") and concepts ("what are the primitives?"). Front-of-line for skeptical evaluators.
 
-- **`docs/methodology.md`** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, adversarial review layers, four coding principles. Pulls together what was previously scattered across coding-principles.md, role briefs, and the rules docs into one referenceable explanation of *why* the pipeline is shaped this way.
+- **`docs/methodology.md`** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, the adversarial red-team layer, multi-role peer review, and the four coding principles. Pulls together what was previously scattered across coding-principles.md, role briefs, and the rules docs into one referenceable explanation of *why* the pipeline is shaped this way.
 
 - **Red-team failure recovery Q&A in FAQ + unattended-pipeline guidance in user-guide.** Two operational gaps users hit in pilot.
 
@@ -41,6 +41,8 @@ JSON, the adapter contract, or `.devteam/config.yml`.
 - **Reduced prompt token usage in claude-code adapter.** Trimmed boilerplate and de-duplicated context-loading instructions in the rendered stage prompt; typical reduction is 15–25% input tokens per dispatch with no observable change in output quality. Direct cost reduction for users on per-token-priced model tiers.
 
 - **`devteam init` and the SOC 2 walkthrough sweep.** Comprehensive doc audit pass over README, user-guide, FAQ, presentation-notes — primarily updating stale stage counts (8→12 roles, 6→13 skills) and aligning the 17-stage table across every reference point. Audit-tier-1 fixes from the 2026-06-02 self-audit completed this sweep (examples, walkthrough, api-conventions DELETE claim, FEATURES.md track counts).
+
+- **Stage 5 renamed from "adversarial peer review" to "peer review" / "multi-model peer review".** The audit flagged that all four area reviewers in Stage 5 use the same `reviewer.md` rubric on the same inputs — a fanout across hosts gives execution-diversity (different training data) but not method-diversity. Calling this "adversarial" overclaimed: the adversarial label belongs to stage-04c red-team (a separate role with a separate method: the 10-surfaces walkthrough). Renamed the term across README, methodology, concepts, FEATURES, user-guide, adoption-guide, presentation-notes, faq, BACKLOG, and EXAMPLE. Stage 4c remains "adversarial review" everywhere — that label is accurate and load-bearing.
 
 ### Fixed
 

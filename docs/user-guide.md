@@ -78,7 +78,7 @@ Everything else — which subagent to invoke, which file to write, what schema t
 6. [The web UI](#the-web-ui)
 7. [Persistent memory](#persistent-memory)
 8. [Observability (OpenTelemetry)](#observability-opentelemetry)
-9. [Multi-model adversarial peer review](#multi-model-adversarial-peer-review)
+9. [Multi-model peer review](#multi-model-peer-review)
 10. [Auditing a codebase](#auditing-a-codebase)
 11. [When things go wrong](#when-things-go-wrong)
 11. [Customizing for your project](#customizing-for-your-project)
@@ -309,7 +309,7 @@ This distinction matters when you're optimizing cost or comparing model quality:
 
 **Cost.** Opus-class models cost roughly 5× more per token than Sonnet. Multi-host lets you route expensive models only to the roles that justify the price — typically Principal, Security, and Red-team for their reasoning demands — and cheaper models for the bulk of implementation work. Net cost on a full pipeline run typically drops 30–50%.
 
-**Model diversity.** Different models have different blind spots. A bug Claude rationalizes as acceptable, Codex or Gemini might flag. Routing specific roles to specific models captures independent opinions without manual effort. The formalized version of this — where every code-review area runs on all configured hosts in parallel — is [adversarial peer review](#multi-model-adversarial-peer-review). Neither of these happens automatically: red-team routes to `default_host` unless you add a `roles: red-team:` override, and adversarial peer review is off unless you set `review_fanout`.
+**Model diversity.** Different models have different blind spots. A bug Claude rationalizes as acceptable, Codex or Gemini might flag. Routing specific roles to specific models captures independent opinions without manual effort. The formalized version of this — where every code-review area runs on all configured hosts in parallel — is [multi-model peer review](#multi-model-peer-review). Neither of these happens automatically: red-team routes to `default_host` unless you add a `roles: red-team:` override, and multi-model peer review is off unless you set `review_fanout`.
 
 **Tool fit.** Claude Code is strong on design, complex review, and reasoning about architecture. Codex CLI is fast at backend implementation. Gemini CLI is inexpensive for pattern-matching tasks like QA. Use the right tool for the job.
 
@@ -419,7 +419,7 @@ routing:
   review_fanout: [claude-code, codex, gemini-cli]
 ```
 
-With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model adversarial peer review](#multi-model-adversarial-peer-review) for the full picture.
+With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model peer review](#multi-model-peer-review) for the full picture.
 
 ### Multi-host in headless mode
 
@@ -647,9 +647,9 @@ Works with Jaeger / Tempo / Honeycomb / Datadog Agent — anything that speaks O
 
 Tracing is no-op (zero overhead) when no endpoint is configured. To force-disable even when an endpoint is set (useful in tests that import core modules): `DEVTEAM_OTEL_DISABLE=1`.
 
-## Multi-model adversarial peer review
+## Multi-model peer review
 
-Opt-in: have Stage 5 (peer-review) run across multiple hosts simultaneously. Each area gets reviewed by every configured host; the merged gate is pessimistic.
+Opt-in: have Stage 5 (peer-review) run across multiple hosts simultaneously. Each area gets reviewed by every configured host; the merged gate is pessimistic. The reviewers all apply the same four-principles rubric — the cross-model signal comes from training-data diversity, not from giving different reviewers different methods. (For *method* diversity — a different role applying a different methodology — see Stage 4c red-team.)
 
 ```yaml
 # .devteam/config.yml

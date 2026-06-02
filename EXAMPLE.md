@@ -631,7 +631,7 @@ Platform runs lint, tests, dep review, and the security heuristic against the di
 
 ### Stage 5 — Peer review, single-host
 
-For a hotfix, you probably don't want adversarial fanout — the cost-benefit tilts toward "ship fast." A single reviewer across all 4 areas is fine.
+For a hotfix, you probably don't want multi-model fanout — the cost-benefit tilts toward "ship fast." A single reviewer across all 4 areas is fine.
 
 Reviewer writes `pipeline/code-review/by-senior.md`:
 

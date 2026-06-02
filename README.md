@@ -39,7 +39,7 @@ New here? Read in this order:
 
 1. **[EXAMPLE.md](EXAMPLE.md)** — one full pipeline run traced end-to-end. The single best onboarding artifact.
 2. **[docs/concepts.md](docs/concepts.md)** — six primitives (stage, role, workstream, host, gate, track) in one table.
-3. **[docs/methodology.md](docs/methodology.md)** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, adversarial review layers, and the four coding principles.
+3. **[docs/methodology.md](docs/methodology.md)** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, the adversarial red-team layer, multi-role peer review, and the four coding principles.
 4. **[docs/user-guide.md](docs/user-guide.md)** — daily-use reference: running stages, multi-host setups, headless mode, troubleshooting.
 5. **[docs/adoption-guide.md](docs/adoption-guide.md)** — for team leads deciding whether to adopt. Covers pilot, objections, success criteria.
 6. **[docs/presentation-notes.md](docs/presentation-notes.md)** — slide deck + speaker notes for pitching this to a team or stakeholder.
@@ -67,7 +67,7 @@ Feature deep-dives:
 
 ## Why "Stagecraft"?
 
-The pipeline is a staged production. PM writes the brief. Principal directs the architecture. Specialist developers each build their part. Reviewers critique. QA tests. The curtain rises on deploy. Each stage has its cast, its script (the rules under `rules/`), and its gate that decides if the show moves on. Multi-host adversarial review is the panel of critics. The discipline of putting all of that together — staged work by specialized roles in a choreographed production — is **stagecraft**.
+The pipeline is a staged production. PM writes the brief. Principal directs the architecture. Specialist developers each build their part. Reviewers critique. QA tests. The curtain rises on deploy. Each stage has its cast, its script (the rules under `rules/`), and its gate that decides if the show moves on. Multi-model peer review is the panel of critics; the red-team is the adversary in the wings. The discipline of putting all of that together — staged work by specialized roles in a choreographed production — is **stagecraft**.
 
 The vocabulary extends naturally: a *run* is one pipeline invocation, *dress rehearsal* is pre-review (Stage 4a), *curtain call* is the retrospective (Stage 9), and *notes* are peer-review comments. The metaphor isn't decoration — it's how the system thinks.
 
