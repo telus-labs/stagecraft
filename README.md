@@ -39,11 +39,12 @@ New here? Read in this order:
 
 1. **[EXAMPLE.md](EXAMPLE.md)** — one full pipeline run traced end-to-end. The single best onboarding artifact.
 2. **[docs/concepts.md](docs/concepts.md)** — six primitives (stage, role, workstream, host, gate, track) in one table.
-3. **[docs/user-guide.md](docs/user-guide.md)** — daily-use reference: running stages, multi-host setups, headless mode, troubleshooting.
-4. **[docs/adoption-guide.md](docs/adoption-guide.md)** — for team leads deciding whether to adopt. Covers pilot, objections, success criteria.
-5. **[docs/presentation-notes.md](docs/presentation-notes.md)** — slide deck + speaker notes for pitching this to a team or stakeholder.
-6. **[docs/tracks.md](docs/tracks.md)** — which of the six tracks to pick.
-7. **[docs/faq.md](docs/faq.md)** — operational questions, common gotchas, comparisons to other tools.
+3. **[docs/methodology.md](docs/methodology.md)** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, adversarial review layers, and the four coding principles.
+4. **[docs/user-guide.md](docs/user-guide.md)** — daily-use reference: running stages, multi-host setups, headless mode, troubleshooting.
+5. **[docs/adoption-guide.md](docs/adoption-guide.md)** — for team leads deciding whether to adopt. Covers pilot, objections, success criteria.
+6. **[docs/presentation-notes.md](docs/presentation-notes.md)** — slide deck + speaker notes for pitching this to a team or stakeholder.
+7. **[docs/tracks.md](docs/tracks.md)** — which of the six tracks to pick.
+8. **[docs/faq.md](docs/faq.md)** — operational questions, common gotchas, comparisons to other tools.
 
 Reference / extension:
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — 11 locked design decisions. Read when you want to know *why*.
