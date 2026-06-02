@@ -263,6 +263,70 @@ function injectQABuildBlockers(gate, cwd) {
   );
 }
 
+/**
+ * Strip a previously-injected blocker section from pipeline/context.md.
+ * Idempotent — if the markers aren't present, this is a no-op.
+ * Used when the originating stage transitions to PASS or WARN so stale
+ * "IMMEDIATE: ... — Fix Before X" headings don't sit in context forever.
+ *
+ * Returns true if the file was rewritten.
+ */
+function stripMarkedSection(contextPath, beginMarker, endMarker) {
+  if (!fs.existsSync(contextPath)) return false;
+  const content = fs.readFileSync(contextPath, "utf8");
+  if (!content.includes(beginMarker)) return false;
+  const startIdx = content.indexOf(beginMarker);
+  const endIdx = content.indexOf(endMarker);
+  if (endIdx < 0) return false;
+  // Strip the section and any blank line(s) immediately after the end
+  // marker so we don't leave a dangling gap. Leading whitespace before
+  // the begin marker is preserved (the section may be at file start).
+  let after = content.slice(endIdx + endMarker.length);
+  after = after.replace(/^\n+/, "\n");
+  const next = content.slice(0, startIdx) + after.replace(/^\n+/, "");
+  fs.writeFileSync(contextPath, next, "utf8");
+  return true;
+}
+
+/**
+ * When a red-team gate resolves to PASS or WARN, strip the previously-
+ * injected red-team-blockers section from pipeline/context.md. The
+ * implementer fixed the items; the section has done its job and would
+ * otherwise sit there taking up context on every subsequent stage.
+ */
+function stripRedTeamBlockers(gate, cwd) {
+  if (gate.stage !== "stage-04c") return;
+  if (gate.status !== "PASS" && gate.status !== "WARN") return;
+  const contextPath = path.join(cwd, "pipeline", "context.md");
+  const stripped = stripMarkedSection(
+    contextPath,
+    "<!-- devteam:red-team-blockers:begin -->",
+    "<!-- devteam:red-team-blockers:end -->",
+  );
+  if (stripped) {
+    console.log("[gate-validator] ℹ️  red-team blockers section cleared from pipeline/context.md (red-team is now PASS/WARN)");
+  }
+}
+
+/**
+ * When the QA workstream gate resolves to PASS or WARN, strip the
+ * previously-injected qa-build-blockers section from pipeline/context.md.
+ * Same rationale as stripRedTeamBlockers.
+ */
+function stripQABuildBlockers(gate, cwd) {
+  if (gate.stage !== "stage-04" || gate.workstream !== "qa") return;
+  if (gate.status !== "PASS" && gate.status !== "WARN") return;
+  const contextPath = path.join(cwd, "pipeline", "context.md");
+  const stripped = stripMarkedSection(
+    contextPath,
+    "<!-- devteam:qa-build-blockers:begin -->",
+    "<!-- devteam:qa-build-blockers:end -->",
+  );
+  if (stripped) {
+    console.log("[gate-validator] ℹ️  QA build-blockers section cleared from pipeline/context.md (QA is now PASS/WARN)");
+  }
+}
+
 /** Validate required fields. Returns an array of missing field names. */
 function missingRequired(gate) {
   return REQUIRED_FIELDS.filter((k) => !(k in gate));
@@ -465,6 +529,10 @@ function main() {
   const stageLabel = workstream ? `${stage}/${workstream}` : stage;
 
   if (status === "PASS" || status === "WARN") {
+    // Clear any injected blocker sections for stages that just resolved.
+    // Idempotent — no-op when the markers aren't present.
+    stripRedTeamBlockers(gate, process.cwd());
+    stripQABuildBlockers(gate, process.cwd());
     const icon = status === "WARN" ? "⚠️ " : "✅";
     console.log(`[gate-validator] ${icon} GATE ${status} — ${stageLabel} (${producer})`);
     if (Array.isArray(gate.warnings) && gate.warnings.length > 0) {
