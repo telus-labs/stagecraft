@@ -8,6 +8,58 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+Post-0.4.0 work, accumulated since `v0.4.0` (2026-05-28). Three themes:
+(1) tightening the build loop so adversarial findings feed back into the
+same stage that produced them (red-team blocker auto-injection +
+`--patch`, QA-within-build); (2) operational ergonomics for unattended
+runs (parallel workstream dispatch, `--dangerously-skip-permissions`,
+configurable stage skips, headless timeout doc); (3) sustained
+documentation work (methodology.md, SOC 2 walkthrough, FEATURES.md,
+audit-driven doc fixes). All additive; no breaking changes to gate
+JSON, the adapter contract, or `.devteam/config.yml`.
+
+### Added
+
+- **Auto-inject red-team blockers into build context + `--patch` for scoped re-runs.** When stage-04c (red-team) writes `must_address_before_peer_review[]`, the validator now auto-injects each blocker into `pipeline/context.md` so the next build invocation sees the findings without manual copy-paste. New `--patch --from <gate>` flag on `devteam stage build` renders a scoped prompt addressing only the cited blockers, rather than a full re-build. Closes the only place in the pipeline where adversarial feedback was previously broken (red-team would find an issue and the implementer would have to manually port it into context). `core/hooks/approval-derivation.js` writes the injection idempotently. See `tests/red-team.test.js` for the round-trip.
+
+- **QA-within-build fix workflow.** When stage-06 (QA) fails on a fix-the-tests-not-the-implementation case, the orchestrator can now dispatch a scoped build re-run that addresses the QA findings without re-running the entire build stage. Reduces wall-clock on the common "test added late, implementation needs a 3-line tweak" loop.
+
+- **`pipeline.skip_stages` config.** Teams that intentionally skip a stage (e.g., `observability-gate` on a docs-only repo) can now declare that in `.devteam/config.yml` and have `devteam next` walk past the stage cleanly, rather than escalating. Pairs with `core/pipeline/stages.js` so skips are visible at orchestrator level, not buried in role briefs.
+
+- **SOC 2 evidence collector walkthrough.** A non-trivial 17-stage trace at `docs/walkthroughs/soc2-evidence-collector.md` — building a SOC 2 evidence collector CLI end to end, with conditional security/migration stages firing for real, adversarial peer review, and property-based verification. Replaces EXAMPLE.md as the canonical full-feature showcase for evaluators who want to see what the full track actually produces. Linked from user-guide and adoption-guide.
+
+- **`docs/FEATURES.md`** — every shipped feature organized by area. Single source of truth for "what does Stagecraft do?", separate from the methodology doc ("why does it do it that way?") and concepts ("what are the primitives?"). Front-of-line for skeptical evaluators.
+
+- **`docs/methodology.md`** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, adversarial review layers, four coding principles. Pulls together what was previously scattered across coding-principles.md, role briefs, and the rules docs into one referenceable explanation of *why* the pipeline is shaped this way.
+
+- **Red-team failure recovery Q&A in FAQ + unattended-pipeline guidance in user-guide.** Two operational gaps users hit in pilot.
+
+### Changed
+
+- **Parallel workstream dispatch.** Stage 04 and stage 05 (the two multi-role stages) now dispatch their workstreams in parallel rather than sequentially. On a `full` track with 4 build workstreams, this typically cuts wall-clock by 40–60% depending on host responsiveness. Removed an internal `Promise.all`-shaped redundancy that was already serializing work that didn't need to be serialized.
+
+- **Reduced prompt token usage in claude-code adapter.** Trimmed boilerplate and de-duplicated context-loading instructions in the rendered stage prompt; typical reduction is 15–25% input tokens per dispatch with no observable change in output quality. Direct cost reduction for users on per-token-priced model tiers.
+
+- **`devteam init` and the SOC 2 walkthrough sweep.** Comprehensive doc audit pass over README, user-guide, FAQ, presentation-notes — primarily updating stale stage counts (8→12 roles, 6→13 skills) and aligning the 17-stage table across every reference point. Audit-tier-1 fixes from the 2026-06-02 self-audit completed this sweep (examples, walkthrough, api-conventions DELETE claim, FEATURES.md track counts).
+
+### Fixed
+
+- **Validator auto-injects `orchestrator` and `host` fields.** Gates written by adapters without these fields are completed at validation time using the calling adapter's identity, rather than failing the schema. Catches the most common shape error agents make (forgetting one of the two identity fields) without forcing every adapter prompt to re-state them. `tests/gate-validator.test.js` updated.
+
+- **`--dangerously-skip-permissions` in claude-code headless mode.** Without this flag, headless `claude --print` would hang on the first tool that asked for permission, breaking unattended runs. Set on the headless path in `hosts/claude-code/capabilities.json`; documented as a deliberate trust-the-prompt-discipline tradeoff for the headless mode only.
+
+- **Missing YAML frontmatter on 6 skill files.** Claude Code's skill loader skips skills without frontmatter; six SKILL.md files that shipped during 0.4.0 had been silently invisible. Added the standard `name:` + `description:` block.
+
+- **Malformed ISO timestamps in `examples/sms-opt-in/pipeline/gates/stage-04.*.json`.** Four workstream gates carried `T15:020:00Z` / `T15:010:00Z` (extra digit in minutes); fixed to `T15:20:00Z` / `T15:10:00Z`. The example users copy to seed their own runs is now valid.
+
+- **`docs/walkthroughs/stage-04-split-host.md` rewrite.** The walkthrough was a pre-0.1 design exercise dressed up as a current trace — referenced commands and paths that no longer exist (`devteam status --advance`, `/devteam:stage`, a non-existent pm skill) and proposed a contract that has since shipped. Rewritten as a post-implementation trace using today's CLI, today's `capabilities.json`, and real gate JSON from `examples/sms-opt-in/`.
+
+- **`skills/api-conventions/SKILL.md` DELETE 204 claim.** The skill stated "DELETE returns 204, not 404" as a flat rule contradicting its own 404 entry; now explicit that this is a deliberate project convention (idempotent DELETEs, retry-friendly) rather than a universal HTTP rule, with reviewer guidance about not blocker-ing standards-conformant third-party code.
+
+- **`docs/FEATURES.md` track counts.** Quick=9 (not 7), nano=2 (not 3); rules install to `.devteam/rules/` (not `.claude/rules/`).
+
+- **Stale role/skill/template counts across README, EXAMPLE.md, user-guide, presentation-notes.** Numbers had drifted as the repo grew: 8→12 roles, 6→13 skills, 12→15 templates, 3→4 hosts (gemini-cli added). README repo-layout block updated to include `core/memory`, `core/spec`, `core/ui`, and `hosts/gemini-cli/`. Hooks list updated to include secret-scan on `PreToolUse`.
+
 ---
 
 ## [0.4.0] — 2026-05-28

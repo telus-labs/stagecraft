@@ -26,11 +26,12 @@ Installing host adapter: claude-code
 Next: edit .devteam/config.yml if you need custom routing, then `devteam stage requirements --feature "..."`.
 ```
 
-26 files landed:
-- 8 role subagents in `.claude/agents/`
-- 1 slash command in `.claude/commands/devteam.md`
+40 files landed:
+- 12 role subagents in `.claude/agents/`
+- 3 slash commands in `.claude/commands/` (`devteam`, `audit`, `audit-quick`)
 - 10 rules docs in `.devteam/rules/`
-- 6 task skills in `.claude/skills/`
+- 13 task skills in `.claude/skills/`
+- 1 `.devteam/config.yml`
 - 1 `settings.local.json` wiring the hooks
 
 Check what to do next:

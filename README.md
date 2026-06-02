@@ -11,7 +11,7 @@ devteam init --host claude-code        # one-time install in your project
 devteam stage requirements --feature "Add SMS notification opt-in"
 # (model writes brief + gate; hooks validate)
 devteam next                           # → "▶️ run-stage design (stage-02)"
-# … 11 more stages, then "🎉 pipeline-complete"
+# … 15 more stages, then "🎉 pipeline-complete"
 ```
 
 > The CLI binary is `devteam`. Stagecraft is the project; `devteam` is what you type.
@@ -180,10 +180,10 @@ For `--host claude-code` in a target project:
 |---|---|
 | `.devteam/config.yml` | Routing config — which host handles which role/stage |
 | `.devteam/rules/*.md` | Pipeline, gate, escalation, retrospective rules (10 docs) |
-| `.claude/agents/*.md` | Role subagents with Claude Code YAML frontmatter (8) |
-| `.claude/skills/*/SKILL.md` | Task helpers — implement, review-rubric, security-checklist, etc. (6) |
+| `.claude/agents/*.md` | Role subagents with Claude Code YAML frontmatter (12) |
+| `.claude/skills/*/SKILL.md` | Task helpers — implement, review-rubric, security-checklist, etc. (13) |
 | `.claude/commands/devteam.md` | Slash command wrapper |
-| `.claude/settings.local.json` | Hooks: validator on `Stop`/`SubagentStop`; approval-derivation on `PostToolUse` |
+| `.claude/settings.local.json` | Hooks: validator on `Stop`/`SubagentStop`; approval-derivation on `PostToolUse`; secret-scan on `PreToolUse` |
 | `pipeline/gates/` | Empty workspace dir for gate files |
 
 For `--host codex`: similar but rendered into `.codex/prompts/roles/`, `.codex/skills/`, with no hooks or slash commands (codex doesn't have those primitives).
@@ -282,18 +282,22 @@ stagecraft/
 │   ├── adapters/               ← host-adapter contract + shared helpers
 │   ├── config.js               ← .devteam/config.yml loader + routing
 │   ├── gates/                  ← validator + per-stage schemas
-│   ├── guards/                 ← stoplist, security-heuristic
-│   ├── hooks/                  ← approval-derivation (Stage 5)
+│   ├── guards/                 ← stoplist, security/migration heuristics
+│   ├── hooks/                  ← approval-derivation, secret-scan
+│   ├── memory/                 ← persistent project memory (embed/store/index)
+│   ├── spec/                   ← Gherkin generator + drift verifier
+│   ├── ui/                     ← dashboard web server
 │   ├── orchestrator.js         ← runStage, mergeWorkstreamGates, next
 │   ├── pipeline/stages.js      ← STAGES table + STAGES_BY_TRACK
 │   └── router.js               ← per-(stage, role) host resolution
-├── roles/                      ← single source of truth for role briefs (8)
+├── roles/                      ← single source of truth for role briefs (12)
 ├── rules/                      ← pipeline rules docs (10)
-├── skills/                     ← task-oriented helpers (6)
-├── templates/                  ← artifact templates (12)
+├── skills/                     ← task-oriented helpers (13)
+├── templates/                  ← artifact templates (15)
 ├── hosts/                      ← per-host adapters
 │   ├── claude-code/
 │   ├── codex/
+│   ├── gemini-cli/
 │   └── generic/
 └── docs/                       ← guides, walkthroughs, BACKLOG
 ```

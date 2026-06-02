@@ -34,7 +34,7 @@ Before the procedural reference, the mental model. One pipeline run looks like t
                                        devteam next
                                               │
                                               ▼
-   (loop for 11 more stages)
+   (loop for 15 more stages on the full track)
 
   Multi-role stages (build, peer-review) decompose into per-workstream
   dispatches that each write their own gate. devteam merge <stage>
@@ -111,9 +111,9 @@ my-app/
 │   ├── config.yml              ← routing + track defaults
 │   └── rules/                  ← 10 rule docs (pipeline, gates, escalation, …)
 ├── .claude/                    ← (or .codex/, .gemini/, depending on host)
-│   ├── agents/                 ← 8 role subagents
-│   ├── skills/                 ← task helpers (implement, review-rubric, …)
-│   ├── commands/devteam.md     ← /devteam slash command (claude-code only)
+│   ├── agents/                 ← 12 role subagents
+│   ├── skills/                 ← 13 task helpers (implement, review-rubric, …)
+│   ├── commands/               ← /devteam, /audit, /audit-quick (claude-code only)
 │   └── settings.local.json     ← Stop / SubagentStop / PostToolUse / PreToolUse hooks
 └── pipeline/
     └── gates/                  ← empty; gates land here as stages run

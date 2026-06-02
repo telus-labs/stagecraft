@@ -265,10 +265,10 @@ devteam init --host claude-code
 # Lays down:
 #   .devteam/config.yml          ← routing + track defaults
 #   .devteam/rules/*.md          ← pipeline rules (10 docs)
-#   .claude/agents/*.md          ← role subagents
-#   .claude/skills/*/SKILL.md    ← task helpers
-#   .claude/commands/devteam.md  ← /devteam slash command
-#   .claude/settings.local.json  ← Stop / SubagentStop / PostToolUse hooks
+#   .claude/agents/*.md          ← 12 role subagents
+#   .claude/skills/*/SKILL.md    ← 13 task helpers
+#   .claude/commands/            ← /devteam, /audit, /audit-quick
+#   .claude/settings.local.json  ← Stop / SubagentStop / PostToolUse / PreToolUse hooks
 #   pipeline/gates/              ← empty workspace
 
 # 3. Verify
