@@ -71,7 +71,7 @@ Three main tracks, plus variants for specific change types:
 |---|---|---|
 | `full` | 17 | New features, production changes |
 | `quick` | 9 | Bug fixes, small enhancements |
-| `nano` | 2 | Trivial code change; verifies the change runs and passes tests, nothing else |
+| `nano` | 3 | Trivial code change; build + scoped peer-review (1 reviewer, 1 approval) + qa |
 | `hotfix` | 12 | Emergency fixes with safety gates preserved |
 | `config-only` | 7 | Infrastructure and config changes |
 | `dep-update` | 5 | Dependency bumps |

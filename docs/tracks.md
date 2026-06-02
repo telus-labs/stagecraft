@@ -17,7 +17,7 @@ Or override per-invocation: `devteam stage build --track quick`.
 |---|---|---|
 | New customer-facing feature | `full` | Full rigor: requirements → design → build → review → tests → sign-off → deploy → retro |
 | Small fix or copy change | `quick` | Skip design + clarification + pre-review; PM brief is still required |
-| Mechanical change with obvious scope (rename a function, bump padding) | `nano` | Just build + qa |
+| Mechanical change with obvious scope (rename a function, bump padding) | `nano` | Build + scoped peer-review (1 reviewer, 1 approval) + qa |
 | Tweaking config/feature-flag values, no code | `config-only` | Build + pre-review + (security if triggered) + qa + sign-off + deploy |
 | Dependency bump or library upgrade | `dep-update` | Build + peer-review + qa + sign-off + deploy |
 | Urgent production incident | `hotfix` | Build + pre-review + (security if triggered) + peer-review + qa + sign-off + deploy + retro |
@@ -28,13 +28,15 @@ Or override per-invocation: `devteam stage build --track quick`.
                             req  des  cla  bld  4a  4b  5    qa  6b  6c   7    8    9
    full                     ✓    ✓    ✓    ✓    ✓   ✓⁺  ✓    ✓   ✓   ✓    ✓    ✓    ✓
    quick                    ✓              ✓              ✓    ✓   ✓        ✓    ✓    ✓
-   nano                                    ✓                  ✓
+   nano                                    ✓              ✓ˢ   ✓
    config-only                              ✓    ✓   ✓⁺           ✓             ✓    ✓
    dep-update                               ✓              ✓    ✓             ✓    ✓
    hotfix                                   ✓    ✓   ✓⁺  ✓    ✓   ✓   ✓    ✓    ✓    ✓
 
    Legend: ✓⁺ = stage-04b (security review) is conditional — only runs
    when stage-04a reports security_review_required: true.
+   ✓ˢ = scoped peer-review (single reviewer, required_approvals=1)
+        on nano. See PEER_REVIEW_SIZING in core/pipeline/stages.js.
    6b = accessibility audit (axe-core / pa11y / lighthouse). See
         skills/accessibility-audit/SKILL.md.
    6c = observability gate (verify the brief's promised metrics/logs/

@@ -132,13 +132,24 @@ describe("next: track filtering", () => {
     assert.equal(r.name, "build");
   });
 
-  it("nano completes after just build + qa", () => {
+  it("nano completes after build + peer-review + qa", () => {
     const cwd = track(makeTargetProject({
       config: "routing:\n  default_host: generic\npipeline:\n  default_track: nano\n",
     }));
     seedGate(cwd, "stage-04", { status: "PASS" });
+    seedGate(cwd, "stage-05", { status: "PASS" });
     seedGate(cwd, "stage-06", { status: "PASS" });
     const r = next({ cwd });
     assert.equal(r.action, "pipeline-complete");
+  });
+
+  it("nano dispatches a single peer-review workstream, not 4", () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: nano\n",
+    }));
+    const { runStage } = require("../core/orchestrator");
+    const r = runStage("peer-review", { cwd, track: "nano" });
+    assert.equal(r.workstreams.length, 1, "nano peer-review should fan out to 1 workstream");
+    assert.equal(r.workstreams[0].role, "backend", "scoped reviewer is the backend slot");
   });
 });

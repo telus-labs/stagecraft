@@ -17,8 +17,11 @@ describe("tracks: TRACKS ↔ STAGES_BY_TRACK", () => {
     assert.deepEqual(orderedStageNamesForTrack("full"), orderedStageNames());
   });
 
-  it("nano is the smallest track (just build + qa)", () => {
-    assert.deepEqual(orderedStageNamesForTrack("nano"), ["build", "qa"]);
+  it("nano is the smallest track (build + scoped peer-review + qa)", () => {
+    // Audit Tier-2: nano previously skipped peer-review entirely (just
+    // build+qa). Even trivial changes get one reviewer + one approval;
+    // see PEER_REVIEW_SIZING.nano in core/pipeline/stages.js.
+    assert.deepEqual(orderedStageNamesForTrack("nano"), ["build", "peer-review", "qa"]);
   });
 
   it("quick skips design and clarification", () => {

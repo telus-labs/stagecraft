@@ -11,7 +11,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { STAGES, getStage, orderedStageNames, orderedStageNamesForTrack, isStageInTrack } = require("./pipeline/stages");
+const { STAGES, getStage, orderedStageNames, orderedStageNamesForTrack, isStageInTrack, rolesForStage } = require("./pipeline/stages");
 const { loadConfig } = require("./config");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
@@ -39,21 +39,27 @@ function workstreamId(stage, role, roleCount) {
 // hostName is null when fanout is active and the caller should resolve
 // it from the entry's hostName field directly (no routing precedence).
 // For non-fanout, the caller resolves via routing as usual.
-function computeDispatchPlan(stageDef, config) {
+function computeDispatchPlan(stageDef, config, track) {
   const fanout = (config && config.routing && Array.isArray(config.routing.review_fanout))
     ? config.routing.review_fanout
     : [];
   const isPeerReview = stageDef.stage === "stage-05" && fanout.length > 0;
+  // Track-aware roles. Today only stage-05 (peer-review) varies — nano
+  // dispatches a single reviewer; every other track uses the standard
+  // four-area matrix. rolesForStage falls back to stageDef.roles for
+  // every other stage.
+  const effectiveTrack = track || (config && config.pipeline && config.pipeline.default_track) || "full";
+  const roles = rolesForStage(stageDef, effectiveTrack);
 
   const plan = [];
-  for (const role of stageDef.roles) {
+  for (const role of roles) {
     if (isPeerReview) {
       for (const hostName of fanout) {
         const ws = `${stageDef.stage}.${role}.${hostName}`;
         plan.push({ role, hostName, workstreamId: ws, gateFile: `${ws}.json`, fanout: true });
       }
     } else {
-      const ws = workstreamId(stageDef.stage, role, stageDef.roles.length);
+      const ws = workstreamId(stageDef.stage, role, roles.length);
       plan.push({ role, hostName: null, workstreamId: ws, gateFile: `${ws}.json`, fanout: false });
     }
   }
@@ -115,7 +121,7 @@ function runStage(stageName, opts = {}) {
     );
   }
 
-  const plan = computeDispatchPlan(stageDef, config);
+  const plan = computeDispatchPlan(stageDef, config, ctx.track);
 
   return withSpan("pipeline.stage", {
     "devteam.stage": stageDef.stage,
@@ -226,7 +232,8 @@ function mergeWorkstreamGates(stageName, opts = {}) {
   const stageDef = getStage(stageName);
   if (!stageDef) throw new Error(`Unknown stage "${stageName}"`);
   const config = opts.config || loadConfig(opts.cwd || process.cwd());
-  const plan = computeDispatchPlan(stageDef, config);
+  const track = opts.track || config.pipeline.default_track;
+  const plan = computeDispatchPlan(stageDef, config, track);
   if (plan.length <= 1) {
     return { merged: false, reason: "single-workstream stage; no merge needed" };
   }

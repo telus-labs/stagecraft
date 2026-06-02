@@ -121,7 +121,7 @@ The real question to test is: does the structure produce better output for non-t
 
 ### "Our team is too small for this much process."
 
-Pick a lighter track. `nano` is 2 stages (build + qa). `quick` is 7. The pipeline is opt-in; you don't have to run `full` on every change. The track system exists specifically to scale the process to the change.
+Pick a lighter track. `nano` is 3 stages (build + scoped peer-review with 1 reviewer + qa). `quick` is 9. The pipeline is opt-in; you don't have to run `full` on every change. The track system exists specifically to scale the process to the change.
 
 That said: there's an honest answer too. If your team is 1–2 people doing fast-moving exploratory work, Stagecraft probably is the wrong shape. It pays off when you have multiple people, multiple changes in flight, and a non-trivial codebase. Below that scale, you're getting structure you don't yet need.
 

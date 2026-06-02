@@ -398,14 +398,57 @@ const ORDERED_STAGE_NAMES = [
 // heavy stuff (property-based / mutation / formal) belongs on the
 // track that explicitly opted into rigour-over-speed. Other tracks
 // rely on stage-06's example tests as their verification floor.
+// Peer-review on nano is a scoped variant — see PEER_REVIEW_SIZING below.
+// Audit Tier-2 policy decision: nano was previously [build, qa] which
+// skipped the entire methodology; even trivial changes deserve a
+// second pair of eyes. Nano now has peer-review as a single-reviewer,
+// single-approval stage to keep wall-clock low while preserving the
+// marquee review property.
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
   quick:         ["requirements", "executable-spec", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
-  nano:          ["build", "qa"],
+  nano:          ["build", "peer-review", "qa"],
   "config-only": ["build", "pre-review", "security-review", "migration-safety", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
   hotfix:        ["build", "pre-review", "security-review", "red-team", "migration-safety", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
 };
+
+// Per-track sizing for peer-review (stage-05). For trivial changes
+// (nano), one reviewer is the right amount of review — four area
+// reviewers would be process-theatre for a typo fix. For everything
+// else, the four-area matrix with 2 approvals is the standard.
+//
+// `roles` controls the dispatch fanout (how many workstream gates land);
+// `required_approvals` is the threshold the approval-derivation hook
+// stamps onto the gate at creation time.
+const PEER_REVIEW_SIZING = {
+  nano:          { roles: ["backend"], required_approvals: 1 },
+  full:          { roles: ["backend", "frontend", "platform", "qa"], required_approvals: 2 },
+  quick:         { roles: ["backend", "frontend", "platform", "qa"], required_approvals: 2 },
+  hotfix:        { roles: ["backend", "frontend", "platform", "qa"], required_approvals: 2 },
+  "dep-update":  { roles: ["backend", "frontend", "platform", "qa"], required_approvals: 2 },
+  "config-only": { roles: ["backend", "frontend", "platform", "qa"], required_approvals: 2 },
+};
+
+// Track-aware roles list for a stage. Today only peer-review (stage-05)
+// varies; every other stage uses its base `roles` array unchanged.
+function rolesForStage(stageDef, track) {
+  if (stageDef.stage === "stage-05") {
+    const sizing = PEER_REVIEW_SIZING[track] || PEER_REVIEW_SIZING.full;
+    return sizing.roles;
+  }
+  return stageDef.roles;
+}
+
+// Track-aware required_approvals for stages that gate on approvals.
+// Returns undefined when the stage doesn't use the approval mechanism.
+function requiredApprovalsFor(stageDef, track) {
+  if (stageDef.stage === "stage-05") {
+    const sizing = PEER_REVIEW_SIZING[track] || PEER_REVIEW_SIZING.full;
+    return sizing.required_approvals;
+  }
+  return undefined;
+}
 
 function stageNames() {
   return Object.keys(STAGES);
@@ -436,9 +479,12 @@ module.exports = {
   TRACKS,
   ORDERED_STAGE_NAMES,
   STAGES_BY_TRACK,
+  PEER_REVIEW_SIZING,
   stageNames,
   orderedStageNames,
   orderedStageNamesForTrack,
   isStageInTrack,
   getStage,
+  rolesForStage,
+  requiredApprovalsFor,
 };
