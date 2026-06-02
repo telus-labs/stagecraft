@@ -37,7 +37,7 @@ Load this skill when designing or implementing API endpoints.
 - `400` — Bad request (validation failure)
 - `401` — Unauthenticated
 - `403` — Unauthorised (authenticated but forbidden)
-- `404` — Not found
+- `404` — Not found (returned by `GET`, `PATCH`, `PUT` when the addressed resource does not exist; see §Gotchas for the `DELETE` exception)
 - `409` — Conflict (duplicate, state violation)
 - `422` — Unprocessable entity (semantically invalid)
 - `500` — Internal server error (never expose details)
@@ -56,4 +56,4 @@ Load this skill when designing or implementing API endpoints.
 ## Gotchas
 
 - Never return `null` where an empty array `[]` is more appropriate.
-- `DELETE` should be idempotent — deleting a non-existent resource returns 204, not 404.
+- **DELETE is idempotent in this project.** A `DELETE` on a resource that does not exist returns `204 No Content`, the same response as deleting an extant resource. Rationale: the client's intent ("ensure this resource is absent") is satisfied either way, and idempotent DELETEs play nicely with at-least-once retry policies. Note that this is a deliberate project choice — RFC 9110 allows but does not require it, and some APIs (GitHub, Stripe) return `404` instead. Reviewers should not BLOCKER `404` from `DELETE` in third-party code we depend on; they *should* BLOCKER it in code we own.
