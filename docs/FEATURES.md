@@ -12,7 +12,7 @@ Stagecraft is model-agnostic. It runs on whichever AI CLI you already have — C
 
 The primary host. Installs the full integration payload on `devteam init`.
 
-- Role briefs land in `.claude/agents/`, rules in `.claude/rules/`, skills in `.claude/skills/`
+- Role briefs land in `.claude/agents/`, rules in `.devteam/rules/`, skills in `.claude/skills/`
 - `PreToolUse` hooks wire in secret scanning and filesystem enforcement automatically
 - Slash command `/devteam` is laid down so you can run stages from inside a Claude Code session
 - Headless mode runs via `claude --print`
@@ -70,11 +70,11 @@ Three main tracks, plus variants for specific change types:
 | Track | Stages | Best for |
 |---|---|---|
 | `full` | 17 | New features, production changes |
-| `quick` | 7 | Bug fixes, small enhancements |
-| `nano` | 3 | Config changes, docs, hotfixes |
-| `hotfix` | — | Emergency fixes with safety gates preserved |
-| `config-only` | — | Infrastructure and config changes |
-| `dep-update` | — | Dependency bumps |
+| `quick` | 9 | Bug fixes, small enhancements |
+| `nano` | 2 | Trivial code change; verifies the change runs and passes tests, nothing else |
+| `hotfix` | 12 | Emergency fixes with safety gates preserved |
+| `config-only` | 7 | Infrastructure and config changes |
+| `dep-update` | 5 | Dependency bumps |
 
 Pick at `devteam stage requirements --feature "..." --track full`.
 
