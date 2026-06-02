@@ -201,6 +201,43 @@ Pipeline state — track: full
 
 For a live view, use `devteam ui --open` — see [the web UI](#the-web-ui).
 
+### Answering an open question between stages
+
+Stages 1 (requirements) and 2 (design) sometimes produce questions only a human can answer. They appear as `QUESTION:` lines in both `pipeline/brief.md` (in the *Open Questions* section) and `pipeline/context.md`. The pipeline halts at Stage 3 (clarification) until each one is answered — or, by default, dispatches the PM agent to answer them.
+
+If you'd rather answer yourself instead of invoking PM:
+
+**Where:** `pipeline/context.md` — directly below the `QUESTION:` line. Don't edit `brief.md`. The brief stays as the original intent; context.md is where answers and decisions accumulate across the run.
+
+**Format:** A `PM-ANSWER:` line on the line below. Multi-line answers are fine — readers consume everything until the next blank line or marker.
+
+**Example.** Before:
+
+```markdown
+## Open Questions
+
+QUESTION: Should the SMS opt-in default to on or off for existing users? @PM
+QUESTION: Do we need a separate consent timestamp column, or is updated_at sufficient? @PM
+```
+
+After:
+
+```markdown
+## Open Questions
+
+QUESTION: Should the SMS opt-in default to on or off for existing users? @PM
+PM-ANSWER: Off. Existing users must explicitly opt in; we treat absence of consent as no.
+
+QUESTION: Do we need a separate consent timestamp column, or is updated_at sufficient? @PM
+PM-ANSWER: Separate column `sms_optin_at` (nullable timestamptz). updated_at changes on any row update; we need to know when consent was specifically granted for audit/compliance.
+```
+
+Save the file and run `devteam next`. Stage 3's `grep QUESTION: not followed by PM-ANSWER:` check passes; the pipeline advances to design without invoking PM.
+
+**If your answer changes the brief itself** (e.g. adds an acceptance criterion), add a `## Brief Changes` section to `pipeline/context.md` rather than editing `brief.md`. Devs at every later stage read both. Keeps the audit trail honest.
+
+For the full vocabulary of markers like `QUESTION:` / `PM-ANSWER:` / `CONCERN:` / `BLOCKER:` etc., see [`docs/conventions.md`](conventions.md).
+
 ## Running each stage
 
 The CLI emits a prompt aimed at the routed host. You consume the prompt by invoking the named subagent in your AI tool — typically via a slash command or natural language.

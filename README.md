@@ -53,6 +53,7 @@ Reference / extension:
 - **[docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)** — multi-workstream contract stress-test trace.
 - **[docs/walkthroughs/soc2-evidence-collector.md](docs/walkthroughs/soc2-evidence-collector.md)** — end-to-end showcase: building a SOC 2 evidence collector through the full 17-stage pipeline.
 - **[docs/runbooks/escalation.md](docs/runbooks/escalation.md)** — procedural playbook: what to read, how to decide, and how to encode the result when `devteam next` says `resolve-escalation`.
+- **[docs/conventions.md](docs/conventions.md)** — operator-facing catalogue of pipeline markers (`QUESTION:`/`PM-ANSWER:`, `BLOCKER:`/`SUGGESTION:`/`PATTERN:`, `## Brief Changes`, `## Verify`, magic comments, …) — where each lives, who writes it, what reads it.
 
 Feature deep-dives:
 - **[docs/FEATURES.md](docs/FEATURES.md)** — every shipped feature, organized by area. Start here to see what Stagecraft does.

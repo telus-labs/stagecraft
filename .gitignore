@@ -2,3 +2,4 @@ node_modules/
 *.bak
 .DS_Store
 .README.md.swp
+.claude/scheduled_tasks.lock

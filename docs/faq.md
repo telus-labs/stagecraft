@@ -88,6 +88,10 @@ You don't usually need to think about workstreams directly — `devteam next` te
 
 `devteam next` will keep reporting `run-stage` (or `continue-stage` for partial multi-role). Either re-invoke the agent with a clearer instruction, or hand-write the gate (see above). The orchestrator only knows what's on disk.
 
+### How do I answer an open question myself instead of invoking PM?
+
+Stages 1–2 sometimes produce `QUESTION: <text> @PM` lines in `pipeline/brief.md` and `pipeline/context.md`. Stage 3 (clarification) halts until each one has a `PM-ANSWER:` line beneath it. To answer yourself rather than dispatching the PM agent: open `pipeline/context.md` (not brief.md), write `PM-ANSWER: <text>` directly below each `QUESTION:`, save. `devteam next` advances. Full example + the "what if the answer changes the brief itself" escape hatch in [`docs/user-guide.md` § Answering an open question between stages](user-guide.md#answering-an-open-question-between-stages). For the full marker vocabulary (`QUESTION:`/`PM-ANSWER:`/`CONCERN:`/`BLOCKER:` etc.), see [`docs/conventions.md`](conventions.md).
+
 ### What goes in a gate and what fields are required?
 
 Every gate must have: `stage`, `workstream`, `status` (PASS/WARN/FAIL/ESCALATE), `track`, `timestamp` (ISO-8601), `blockers` (array), `warnings` (array). The `orchestrator` and `host` fields are auto-injected by the validator — the model doesn't write them.
