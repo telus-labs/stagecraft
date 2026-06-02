@@ -38,6 +38,8 @@ JSON, the adapter contract, or `.devteam/config.yml`.
 
 - **Red-team failure recovery Q&A in FAQ + unattended-pipeline guidance in user-guide.** Two operational gaps users hit in pilot.
 
+- **Forcing function in dev role briefs: `## Verify` section required before PASS.** Audit Tier-2: dev role briefs (backend, frontend, platform) ended with "Write the gate with `status: PASS`" — no forcing function preventing a careless model from rubber-stamping without doing the work. Each brief now requires the implementing dev to write a `## Verify` section in their `pipeline/pr-{area}.md` listing one bullet per acceptance criterion, each carrying (a) the exact command/action and (b) the observed output. Examples per role: backend bullets show `curl` invocations + actual HTTP responses; frontend bullets show user actions + DOM/screenshot evidence; platform bullets show `docker compose` output + health-check status. The gate-writing step is now explicit that PASS without a populated `## Verify` is invalid and will be flagged at peer review. Pairs with the orchestrator-stamped verification PR's stage-06 AC-mapping cross-check — the model is now both forced to claim verification (in writing) and cross-examined by the orchestrator after the fact.
+
 ### Changed
 
 - **Parallel workstream dispatch.** Stage 04 and stage 05 (the two multi-role stages) now dispatch their workstreams in parallel rather than sequentially. On a `full` track with 4 build workstreams, this typically cuts wall-clock by 40–60% depending on host responsiveness. Removed an internal `Promise.all`-shaped redundancy that was already serializing work that didn't need to be serialized.

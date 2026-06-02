@@ -52,7 +52,29 @@ Before build or review work, read:
    - Any spec deviations and why
    - Anything the reviewer should pay attention to
    - `## Out of Scope — Noticed` (if anything)
-9. Write `pipeline/gates/stage-04-backend.json` with `"status": "PASS"`.
+   - **`## Verify`** — required before writing a PASS gate. List one bullet per
+     acceptance criterion you claim to have satisfied, in this exact shape:
+
+     ```markdown
+     ## Verify
+
+     - **AC-1**: registered POST /users endpoint
+       - `curl -X POST localhost:3000/users -d '{"email":"a@b.com"}'`
+       - → `HTTP/1.1 201 Created` with `{"id": "...", "email": "a@b.com"}`
+     - **AC-2**: rejects malformed payloads with 422
+       - `curl -X POST localhost:3000/users -d '{}'`
+       - → `HTTP/1.1 422 Unprocessable Entity` with `{"error": {"code": "VALIDATION_FAILED"}}`
+     ```
+
+     Each bullet ties one acceptance-criterion ID to (a) the exact command you ran
+     and (b) the observed output snippet — not "verified" or "tested locally."
+     Reviewers and the orchestrator will read this section first. A PASS gate
+     whose `## Verify` is empty, missing, or lists ACs you didn't actually
+     exercise is invalid and will be flagged at peer review.
+9. Write `pipeline/gates/stage-04-backend.json` with `"status": "PASS"`. PASS is
+   only honest when every AC has a `## Verify` bullet with a real command and a
+   real observed output. If even one AC is unverified, the right status is FAIL
+   or escalate back to the PM for clarification — not PASS.
 
 ## On a Code Review Task
 

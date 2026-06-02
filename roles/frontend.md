@@ -48,8 +48,32 @@ Before build or review work, read:
    (Simplicity First, coding-principles §2). Every changed line traces to
    the spec or a `PM-ANSWER:`.
 7. Finish `pipeline/pr-frontend.md`. Include `## Out of Scope — Noticed` for
-   any unrelated issues you spotted but did not fix.
-8. Write `pipeline/gates/stage-04-frontend.json` with `"status": "PASS"`.
+   any unrelated issues you spotted but did not fix. Also include:
+
+   - **`## Verify`** — required before writing a PASS gate. One bullet per
+     acceptance criterion you claim to have satisfied, in this exact shape:
+
+     ```markdown
+     ## Verify
+
+     - **AC-3**: SMS opt-in toggle appears under account settings
+       - rendered `<SettingsPage />` with `npm run dev`; navigated to /settings
+       - → screenshot at `pipeline/screenshots/ac3-opt-in-toggle.png`; toggle
+         appears between "Email notifications" and "Privacy" sections
+     - **AC-4**: toggle persists across page reloads
+       - flipped on, hit reload, observed it stayed on
+       - → `localStorage.getItem("sms_optin")` returns `"true"` post-reload
+     ```
+
+     Each bullet ties one acceptance-criterion ID to (a) the exact action you
+     performed and (b) the observed result — a screenshot path, a DOM
+     assertion, a stored value. Not "looks good" or "renders correctly." A
+     PASS gate whose `## Verify` is empty, missing, or lists ACs you didn't
+     actually exercise is invalid and will be flagged at peer review.
+8. Write `pipeline/gates/stage-04-frontend.json` with `"status": "PASS"`. PASS
+   is only honest when every AC has a `## Verify` bullet with a real action
+   and a real observed result. If even one AC is unverified, the right status
+   is FAIL or escalate back to the PM for clarification — not PASS.
 
 ## On a Code Review Task
 
