@@ -33,6 +33,8 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { loadConfig } = require("../config");
+const { requiredApprovalsFor, STAGES } = require("../pipeline/stages");
 
 const ORCHESTRATOR_ID = `devteam@${require("../../package.json").version}`;
 const HOST = "claude-code"; // this hook is wired only into the claude-code adapter
@@ -219,6 +221,12 @@ function applyVerdict({ area, verdict, reviewer, host }) {
         return;
       }
     } else {
+      // Read the project's track so required_approvals matches the
+      // PEER_REVIEW_SIZING table. Nano-track changes need 1 approval
+      // (single-reviewer scoped review); full/quick/hotfix/etc need 2.
+      let track = "full";
+      try { track = loadConfig(CWD).pipeline.default_track || "full"; } catch { /* defaults */ }
+      const required = requiredApprovalsFor(STAGES["peer-review"], track) ?? 2;
       gate = {
         stage: "stage-05",
         workstream: area,
@@ -228,7 +236,7 @@ function applyVerdict({ area, verdict, reviewer, host }) {
         // since this hook is wired only into claude-code today).
         host: host || HOST,
         orchestrator: ORCHESTRATOR_ID,
-        track: "full",
+        track,
         status: "FAIL",
         timestamp: new Date().toISOString(),
         blockers: [],
@@ -237,8 +245,8 @@ function applyVerdict({ area, verdict, reviewer, host }) {
         approvals: [],
         changes_requested: [],
         escalated_to_principal: false,
-        required_approvals: 2,
-        review_shape: "matrix",
+        required_approvals: required,
+        review_shape: required === 1 ? "single" : "matrix",
       };
     }
 

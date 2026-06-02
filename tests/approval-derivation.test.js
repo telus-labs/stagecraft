@@ -182,4 +182,28 @@ describe("approval-derivation: gate upsert (end-to-end)", () => {
     const g = readGate(cwd, "stage-05.frontend");
     assert.equal(g.host, "claude-code", "legacy gate should be backfilled with HOST");
   });
+
+  it("creates nano gates with required_approvals=1 and review_shape=single", () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: nano\n",
+    }));
+    writeReview(cwd, "by-backend.md", "## Review of backend\nLGTM\nREVIEW: APPROVED\n");
+    runHook(cwd);
+    const g = readGate(cwd, "stage-05.backend");
+    assert.ok(g, "gate not written");
+    assert.equal(g.required_approvals, 1, "nano needs 1 approval, not 2");
+    assert.equal(g.review_shape, "single");
+    assert.equal(g.track, "nano");
+    assert.equal(g.status, "PASS", "1 approval should be enough on nano");
+  });
+
+  it("non-nano tracks keep required_approvals=2 and review_shape=matrix", () => {
+    const cwd = track(makeTargetProject()); // default: routing.default_host=generic, track=full
+    writeReview(cwd, "by-backend.md", "## Review of frontend\nLGTM\nREVIEW: APPROVED\n");
+    runHook(cwd);
+    const g = readGate(cwd, "stage-05.frontend");
+    assert.equal(g.required_approvals, 2);
+    assert.equal(g.review_shape, "matrix");
+    assert.equal(g.status, "FAIL", "1 approval is not enough on full");
+  });
 });

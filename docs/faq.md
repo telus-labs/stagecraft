@@ -43,7 +43,7 @@ If you want to skip a stage that *is* in your active track, just don't run it â€
 
 ### Do I have to use all 17 stages?
 
-No. The track system exists precisely to let you opt out of stages per change. The full track has all 17; nano has 2 (build + qa). Pick whatever matches the change's risk profile.
+No. The track system exists precisely to let you opt out of stages per change. The full track has all 17; nano has 3 (build + a scoped peer-review with 1 reviewer + qa). Pick whatever matches the change's risk profile.
 
 ### How do I know which track to use for my change?
 

@@ -24,7 +24,7 @@ A typical `full`-track run touches every primitive:
 3. The model writes `pipeline/brief.md` (the artifact) and `pipeline/gates/stage-01.json` (the **gate**) with `status: "PASS"`.
 4. You run **`devteam next`**. It reads the gate, sees PASS, and reports `▶️ run-stage — design (stage-02)`.
 5. Two stages later you hit **stage-04 build**: 4 workstreams (backend / frontend / platform / qa), each potentially dispatched to a different host depending on routing. Each writes its own per-workstream gate (`pipeline/gates/stage-04.backend.json` etc.). `devteam merge build` aggregates them into the stage gate.
-6. The **track** you picked (`full`) is what put all 17 stages on the menu. Picking `nano` would skip everything except build + qa.
+6. The **track** you picked (`full`) is what put all 17 stages on the menu. Picking `nano` would skip everything except build + a scoped peer-review (1 reviewer) + qa.
 
 The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator never holds state outside of those files.
 
@@ -83,7 +83,7 @@ These come up frequently but build on the primitives above:
 |---|---|---|
 | `full` | All 17 (requirements → retrospective) | Multi-area features, anything touching auth / PII / payments / migrations. |
 | `quick` | requirements, build, peer-review, qa, accessibility-audit, sign-off, deploy, retrospective | Single-area changes with non-trivial scope but no design complexity. |
-| `nano` | build, qa | Typo fixes, comment changes, one-line tweaks. |
+| `nano` | build, peer-review (scoped: 1 reviewer, 1 approval), qa | Typo fixes, comment changes, one-line tweaks. Even trivial changes get one pair of eyes. |
 | `config-only` | build, pre-review, security-review, qa, sign-off, deploy | Config / infrastructure changes with no application code. |
 | `dep-update` | build, peer-review, qa, sign-off, deploy | Dependency bumps. Security-review fires if the diff touches sensitive paths. |
 | `hotfix` | build, pre-review, security-review, red-team, peer-review, qa, accessibility-audit, observability-gate, sign-off, deploy, retrospective | Production outages. Skips requirements / design / clarification — you already know what's broken — but keeps all the safety stages. |
