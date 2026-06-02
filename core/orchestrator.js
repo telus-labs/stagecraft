@@ -15,6 +15,7 @@ const { STAGES, getStage, orderedStageNames, orderedStageNamesForTrack, isStageI
 const { loadConfig } = require("./config");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
+const { loadGateSafe } = require("./gates/load-gate");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const ORCHESTRATOR_ID = `devteam@${require("../package.json").version}`;
@@ -244,7 +245,12 @@ function mergeWorkstreamGates(stageName, opts = {}) {
         setSpanAttributes({ "devteam.merge.result": "missing", "devteam.merge.missing": entry.workstreamId });
         return { merged: false, reason: `missing workstream gate: ${wsFile}` };
       }
-      wsGates.push({ role: entry.role, host: entry.hostName, gate: JSON.parse(fs.readFileSync(wsFile, "utf8")) });
+      const { gate, error } = loadGateSafe(wsFile);
+      if (error) {
+        setSpanAttributes({ "devteam.merge.result": "malformed", "devteam.merge.malformed": entry.workstreamId });
+        return { merged: false, reason: `unreadable workstream gate (${entry.workstreamId}): ${error}` };
+      }
+      wsGates.push({ role: entry.role, host: entry.hostName, gate });
     }
 
     const statuses = wsGates.map((w) => w.gate.status);
@@ -361,7 +367,16 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
         // have returned for it. If we got here, fall through to normal
         // run-stage handling — but flag the issue.
       } else {
-        const prereq = JSON.parse(fs.readFileSync(prereqGatePath, "utf8"));
+        const { gate: prereq, error } = loadGateSafe(prereqGatePath);
+        if (error) {
+          return {
+            action: "fix-and-retry", stage: stageDef.stage, name: stageName,
+            gate: prereqGatePath,
+            blockers: [`prereq gate is unreadable: ${error}`],
+            reason: "cannot evaluate conditional stage — fix the prereq gate file",
+            command: `cat ${prereqGatePath}  # then repair or rewrite`,
+          };
+        }
         if (prereq[c.field] !== c.equals) {
           continue; // condition not met — skip this stage silently
         }
@@ -406,7 +421,16 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
       };
     }
 
-    const gate = JSON.parse(fs.readFileSync(stageGatePath, "utf8"));
+    const { gate, error: gateError } = loadGateSafe(stageGatePath);
+    if (gateError) {
+      return {
+        action: "fix-and-retry", stage: stageDef.stage, name: stageName,
+        gate: stageGatePath,
+        blockers: [`gate file is unreadable: ${gateError}`],
+        reason: "cannot determine stage status — fix or rewrite the gate file",
+        command: `cat ${stageGatePath}  # then repair or rewrite`,
+      };
+    }
     if (gate.status === "ESCALATE") {
       return {
         action: "resolve-escalation", stage: stageDef.stage, name: stageName,
