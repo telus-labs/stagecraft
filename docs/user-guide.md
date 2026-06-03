@@ -555,6 +555,8 @@ devteam stage security-review --headless   # if still required
 devteam stage red-team --headless          # verifies fixes
 ```
 
+For the complete procedure with a worked example — including the `rm pipeline/gates/stage-04.backend.json` optimization to re-run only the affected workstream, what happens to non-target workstreams, the `noted_for_followup` question, and the equivalent flow for QA/pre-review/peer-review FAIL — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+
 ### Fixing QA failures within build
 
 When QA's workstream gate within Stage 4 is FAIL, the bugs belong to the other build roles — typically backend or platform. The validator automatically writes the QA blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
@@ -772,6 +774,8 @@ A stage gate has `status: FAIL`. The blockers are listed in `devteam next`'s out
 If you re-run the same stage more than once without resolution, the model should increment `retry_number` and fill `this_attempt_differs_by` — a non-empty string describing what changed between this attempt and the last. The validator enforces this: a gate with `retry_number >= 1` and an empty or missing `this_attempt_differs_by` is rejected. This prevents silent retry loops where the model just writes the same failing gate again.
 
 If you've retried several times without progress, consider writing a gate with `status: ESCALATE` — it means "a human decision is needed" rather than "fix the code and retry."
+
+For the full procedure — what to read, how to scope the re-run with `--patch` and `--skip-completed`, and the per-stage specifics (red-team, QA-in-build, pre-review, peer-review) — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
 
 ### `devteam next` says `resolve-escalation`
 
