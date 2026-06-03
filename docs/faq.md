@@ -413,6 +413,8 @@ For **documentation-only findings** (e.g. "this permission isn't explained in th
 
 If a finding requires a design decision before the build agents can act (e.g. "the permission set is fundamentally too broad — what's the minimum viable scope?"), add a note to `pipeline/context.md` before re-running build. That file is read first by every stage and is the intended channel for human direction between stages.
 
+For the complete operational sequence — including the optimization to re-run only the affected workstream (`rm pipeline/gates/stage-04.<area>.json` + `--skip-completed`), what to do with `noted_for_followup` items, and the equivalent flow for QA / pre-review / peer-review FAIL — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+
 ### Can I roll back to an earlier stage?
 
 Yes. Two ways:
