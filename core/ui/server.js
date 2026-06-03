@@ -19,7 +19,7 @@
 const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
-const { exec } = require("node:child_process");
+const { spawn } = require("node:child_process");
 
 const STATIC_DIR = path.join(__dirname, "static");
 const MIME = {
@@ -230,10 +230,22 @@ function startServer(opts = {}) {
 }
 
 function tryOpen(url) {
-  const cmd = process.platform === "darwin" ? `open "${url}"`
-           : process.platform === "win32" ? `start "" "${url}"`
-           : `xdg-open "${url}"`;
-  try { exec(cmd); } catch { /* not fatal */ }
+  // Use spawn with array args, NOT exec with shell-string interpolation —
+  // even though the URL is bound by server.address() today (not user
+  // input), the exec(cmd) shape is exactly the shell-injection pattern
+  // CodeQL's js/shell-command-injection-from-environment rule flags.
+  // Defense in depth against future URL-source changes.
+  const [cmd, ...args] =
+    process.platform === "darwin" ? ["open", url]
+    : process.platform === "win32" ? ["cmd", "/c", "start", "", url]
+    : ["xdg-open", url];
+  try {
+    const child = spawn(cmd, args, { detached: true, stdio: "ignore" });
+    child.unref();
+    // Ignore errors silently — opening the browser is a convenience, not
+    // a contract. If the OS doesn't have `open`/`xdg-open`, that's fine.
+    child.on("error", () => { /* not fatal */ });
+  } catch { /* not fatal */ }
 }
 
 module.exports = { startServer, buildState, loadGateFile, loadRoleBrief };

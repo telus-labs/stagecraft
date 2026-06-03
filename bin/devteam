@@ -14,7 +14,17 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { runStage, runStageHeadless, mergeWorkstreamGates, next, summary } = require(path.join(__dirname, "..", "core", "orchestrator"));
+
+// Orchestrator pulls in the validator, every gate schema, the spawn helper,
+// every host adapter (transitively, via router). ~60ms cold-load. Lazy-load
+// it via this helper so `devteam help`, `devteam stages`, `devteam hosts`,
+// `devteam doctor` don't pay the cost. cmdX functions that need orchestrator
+// destructure from getOrchestrator() at function entry.
+let _orch;
+function getOrchestrator() {
+  if (!_orch) _orch = require(path.join(__dirname, "..", "core", "orchestrator"));
+  return _orch;
+}
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
 const { stageNames, getStage } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
@@ -218,6 +228,7 @@ function parseFlags(argv) {
 }
 
 function cmdStage(argv) {
+  const { runStage, runStageHeadless } = getOrchestrator();
   const { positional, flags } = parseFlags(argv);
   const name = positional[0];
   if (!name) {
@@ -363,6 +374,7 @@ function cmdValidate(argv) {
 }
 
 function cmdNext(argv) {
+  const { next } = getOrchestrator();
   const { flags } = parseFlags(argv);
   const result = next({ cwd: flags.cwd });
   if (flags.json) {
@@ -1211,6 +1223,7 @@ function cmdLog(argv) {
 }
 
 function cmdSummary(argv) {
+  const { summary } = getOrchestrator();
   const { flags } = parseFlags(argv);
   const result = summary({ cwd: flags.cwd });
   if (flags.json) {
@@ -1398,6 +1411,7 @@ function cmdRestart(argv) {
 }
 
 function cmdMerge(argv) {
+  const { mergeWorkstreamGates } = getOrchestrator();
   const { positional, flags } = parseFlags(argv);
   const stageName = positional[0];
   if (!stageName) {
