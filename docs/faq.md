@@ -314,7 +314,7 @@ cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals, required_appro
 # If changes_requested is [] and approvals.length < required_approvals → quorum miss, no objections.
 ```
 
-Resolve by appending a `## Review of <area>` section with `REVIEW: APPROVED` to a non-area reviewer's `pipeline/code-review/by-*.md` file; the `approval-derivation` hook re-derives the per-area gate on the save, then `devteam merge peer-review` rebuilds the merged gate. Full operational sequence — including when overriding the merged gate to WARN is defensible and what gotchas come with it — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
+Resolve by appending a `## Review of <area>` section with `REVIEW: APPROVED` to a non-area reviewer's `pipeline/code-review/by-*.md` file, then running `devteam derive-approvals pipeline/code-review/by-<reviewer>.md` to update the per-area gate, then `devteam merge peer-review` to rebuild the merged gate. The `devteam derive-approvals` step is needed because the `approval-derivation` hook is a Claude Code `PostToolUse` hook — it fires only when an agent writes the file inside a Claude Code session, not when you edit it from your shell or editor. Full operational sequence — including when overriding the merged gate to WARN is defensible and what gotchas come with it — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
 
 ### How do I roll back a deploy?
 

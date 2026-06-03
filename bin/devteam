@@ -59,6 +59,17 @@ Commands:
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
                                    by host hooks (e.g. Claude Code Stop).
   merge <stage>                    Merge per-workstream gates into stage gate.
+  derive-approvals [<file>]        Re-run the approval-derivation hook on
+        [--cwd <dir>] [--json]      pipeline/code-review/by-*.md and rewrite the
+                                   per-area stage-05.<area>.json gates. Use after
+                                   hand-editing a review file outside an active
+                                   Claude Code session (the hook only fires on
+                                   agent saves; shell/editor saves bypass it).
+                                   Without an argument, derives every by-*.md
+                                   under pipeline/code-review/. Follow with
+                                   'devteam merge peer-review' to rebuild the
+                                   merged stage-05.json. See docs/runbooks/
+                                   fix-and-retry.md § Case 5.
   restart <stage> [--cascade]      Clear a stage's gate(s) so the pipeline can
        [--keep-context]            re-run it. With --cascade, also clears every
        [--dry-run]                 stage that comes after this one in the active
@@ -1401,6 +1412,99 @@ function cmdMerge(argv) {
   console.log(`Merged → ${result.file} (status: ${result.gate.status})`);
 }
 
+// `devteam derive-approvals [<review-file>] [--cwd <dir>] [--json]`
+//
+// Invoke core/hooks/approval-derivation.js the same way Claude Code does —
+// stdin carries a synthetic PostToolUse payload — but from the shell, so
+// operators who hand-edit pipeline/code-review/by-*.md files outside an
+// agent session can still get the per-area stage-05 gates re-derived.
+//
+// Without an argument, walks every by-*.md under pipeline/code-review/.
+// With an argument, derives from that one file only. Either way, the
+// hook reconciles approvals and changes_requested for every "## Review
+// of <area>" section it finds.
+//
+// Followed by `devteam merge peer-review` to rebuild the merged
+// stage-05.json from the updated per-area gates.
+function cmdDeriveApprovals(argv) {
+  const { positional, flags } = parseFlags(argv);
+  const cwd = flags.cwd ? path.resolve(flags.cwd) : process.cwd();
+  const hookPath = path.join(__dirname, "..", "core", "hooks", "approval-derivation.js");
+  const reviewDir = path.join(cwd, "pipeline", "code-review");
+
+  let files;
+  if (positional[0]) {
+    const arg = positional[0];
+    const abs = path.isAbsolute(arg) ? arg : path.resolve(cwd, arg);
+    if (!fs.existsSync(abs)) {
+      console.error(`devteam: file not found: ${arg}`);
+      process.exit(2);
+    }
+    // Confine to pipeline/code-review/. The hook is otherwise happy to
+    // ignore anything outside that directory (it returns early), but we
+    // want operators to get a clear error rather than a silent no-op.
+    const realArg = fs.realpathSync(abs);
+    if (!fs.existsSync(reviewDir)) {
+      console.error(`devteam: pipeline/code-review/ does not exist under ${cwd}`);
+      process.exit(2);
+    }
+    const realReviewDir = fs.realpathSync(reviewDir);
+    if (!realArg.startsWith(realReviewDir + path.sep)) {
+      console.error(`devteam: ${arg} is not under pipeline/code-review/ — refusing to derive`);
+      process.exit(2);
+    }
+    if (!/^by-[\w-]+\.md$/.test(path.basename(realArg))) {
+      console.error(`devteam: ${arg} is not a by-<reviewer>.md file — refusing to derive`);
+      process.exit(2);
+    }
+    files = [realArg];
+  } else {
+    if (!fs.existsSync(reviewDir)) {
+      console.error(`devteam: pipeline/code-review/ does not exist under ${cwd}`);
+      process.exit(2);
+    }
+    files = fs.readdirSync(reviewDir)
+      .filter((n) => /^by-[\w-]+\.md$/.test(n))
+      .map((n) => path.join(reviewDir, n))
+      .sort();
+    if (files.length === 0) {
+      console.error(`devteam: no by-*.md review files found under ${reviewDir}`);
+      process.exit(2);
+    }
+  }
+
+  const { spawnSync } = require("node:child_process");
+  const perFile = [];
+  let anyFailed = false;
+  for (const file of files) {
+    const payload = JSON.stringify({ tool_input: { file_path: file } });
+    const result = spawnSync(process.execPath, [hookPath], {
+      cwd,
+      input: payload,
+      // Stdout/stderr inherit so the hook's [approval-derivation] log
+      // lines reach the operator. Empty input → hook short-circuits.
+      stdio: ["pipe", flags.json ? "pipe" : "inherit", "inherit"],
+      encoding: "utf8",
+    });
+    const ok = result.status === 0;
+    if (!ok) {
+      anyFailed = true;
+      console.error(`devteam: approval-derivation exited ${result.status} for ${path.relative(cwd, file)}`);
+    }
+    perFile.push({ file: path.relative(cwd, file), exitCode: result.status, ok });
+  }
+
+  if (flags.json) {
+    console.log(JSON.stringify({ cwd, files: perFile, ok: !anyFailed }, null, 2));
+  } else if (!anyFailed) {
+    const rel = perFile.map((p) => p.file).join(", ");
+    console.log(`Derived approvals from ${files.length} review file${files.length === 1 ? "" : "s"}: ${rel}`);
+    console.log("Run `devteam merge peer-review` to rebuild pipeline/gates/stage-05.json from the updated per-area gates.");
+  }
+
+  process.exit(anyFailed ? 1 : 0);
+}
+
 // Render a Principal-ruling prompt — instructs the Principal subagent
 // to read the cited context, weigh the question, and write a
 // PRINCIPAL-RULING line into pipeline/context.md. Used by cmdRuling.
@@ -1779,6 +1883,7 @@ function main() {
     case "next":     return cmdNext(rest);
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);
+    case "derive-approvals": return cmdDeriveApprovals(rest);
     case "restart":  return cmdRestart(rest);
     case "ruling":   return cmdRuling(rest);
     case "summary":  return cmdSummary(rest);

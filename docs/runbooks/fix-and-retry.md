@@ -232,29 +232,44 @@ grep -l "^## Review of <area>" pipeline/code-review/by-*.md
 
 ### Two operator paths
 
-**Legitimate: add the missing area review.** Pick a reviewer who *can* review that area per the matrix (any non-area seat) and append a `## Review of <area>` section to their existing review file. The PostToolUse `approval-derivation` hook fires on the save, re-derives the per-area gate, and the area flips to PASS once `approvals.length >= required_approvals`.
+**Legitimate: add the missing area review.** Pick a reviewer who *can* review that area per the matrix (any non-area seat) and append a `## Review of <area>` section to their existing review file. Then run `devteam derive-approvals` to update the per-area gate, then `devteam merge peer-review` to rebuild the merged gate.
 
 ```bash
-# Append to an existing review file (e.g., dev-platform reviewing the qa area).
+# 1. Append to an existing review file (e.g., dev-platform reviewing the qa area).
 cat <<'EOF' >> pipeline/code-review/by-platform.md
 
 ## Review of <area>
 
 <2-3 sentences of substantive review against AC-N and design-spec §X.
-The hook doesn't enforce content quality — but the audit trail should
-show a real read of the area, not a rubber stamp.>
+The audit trail should show a real read of the area, not a rubber stamp.>
 
 REVIEW: APPROVED
 EOF
 
-# Confirm the hook re-derived the gate
+# 2. Re-derive the per-area gate from the updated review file.
+#    Without this, a shell/editor save doesn't trigger the approval-derivation
+#    hook — see the host-lifecycle note below.
+devteam derive-approvals pipeline/code-review/by-platform.md
+
+# 3. Confirm the gate flipped to PASS.
 cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals}'
 # Expect: status "PASS", approvals ["dev-backend", "dev-platform"]
 
-# Re-merge and advance
+# 4. Re-merge the per-area gates into the merged stage gate, then advance.
 devteam merge peer-review
 devteam next   # expect: ▶️ run-stage qa (stage-06) or next track-stage
 ```
+
+#### Why step 2 is needed: the host-lifecycle constraint
+
+The `approval-derivation` hook is registered as a Claude Code `PostToolUse` hook (`hosts/claude-code/adapter.js:230`). It fires when an **agent inside an active Claude Code session** uses the `Write` or `Edit` tool on a review file — that's how a peer-review subagent's `REVIEW: APPROVED` marker reaches the per-area gate during a normal stage run.
+
+A shell `cat >>`, an editor save (vim, VS Code outside Claude Code, etc.), or any write that doesn't go through the Claude Code tool-call lifecycle bypasses the hook entirely. `devteam derive-approvals` is the explicit operator path that invokes the same hook (same code, same gate shape, same lock + atomic-write semantics) with a synthetic PostToolUse payload — it's what closes the gap when the review file was edited outside a host session.
+
+It's also useful when:
+- You hand-corrected a typo in a `## Review of <area>` heading and want the gate to reflect the fix.
+- You bulk-edited several `by-*.md` files (`devteam derive-approvals` with no argument processes every one).
+- The hook errored mid-run and you want to recover from a known-good review-file state.
 
 **Override: hand-edit the merged gate to WARN.** Faster, but only defensible when the warnings carry no `BLOCKER:` content and the missing review wouldn't realistically have flipped any decision. Document the deferral in `pipeline/context.md` so the retrospective sees it.
 
@@ -314,7 +329,7 @@ The per-area gate showed the truth:
 
 `dev-backend` wrote `## Review of qa` with `REVIEW: APPROVED`. Neither `dev-frontend` nor `dev-platform` wrote one. The QA reviewer's own file doesn't count (matrix excludes self-reviews). Pure quorum miss; nothing wrong with the code.
 
-Fixed by appending a `## Review of qa` section to `by-platform.md` with a substantive 3-paragraph review of `src/tests/` against AC-11 / AC-13 and `REVIEW: APPROVED`. The hook re-derived the qa gate to PASS in seconds; `devteam merge peer-review` rebuilt the merged gate; `devteam next` advanced to stage-06.
+Fixed by appending a `## Review of qa` section to `by-platform.md` with a substantive review of `src/tests/` against AC-11 / AC-13 and `REVIEW: APPROVED`, then running `devteam derive-approvals pipeline/code-review/by-platform.md`. The gate flipped to PASS in milliseconds; `devteam merge peer-review` rebuilt the merged gate; `devteam next` advanced to stage-06.
 
 The SUGGESTION items in `warnings[]` carried through to the merged gate as warnings, where the retrospective will see them. SUGGESTIONs are deferred follow-ups, not merge-blockers — that's the convention (see [`conventions.md`](../conventions.md)).
 
@@ -326,7 +341,8 @@ The SUGGESTION items in `warnings[]` carried through to the merged gate as warni
 - **`--from` accepts both friendly name and gate id.** `--from red-team` and `--from stage-04c` are equivalent.
 - **The non-target workstreams will re-render and exit fast.** When you run `devteam stage build --patch --from red-team --headless` (without `--skip-completed`), all four build workstreams re-dispatch. The three not implicated by the patch items write quick PASS gates with PR summaries saying "no relevant items in scope." Costs wall-clock but is correct.
 - **Don't hand-edit gate status to PASS.** Orchestrator-stamped verification (stage-04a, stage-06) will re-stamp on next validate and flip you back. The right way to override an automated decision is the [escalation runbook](escalation.md) → Principal ruling.
-- **Stage 5 is the exception — and only for quorum misses, not objections.** The merged `stage-05.json` is *not* orchestrator-stamped, so you can hand-edit it (Case 5, the override path). But the `approval-derivation` hook will overwrite per-area gates (`stage-05.<area>.json`) on any review-file save, and a subsequent `devteam merge peer-review` will re-derive the merged gate from those per-area gates. The override sticks only if neither happens. Adding the missing area review is the durable fix.
+- **Stage 5 is the exception — and only for quorum misses, not objections.** The merged `stage-05.json` is *not* orchestrator-stamped, so you can hand-edit it (Case 5, the override path). But the `approval-derivation` hook will overwrite per-area gates (`stage-05.<area>.json`) on any review-file save *from inside Claude Code*, and a subsequent `devteam merge peer-review` will re-derive the merged gate from those per-area gates. The override sticks only if neither happens. Adding the missing area review (and running `devteam derive-approvals`) is the durable fix.
+- **Editor saves don't fire the approval-derivation hook.** The hook is registered as a Claude Code `PostToolUse Write|Edit` event — it fires when an agent uses the `Write` or `Edit` tool inside an active session, not when you save the file from vim, VS Code outside Claude Code, or `cat >>` from your shell. After any manual edit to `pipeline/code-review/by-*.md`, run `devteam derive-approvals [<file>]` to update the per-area gates. Without an argument it processes every review file under `pipeline/code-review/`.
 - **`devteam log --follow`** in a second pane is the right way to watch a multi-step re-run. You'll see each gate land in chronological order.
 
 ---
