@@ -74,7 +74,40 @@ Write `docs/audit/status.json` at the start of any audit and update it after eve
 
 ## Phase 0 — Bootstrap
 
-Establish what the project is. Three steps, each builds on the prior.
+Establish what the project is. Four steps — start with the archive housekeeping in 0.0, then the three substantive bootstrap steps.
+
+### 0.0 — Archive prior audit if present
+
+Before any new audit work, preserve the prior audit so its findings remain browsable while the new one runs. Skip this step entirely if `--resume` is set (a `--resume` run is *continuing* the existing audit, not starting a new one).
+
+**When to archive:** `docs/audit/status.json` exists AND reports `current_phase: "phase-3"` (a completed audit). If `status.json` is absent (first audit) or reports an incomplete prior run (in-progress; rare — usually means a previous audit crashed), skip the archive and proceed to step 0.1; the new audit will overwrite or finish what's there.
+
+**Archive procedure:**
+
+1. **Resolve the archive directory name** as `<date>-<version>-<context>`:
+   - `<date>` — the `started` field from the prior `status.json`, taking only the YYYY-MM-DD prefix.
+   - `<version>` — the `version` field from `package.json` at the time of the prior audit. If the package.json version has since changed, use the prior audit's recorded version; if not recorded, ask the operator.
+   - `<context>` — a short kebab-case phrase describing what was distinctive about that audit run (e.g. `initial-dogfood`, `post-derive-approvals`, `pre-v1-release`). Ask the operator if unclear.
+   - Example: `docs/audit-archive/2026-05-28-v0.4.0-initial-dogfood/`.
+
+2. **Move the prior audit** via `git mv` (preserves git history) into the archive directory:
+   ```bash
+   mkdir -p docs/audit-archive/<archive-name>/
+   git mv docs/audit/00-project-context.md docs/audit/01-architecture.md \
+          docs/audit/02-git-history.md docs/audit/03-compliance.md \
+          docs/audit/04-tests.md docs/audit/05-documentation.md \
+          docs/audit/06-security.md docs/audit/07-performance.md \
+          docs/audit/08-code-quality.md docs/audit/09-backlog.md \
+          docs/audit/10-roadmap.md docs/audit/status.json \
+          docs/audit-archive/<archive-name>/
+   ```
+   Leave `docs/audit/README.md` in place if present — it's the placeholder pointing at the archive.
+
+3. **Append a row to `docs/audit-archive/HISTORY.md`** with date, version, context, phases completed, and a one-line headline derived from the prior `10-roadmap.md` summary (typically counts of P0/P1/P2/P3 items and a total effort estimate). Create `HISTORY.md` if it doesn't exist — see the existing file for the table shape.
+
+4. **Carry-forward note:** make a mental record of any prior `10-roadmap.md` items that are still open (not yet addressed in subsequent commits). When you write the new `09-backlog.md` and `10-roadmap.md` in Phase 3, you must either close those items out with a citation explaining why, or re-include them alongside the new findings with appropriate priority. The archive directory is the source of truth for what was open.
+
+After archiving, `docs/audit/` should contain only `README.md` (if present). Proceed to step 0.1.
 
 ### 0.1 — Project context
 
@@ -293,7 +326,7 @@ Two steps. The synthesis step does the load-bearing work; the sequencing step pa
 
 ### 3.1 — Synthesis & prioritization
 
-Read all files in `docs/audit/`.
+Read all files in `docs/audit/`. If `docs/audit-archive/HISTORY.md` exists, also read the **most recent archived audit's `09-backlog.md` and `10-roadmap.md`** — any items there that haven't been closed in subsequent commits must be carried forward (re-prioritized alongside new findings) or closed out with a citation in the new backlog. Carry-forward is the mechanism that keeps audits cumulative; without it, each audit re-discovers the same gaps without acknowledging the prior cycle.
 
 1. Synthesize findings into **3–5 systemic themes** — patterns that recur across multiple files in §03–§08. Themes are higher-level than individual findings.
 2. Build a prioritized backlog. For each item, capture:

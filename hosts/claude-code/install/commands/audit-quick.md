@@ -24,10 +24,11 @@ The text after `/audit-quick` is an optional scope constraint. If provided (e.g.
 3. Read `AGENTS.md` if it exists.
 4. Create `docs/audit/` if it doesn't exist.
 5. Check for `docs/audit-extensions.md`.
+6. **Run skill step 0.0 — archive any prior completed audit.** Move `docs/audit/*` to `docs/audit-archive/<date>-<version>-<context>/` if `status.json` reports `current_phase: "phase-3"`. Skip on `--resume`. Procedure: `skills/audit/SKILL.md` § Phase 0 step 0.0.
 
 ## Execution
 
-Run Phase 0 (steps 0.1, 0.2, 0.3) and Phase 1 (steps 1.1, 1.2, 1.3) from the skill. Write all six output files. Run extensions for Phases 0 and 1 if any are declared.
+Run Phase 0 (steps 0.0, 0.1, 0.2, 0.3) and Phase 1 (steps 1.1, 1.2, 1.3) from the skill. Write all six output files. Run extensions for Phases 0 and 1 if any are declared.
 
 Write `docs/audit/status.json` with phases 0 and 1 complete, phases 2 and 3 pending:
 

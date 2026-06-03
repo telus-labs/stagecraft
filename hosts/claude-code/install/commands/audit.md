@@ -30,7 +30,8 @@ Before any phase work:
 3. Read `AGENTS.md` if it exists.
 4. Create `docs/audit/` if it doesn't exist.
 5. Check for `docs/audit-extensions.md` — note whether it exists; if it does, you'll read it at the start of each phase and append findings under a `## Project-Specific` heading in the phase's output file.
-6. Check for `docs/audit/status.json` — if resuming, load state. Otherwise write a fresh status file:
+6. **Run skill step 0.0 — archive any prior completed audit.** If `docs/audit/status.json` exists with `current_phase: "phase-3"`, move the prior audit's files into `docs/audit-archive/<date>-<version>-<context>/` and append a row to `docs/audit-archive/HISTORY.md`. Skip on `--resume`. Full procedure in `skills/audit/SKILL.md` § Phase 0 step 0.0.
+7. Check for `docs/audit/status.json` — if resuming, load state. Otherwise write a fresh status file:
 
 ```json
 {
@@ -53,7 +54,7 @@ Run each phase as defined in `.claude/skills/audit/SKILL.md`. Read each phase's 
 
 ### Phase 0 — Bootstrap
 
-Run steps 0.1, 0.2, 0.3 from the skill. Write each output file.
+Run steps 0.0 (archive prior audit), 0.1, 0.2, 0.3 from the skill. Write each output file.
 If `docs/audit-extensions.md` declares Phase 0 extensions, run them and append results under `## Project-Specific` in each phase-0 file.
 Update `status.json`: `"phase-0": "complete"`.
 
