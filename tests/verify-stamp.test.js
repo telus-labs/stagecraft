@@ -103,6 +103,40 @@ describe("verify/stamp: stampStage04a — happy path", () => {
     assert.match(r.gate._orchestrator_stamped.runs.test.skipped, /no test command/);
     assert.equal(r.gate.status, "PASS", "skipped runs don't flip status");
   });
+
+  // Audit P2-7: middle path of the command-resolution fall-through chain.
+  // Unit-tested in verify-runner.test.js for resolveCommands directly;
+  // this exercises it through the full stamping flow to catch any
+  // wiring break between resolveCommands and the stamp logic.
+  it("falls back to package.json scripts.lint / scripts.test when .devteam/config.yml has no verify section", async () => {
+    // makeTargetProject's default config has no pipeline.verify.*
+    const cwd = track(makeTargetProject());
+    // Add a package.json with lint + test scripts that both succeed.
+    fs.writeFileSync(
+      path.join(cwd, "package.json"),
+      JSON.stringify({ name: "test-fixture", scripts: { lint: "true", test: "true" } }, null, 2),
+    );
+    const gatePath = seedGateRaw(cwd, "stage-04a", {
+      stage: "stage-04a", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "full", timestamp: "2026-06-02T12:00:00Z",
+      blockers: [], warnings: [],
+      lint_passed: true, tests_passed: true,
+      dependency_review_passed: true, security_review_required: false,
+    });
+    const r = await stampStage04a(cwd, gatePath);
+    assert.equal(r.ok, true);
+    // Both should resolve to "npm run lint" / "npm test" and exit 0.
+    assert.equal(r.gate._orchestrator_stamped.runs.lint.exit_code, 0,
+      "lint resolved from package.json scripts.lint and ran cleanly");
+    assert.equal(r.gate._orchestrator_stamped.runs.test.exit_code, 0,
+      "test resolved from package.json scripts.test and ran cleanly");
+    // Should NOT show "skipped" — fall-through worked.
+    assert.ok(!("skipped" in r.gate._orchestrator_stamped.runs.lint),
+      "lint should not be skipped when package.json provides a script");
+    assert.ok(!("skipped" in r.gate._orchestrator_stamped.runs.test),
+      "test should not be skipped when package.json provides a script");
+    assert.equal(r.gate.status, "PASS");
+  });
 });
 
 describe("verify/stamp: stampStage06 — AC mapping", () => {
