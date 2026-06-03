@@ -851,6 +851,34 @@ The pipeline cannot advance until you resolve it. The summary is: read the gate'
 
 For the full procedure — what to read in what order, how to invoke the Principal role for a binding ruling, how to encode must-fix vs defer decisions, common gotchas — see **[`docs/runbooks/escalation.md`](runbooks/escalation.md)**. That's the operational playbook; this section is the one-paragraph version.
 
+### Ad-hoc Principal rulings (`devteam ruling`)
+
+Some decisions need the Principal's judgment but **don't warrant re-running a whole stage**. Examples:
+
+- A reviewer's `ESCALATE-to-Principal:` marker in `pipeline/code-review/by-<reviewer>.md` calls out an architectural question (e.g. "this approach contradicts ADR-0003 — Principal should rule").
+- An ADR-vs-implementation drift surfaces mid-pipeline ("the ADR says round to 6 decimal places; the code rounds to 8 — which is right?").
+- A consistency-audit finding (`devteam reproduce`) shows the system-prompt hash drifted and you need a Principal call on whether to re-baseline or replay.
+
+`devteam ruling` dispatches the Principal subagent for a focused ruling that lands as a `PRINCIPAL-RULING:` line in `pipeline/context.md` under a `## Principal Rulings` section. **No gate is written** — the ruling is an artifact, not a status change. After reading the ruling, you use `devteam restart <stage>` (must-fix path) or hand-edit the escalating gate (defer path) to act on it.
+
+```bash
+devteam ruling --topic "ADR-0003 round(x,6) vs implementation round(x,8)" \
+               --context pipeline/adr/0003-cost-rounding.md,pipeline/code-review/by-qa.md \
+               --target-gate pipeline/gates/stage-05.json \
+               --headless
+```
+
+Flags:
+
+- **`--topic "..."`** (required) — short description of what to rule on.
+- **`--context paths`** — comma-separated files Principal should read (the reviewer's file, the ADR, the failing test report, etc.).
+- **`--target-gate path`** — the escalating gate. Principal will read its `escalation_reason` and `decision_needed`.
+- **`--headless`** — pipe the prompt through the Principal-routed host's headless command. Without it, the prompt prints to stdout for paste-into-host (the user-driven mode).
+
+Routing: `devteam ruling` resolves the Principal's host from `routing.roles.principal` if set in `.devteam/config.yml`, else `routing.default_host`. Refuses cleanly when the routed host doesn't support `--headless` (e.g., `generic`).
+
+For when to use `ruling` vs `devteam stage`, vs hand-editing gates, vs `devteam restart`, see [`docs/runbooks/escalation.md`](runbooks/escalation.md) — same operational playbook that covers the rest of the escalation flow.
+
 ### Stoplist blocked my change
 
 ```
