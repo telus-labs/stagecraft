@@ -8,7 +8,6 @@ const { makeTargetProject, cleanup, runCLI } = require("./_helpers");
 const {
   needsMigrationSafety,
   matchContent,
-  PATH_PATTERNS,
   DDL_PATTERNS,
 } = require("../core/guards/migration-heuristic");
 

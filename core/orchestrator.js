@@ -11,7 +11,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { STAGES, getStage, orderedStageNames, orderedStageNamesForTrack, isStageInTrack, rolesForStage } = require("./pipeline/stages");
+const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage } = require("./pipeline/stages");
 const { loadConfig } = require("./config");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
@@ -251,13 +251,6 @@ async function runStageHeadless(stageName, opts = {}) {
 
     return { stage: plan.stage, name: stageName, roles: plan.roles, results, ctx: plan.ctx };
   });
-}
-
-function gateFileFor(stage, workstream, gatesDir) {
-  const dir = gatesDir || path.join(process.cwd(), "pipeline", "gates");
-  return workstream && workstream !== stage
-    ? path.join(dir, `${stage}.${workstream.split(".").pop()}.json`)
-    : path.join(dir, `${stage}.json`);
 }
 
 function mergeWorkstreamGates(stageName, opts = {}) {
@@ -506,7 +499,6 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
     // out of order, so we surface that as needing the prerequisite first.
     if (stageDef.conditionalOn) {
       const c = stageDef.conditionalOn;
-      const prereqDef = Object.values(STAGES).find((s) => s && s.stage === c.stage);
       const prereqGatePath = path.join(gatesDir, `${c.stage}.json`);
       if (!fs.existsSync(prereqGatePath)) {
         // Prereq not done yet; the earlier iteration of this loop should

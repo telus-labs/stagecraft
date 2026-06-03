@@ -107,8 +107,18 @@ function changedPathsFromArgs(args) {
   return fs.readFileSync(diffFile, "utf8").split(/\r?\n/).filter(Boolean);
 }
 
+// Magic-comment override: any line containing `devteam-no-security-review:
+// <reason>` (case-insensitive) disables the heuristic for that file.
+// Parity with secret-scan's `devteam-allow-secret:` escape hatch — same
+// shape, same conservative intent. Use sparingly for verified false
+// positives (docs / fixtures / educational examples that mention security
+// primitives without using them).
+const NO_REVIEW_MARKER = /devteam-no-security-review\s*:/i;
+
 // Scan a single file's contents against CONTENT_PATTERNS. Returns the
 // list of labels that fired. Read errors and oversized files return [].
+// Files carrying the `devteam-no-security-review:` magic comment return
+// [] regardless of pattern matches.
 function contentFindings(filePath, patterns = CONTENT_PATTERNS) {
   let absolute;
   try {
@@ -125,6 +135,7 @@ function contentFindings(filePath, patterns = CONTENT_PATTERNS) {
   } catch {
     return [];
   }
+  if (NO_REVIEW_MARKER.test(content)) return [];
   const hits = [];
   for (const { label, re } of patterns) {
     if (re.test(content)) hits.push(label);
@@ -200,4 +211,4 @@ if (require.main === module) {
   process.exit(main());
 }
 
-module.exports = { needsSecurityReview, analyze, contentFindings, PATH_PATTERNS, CONTENT_PATTERNS, MAX_SCAN_BYTES };
+module.exports = { needsSecurityReview, analyze, contentFindings, PATH_PATTERNS, CONTENT_PATTERNS, MAX_SCAN_BYTES, NO_REVIEW_MARKER };

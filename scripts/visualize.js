@@ -11,7 +11,6 @@
 const path = require("node:path");
 const REPO_ROOT = path.resolve(__dirname, "..");
 const {
-  STAGES,
   TRACKS,
   STAGES_BY_TRACK,
   orderedStageNamesForTrack,

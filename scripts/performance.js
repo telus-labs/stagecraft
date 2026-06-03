@@ -17,8 +17,6 @@
 // This is the data layer for D5 (adaptive routing). The output is
 // designed to be read by humans AND by scripts/routing-suggest.js.
 
-const fs = require("node:fs");
-const path = require("node:path");
 const { loadGatesFrom, filterSince } = require("./dashboard");
 const { formatUsd } = require("../core/pricing");
 

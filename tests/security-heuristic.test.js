@@ -14,7 +14,7 @@ function tmpdir() {
   return d;
 }
 afterEach(() => {
-  for (const d of _dirs) try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
+  for (const d of _dirs) try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* test cleanup; ignore */ }
   _dirs = [];
 });
 
@@ -161,6 +161,34 @@ describe("security-heuristic: content scanning", () => {
 
   it("does not throw on missing or unreadable files", () => {
     assert.deepEqual(contentFindings("/tmp/does-not-exist-stagecraft-test-xyz.ts"), []);
+  });
+
+  it("devteam-no-security-review magic comment suppresses content findings", () => {
+    // A doc/example file that legitimately mentions security primitives but
+    // doesn't actually use them. Without the override, the bcrypt mention
+    // alone would trigger stage-04b unnecessarily.
+    const d = tmpdir();
+    const content = [
+      "// devteam-no-security-review: explanatory doc — describes bcrypt without using it",
+      "//",
+      "// Example: how a password-hashing setup typically looks:",
+      "//   import bcrypt from 'bcrypt';",
+      "//   const hash = await bcrypt.hash(password, 12);",
+      "//",
+      "// This file is documentation. The real implementation lives in src/auth/.",
+      "export const example = 'see comments above';",
+    ].join("\n");
+    const f = writeFile(d, "docs/examples/password-hashing.md", content);
+    const hits = contentFindings(f);
+    assert.deepEqual(hits, [], "magic comment must suppress all content findings");
+  });
+
+  it("magic comment is case-insensitive", () => {
+    const d = tmpdir();
+    const content =
+      "// DEVTEAM-NO-SECURITY-REVIEW: case-insensitive\nimport bcrypt from 'bcrypt';\n";
+    const f = writeFile(d, "src/example.js", content);
+    assert.deepEqual(contentFindings(f), []);
   });
 });
 

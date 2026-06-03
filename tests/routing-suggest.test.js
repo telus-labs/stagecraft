@@ -5,7 +5,6 @@ const assert = require("node:assert/strict");
 const {
   buildRecommendations,
   renderRecommendations,
-  scoreFor,
   compareScores,
   MIN_DISPATCHES,
   MIN_PASS_RATE_DELTA,

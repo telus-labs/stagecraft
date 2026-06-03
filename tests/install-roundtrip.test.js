@@ -1,6 +1,5 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
 const { listHosts, loadAdapter } = require(path.join(REPO_ROOT, "core", "router"));
@@ -58,7 +57,7 @@ describe("install round-trip per adapter", () => {
       it("uninstall removes the install payload", () => {
         const cwd = track(makeTargetProject());
         const adapter = loadAdapter(host);
-        const r = adapter.install(cwd);
+        adapter.install(cwd);
         adapter.uninstall(cwd);
         // After uninstall, status should report missing (except for generic which installs nothing)
         const s = adapter.status(cwd);
