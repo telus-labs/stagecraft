@@ -75,6 +75,11 @@ Commands:
                                    PRINCIPAL-RULING line; no gate is written.
                                    See docs/runbooks/escalation.md.
   summary [--json]                 One-screen pipeline state report.
+  log [--follow] [--json]          Chronological event timeline: every gate
+                                   and every artifact write, in mtime order,
+                                   with key fields per stage. --follow tails
+                                   the pipeline/ directory at 1s poll. Works
+                                   in both headless and user-driven modes.
   doctor                           Pre-flight check: install integrity,
                                    target layout, config validity, adapter
                                    status, host CLIs on PATH.
@@ -191,6 +196,7 @@ function parseFlags(argv) {
     if (a === "--topic")   { flags.topic   = argv[++i]; continue; }
     if (a === "--context") { flags.context = argv[++i]; continue; }
     if (a === "--target-gate") { flags.targetGate = argv[++i]; continue; }
+    if (a === "--follow")  { flags.follow  = true;      continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -1113,6 +1119,86 @@ function cmdDoctor(argv) {
   console.log("✅ everything looks good");
 }
 
+// Format an event from core/log/journal.js as a single terminal line.
+function formatLogEvent(event, cwd) {
+  const { summarizeGate, summarizeArtifact } = require(path.join(__dirname, "..", "core", "log", "journal"));
+  const time = new Date(event.mtime).toISOString().slice(11, 19); // HH:MM:SS
+  if (event.kind === "gate") {
+    const s = summarizeGate(event.gate);
+    const extras = s.extras ? `  ${s.extras}` : "";
+    return `${time}  ${s.icon}  ${s.label.padEnd(20)}  ${s.status.padEnd(8)}${extras}`;
+  }
+  if (event.kind === "artifact") {
+    const a = summarizeArtifact(event, cwd);
+    const owner = a.owner ? `  (${a.owner})` : "";
+    return `${time}  📝  ${a.rel.padEnd(20)}  ${a.lines} lines${owner}`;
+  }
+  return `${time}  ?  ${event.path}`;
+}
+
+// `devteam log [--follow] [--json] [--cwd <path>]`
+// Chronological view of pipeline state — works in both headless and
+// user-driven modes (it reads gate files + artifact files, not the
+// agent's transcript). Pair with the per-stage transcripts in
+// pipeline/logs/ (written by headless dispatches) for the full picture.
+function cmdLog(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const { buildEvents } = require(path.join(__dirname, "..", "core", "log", "journal"));
+
+  function emit(events) {
+    if (flags.json) {
+      for (const e of events) {
+        const out = {
+          ts: new Date(e.mtime).toISOString(),
+          kind: e.kind,
+          path: path.relative(cwd, e.path).replace(/\\/g, "/"),
+        };
+        if (e.kind === "gate") {
+          out.stage = e.gate.stage;
+          out.workstream = e.gate.workstream;
+          out.status = e.gate.status;
+        } else {
+          out.owner = e.owner;
+          out.artifactKind = e.artifactKind;
+        }
+        console.log(JSON.stringify(out));
+      }
+    } else {
+      for (const e of events) console.log(formatLogEvent(e, cwd));
+    }
+  }
+
+  const initial = buildEvents(cwd);
+  emit(initial);
+
+  if (!flags.follow) return;
+
+  // --follow: re-scan periodically and emit anything new. Polling
+  // (1s) keeps the implementation portable across platforms (fs.watch
+  // recursive isn't reliable on Linux). The cost — ~1 readdir/sec
+  // over a small dir — is negligible.
+  const seen = new Set();
+  for (const e of initial) seen.add(`${e.kind}:${e.path}:${e.mtime.getTime()}`);
+  const interval = setInterval(() => {
+    let events;
+    try { events = buildEvents(cwd); } catch { return; }
+    const fresh = [];
+    for (const e of events) {
+      const key = `${e.kind}:${e.path}:${e.mtime.getTime()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        fresh.push(e);
+      }
+    }
+    if (fresh.length > 0) emit(fresh);
+  }, 1000);
+  // Keep process alive on Ctrl-C — interval.unref would otherwise let
+  // node exit when the only handle left is the interval. We want the
+  // user to hit Ctrl-C explicitly.
+  process.on("SIGINT", () => { clearInterval(interval); process.exit(0); });
+}
+
 function cmdSummary(argv) {
   const { flags } = parseFlags(argv);
   const result = summary({ cwd: flags.cwd });
@@ -1696,6 +1782,7 @@ function main() {
     case "restart":  return cmdRestart(rest);
     case "ruling":   return cmdRuling(rest);
     case "summary":  return cmdSummary(rest);
+    case "log":      return cmdLog(rest);
     case "doctor":   return cmdDoctor(rest);
     case "ui":       return cmdUI(rest);
     case "memory":   return cmdMemory(rest);

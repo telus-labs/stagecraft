@@ -161,6 +161,18 @@ Things the dev noticed but did not fix because they're outside the brief.
 - **Format:** Bulleted list. Each bullet is a one-line description and (optionally) a ticket reference.
 - **Read by:** Reviewers (flagging an Out-of-Scope item is *not* a BLOCKER; it's how scope discipline is enforced). Stage 9 retro harvests these.
 
+## Auto-captured stage transcripts (`pipeline/logs/`)
+
+Per-stage logs written by `devteam stage X --headless` — the full stdout/stderr from the host CLI for that stage, with a header (start time, command, host) and trailer (end time, exit code).
+
+- **Where:** `pipeline/logs/<workstreamId>.log`. For multi-role stages, one file per workstream (`stage-04.backend.log`, `stage-04.frontend.log`, etc.).
+- **Written by:** `core/adapters/headless.js → runHeadless()` — automatic when a stage runs in `--headless` mode. Does not apply to user-driven mode (devteam doesn't see the agent's I/O there; the transcript lives in the host tool's session log).
+- **Read by:** You, post-hoc. `cat pipeline/logs/stage-04.backend.log` for the full transcript of one workstream.
+- **Opt out:** `DEVTEAM_NO_LOG=1` in the environment.
+- **Companion command:** `devteam log [--follow]` for a chronological cross-stage timeline. The per-stage logs are the deep-dive; `devteam log` is the overview.
+
+Not committed to git by default — typically `.gitignore` `pipeline/logs/` (they're large and easy to regenerate). Audit-grade pipelines may want to commit them; that's a team policy decision.
+
 ## Magic comments (in source code)
 
 Single-line `// comment` markers that change framework behavior at write-time.
