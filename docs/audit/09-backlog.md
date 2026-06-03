@@ -92,7 +92,15 @@ Land in next 1–2 commits.
 - **Risk of NOT changing:** low (the link is in a "what the output looks like" example, easily missed but real).
 - **Confidence:** HIGH.
 
-### P1-4: Resolve `architect` and `data-engineer` agent registrations
+### P1-4: Resolve `architect` and `data-engineer` agent registrations — **RETRACTED 2026-06-03**
+
+- **Status:** RETRACTED during Batch 1 implementation. The premise is false: `hosts/claude-code/adapter.js`'s `ROLE_FRONTMATTER` does **not** register `architect` or `data-engineer`. Direct grep confirms 12 entries (`pm`, `principal`, `reviewer`, `security`, `backend`, `frontend`, `platform`, `qa`, `auditor`, `red-team`, `migrations`, `verifier`); the audit listed two names that simply don't exist in the codebase. The "missing role briefs" gap is not a gap. See `03-compliance.md` § C-1 RETRACTION for the citation.
+- **Lesson:** the `skills/audit/SKILL.md` § Process discipline rule ("verify before promoting" — added after the 2026-05-28 audit's S5 retraction) wasn't applied here. Findings that name specific symbols must be confirmed via direct code inspection, not from memorized expectation, before being promoted to a backlog item.
+- **Original text preserved below** for audit-trail integrity.
+
+---
+
+**Original text (now retracted):**
 
 - **Theme:** Documentation residue (Theme 1) + single-source-of-truth convention.
 - **Source:** Findings C-1, D-4.
