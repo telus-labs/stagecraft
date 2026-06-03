@@ -2,7 +2,7 @@
 
 `devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook is the operational playbook — what to read, how to fix, how to re-run, and how to know it worked.
 
-Most `fix-and-retry` cases come from one of four stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), or **peer-review** (Stage 5). The general flow is the same; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of four stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), or **peer-review** (Stage 5). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). The general flow is the same across all cases; the per-stage specifics differ.
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md) — different protocol.
 
@@ -195,12 +195,138 @@ If two rounds of reviews still disagree, that's an [escalation](escalation.md) �
 
 ---
 
+## Case 5: Peer-review (Stage 5) FAIL with no objections — quorum miss
+
+A subtler Stage 5 failure: the merged `stage-05.json` is FAIL, but no reviewer wrote `REVIEW: CHANGES REQUESTED` and no `BLOCKER:` line exists anywhere. The cause is a **missing area review** — one of the four areas didn't accumulate enough approvals to reach `required_approvals`, even though every review file that *was* written is APPROVED.
+
+### Vocabulary you need first
+
+At Stage 4 (build), `workstreams[]` are the four **implementers** — backend, frontend, platform, qa each produced code, each wrote a gate.
+
+At Stage 5 (peer-review), `workstreams[]` in the merged `stage-05.json` are the four **areas of code being reviewed**, not reviewers. The `status` on each entry is the verdict on *that area's code*, derived from how many non-area reviewers approved it. A FAIL on `workstreams[3]` (`qa`) doesn't mean "the QA reviewer disapproved" — it means "the qa *area* (`src/tests/`) didn't receive its required approvals from non-qa reviewers." See [`concepts.md`](../concepts.md) §Workstream for the full vocabulary.
+
+### How to diagnose
+
+The merged gate is an aggregate; the actual FAIL lives in the per-area gate.
+
+```bash
+# 1. Which area is FAIL?
+cat pipeline/gates/stage-05.json | jq '.workstreams'
+
+# 2. Open the per-area gate for that area.
+cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals, required_approvals, changes_requested}'
+# Expect to see:
+#   status: "FAIL"
+#   approvals: ["dev-backend"]   ← only one
+#   required_approvals: 2
+#   changes_requested: []        ← nobody objected
+```
+
+If `changes_requested` is empty and `approvals.length < required_approvals`, this is a **quorum miss with no objections**. The matrix (in `rules/stage-05.md`) excludes self-reviews — `dev-qa` reviewing the qa area doesn't count toward quorum for that area — so an area can sit at 1 approval if only one non-area reviewer wrote a `## Review of <area>` section.
+
+```bash
+# 3. Confirm by grepping the reviewer files
+grep -l "^## Review of <area>" pipeline/code-review/by-*.md
+# If only one non-area file matches, that's your quorum miss.
+```
+
+### Two operator paths
+
+**Legitimate: add the missing area review.** Pick a reviewer who *can* review that area per the matrix (any non-area seat) and append a `## Review of <area>` section to their existing review file. The PostToolUse `approval-derivation` hook fires on the save, re-derives the per-area gate, and the area flips to PASS once `approvals.length >= required_approvals`.
+
+```bash
+# Append to an existing review file (e.g., dev-platform reviewing the qa area).
+cat <<'EOF' >> pipeline/code-review/by-platform.md
+
+## Review of <area>
+
+<2-3 sentences of substantive review against AC-N and design-spec §X.
+The hook doesn't enforce content quality — but the audit trail should
+show a real read of the area, not a rubber stamp.>
+
+REVIEW: APPROVED
+EOF
+
+# Confirm the hook re-derived the gate
+cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals}'
+# Expect: status "PASS", approvals ["dev-backend", "dev-platform"]
+
+# Re-merge and advance
+devteam merge peer-review
+devteam next   # expect: ▶️ run-stage qa (stage-06) or next track-stage
+```
+
+**Override: hand-edit the merged gate to WARN.** Faster, but only defensible when the warnings carry no `BLOCKER:` content and the missing review wouldn't realistically have flipped any decision. Document the deferral in `pipeline/context.md` so the retrospective sees it.
+
+```bash
+# 1. Edit pipeline/gates/stage-05.json:
+#    "status": "FAIL"  →  "status": "WARN"
+#    Leave warnings[] and workstreams[] untouched — that's the audit record.
+
+# 2. Document the deferral
+cat <<'EOF' >> pipeline/context.md
+
+## Deferred follow-ups
+
+- **stage-05 <area> quorum** — Only 1 of 2 required approvals on <area>.
+  Merged gate manually overridden to WARN because the open warnings are
+  non-blocking SUGGESTIONs and no reviewer wrote CHANGES_REQUESTED.
+  Filed as TICKET-XXX. Per docs/runbooks/escalation.md § 4b (defer path).
+EOF
+
+# 3. Advance
+devteam validate   # gate is still valid; WARN advances
+devteam next
+```
+
+**Critical caveat with the override path.** If you (or any process) later runs `devteam merge peer-review`, the merge re-derives FAIL from the still-FAILing per-area gate and your override is lost. The hook does NOT overwrite the merged gate (it only writes per-area gates), so as long as nobody re-merges, the WARN sticks. If you want the override to survive a re-merge, you must also hand-edit the per-area gate's status (and accept that the hook will overwrite it the next time anyone saves a review file).
+
+### Worked example: qa area, 1-of-2 approvals, no objections
+
+Real run, full track, multi-area diff. The merged gate looked like:
+
+```json
+{
+  "stage": "stage-05",
+  "status": "FAIL",
+  "workstreams": [
+    { "workstream": "backend",  "status": "PASS" },
+    { "workstream": "frontend", "status": "PASS" },
+    { "workstream": "platform", "status": "PASS" },
+    { "workstream": "qa",       "status": "FAIL" }
+  ]
+}
+```
+
+The per-area gate showed the truth:
+
+```json
+{
+  "stage": "stage-05", "workstream": "qa", "area": "qa",
+  "status": "FAIL",
+  "review_shape": "matrix", "required_approvals": 2,
+  "approvals": ["dev-backend"],
+  "changes_requested": [],
+  "blockers": [],
+  "warnings": ["…SUGGESTION:…", "…SUGGESTION:…"]
+}
+```
+
+`dev-backend` wrote `## Review of qa` with `REVIEW: APPROVED`. Neither `dev-frontend` nor `dev-platform` wrote one. The QA reviewer's own file doesn't count (matrix excludes self-reviews). Pure quorum miss; nothing wrong with the code.
+
+Fixed by appending a `## Review of qa` section to `by-platform.md` with a substantive 3-paragraph review of `src/tests/` against AC-11 / AC-13 and `REVIEW: APPROVED`. The hook re-derived the qa gate to PASS in seconds; `devteam merge peer-review` rebuilt the merged gate; `devteam next` advanced to stage-06.
+
+The SUGGESTION items in `warnings[]` carried through to the merged gate as warnings, where the retrospective will see them. SUGGESTIONs are deferred follow-ups, not merge-blockers — that's the convention (see [`conventions.md`](../conventions.md)).
+
+---
+
 ## Common gotchas
 
 - **`--patch` without `--from`** defaults to `red-team`. Fine in the common case; explicit `--from <stage>` is clearer.
 - **`--from` accepts both friendly name and gate id.** `--from red-team` and `--from stage-04c` are equivalent.
 - **The non-target workstreams will re-render and exit fast.** When you run `devteam stage build --patch --from red-team --headless` (without `--skip-completed`), all four build workstreams re-dispatch. The three not implicated by the patch items write quick PASS gates with PR summaries saying "no relevant items in scope." Costs wall-clock but is correct.
 - **Don't hand-edit gate status to PASS.** Orchestrator-stamped verification (stage-04a, stage-06) will re-stamp on next validate and flip you back. The right way to override an automated decision is the [escalation runbook](escalation.md) → Principal ruling.
+- **Stage 5 is the exception — and only for quorum misses, not objections.** The merged `stage-05.json` is *not* orchestrator-stamped, so you can hand-edit it (Case 5, the override path). But the `approval-derivation` hook will overwrite per-area gates (`stage-05.<area>.json`) on any review-file save, and a subsequent `devteam merge peer-review` will re-derive the merged gate from those per-area gates. The override sticks only if neither happens. Adding the missing area review is the durable fix.
 - **`devteam log --follow`** in a second pane is the right way to watch a multi-step re-run. You'll see each gate land in chronological order.
 
 ---

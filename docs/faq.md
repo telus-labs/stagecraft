@@ -301,6 +301,21 @@ The pipeline halts at Stage 4b — `devteam next` reports `resolve-escalation`. 
 
 After two review rounds with persistent CHANGES_REQUESTED, the gate's `escalated_to_principal` should flip to `true` (this is part of the approval-derivation hook's logic). The Principal then makes a binding ruling and either flips the gate to PASS or the team negotiates the change.
 
+### Stage 5 is FAIL but no reviewer objected — where's the failure coming from?
+
+A **quorum miss**, not an objection. The merged `stage-05.json` aggregates four per-area gates (`stage-05.backend.json`, `…frontend.json`, `…platform.json`, `…qa.json`); each area gate needs `approvals.length >= required_approvals` to PASS. If one area received fewer area-reviews than required — even with every review file that *was* written being APPROVED — that area's gate is FAIL, and the merge lifts the FAIL into the merged gate's `workstreams[]` entry for that area.
+
+Key vocabulary trip: at Stage 5, `workstreams[]` are **areas of code being reviewed**, not reviewers. A FAIL on `workstreams[].workstream: "qa"` means "the qa *area* didn't reach quorum," not "the qa reviewer objected." See [`concepts.md` §Stage-5 vocabulary callout](concepts.md#stage-5-vocabulary-callout).
+
+Diagnose with:
+
+```bash
+cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals, required_approvals, changes_requested}'
+# If changes_requested is [] and approvals.length < required_approvals → quorum miss, no objections.
+```
+
+Resolve by appending a `## Review of <area>` section with `REVIEW: APPROVED` to a non-area reviewer's `pipeline/code-review/by-*.md` file; the `approval-derivation` hook re-derives the per-area gate on the save, then `devteam merge peer-review` rebuilds the merged gate. Full operational sequence — including when overriding the merged gate to WARN is defensible and what gotchas come with it — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
+
 ### How do I roll back a deploy?
 
 The role's role brief explicitly says **don't auto-rollback** — the runbook (`pipeline/runbook.md`) names the rollback procedure and a human decides whether to roll back or investigate. The deploy gate records `rollback_executed: false` by default; PASS requires this to be false.
