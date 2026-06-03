@@ -209,7 +209,7 @@ describe("secret-scan: PreToolUse hook (end-to-end via stdin)", () => {
   });
 
   it("content over MAX_SCAN_BYTES → exit 0 with warning (fail-soft on size)", () => {
-    // 1.5 MB of plausible source text with an AWS key buried inside. The cap
+    // 1.7 MB of plausible source text with an AWS key buried inside. The cap
     // is 1 MB; this content should be skipped, the key NOT detected, and the
     // hook should exit 0 (allow) so a hook-timeout-fail-open can't happen
     // under load.
@@ -217,15 +217,19 @@ describe("secret-scan: PreToolUse hook (end-to-end via stdin)", () => {
     // Implementation note: spawnSync's `input` option EPIPEs the parent
     // when the child consumes stdin and exits before the parent finishes
     // writing — happens reliably for inputs ≳ 500KB. Real Claude Code use
-    // is a streamed pipe and doesn't hit this; we use shell-redirected
-    // stdin from a temp file to mirror that shape.
+    // is a streamed pipe and doesn't hit this. We mirror the streamed shape
+    // by writing to a temp file and passing its file descriptor as the
+    // child's stdin (`stdio: [fd, ...]`) — no shell involved.
     const filler = "function f() { return 42; }\n".repeat(60_000); // ~1.7 MB
     const content = filler + "\nconst k = 'AKIAIOSFODNN7EXAMPLE';\n";
     const stdin = preToolUse("Write", "src/big.js", content);
-    const tmp = path.join(fs.mkdtempSync(path.join(require("node:os").tmpdir(), "secret-scan-")), "in.json");
+    const tmpDir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "secret-scan-"));
+    const tmp = path.join(tmpDir, "in.json");
     fs.writeFileSync(tmp, stdin);
+    const fd = fs.openSync(tmp, "r");
     try {
-      const r = spawnSync("sh", ["-c", `node ${JSON.stringify(HOOK)} < ${JSON.stringify(tmp)}`], {
+      const r = spawnSync("node", [HOOK], {
+        stdio: [fd, "pipe", "pipe"],
         encoding: "utf8",
         maxBuffer: 16 * 1024 * 1024,
       });
@@ -235,7 +239,8 @@ describe("secret-scan: PreToolUse hook (end-to-end via stdin)", () => {
       // The buried AWS key should NOT have been reported — we skipped the scan.
       assert.doesNotMatch(r.stderr, /AWS Access Key ID/);
     } finally {
-      cleanup(path.dirname(tmp));
+      fs.closeSync(fd);
+      cleanup(tmpDir);
     }
   });
 
