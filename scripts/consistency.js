@@ -16,7 +16,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
-const { STAGES, TRACKS, STAGES_BY_TRACK, ORDERED_STAGE_NAMES, stageNames } =
+const { STAGES, STAGES_BY_TRACK, ORDERED_STAGE_NAMES, stageNames } =
   require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 const { listHosts, loadAdapter } = require(path.join(REPO_ROOT, "core", "router"));
 

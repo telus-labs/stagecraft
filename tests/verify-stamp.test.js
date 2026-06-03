@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { makeTargetProject, cleanup } = require("./_helpers");
-const { stamp, stampStage04a, stampStage06, extractAcsFromBrief, extractAcsFromReport } =
+const { stamp, stampStage04a, stampStage06, extractAcsFromBrief } =
   require("../core/verify/stamp");
 
 let _dirs = [];

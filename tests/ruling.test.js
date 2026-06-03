@@ -6,8 +6,6 @@
 
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { BIN, makeTargetProject, cleanup } = require("./_helpers");
 

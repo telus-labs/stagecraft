@@ -28,7 +28,6 @@
  */
 
 const fs = require("node:fs");
-const path = require("node:path");
 
 // ---------------------------------------------------------------------------
 // Detection patterns
@@ -126,8 +125,8 @@ function scanContent(text) {
   }
 
   const findings = [];
-  const lines = text.split(/\r?\n/);
-  // Build a flat list with line numbers so the regex's index can map to a line.
+  // Per-match line numbers are computed inline below by re-splitting the
+  // prefix up to the match index. We don't keep a separate lines array.
   for (const pattern of SECRET_PATTERNS) {
     // Reset regex state for global flag reuse.
     pattern.re.lastIndex = 0;

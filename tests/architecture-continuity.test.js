@@ -124,5 +124,5 @@ test("memory promote + architecture lookup round-trip surfaces a project's ADR c
   const look = runCLI(["architecture", "lookup", "pagination cursor"], { cwd: projectB, env });
   assert.equal(look.status, 0, `lookup failed: ${look.stderr}`);
   assert.match(look.stdout, /Pagination style/);
-  assert.match(look.stdout, new RegExp(projectA.replace(/[.\\\/]/g, "\\$&"))); // project A's path in the source attribution
+  assert.match(look.stdout, new RegExp(projectA.replace(/[.\\/]/g, "\\$&"))); // project A's path in the source attribution
 });
