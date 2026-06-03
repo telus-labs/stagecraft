@@ -201,6 +201,31 @@ Pipeline state — track: full
 
 For a live view, use `devteam ui --open` — see [the web UI](#the-web-ui).
 
+### Following pipeline progress
+
+Three ways to keep visibility while a pipeline runs, each suited to a different operator preference:
+
+**1. `devteam log` — chronological terminal narrative.** Reads every gate and every artifact file from `pipeline/`, sorts by mtime, prints one line per event with key fields per stage:
+
+```bash
+$ devteam log
+13:42:11  ✓  stage-01              PASS      3 AC, 0 Q
+13:42:30  📝  pipeline/brief.md     120 lines  (pm)
+13:43:00  ✓  stage-02              PASS      2 ADRs consulted
+13:43:05  📝  pipeline/design-spec.md  250 lines  (principal)
+13:48:21  ✓  stage-04              PASS      4/4 workstreams
+13:50:02  ✓  stage-04a             PASS      lint ✓, tests ✓, deps ✓
+13:50:15  ✗  stage-04c             FAIL      2 findings, 1 must-fix, 1 blocker
+```
+
+Add `--follow` to tail the directory at 1-second poll — new events stream in as gates land and artifacts get written. Add `--json` for one NDJSON event per line if you're piping to another tool. Works identically in headless and user-driven modes (it reads on-disk state, not the agent's transcript).
+
+**2. `pipeline/logs/*.log` — per-stage transcripts (headless only).** When you run `devteam stage X --headless`, the host CLI's stdout/stderr stream to your terminal AND get teed to `pipeline/logs/<workstreamId>.log`. After a run, `cat pipeline/logs/stage-04.backend.log` shows everything the agent printed, with a header (start time, command) and trailer (end time, exit code). Disable with `DEVTEAM_NO_LOG=1`. Doesn't apply to user-driven mode because the transcript lives in your AI tool's session, not in devteam's process.
+
+**3. `devteam ui --open` — live web dashboard.** Same data as `devteam log` but as a tree, updated via Server-Sent Events when gates change. Best if you're using two monitors or prefer a UI. See [the web UI](#the-web-ui).
+
+The three are complementary — use whichever fits the moment. A common pattern: `devteam log --follow` in one terminal pane while running the pipeline in another.
+
 ### Answering an open question between stages
 
 Stages 1 (requirements) and 2 (design) sometimes produce questions only a human can answer. They appear as `QUESTION:` lines in both `pipeline/brief.md` (in the *Open Questions* section) and `pipeline/context.md`. The pipeline halts at Stage 3 (clarification) until each one is answered — or, by default, dispatches the PM agent to answer them.

@@ -205,6 +205,7 @@ For multi-host (`--host claude-code,codex`): both surfaces installed side-by-sid
 | `devteam validate` | Run the gate validator manually against the current gate directory |
 | `devteam verify <stage-id> [--json]` | Orchestrator-stamped verification. For stage-04a (lint+tests) and stage-06 (tests + AC mapping), runs the configured commands and stamps the gate with what was actually observed. Flips status to FAIL if the orchestrator's truth disagrees with the model's claim. |
 | `devteam summary` | One-screen view of all stages: pass/warn/fail/escalate/pending per stage and workstream |
+| `devteam log [--follow] [--json]` | Chronological event timeline: every gate + every artifact write, mtime-sorted, with per-stage key fields. `--follow` polls at 1s for live tailing. Works in headless and user-driven modes. |
 | `devteam stages` | List all stages and their stage IDs |
 | `devteam hosts` | List available host adapters |
 | `devteam doctor` | Check that the install is healthy: hooks wired, agent files present, host CLIs on PATH |

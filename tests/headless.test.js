@@ -219,3 +219,73 @@ test("ctx.timeoutMs: 0 disables the timeout", async () => {
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }
 });
+
+test("writes pipeline/logs/<workstreamId>.log by default (tee behavior)", async () => {
+  const ctx = makeCtx();
+  try {
+    // `cat` echoes our prompt back to stdout, which gets teed to the log.
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "cat", () =>
+      runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+    );
+    assert.equal(r.exitCode, 0);
+    const expectedLog = path.join(ctx.cwd, "pipeline", "logs", "stage-01.log");
+    assert.equal(r.logPath, expectedLog, "logPath returned from runHeadless");
+    assert.ok(fs.existsSync(expectedLog), "log file written to disk");
+    const content = fs.readFileSync(expectedLog, "utf8");
+    // Header
+    assert.match(content, /# Stage transcript: stage-01/);
+    assert.match(content, /# Host: test-host/);
+    assert.match(content, /# Command: cat/);
+    assert.match(content, /# Started:/);
+    // The piped prompt content
+    assert.match(content, /stage stage-01/);
+    assert.match(content, /prompt body/);
+    // Trailer
+    assert.match(content, /# Ended:/);
+    assert.match(content, /# Exit: 0/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("DEVTEAM_NO_LOG=1 disables the tee; no log file is written", async () => {
+  const ctx = makeCtx();
+  try {
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", async () => {
+      const prev = process.env.DEVTEAM_NO_LOG;
+      process.env.DEVTEAM_NO_LOG = "1";
+      try {
+        return await runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx);
+      } finally {
+        if (prev === undefined) delete process.env.DEVTEAM_NO_LOG;
+        else process.env.DEVTEAM_NO_LOG = prev;
+      }
+    });
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.logPath, null, "logPath must be null when logging disabled");
+    const logsDir = path.join(ctx.cwd, "pipeline", "logs");
+    assert.ok(!fs.existsSync(logsDir), "no logs dir should be created");
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("log file is closed cleanly even when the spawn fails (no async write-after-end)", async () => {
+  const ctx = makeCtx();
+  try {
+    await assert.rejects(
+      withEnv("DEVTEAM_HEADLESS_COMMAND", "stagecraft-no-such-binary-xyz", () =>
+        runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+      ),
+      /failed to spawn/,
+    );
+    // The log file should exist (we opened it before spawn) with a
+    // "spawn error" trailer rather than being left half-written.
+    const logPath = path.join(ctx.cwd, "pipeline", "logs", "stage-01.log");
+    assert.ok(fs.existsSync(logPath));
+    const content = fs.readFileSync(logPath, "utf8");
+    assert.match(content, /Exit: spawn error:/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
