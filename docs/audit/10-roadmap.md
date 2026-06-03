@@ -37,7 +37,15 @@ Closes the only security finding above LOW.
 **Total estimated effort:** XS (~15 minutes including test).
 **Infrastructure changes needed:** none.
 
-### PR 1.3 — Resolve dormant agent registrations
+### PR 1.3 — Resolve dormant agent registrations — **RETRACTED 2026-06-03**
+
+**Status:** RETRACTED during Batch 1 implementation. The underlying finding (P1-4, sourced from C-1) was based on a false premise — `architect` and `data-engineer` are not registered as agents anywhere in the codebase. Direct inspection of `hosts/claude-code/adapter.js` `ROLE_FRONTMATTER` confirms 12 entries, none of which are these two names. No PR is required for this item. See `09-backlog.md` § P1-4 RETRACTION and `03-compliance.md` § C-1 RETRACTION for the full citation.
+
+**Lesson preserved:** `skills/audit/SKILL.md` § Process discipline ("verify before promoting") was not applied during the 2026-06-03 audit on this finding. Future audits MUST verify findings that cite specific symbols (agent names, file paths, function names) via direct grep before promotion past LOW confidence.
+
+---
+
+**Original text (now retracted):**
 
 | # | Item | Effort | Verification |
 |---|---|---|---|

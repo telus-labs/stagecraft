@@ -12,14 +12,24 @@ The documented load-bearing conventions (`AGENTS.md` § Conventions, § Load-bea
 | Workstream gate filename `<stage>.<workstream>.json` | ✅ Held | Validator, hook, and adapters all consistent. |
 | Idempotent installs (`{written, skipped}`) | ✅ Held | All 4 adapters return the documented shape. |
 | No comments-as-documentation in code | ✅ Held | Spot-checks of `core/orchestrator.js`, `core/gates/validator.js` show short "why" comments only; no multi-paragraph docstrings. |
-| Single source of truth for roles / rules / skills | ⚠️ Partial gap | See finding C-1 below. |
+| Single source of truth for roles / rules / skills | ✅ Held (C-1 RETRACTED) | See finding C-1 below — the apparent gap was a false reading. |
 | `process.exit(N)` rather than throwing for CLI errors | ✅ Held | 5 `process.exit` calls in `bin/devteam` for the error paths; CLI subcommands consistently exit rather than throw. |
 | 11 locked design decisions (ARCHITECTURE.md) | ✅ Held | 99 commits since prior audit, none touched `ARCHITECTURE.md`. Architectural seam stable. |
 | Per-PR test in lockstep with contract change | ✅ Held | All recent CLI additions (ruling, derive-approvals, restart, log) shipped with tests. Suite grew 378 → 778 (+400) since prior audit. |
 
 ## Findings
 
-### C-1 — Role briefs missing for two registered agents (MEDIUM, HIGH confidence)
+### C-1 — Role briefs missing for two registered agents (MEDIUM, HIGH confidence) — **RETRACTED 2026-06-03**
+
+**RETRACTION (added 2026-06-03 during Batch 1 implementation):** This finding was wrong. The premise — that `hosts/claude-code/adapter.js` registers `architect` and `data-engineer` agents — is false. Direct inspection of `ROLE_FRONTMATTER` (the actual structure name; the audit called it `AGENT_DEFS`) shows 12 entries: `pm`, `principal`, `reviewer`, `security`, `backend`, `frontend`, `platform`, `qa`, `auditor`, `red-team`, `migrations`, `verifier`. No `architect`, no `data-engineer`. Both names are word-uses for the concept "architecture," not agent identifiers. The finding was based on a memorized expectation that wasn't verified against the codebase.
+
+Per the "verify before promoting" lesson codified in `skills/audit/SKILL.md` § Process discipline (added after the 2026-05-28 audit's S5 retraction), findings that cite specific symbols must be verified via direct code inspection before promotion past LOW confidence. The 2026-06-03 audit didn't apply that discipline here. Mirrors the S5 pattern — promoted on signature-only reasoning, retracted on verification.
+
+The original-text finding is preserved below for audit-trail integrity. Findings D-4 (`05-documentation.md`) and P1-4 (`09-backlog.md`) + roadmap PR 1.3 (`10-roadmap.md`) are also retracted; see citations there.
+
+---
+
+**Original finding text (now retracted):**
 
 `hosts/claude-code/adapter.js` registers `auditor`, `red-team`, `migrations`, `verifier`, `architect`, `data-engineer` (among others) in its `AGENT_DEFS` table. Two of those agent names — **`architect`** and **`data-engineer`** — have no corresponding role brief file:
 

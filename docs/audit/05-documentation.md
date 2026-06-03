@@ -50,7 +50,13 @@ The user-guide is positioned as "daily-use reference" (README doc map line 43). 
 
 **Recommended fix**: add a `### Ad-hoc Principal rulings` subsection to the user-guide under (probably) "When things go wrong" or right after "Daily loop". ~15 lines covering: when you'd want a ruling (a reviewer wrote `ESCALATE-to-Principal:` without a stage-09 dispatch; an architectural call comes up mid-pipeline), the basic invocation, where the ruling lands (`pipeline/context.md` under `## Principal Rulings`), and a pointer to the escalation runbook for the full flow.
 
-### D-4 — Two role files registered but missing on disk (LOW, HIGH confidence)
+### D-4 — Two role files registered but missing on disk (LOW, HIGH confidence) — **RETRACTED 2026-06-03**
+
+**RETRACTED**: depends on C-1, which was a false reading. `hosts/claude-code/adapter.js` does not register `architect` or `data-engineer`; the names appear in the codebase only as word-uses for "architecture" the concept, not as agent identifiers. See `03-compliance.md` § C-1 RETRACTION for the full citation. No documentation gap exists; the original text below is preserved for audit-trail integrity.
+
+---
+
+**Original finding text (now retracted):**
 
 Cross-reference with finding C-1 in `03-compliance.md`. `hosts/claude-code/adapter.js` registers `architect` and `data-engineer` in its `AGENT_DEFS`; neither has a `roles/<name>.md` file. From a documentation standpoint, this means the role definition for those two agents is implicit in the adapter's inline description (the `description` field on each AGENT_DEFS entry, used by Claude Code's subagent metadata). That's not the project's documented convention — role briefs are the single source of truth.
 
