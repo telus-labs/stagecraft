@@ -101,6 +101,13 @@ function additionalAllowlistPatterns() {
   return raw.split(",").map((s) => s.trim()).filter(Boolean).map((s) => new RegExp(s));
 }
 
+// Skip scanning content larger than this. The hook runs as a Claude Code
+// PreToolUse blocker — Claude Code times out hooks that take too long, and
+// a timed-out hook fails OPEN (tool call proceeds without the safety net).
+// Matches the 1 MB cap used by core/guards/security-heuristic.js and
+// core/hooks/approval-derivation.js for the same reason.
+const MAX_SCAN_BYTES = 1_000_000;
+
 // ---------------------------------------------------------------------------
 // Scan logic
 // ---------------------------------------------------------------------------
@@ -221,6 +228,17 @@ function main() {
   if (!ctx.content) process.exit(0);
   if (isAllowlistedPath(ctx.file_path)) process.exit(0);
 
+  // Fail-soft on oversized content: log a warning and allow the tool call.
+  // Better to skip an unusually large file than to time out the hook and
+  // fail OPEN under load. Real source files are well under 1 MB.
+  if (ctx.content.length > MAX_SCAN_BYTES) {
+    console.error(
+      `[secret-scan] ⚠️  content for ${ctx.file_path || "<file>"} ` +
+      `is ${ctx.content.length} bytes (cap ${MAX_SCAN_BYTES}); skipping scan and allowing.`,
+    );
+    process.exit(0);
+  }
+
   const findings = scanContent(ctx.content);
   if (findings.length === 0) process.exit(0);
 
@@ -244,4 +262,5 @@ module.exports = {
   isAllowlistedPath,
   SECRET_PATTERNS,
   ALLOWLIST_PATH_PATTERNS,
+  MAX_SCAN_BYTES,
 };
