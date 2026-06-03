@@ -8,15 +8,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-Post-0.4.0 work, accumulated since `v0.4.0` (2026-05-28). Three themes:
-(1) tightening the build loop so adversarial findings feed back into the
-same stage that produced them (red-team blocker auto-injection +
-`--patch`, QA-within-build); (2) operational ergonomics for unattended
-runs (parallel workstream dispatch, `--dangerously-skip-permissions`,
-configurable stage skips, headless timeout doc); (3) sustained
-documentation work (methodology.md, SOC 2 walkthrough, FEATURES.md,
-audit-driven doc fixes). All additive; no breaking changes to gate
-JSON, the adapter contract, or `.devteam/config.yml`.
+(No entries yet — first commit after `v0.5.0` goes here.)
+
+## [0.5.0] — 2026-06-03
+
+Post-0.4.0 work, accumulated since `v0.4.0` (2026-05-28). Four themes:
+(1) **tightening the build loop** so adversarial findings feed back into
+the same stage that produced them (red-team blocker auto-injection +
+`--patch`, QA-within-build, orchestrator-stamped verification for
+stage-04a/06); (2) **operational ergonomics** for unattended and
+recovery runs (parallel workstream dispatch, `--dangerously-skip-permissions`,
+configurable stage skips, headless timeout doc, `devteam ruling` /
+`derive-approvals` / `restart` / `log` subcommands, `--patch --from`
+flow for scoped re-runs, fix-and-retry runbook); (3) **sustained
+documentation work** (methodology.md, SOC 2 walkthrough, FEATURES.md,
+conventions.md, four-mode audit framing, escalation + fix-and-retry
+runbooks, audit-archive convention with skill Step 0.0); (4)
+**pre-1.0 hygiene** (ESLint + .editorconfig, secret-scan size cap,
+`tryOpen` exec→spawn, security-heuristic magic comment, lazy-require
+in `bin/devteam`, cross-host render equivalence test, second self-audit
+cycle with 100 % carry-forward from the first).
+
+All additive; no breaking changes to gate JSON, the adapter contract,
+or `.devteam/config.yml`. Tracks suite growth: 378 (v0.4.0) → 783 (v0.5.0),
+a 107 % increase that tracked feature additions in lockstep. Lint
+tooling and the audit-archive convention land as load-bearing
+infrastructure for v1.0.
 
 ### Added
 
