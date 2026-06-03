@@ -1,6 +1,6 @@
 # Stagecraft
 
-> *Your Claude session went sideways again. Context reset. The agent forgot the architecture you spent ten minutes explaining. It edited the wrong file, then "fixed" the symptom instead of the cause. You're three hours in and you don't have a brief, a design, tests, or a deployable change — just a chat log.*
+> *"I'm not coding anymore — I'm reviewing a confident intern with amnesia who ships faster than I can read. When he's right, only the chat log knows why."*
 
 **Stagecraft is an orchestrator that runs your AI coding tool through a structured 17-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage can't start until the gate passes. You see the whole run on disk, auditable, resumable, not in a chat log.
 
@@ -223,28 +223,20 @@ See `devteam help` for the up-to-date list with flags.
 
 ## Auditing an existing codebase
 
-Separate from the pipeline (which *builds* features) is the **audit feature**, which *analyzes* an existing codebase end-to-end and produces a prioritized improvement roadmap. Read-only by design — it writes findings, never source code.
+Separate from the pipeline (which *builds* features), Stagecraft's **audit** workflow *analyzes* an existing codebase and produces a prioritized improvement roadmap under `docs/audit/00–10` + a `status.json` for resume. Read-only by design — writes findings, never source code. The `implement` skill consumes `docs/audit/10-roadmap.md` to pick the next change.
 
-Inside Claude Code (after `devteam init --host claude-code`):
+Inside Claude Code:
 
 ```
-/audit                  # full audit: Phases 0-3, ~30-60 min, 11 output files
-/audit-quick            # Phases 0-1 only: ~5-15 min, 6 output files
-/audit src/backend/     # scope to a subtree
-/audit --resume         # continue from the last completed phase
+/audit              # full audit: Phases 0-3, ~30-60 min, 11 output files
+/audit-quick        # Phases 0-1 only: ~5-15 min, 6 output files
 ```
 
-On other hosts, no slash command exists, but the `audit` skill is installed when you run `devteam init`. Run the stage prompt for the `auditor` role directly:
+The slash commands are claude-code-only; on other hosts the `auditor` role and `audit` skill ship with every `devteam init` and you dispatch them as a normal role-plus-skill prompt.
 
-```bash
-devteam stage audit --headless    # drives codex / gemini-cli automatically
-# or interactive:
-devteam stage audit               # prints the auditor prompt; paste into your tool
-```
+For auditing a feature *built with* Stagecraft (where the pipeline left a rich on-disk trail), the audit splits into **four modes** — code / process / consistency / threat — each answering a different question with a different tool. See [`docs/user-guide.md` § Auditing a feature built with Stagecraft](docs/user-guide.md#auditing-a-feature-built-with-stagecraft--the-four-modes).
 
-Output lands under `docs/audit/` in your project: `00-project-context.md` through `10-roadmap.md`, plus a `status.json` for resume capability. The `implement` skill consumes `docs/audit/10-roadmap.md` to pick the next change to work on.
-
-See [`skills/audit/SKILL.md`](skills/audit/SKILL.md) for the phase definitions.
+Full operational guidance: [`docs/user-guide.md` § Auditing a codebase](docs/user-guide.md#auditing-a-codebase). Phase definitions: [`skills/audit/SKILL.md`](skills/audit/SKILL.md).
 
 ## Architecture in one diagram
 

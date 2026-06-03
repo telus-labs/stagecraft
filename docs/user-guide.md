@@ -786,6 +786,44 @@ Every finding in those files cites file paths and line numbers; severity / effor
 - It does not audit Stagecraft itself unless you explicitly ask. The audit targets the project Stagecraft was installed into.
 - It does not skip phases without a documented reason in `status.json`.
 
+### Auditing a feature built with Stagecraft — the four modes
+
+When the feature you're auditing was built with Stagecraft, the audit trail is unusually rich: `pipeline/brief.md` (intent), `pipeline/design-spec.md` + `pipeline/adr/` (design rationale), `pipeline/gates/*.json` (every decision), `pipeline/code-review/by-*.md` (review evidence), `pipeline/red-team-report.md` (adversarial findings), `pipeline/spec.feature` + `pipeline/test-report.md` (AC ↔ test mapping), `pipeline/retrospective.md` (lessons). Most audits of an externally-built feature have to reverse-engineer this material from a chat log; for a Stagecraft-built feature you just open the files. That changes which audit modes are worth running.
+
+"Audit" is the umbrella term — but the `/audit` slash command covers only one of four useful modes. The full set:
+
+| Mode | What it asks | Tool / approach |
+|---|---|---|
+| **Code audit** | "Is the code itself clean, secure, performant, well-documented?" | `/audit` or `/audit-quick` (claude-code) — see "How to invoke it" above. On other hosts, dispatch the `auditor` role with the `audit` skill. Output: `docs/audit/00–10`. |
+| **Process audit** | "Did the pipeline that produced this feature hold up? Any rubber-stamping, skipped reviews, normalized warnings, deferred items that never got tracked?" | Read `pipeline/` skeptically; cross-check with `devteam summary`, `devteam verify stage-04a`, `devteam verify stage-06`. No CLI verdict — it's a human read. |
+| **Consistency audit** | "Does the implementation still match the brief / design / spec? Has anything drifted since ship?" | `devteam spec verify --strict` (brief.md ↔ spec.feature ↔ test-report.md), `devteam reproduce <stage-id>` (gate fingerprint check), `devteam replay <stage-id>` (re-run with current config + diff). |
+| **Threat audit** | "Are the threat assumptions from when this was built still valid? New endpoints, new IAM policies, new dependencies?" | `devteam stage red-team --headless` against the current code. Anything new, or anything that was `noted_for_followup` and still isn't fixed, surfaces. |
+
+Pick by intent:
+
+- **"Is the code quality acceptable?"** → Code audit (`/audit`). Same as for any non-Stagecraft project.
+- **"Did we actually follow our own process?"** → Process audit. Highest-leverage for catching pipeline drift — the place where Stagecraft's safety properties degrade over time.
+- **"Did the spec keep up with the implementation?"** → Consistency audit. Cheapest of the four (`devteam spec verify` is one command); catches the common "we updated the code but forgot the brief" case.
+- **"Is this feature still safe?"** → Threat audit. Most valuable for features that have been in prod for a while as the environment around them shifted.
+
+#### Process-audit checklist (mode 2)
+
+The process audit is the one mode that's *unique* to Stagecraft-built features and has no CLI tool — it's a structured human read. Walk these five questions:
+
+- **Did every gate genuinely pass, or did anything get rubber-stamped?** Read each `pipeline/gates/stage-NN.json` and the corresponding artifact. A PASS with a sparse `## Verify` section in `pipeline/pr-*.md` is a yellow flag. Stage 4a and Stage 6 are orchestrator-stamped — run `devteam verify stage-04a` and `devteam verify stage-06` to re-stamp on demand; if the current code still passes, the recorded PASS was real.
+- **Are the warnings still defensible?** `jq '.warnings[]' pipeline/gates/*.json` lists every warning that survived to PASS. SUGGESTION-flavored warnings are fine; CONCERN-flavored ones that never got resolved to a ticket are technical debt that's been quietly normalized.
+- **Did red-team's `noted_for_followup` items get tracked anywhere?** `jq '.noted_for_followup' pipeline/gates/stage-04c.json`. Each entry has a `track_for` field saying where it should land (ticket, ADR amendment, runbook note). Grep for those references — if nothing exists, the deferral was theoretical.
+- **Did peer review actually exercise the matrix?** `grep -c "^## Review of " pipeline/code-review/by-*.md` should hit each non-self area at least twice (matrix) or once (scoped/nano). If a `by-<reviewer>.md` has only one section, that reviewer's coverage was thin.
+- **Did the retrospective land anything?** `pipeline/retrospective.md` should cite specific incidents from the run. A generic "tests pass and we shipped" retro means the team didn't reflect.
+
+A full process audit takes ~30 minutes on a `full`-track feature; it's the single highest-leverage audit because process drift is invisible to code-quality scans.
+
+#### Cross-host notes
+
+- **`/audit` and `/audit-quick`** are claude-code-only (slash commands are a claude-code UX surface). On other hosts dispatch the `auditor` role with the `audit` skill — see § How to invoke it above for the exact prompt.
+- **The `auditor` is also registered as a Claude Code subagent** (`hosts/claude-code/adapter.js`), so you can dispatch to it via `Task`. Other hosts don't have an equivalent subagent registration today — you just invoke the role-plus-skill as a single prompt.
+- **Modes 2, 3, 4 are host-agnostic.** They run against files on disk (`pipeline/`, `docs/`, source) and use `devteam` CLI subcommands that don't dispatch to any model. You can do them with no LLM at all, just `jq` and a careful reader.
+
 ## When things go wrong
 
 ### "Unknown stage" or "No adapter found"
