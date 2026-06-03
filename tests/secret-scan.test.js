@@ -207,6 +207,46 @@ describe("secret-scan: PreToolUse hook (end-to-end via stdin)", () => {
     const r = runHook("{this is not json");
     assert.equal(r.status, 0);
   });
+
+  it("content over MAX_SCAN_BYTES → exit 0 with warning (fail-soft on size)", () => {
+    // 1.5 MB of plausible source text with an AWS key buried inside. The cap
+    // is 1 MB; this content should be skipped, the key NOT detected, and the
+    // hook should exit 0 (allow) so a hook-timeout-fail-open can't happen
+    // under load.
+    //
+    // Implementation note: spawnSync's `input` option EPIPEs the parent
+    // when the child consumes stdin and exits before the parent finishes
+    // writing — happens reliably for inputs ≳ 500KB. Real Claude Code use
+    // is a streamed pipe and doesn't hit this; we use shell-redirected
+    // stdin from a temp file to mirror that shape.
+    const filler = "function f() { return 42; }\n".repeat(60_000); // ~1.7 MB
+    const content = filler + "\nconst k = 'AKIAIOSFODNN7EXAMPLE';\n";
+    const stdin = preToolUse("Write", "src/big.js", content);
+    const tmp = path.join(fs.mkdtempSync(path.join(require("node:os").tmpdir(), "secret-scan-")), "in.json");
+    fs.writeFileSync(tmp, stdin);
+    try {
+      const r = spawnSync("sh", ["-c", `node ${JSON.stringify(HOOK)} < ${JSON.stringify(tmp)}`], {
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+      });
+      assert.equal(r.status, 0, "oversize content should be skipped (allow)");
+      assert.match(r.stderr, /\[secret-scan\] ⚠️.*skipping scan/);
+      assert.match(r.stderr, /cap 1000000/);
+      // The buried AWS key should NOT have been reported — we skipped the scan.
+      assert.doesNotMatch(r.stderr, /AWS Access Key ID/);
+    } finally {
+      cleanup(path.dirname(tmp));
+    }
+  });
+
+  it("content just under MAX_SCAN_BYTES still scans normally", () => {
+    // ~250 KB of clean content — well under the 1 MB cap; should scan and
+    // pass clean (no warning, no findings).
+    const content = "const x = " + "1, ".repeat(50_000) + "0;\n";
+    const r = runHook(preToolUse("Write", "src/medium.js", content));
+    assert.equal(r.status, 0, "under-cap clean content should scan and pass");
+    assert.doesNotMatch(r.stderr, /skipping scan/);
+  });
 });
 
 describe("secret-scan: snippet redaction", () => {
