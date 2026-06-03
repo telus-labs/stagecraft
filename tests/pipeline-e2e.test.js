@@ -19,7 +19,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { REPO_ROOT, BIN, makeTargetProject, seedGate, cleanup } = require("./_helpers");
+const { REPO_ROOT, BIN, makeTargetProject, cleanup } = require("./_helpers");
 const { next, mergeWorkstreamGates } = require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 

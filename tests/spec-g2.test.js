@@ -16,7 +16,7 @@ const path = require("node:path");
 const { makeTargetProject, cleanup, runCLI } = require("./_helpers");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
-const { parse, allScenarios, acIdsFor } = require("../core/spec/gherkin");
+const { parse, acIdsFor } = require("../core/spec/gherkin");
 const {
   extractAcsFromBrief,
   extractAcRefsFromTestReport,
@@ -329,7 +329,7 @@ test("verify(cwd): missing spec.feature flags drift + missing_artifact error", (
 // -- Stage definition --------------------------------------------------------
 
 test("core/pipeline/stages.js has executable-spec at stage-03b", () => {
-  const { STAGES, getStage, ORDERED_STAGE_NAMES, orderedStageNamesForTrack } =
+  const { STAGES, getStage } =
     require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
   assert.ok(STAGES["executable-spec"], "no executable-spec stage");
   const s = getStage("executable-spec");

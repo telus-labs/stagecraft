@@ -36,7 +36,6 @@ function buildPRBody(cwd) {
   const designSpec = readFileSafe(path.join(pipelineDir, "design-spec.md"));
   const stage04 = readJSONSafe(path.join(pipelineDir, "gates", "stage-04.json"));
   const stage06 = readJSONSafe(path.join(pipelineDir, "gates", "stage-06.json"));
-  const testReport = readFileSafe(path.join(pipelineDir, "test-report.md"));
 
   // Title: pull the first H1 from brief if present, else generic
   const title = (brief && brief.match(/^#\s+(.+)$/m)) ? brief.match(/^#\s+(.+)$/m)[1] : "Pipeline-produced PR";

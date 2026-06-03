@@ -1,9 +1,8 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { runStage, runStageHeadless, mergeWorkstreamGates, buildDescriptor } =
+const { runStage, mergeWorkstreamGates, buildDescriptor } =
   require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 

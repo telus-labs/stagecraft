@@ -3,10 +3,9 @@
 // OTLP endpoint. We set up a custom tracer provider, attach the
 // in-memory exporter, and run real orchestrator calls through it.
 
-const { describe, it, before, afterEach } = require("node:test");
+const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { trace } = require("@opentelemetry/api");
 const { NodeTracerProvider } = require("@opentelemetry/sdk-trace-node");
 const { InMemorySpanExporter, SimpleSpanProcessor } = require("@opentelemetry/sdk-trace-base");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");

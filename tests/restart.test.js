@@ -8,7 +8,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { REPO_ROOT, BIN, makeTargetProject, seedGate, cleanup } = require("./_helpers");
+const { BIN, makeTargetProject, seedGate, cleanup } = require("./_helpers");
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }

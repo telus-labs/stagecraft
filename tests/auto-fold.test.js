@@ -15,7 +15,7 @@ let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
 afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
 
-function seedAll(cwd, untilSignOff = true) {
+function seedAll(cwd, _untilSignOff = true) {
   // Seed every stage on the full track up to and including stage-06 as PASS,
   // skipping conditional sub-stages we don't care about.
   const passes = [

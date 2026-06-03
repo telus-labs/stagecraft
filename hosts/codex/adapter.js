@@ -26,7 +26,6 @@ const capabilities = require("./capabilities.json");
 const { runHeadless } = require("../../core/adapters/headless");
 const { listRoles, ROLES_DIR } = require("../../core/roles");
 const baseInstall = require("../../core/adapters/base-install");
-const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const RULES_DIR = baseInstall.RULES_DIR;
 const SKILLS_DIR = baseInstall.SKILLS_DIR;
 

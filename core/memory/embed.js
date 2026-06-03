@@ -47,7 +47,7 @@ async function makeLocal(opts = {}) {
   try {
     const transformers = require("@huggingface/transformers");
     pipeline = transformers.pipeline;
-  } catch (err) {
+  } catch {
     throw new Error(
       `@huggingface/transformers not installed; cannot load local embedder. ` +
       `Install with: npm install @huggingface/transformers --save\n` +

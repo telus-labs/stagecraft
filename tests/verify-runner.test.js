@@ -12,7 +12,7 @@ function tmpdir() {
   return d;
 }
 afterEach(() => {
-  for (const d of _dirs) try { fs.rmSync(d, { recursive: true, force: true }); } catch {}
+  for (const d of _dirs) try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* test cleanup; ignore */ }
   _dirs = [];
 });
 
