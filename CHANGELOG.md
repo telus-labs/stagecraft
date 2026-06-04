@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Added
+
+- **Between-cycle observations channel in `docs/audit-archive/HISTORY.md`.** Three observations surfaced between audit #2 (2026-06-03) and the next audit, but had nowhere durable to live — they'd be lost from the conversation that produced them. New `## Between-cycle observations` section in HISTORY.md captures them; `skills/audit/SKILL.md` § Phase 3.1 updated to read the section and fold each observation into the new backlog (promoted to a finding with full ratings, or closed-out with a citation). Convention is "observations live with the audit they informed" — at archive time, processed observations move from HISTORY.md into the archived audit's `09-backlog.md` § Project-Specific. First three captured: (a) `eslint-plugin-security` as a P3 candidate — three CodeQL alerts in one week since v0.5.0 suggests the PR 2.1 defer should be revisited; (b) CHANGELOG-per-PR fragments as a P3 — `[Unreleased]` merge conflicts hit 4+ times across Batch 1/2; (c) "verify before promoting" discipline didn't hold even after codification — the C-1 retraction in PR #32 was the same failure mode as the 2026-05-28 audit's S5, suggesting an enforceable mechanism is needed, not just textual guidance.
+
 ### Fixed
 
 - **Two GitHub code-scanning alerts** that surfaced after the v0.5.0 push.
