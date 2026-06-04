@@ -149,6 +149,12 @@ test("the audit skill defines all four phases (0 through 3) and 11 outputs", () 
     "09-backlog.md", "10-roadmap.md",
   ];
   for (const f of outputs) {
-    assert.match(text, new RegExp(f.replace(/\./g, "\\.")), `audit skill doesn't reference ${f}`);
+    // Literal substring check — these filenames don't need regex matching
+    // and the previous `new RegExp(f.replace(/\./g, "\\."))` form was
+    // flagged by CodeQL js/incomplete-sanitization (it only escaped dots,
+    // not backslashes or other regex metacharacters). The filenames are
+    // hardcoded literals so the regex risk was structural rather than
+    // active, but `.includes` makes the test simpler and the linter quiet.
+    assert.ok(text.includes(f), `audit skill doesn't reference ${f}`);
   }
 });
