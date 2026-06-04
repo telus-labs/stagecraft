@@ -326,7 +326,13 @@ Two steps. The synthesis step does the load-bearing work; the sequencing step pa
 
 ### 3.1 — Synthesis & prioritization
 
-Read all files in `docs/audit/`. If `docs/audit-archive/HISTORY.md` exists, also read the **most recent archived audit's `09-backlog.md` and `10-roadmap.md`** — any items there that haven't been closed in subsequent commits must be carried forward (re-prioritized alongside new findings) or closed out with a citation in the new backlog. Carry-forward is the mechanism that keeps audits cumulative; without it, each audit re-discovers the same gaps without acknowledging the prior cycle.
+Read all files in `docs/audit/`. If `docs/audit-archive/HISTORY.md` exists, also read **three** sources from it:
+
+1. **The most recent archived audit's `09-backlog.md` and `10-roadmap.md`** — any items there that haven't been closed in subsequent commits must be carried forward (re-prioritized alongside new findings) or closed out with a citation in the new backlog.
+2. **The `## Between-cycle observations` section of `HISTORY.md` itself** — informal observations that surfaced between audits, captured as a between-cycle channel. Each observation must be either folded into the new backlog (as a finding with full effort/risk/confidence ratings) or closed out with a citation. Don't ignore them; they're the audit's way of being informed by operational reality between cycles.
+3. **Carry-forward is the mechanism that keeps audits cumulative.** Without it, each audit re-discovers the same gaps without acknowledging the prior cycle.
+
+After processing the between-cycle observations, move them from `HISTORY.md` into a `## Project-Specific` block in the new `09-backlog.md` (or annotate them in-place with `→ promoted to P<N>-<id>` / `→ closed: <reason>`), so the `HISTORY.md` section is reset to the most recent audit's date. The convention is "observations live with the audit they informed."
 
 1. Synthesize findings into **3–5 systemic themes** — patterns that recur across multiple files in §03–§08. Themes are higher-level than individual findings.
 2. Build a prioritized backlog. For each item, capture:
