@@ -8,6 +8,7 @@
 // Run: npm run lint
 
 const js = require("@eslint/js");
+const security = require("eslint-plugin-security");
 
 module.exports = [
   // Files NOT to lint.
@@ -28,6 +29,40 @@ module.exports = [
 
   // Base recommended rules.
   js.configs.recommended,
+
+  // Security rules. Targeted subset of eslint-plugin-security focused on
+  // the shell-injection-shape class CodeQL caught post-merge three times
+  // in the last week (PRs #31, #34, #38). Pre-push catch is the goal;
+  // the plugin's broader defaults flag many false positives on
+  // legitimate buffer/regex/property-access code, so we enable only the
+  // rules that pay their noise budget here.
+  //
+  // Rules deliberately OFF and why:
+  //   detect-unsafe-regex — flagged 7 regexes that parse file-system
+  //     content under operator control (DDL keywords, Gherkin grammar,
+  //     AC identifiers, YAML config). All bounded inputs, all
+  //     line-by-line parses; no realistic ReDoS surface. Inline
+  //     suppression on each was rejected as noisier than the rule.
+  //   detect-non-literal-fs-filename — Stagecraft legitimately reads
+  //     dynamic paths everywhere (per-stage gate files, per-host
+  //     install payloads).
+  //   detect-non-literal-regexp — false-positives on legit cases like
+  //     normalized-input regex constructors in tests.
+  //   detect-non-literal-require — adapter loader genuinely needs this.
+  //   detect-object-injection — very high false-positive rate on
+  //     legitimate property access (gate field reads, config lookups).
+  //   detect-possible-timing-attacks — Stagecraft doesn't do auth
+  //     comparisons; rule fires on every === between strings.
+  {
+    plugins: { security },
+    rules: {
+      "security/detect-child-process": "error",
+      "security/detect-eval-with-expression": "error",
+      "security/detect-pseudoRandomBytes": "error",
+      "security/detect-new-buffer": "error",
+      "security/detect-bidi-characters": "error",
+    },
+  },
 
   // Project-wide rules.
   {
