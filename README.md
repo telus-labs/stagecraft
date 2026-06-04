@@ -220,6 +220,7 @@ For multi-host (`--host claude-code,codex`): both surfaces installed side-by-sid
 | `devteam ui` | Open the web dashboard (live gate view, cost, performance charts) |
 | `devteam spec generate` | Scaffold `pipeline/spec.feature` from AC-N criteria in `pipeline/brief.md` |
 | `devteam spec verify` | Check `pipeline/spec.feature` for drift against the brief |
+| `devteam consistency analyze [--strict] [--json]` | Cross-artifact drift check across the full pipeline chain — brief → spec → `pr-*.md ## Verify` → red-team `must_address` → test-report → gate field reality. Generalizes `devteam spec verify` to every intermediate artifact + the gate-vs-reality dimension. Exits non-zero on any drift. |
 
 See `devteam help` for the up-to-date list with flags.
 
