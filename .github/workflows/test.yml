@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+# Minimal permissions: the test workflow only needs to read source.
+# Lints, tests, consistency checks, and the devteam-doctor smoke test
+# don't write to issues, PRs, packages, or anything else. CodeQL flags
+# workflows without explicit permissions because the default
+# GITHUB_TOKEN otherwise has overly-broad write scope.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: node ${{ matrix.node-version }}

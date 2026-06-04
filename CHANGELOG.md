@@ -8,7 +8,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-(No entries yet — first commit after `v0.5.0` goes here.)
+### Fixed
+
+- **Two GitHub code-scanning alerts** that surfaced after the v0.5.0 push.
+  - **HIGH (alert #2): `js/incomplete-sanitization` in `tests/audit.test.js:152`.** The test built a regex via `new RegExp(f.replace(/\./g, "\\."))` to confirm the audit skill references each of the 11 phase output files. The escape only handled dots — not backslashes or other regex metacharacters. The filenames are hardcoded literals so the risk was structural rather than active, but the cleanest fix is to drop the regex entirely: `text.includes(f)` does the same check without any escape concerns. Removes the alert class for that call site.
+  - **MEDIUM (alert #1): `actions/missing-workflow-permissions` in `.github/workflows/test.yml`.** Added a top-level `permissions: { contents: read }` block. The default `GITHUB_TOKEN` has overly-broad write scope; the test workflow only reads source (lint, tests, consistency check, devteam-doctor smoke test — no issue / PR / package / release writes), so minimal `contents: read` is correct.
 
 ## [0.5.0] — 2026-06-03
 
