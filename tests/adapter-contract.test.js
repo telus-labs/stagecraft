@@ -183,3 +183,67 @@ describe("adapter contract", () => {
     });
   }
 });
+
+// Audit P2-6: pins cross-host equivalence of the shared gate footer
+// that landed via core/adapters/render-helpers.js (commit 38ce2a0,
+// renderStagePrompt de-duplication). claude-code, codex, and gemini-cli
+// share the footer code; if any one adapter starts diverging on it,
+// `devteam reproduce` and `devteam replay` would silently see hash
+// drift across hosts. The per-host renderStagePrompt headers differ
+// (claude-code includes a subagent block + patch-mode framing); the
+// footer is the part the test pins.
+describe("adapter contract: cross-host gate-footer equivalence", () => {
+  const SHARING_HOSTS = ["claude-code", "codex", "gemini-cli"];
+
+  // The shared footer starts at the "## Gate to write" heading and runs
+  // to end-of-prompt. That's where appendGateFooter (render-helpers)
+  // takes over from the per-host header rendering.
+  //
+  // Two values in the footer are LEGITIMATELY host-specific:
+  //   1. The `"host": "<name>"` literal in the orchestrator-adds line —
+  //      each adapter stamps its own name.
+  //   2. The `system_prompt_hash` — computed over the full prompt
+  //      including the per-host header, so naturally differs.
+  // We normalize both before comparing; the rest of the footer should
+  // be byte-identical across the three sharing hosts.
+  function normalizedFooter(prompt) {
+    const i = prompt.indexOf("## Gate to write");
+    if (i < 0) return null;
+    return prompt
+      .slice(i)
+      .replace(/"host": "[a-z0-9-]+"/g, '"host": "<HOST>"')
+      .replace(/"system_prompt_hash": "sha256:[a-f0-9]+"/g, '"system_prompt_hash": "sha256:<HASH>"');
+  }
+
+  it("claude-code / codex / gemini-cli render structurally identical gate footers (modulo host name + hash)", () => {
+    const d = tmpdir();
+    const desc = fixtureDescriptor();
+    const ctx = fixtureContext(d);
+
+    const footers = {};
+    for (const host of SHARING_HOSTS) {
+      const adapter = loadAdapter(host);
+      const prompt = adapter.renderStagePrompt(desc, ctx);
+      const footer = normalizedFooter(prompt);
+      assert.ok(footer, `${host}: prompt missing "## Gate to write" — render-helpers may not have been invoked`);
+      footers[host] = footer;
+    }
+
+    assert.equal(footers["codex"], footers["claude-code"],
+      "codex footer drifted from claude-code — render-helpers de-dup broke");
+    assert.equal(footers["gemini-cli"], footers["claude-code"],
+      "gemini-cli footer drifted from claude-code — render-helpers de-dup broke");
+  });
+
+  it("each adapter stamps its own host name in the footer", () => {
+    const d = tmpdir();
+    const desc = fixtureDescriptor();
+    const ctx = fixtureContext(d);
+    for (const host of SHARING_HOSTS) {
+      const adapter = loadAdapter(host);
+      const prompt = adapter.renderStagePrompt(desc, ctx);
+      assert.match(prompt, new RegExp(`"host": "${host}"`),
+        `${host}: footer must stamp its own host name`);
+    }
+  });
+});
