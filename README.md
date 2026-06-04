@@ -55,6 +55,7 @@ Reference / extension:
 - **[docs/runbooks/escalation.md](docs/runbooks/escalation.md)** — procedural playbook: what to read, how to decide, and how to encode the result when `devteam next` says `resolve-escalation`.
 - **[docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md)** — procedural playbook for `fix-and-retry` halts: red-team FAIL, QA-within-build FAIL, pre-review FAIL, peer-review CHANGES_REQUESTED. Covers the `--patch --from <stage>` flow with a worked example.
 - **[docs/conventions.md](docs/conventions.md)** — operator-facing catalogue of pipeline markers (`QUESTION:`/`PM-ANSWER:`, `BLOCKER:`/`SUGGESTION:`/`PATTERN:`, `## Brief Changes`, `## Verify`, magic comments, …) — where each lives, who writes it, what reads it.
+- **[docs/comparative-analysis.md](docs/comparative-analysis.md)** — Stagecraft vs adjacent AI-dev frameworks (BMAD-METHOD, GitHub Spec Kit, Agent OS, OpenSpec, AWS Kiro, AI-DLC). Four-school taxonomy, comparison matrix, three defensible claims, three cases where Stagecraft *isn't* the best fit, evolution opportunities with effort estimates.
 
 Feature deep-dives:
 - **[docs/FEATURES.md](docs/FEATURES.md)** — every shipped feature, organized by area. Start here to see what Stagecraft does.
