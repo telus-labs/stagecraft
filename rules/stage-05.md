@@ -74,6 +74,29 @@ accordingly. **Agents no longer author the `approvals` or
 reviewers effectively approve themselves. The hook is the single
 writer.
 
+**`blockers[]` extraction (hook-written).** When parsing a section that
+ends with `REVIEW: CHANGES REQUESTED`, the hook also extracts every
+`BLOCKER: <text>` line from that section and writes them into the
+per-area gate as a `blockers` array. This lets operators read blocker
+text directly from the gate without grepping review files:
+
+```json
+{
+  "stage": "stage-05", "workstream": "backend",
+  "status": "FAIL",
+  "changes_requested": [{ "reviewer": "dev-platform", "timestamp": "…" }],
+  "blockers": [
+    { "reviewer": "dev-platform", "text": "Missing pagination on ListUsersCommand — truncates at 100" },
+    { "reviewer": "dev-platform", "text": "iam_admin_users stub unconditionally emits PASS — remove or mark always_insufficient" }
+  ]
+}
+```
+
+Each entry carries `reviewer` (who wrote it) and `text` (the raw
+`BLOCKER:` line with the prefix stripped). `blockers` is reset on each
+hook run for that area so re-review that flips to `REVIEW: APPROVED`
+clears the array.
+
 ### READ-ONLY Reviewer Rule (strictly enforced)
 
 During a Stage 5 review invocation, a reviewer agent writes ONLY to:
@@ -109,6 +132,28 @@ An agent that manually edits the `approvals` array is running around
 the integrity model. The hook runs on every Write/Edit and reconciles
 the gate to the review file; any direct edit will be overwritten on
 the next reviewer's file save. Don't fight it.
+
+**`affected_workstreams[]` on the merged gate.** When `devteam merge
+peer-review` writes `pipeline/gates/stage-05.json`, it derives
+`affected_workstreams` from the per-area gates: any area whose gate has
+`changes_requested` non-empty contributes its area name. Since area names
+map 1:1 to build workstreams (`backend` → `dev-backend`, etc.), this tells
+operators exactly which agents to re-run:
+
+```json
+{
+  "stage": "stage-05", "status": "FAIL",
+  "affected_workstreams": ["backend"],
+  "workstreams": [
+    { "workstream": "backend",  "status": "FAIL" },
+    { "workstream": "frontend", "status": "PASS" },
+    { "workstream": "platform", "status": "PASS" }
+  ]
+}
+```
+
+Per-area gates do not carry `affected_workstreams` — the area name itself
+is the attribution. Use the merged gate for the operator-facing query.
 
 Pre-read requirement (pass to each reviewer agent):
   - `pipeline/brief.md`

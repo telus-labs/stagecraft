@@ -11,9 +11,11 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 ## The general pattern
 
 ```bash
-# 1. See what failed
+# 1. See what failed — and who needs to fix it
 devteam next --json   # action: "fix-and-retry", reason: "...", blockers: [...]
-cat pipeline/gates/<stage-id>.json | jq .blockers
+cat pipeline/gates/<stage-id>.json | jq .affected_workstreams
+# → ["backend"]          clear only the backend gate; skip frontend/platform
+# → ["backend", "platform"]  clear both
 
 # 2. Fix it — usually via a scoped build re-run
 devteam stage build --patch --from <failing-stage> [--skip-completed] --headless
@@ -40,15 +42,43 @@ The validator helps too: when red-team or stage-04.qa writes FAIL with blockers,
 
 ## Case 1: Red-team FAIL — `must_address_before_peer_review` non-empty
 
-This is the most common `fix-and-retry`. Red-team walked the 10 attack surfaces, found a real defect, and listed it in `must_address_before_peer_review[]` of `pipeline/gates/stage-04c.json`. Each entry includes `id`, `severity`, `file`, `line`, `reproducer`, `contracts_violated`, and `fix_suggestion` — everything the implementer needs.
+This is the most common `fix-and-retry`. Red-team walked the 10 attack surfaces, found a real defect, and listed it in `must_address_before_peer_review[]` of `pipeline/gates/stage-04c.json`. Each entry includes `id`, `severity`, `file`, `workstream`, `reproducer`, and `fix_suggestion` — everything the implementer needs.
+
+**First: identify which workstreams to re-run.**
+
+```bash
+cat pipeline/gates/stage-04c.json | jq .affected_workstreams
+# → ["backend"]
+```
+
+`affected_workstreams` is derived by cross-referencing each finding's `file`
+against the build workstream gates' `files_written` arrays. It names exactly
+the workstreams whose gates you need to clear. If you're working with a gate
+written before this field was added, use the fallback:
+
+```bash
+# Fallback: cross-reference manually
+for ws in backend frontend platform qa; do
+  gate="pipeline/gates/stage-04.${ws}.json"
+  [ -f "$gate" ] || continue
+  ws_files=$(jq -r '.files_written[]' "$gate" 2>/dev/null | sort)
+  flagged=$(jq -r '(.blockers // []) | .[].file' pipeline/gates/stage-04c.json \
+            | cut -d: -f1 | sort)
+  matches=$(comm -12 <(echo "$ws_files") <(echo "$flagged"))
+  [ -n "$matches" ] && echo "[$ws] owns: $matches"
+done
+```
 
 **Concrete example.** A run produced this gate:
 
 ```json
 {
   "stage": "stage-04c", "status": "FAIL",
+  "affected_workstreams": ["backend"],
   "must_address_before_peer_review": [{
-    "id": "F-01", "severity": "critical", "file": "src/backend/app.py", "line": 146,
+    "id": "F-01", "severity": "critical",
+    "file": "src/backend/app.py", "line": 146,
+    "workstream": "backend",
     "reproducer": "POST /estimate {\"text\":\"hi\",\"model\":[]}  ->  500 text/html",
     "contracts_violated": ["design-spec §5", "brief AC-6/7/8"],
     "fix_suggestion": "Insert `if not isinstance(model, str)` check before the membership test."
@@ -59,7 +89,7 @@ This is the most common `fix-and-retry`. Red-team walked the 10 attack surfaces,
 }
 ```
 
-F-01 lives in `src/backend/app.py`, so only the backend dev needs to re-execute. Sequence:
+`affected_workstreams: ["backend"]` confirms only the backend dev needs to re-execute. Sequence:
 
 ```bash
 # 1. (Optional) Watch the run in a second pane
@@ -123,14 +153,16 @@ The red-team gate's `noted_for_followup[]` is non-blocking by design. Don't try 
 QA's workstream gate inside Stage 4 (`pipeline/gates/stage-04.qa.json`) is FAIL with a `blockers[]` list. QA found bugs in code that backend or platform owns. The validator auto-injects the QA blockers into `context.md` between `<!-- devteam:qa-build-blockers -->` markers.
 
 ```bash
-# 1. Identify which workstreams own the bugs from the blocker descriptions.
-cat pipeline/gates/stage-04.qa.json | jq .blockers
-# e.g. "express.static points to public/ which doesn't exist" → backend
-#      "Dockerfile CMD references wrong path" → platform
+# 1. Identify which workstreams own the failing tests.
+cat pipeline/gates/stage-04.qa.json | jq .affected_workstreams
+# → ["backend", "platform"]
+
+# For gates written before affected_workstreams was added, derive it:
+cat pipeline/gates/stage-04.qa.json | jq '[.failing_tests[].assigned_to] | unique | sort'
 
 # 2. Clear the affected gates + QA (which must re-verify) + merged.
-rm pipeline/gates/stage-04.backend.json    # owns express.static bug
-rm pipeline/gates/stage-04.platform.json   # owns Dockerfile bug
+rm pipeline/gates/stage-04.backend.json    # owns backend failures
+rm pipeline/gates/stage-04.platform.json   # owns platform failures
 rm pipeline/gates/stage-04.qa.json         # QA must re-verify after fixes
 rm pipeline/gates/stage-04.json            # merged gate must be rebuilt
 
@@ -173,20 +205,29 @@ The orchestrator re-stamps stage-04a on the next run; you can't fake a PASS by h
 Stage 5 is different — the `approval-derivation` hook writes the gate based on `REVIEW: APPROVED` / `REVIEW: CHANGES REQUESTED` markers in `pipeline/code-review/by-<reviewer>.md`. A FAIL means the approval count didn't meet `required_approvals` because at least one reviewer wrote CHANGES_REQUESTED with `BLOCKER:` items.
 
 ```bash
-# 1. Read the BLOCKER comments
+# 1. Which workstreams need to fix something?
+cat pipeline/gates/stage-05.json | jq .affected_workstreams
+# → ["backend"]
+
+# 2. Read the extracted BLOCKERs from the per-area gate (no grepping review files).
+cat pipeline/gates/stage-05-backend.json | jq '.blockers[]'
+# → { "reviewer": "dev-platform", "text": "Missing pagination on ListUsersCommand" }
+# → { "reviewer": "dev-platform", "text": "iam_admin_users stub always emits PASS" }
+
+# For gates written before blockers[] was added, fall back to the review file:
 grep -A 2 "BLOCKER:" pipeline/code-review/by-*.md
 
-# 2. Address each BLOCKER. Usually a scoped build re-run from the
+# 3. Address each BLOCKER. Usually a scoped build re-run from the
 #    reviewer's specific concerns:
 rm pipeline/gates/stage-04.<owning-area>.json pipeline/gates/stage-04.json
 devteam stage build --patch --from stage-05.<area> --skip-completed --headless
 devteam merge build
 
-# 3. Re-run the build-chain stages
+# 4. Re-run the build-chain stages
 devteam stage pre-review --headless
 devteam stage red-team --headless     # if track includes it
 
-# 4. Re-run peer-review. The reviewers see the patched diff and the
+# 5. Re-run peer-review. The reviewers see the patched diff and the
 #    addressed BLOCKER comments; they update their REVIEW: marker.
 devteam stage peer-review --headless
 ```

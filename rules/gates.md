@@ -17,6 +17,37 @@ The orchestrator reads JSON, not prose. Gates are machine-readable.
 }
 ```
 
+### `affected_workstreams[]` — required on FAIL gates
+
+When `status` is `FAIL`, gates must include an `affected_workstreams` array
+naming the Stage 4 build workstreams that own the reported defects. This is
+the single field operators use to decide which gates to clear and which agents
+to re-run — the answer to "who needs to fix this?" in one `jq` call:
+
+```bash
+jq .affected_workstreams pipeline/gates/<stage>.json
+# → ["backend"]          re-run only backend
+# → ["backend", "platform"]  re-run both
+```
+
+How each gate type derives the value:
+
+| Gate | Source | Derivation |
+|------|--------|------------|
+| `stage-04c` (red-team) | `findings[].file` × each workstream's `files_written[]` in their build gate | Red-team agent cross-references before writing gate |
+| `stage-04.qa` (QA-within-build) | `failing_tests[].assigned_to` | QA agent deduplicates into the array |
+| `stage-06` (test execution) | `failing_tests[].assigned_to` | QA agent deduplicates into the array |
+| `stage-05` merged (peer-review) | Area gates where `changes_requested` is non-empty | `devteam merge peer-review` derives at merge time |
+
+`stage-05` per-area gates do not need this field — the area name *is* the
+attribution (a `stage-05-backend.json` FAIL means the backend workstream must
+fix). The merged gate's `affected_workstreams[]` covers the operator need for
+that stage.
+
+Omitting `affected_workstreams` on a FAIL gate is not a validator hard-stop
+(existing gates without it remain valid), but newly written FAIL gates should
+include it. The validator emits an advisory when it is absent on a FAIL gate.
+
 The legacy `agent` field has been removed. The orchestrator adds `orchestrator` automatically — the role writing the gate does not provide it.
 
 ## Workstream vs. stage gates

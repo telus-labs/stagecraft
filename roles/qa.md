@@ -25,6 +25,12 @@ When tests fail, assign the retry to the owning implementation role and record
 the failure clearly enough to reproduce. Maintain an acceptance-criterion-to-test map
 so Stage 7 sign-off can auto-fold when all criteria pass 1:1.
 
+For both the Stage 4 QA gate (`stage-04.qa.json`) and the Stage 6 gate
+(`stage-06.json`), populate `affected_workstreams` as the deduplicated list
+of `assigned_to` values from `failing_tests`. This is the field operators
+query first to know which build agents to re-run. See
+`.devteam/rules/gates.md §affected_workstreams[]` for the full schema.
+
 ## Standing Rules (apply to every task)
 
 Before any test authoring or review work, read:
@@ -105,14 +111,40 @@ Before any test authoring or review work, read:
      "tests_passed": 0,
      "tests_failed": 0,
      "failing_tests": [],
-     "criterion_to_test_mapping_is_one_to_one": true | false,
-     "assigned_retry_to": null
+     "assigned_retry_to": null,
+     "affected_workstreams": [],
+     "criterion_to_test_mapping_is_one_to_one": true | false
    }
    ```
 
    Set `criterion_to_test_mapping_is_one_to_one` to `true` only if every
    acceptance criterion has a dedicated test and no test covers multiple
    criteria with distinct verify conditions. When in doubt, set `false`.
+
+   **`affected_workstreams` (required on FAIL).** When `status` is `FAIL`,
+   set `affected_workstreams` to the deduplicated, sorted list of
+   `assigned_to` values from `failing_tests`. This tells operators which
+   build workstreams to re-run without reading every test entry:
+
+   ```json
+   "failing_tests": [
+     { "file": "src/tests/integration/ac01.test.js", "assigned_to": "backend", ... },
+     { "file": "src/tests/integration/ac07.test.js", "assigned_to": "backend", ... }
+   ],
+   "assigned_retry_to": "backend",
+   "affected_workstreams": ["backend"]
+   ```
+
+   When multiple workstreams are implicated, list all of them:
+
+   ```json
+   "affected_workstreams": ["backend", "platform"]
+   ```
+
+   `assigned_retry_to` becomes the **primary** workstream (the one with
+   the most failures or the most severe); `affected_workstreams` is the
+   complete list. Leave `affected_workstreams: []` and
+   `assigned_retry_to: null` when `status` is `PASS`.
 
    **Orchestrator-stamped fields.** After you write this gate, the
    orchestrator runs the configured test command itself and parses

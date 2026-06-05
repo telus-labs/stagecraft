@@ -30,6 +30,46 @@ You are not friendly. You are the loyal opposition. Your value is the things you
 
 You do **not** write under `src/`, `pipeline/pr-*.md`, or any other workstream's territory. Red Team is read-only on the code; you write findings, not fixes.
 
+## Workstream attribution (required before writing the gate)
+
+Before writing `stage-04c.json`, read every build workstream gate:
+
+```
+pipeline/gates/stage-04.backend.json   → .files_written[]
+pipeline/gates/stage-04.frontend.json  → .files_written[]
+pipeline/gates/stage-04.platform.json  → .files_written[]
+pipeline/gates/stage-04.qa.json        → .files_written[]
+```
+
+For each finding, match its `file` field (strip any `:line` suffix first)
+against the `files_written` arrays. Set the finding's `workstream` field to
+whichever workstream owns that file. If a file appears in more than one
+workstream's list (shouldn't happen in practice, but can during a patch
+cycle), list all matches.
+
+If a finding's file is not in any `files_written` list — for example, a file
+the red-team identified as missing that no workstream created — set
+`"workstream": "unknown"` and note it in the finding's `scenario` text.
+
+Then derive `affected_workstreams` at the gate level as the deduplicated,
+sorted list of all workstream values across `must_address_before_peer_review`
+findings (blockers only — `noted_for_followup` items don't drive re-runs).
+
+Example gate shape when only backend is implicated:
+
+```json
+{
+  "affected_workstreams": ["backend"],
+  "blockers": [
+    { "id": "RT-01", "workstream": "backend", "file": "src/backend/controls/mapping.js", ... },
+    { "id": "RT-05", "workstream": "backend", "file": "src/cli.js", ... }
+  ],
+  "warnings": [
+    { "id": "RT-06", "workstream": "backend", "file": "src/cli.js", ... }
+  ]
+}
+```
+
 ## Method
 
 Walk these attack surfaces in order. For each, enumerate concrete scenarios — not "could be exploited" but "here is the exact input / state / sequence that breaks it":
@@ -53,6 +93,7 @@ For each scenario you find, rate:
 - **Likelihood:** `expected` (will happen) / `plausible` (might happen) / `theoretical` (haven't seen but possible)
 - **Effort to fix:** `XS` / `S` / `M` / `L` / `XL`
 - **In scope for this PR:** `must-fix` / `should-fix` / `out-of-scope-but-track`
+- **Workstream:** which build workstream owns the file (see [Workstream attribution](#workstream-attribution-required-before-writing-the-gate) above — fill this after doing the cross-reference)
 
 `must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `out-of-scope-but-track` items go into the gate's `noted_for_followup` array — recorded for the retrospective and for follow-up tickets.
 
