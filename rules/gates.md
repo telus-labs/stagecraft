@@ -37,6 +37,7 @@ How each gate type derives the value:
 | `stage-04c` (red-team) | `findings[].file` × each workstream's `files_written[]` in their build gate | Red-team agent cross-references before writing gate |
 | `stage-04.qa` (QA-within-build) | `failing_tests[].assigned_to` | QA agent deduplicates into the array |
 | `stage-06` (test execution) | `failing_tests[].assigned_to` | QA agent deduplicates into the array |
+| `stage-06c` (observability) | `gap[].assigned_to` across metrics, logs, traces | Platform agent deduplicates across all three `gap[]` arrays |
 | `stage-05` merged (peer-review) | Area gates where `changes_requested` is non-empty | `devteam merge peer-review` derives at merge time |
 
 `stage-05` per-area gates do not need this field — the area name *is* the

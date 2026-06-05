@@ -388,6 +388,122 @@ The SUGGESTION items in `warnings[]` carried through to the merged gate as warni
 
 ---
 
+## Case 6: PM sign-off (Stage 7) FAIL — `delta_items` non-empty
+
+Stage 7 is different from all other FAIL cases: the PM has read the test report
+and brief, and found that one or more acceptance criteria are not met or not
+verified. `pm_signoff` is `false` and `delta_items[]` lists what's missing.
+
+```bash
+# 1. Read the delta items
+cat pipeline/gates/stage-07.json | jq '.delta_items[]'
+# e.g. "AC-8: credential failure exits 0 instead of 1 per the brief"
+#      "AC-3: report.md missing the ## CC4.1 section"
+```
+
+Unlike red-team or QA failures, delta items are prose — there's no automatic
+`affected_workstreams` derived from file paths. Read each item and match it
+against the `files_written[]` arrays in the build workstream gates to identify
+which agent owns the gap. The same fallback one-liner from Case 1 applies if
+the responsible file is mentioned in the delta item text.
+
+```bash
+# 2. Determine owning workstreams from delta items (manual step)
+#    Then clear their gates + the merged gate.
+rm pipeline/gates/stage-04.backend.json   # if backend owns the gap
+rm pipeline/gates/stage-04.json           # merged gate must be rebuilt
+
+# 3. Patch build — constrained to delta items only.
+#    --from stage-07 reads delta_items[] and injects them into the build prompt.
+devteam stage build --patch --from stage-07 --skip-completed --headless
+devteam merge build
+
+# 4. Re-run the full post-build chain. PM will re-read the test report and
+#    brief in the new stage-07 invocation; every intermediate gate must be fresh.
+devteam stage pre-review --headless
+devteam stage red-team --headless         # if track includes it
+devteam stage peer-review --headless      # reviewers re-confirm delta items addressed
+devteam stage qa --headless               # re-run tests; delta items often affect AC coverage
+devteam stage sign-off --headless         # PM re-reviews
+
+# 5. Confirm advance
+devteam next
+```
+
+**When re-running QA is optional.** Skip step 4's QA re-run only if the delta
+items are purely documentation gaps (a missing section in `report.md`, an
+incomplete `## Verify` block) and the test suite itself doesn't change. If any
+delta item touches observable behavior (exit codes, output format, a criterion
+not exercised by a test), QA must re-run.
+
+**`delta_items` don't have workstream attribution yet.** This is a known gap —
+`delta_items[]` are prose strings, unlike red-team's structured findings.
+A future improvement would give each item a `file` and `workstream` field,
+enabling the same `jq .affected_workstreams` shortcut available in other cases.
+Until then, read the items and identify the owning workstream manually.
+
+---
+
+## Case 7: Consistency drift — `devteam consistency analyze` exits non-zero
+
+`devteam consistency analyze` walks the full artifact chain — brief → spec →
+`pr-*.md §Verify` → red-team `must_address` → test-report → gate field reality
+— and exits non-zero when any link in that chain disagrees. This can fire
+during pre-review (Stage 4a), as a CI check, or when run manually.
+
+```bash
+# 1. See what drifted
+devteam consistency analyze --json
+# or, for human-readable output:
+devteam consistency analyze
+```
+
+The output names the artifact pair that disagrees and the specific element that
+drifted. The source-of-truth hierarchy for resolving conflicts:
+
+```
+pipeline/brief.md  (highest — the contract)
+  ↓
+pipeline/spec.feature  (generated from brief; defer to brief if they conflict)
+  ↓
+pipeline/pr-*.md  (describes what was built; must match spec)
+  ↓
+pipeline/test-report.md  (must match brief's ACs; brief wins on conflict)
+  ↓
+gate field reality  (must match test-report; test-report wins on conflict)
+```
+
+**Brief drifted from spec** — the PM amended an AC after the spec was
+scaffolded. Fix: re-run `devteam spec generate` to rebuild the spec from the
+updated brief, then check `devteam spec verify`. If the spec changes materially,
+QA tests that mapped to the changed AC need re-verification.
+
+**PR summary drifted from spec** — a workstream's `pr-*.md §Verify` claims to
+satisfy an AC that the spec lists differently. Fix: identify the owning
+workstream from the PR filename, clear that workstream's build gate, re-run
+with `--patch --from stage-04a` to constrain the agent to only the drifted AC.
+
+**Test-report drifted from brief** — an AC has no test row, or a test row
+references an AC ID that doesn't exist in the brief. Fix: clear `stage-06.json`,
+re-run QA (`devteam stage qa --headless`). If the brief's AC was removed or
+renumbered, QA needs to update its test mapping.
+
+**Gate reality drifted from test-report** — the orchestrator-stamped fields
+disagree with what the agent claimed (e.g. `all_acceptance_criteria_met: true`
+but an AC row is missing from `test-report.md`). Fix: run
+`devteam verify stage-06` — the orchestrator re-stamps the gate from the actual
+test output. If the stamp flips the status to FAIL, treat as a normal Case 2
+(QA FAIL).
+
+```bash
+# After any artifact fix, re-run consistency check to confirm clean:
+devteam consistency analyze
+# → exit 0: drift resolved
+# → exit non-zero: additional drift found — repeat per type above
+```
+
+---
+
 ## After resolution
 
 `devteam next` advances past the failing stage. The auto-injected blocker section in `context.md` is gone (stripped by the validator on PASS/WARN). The audit trail in `pipeline/gates/` shows the failed gate, the patched re-run, and the eventual PASS — the full history is on disk for the retrospective and any future audit.
@@ -397,5 +513,7 @@ For the broader vocabulary (`BLOCKER:`, `## Verify`, `PRINCIPAL-RULING:`, etc.),
 For escalation-shaped halts (`ESCALATE`, vetoes, decision_needed), see [`escalation.md`](escalation.md).
 
 For deferred items that didn't block the pipeline but need tickets, see [`open-followups.md`](open-followups.md) — `jq .open_followups pipeline/gates/stage-09.json` is the starting point.
+
+For Stage 8 (deploy) failures, see [`deploy-failure.md`](deploy-failure.md) — covers failure classification, adapter-specific diagnostics, and the rollback procedure.
 
 For the chronological narrative across all this, `devteam log --follow`.

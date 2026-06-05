@@ -19,7 +19,8 @@ Your remaining surface is the build and deploy rails.
 - `src/infra/`
 - `pipeline/pre-review.md`
 - `pipeline/runbook.md`
-- Stage 4a (pre-review) and Stage 8 (deploy) gates
+- `pipeline/observability-report.md`
+- Stage 4a (pre-review), Stage 6c (observability), and Stage 8 (deploy) gates
 
 ## Handoff
 
@@ -172,6 +173,48 @@ missing/weak Plan with unverifiable steps (§4).
 
 Classify as BLOCKER / SUGGESTION / QUESTION inside each section.
 Use `PATTERN:` to call out something done especially well.
+
+## On an Observability Task (Stage 6c)
+
+1. Read `pipeline/brief.md` §9 (Observability requirements) and
+   `pipeline/design-spec.md` for the list of required signals.
+2. For each required metric, log, and trace: verify it is actually emitted
+   by reading the source code or running a runtime probe against staging.
+3. For each gap (required but not verified): identify which build workstream
+   owns the code that should emit the signal. Match the signal to the area:
+   - HTTP/API signals → `backend` (or `frontend` for client-side)
+   - Deploy/infra signals → `platform`
+   - Test/coverage signals → `qa`
+   - Cross-cutting signals (e.g. request tracing) → whichever area handles
+     the entry point
+4. Write `pipeline/gates/stage-06c.json`. On FAIL:
+   - Set `assigned_to` on every gap item (required — see `.devteam/rules/stage-06c.md`)
+   - Derive `affected_workstreams` as the deduplicated list of those values
+   - Set `blockers[]` with one entry per gap item, referencing the signal name,
+     the design-spec section that requires it, and the `assigned_to` workstream
+5. Write `pipeline/observability-report.md` — human-readable version of the gate.
+
+```json
+{
+  "stage": "stage-06c", "status": "FAIL",
+  "workstream": "platform",
+  "affected_workstreams": ["backend"],
+  "metrics": {
+    "required": ["http_requests_total"],
+    "verified": [],
+    "gap": [{ "signal": "http_requests_total", "assigned_to": "backend", "note": "No prom-client emit in src/backend/routes/" }]
+  },
+  "logs": { "required": [], "verified": [], "gap": [] },
+  "traces": { "required": [], "verified": [], "gap": [] },
+  "verification_method": "code-grep",
+  "blockers": [
+    { "signal": "http_requests_total", "assigned_to": "backend", "ref": "design-spec §9.1" }
+  ],
+  "warnings": ["weak verification method: code-grep — recommend runtime-probe post-deploy"]
+}
+```
+
+On PASS: `affected_workstreams: []`, all `gap[]` arrays empty.
 
 ## On a Deploy Task (adapter-driven)
 

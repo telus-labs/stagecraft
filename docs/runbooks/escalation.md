@@ -184,6 +184,74 @@ devteam validate    # confirm the gate is structurally valid
 devteam next        # should now report run-stage <next-stage>
 ```
 
+## 4b. Retry loop exhaustion — a distinct escalation shape
+
+When `devteam next` reports `resolve-escalation` but the gate shows
+`retry_number: 3` (or higher) on a stage-06 gate, this is **not** a
+normal escalation — it's the retry protocol auto-escalating because the
+same test failure repeated three times identically. The pipeline chose to
+stop rather than loop forever.
+
+```bash
+# Confirm this is a retry exhaustion, not a Principal-requested escalation
+cat pipeline/gates/stage-06.json | jq '{retry_number, previous_failure_reason, this_attempt_differs_by, failing_tests}'
+```
+
+If `retry_number >= 3` and `failing_tests` in the current gate matches the
+previous gate exactly, you are in retry exhaustion.
+
+**Root cause is almost always one of two things:**
+
+**Root cause A — the implementation is fundamentally wrong.** The owning dev
+fixed the symptom (a specific assertion) but not the underlying behaviour. Each
+retry addressed a different surface manifestation of the same bug. Evidence:
+`this_attempt_differs_by` describes minor changes but `failing_tests` is
+unchanged.
+
+→ Get a Principal ruling on whether the spec or the implementation is the
+source of truth. Invoke via:
+
+```bash
+devteam ruling \
+  --topic "Stage 6 retry exhaustion: failing_tests unchanged after 3 cycles on <AC-N>" \
+  --context pipeline/gates/stage-06.json,pipeline/test-report.md,pipeline/brief.md,pipeline/design-spec.md \
+  --headless
+```
+
+The Principal reads the failing test, the acceptance criterion, and the
+implementation. The ruling is either: (a) the implementation is wrong in a
+specific way — annotate with `PRINCIPAL-RULING:` and re-run build with that
+constraint; or (b) the acceptance criterion is ambiguous — the PM rewrites
+it, which may require a brief amendment and a new QA cycle.
+
+**Root cause B — the test itself is wrong.** The test asserts the wrong
+thing, or it's flaky (timing-sensitive, ordering-dependent, global-state
+leak). Evidence: the implementation looks correct but the test fails
+non-deterministically or asserts an assumption that isn't in the brief.
+
+→ Clear the QA gate and re-run QA with the retry context visible:
+
+```bash
+rm pipeline/gates/stage-06.json
+# The retry_number and previous_failure_reason remain in context.md;
+# QA reads them and revises the failing test rather than re-running the implementation.
+devteam stage qa --headless
+```
+
+**After ruling:**
+
+```bash
+# After Principal ruling, clear the escalation flag by encoding the ruling:
+# (Follow escalation.md § 4a must-fix or § 4b defer as appropriate)
+devteam validate   # confirm gate is no longer ESCALATE
+devteam next       # confirm advance
+```
+
+The retry counter resets on the next stage-06 invocation — the `retry_number`
+field is per-gate-file, not persistent across runs.
+
+---
+
 ## 5. Stop and ask if any of these are true
 
 Hold the resolution and surface upstream when:
@@ -205,9 +273,86 @@ Hold the resolution and surface upstream when:
 
 Run `devteam next` and confirm the action is something other than `resolve-escalation`. If you're advancing past a stage whose gate you hand-edited (defer path), the audit trail will show the gate as PASS or WARN with a `warnings[]` entry — that's the record. The retrospective at Stage 9 will harvest deferrals and lessons.
 
+## 7b. Two-round peer review exhaustion
+
+When `pipeline/context.md` contains a `REVIEW-ESCALATED:` line for an area,
+or the Stage 5 gate for that area shows two consecutive `changes_requested`
+entries from the same reviewer, the orchestrator has hit the two-round cap and
+must not invoke the dev a third time. This escalation is distinct from a
+normal "reviewer disagrees" case — the process itself requires a binding ruling.
+
+```bash
+# Identify which area hit the cap
+grep "REVIEW-ESCALATED:" pipeline/context.md
+
+# Read both rounds of review for that area
+cat pipeline/code-review/by-<reviewer>.md | grep -A 30 "## Review of <area>"
+
+# Read the dev's PR for that area
+cat pipeline/pr-<area>.md
+
+# Read what the dev changed between round 1 and round 2
+git log --oneline pipeline/pr-<area>.md
+```
+
+**The Principal gets four inputs:**
+1. The reviewer's round-1 section (original BLOCKER)
+2. The dev's PR showing what changed in response
+3. The reviewer's round-2 section (renewed BLOCKER or updated complaint)
+4. The acceptance criterion and design-spec section the BLOCKER references
+
+Invoke the Principal:
+
+```bash
+devteam ruling \
+  --topic "Two-round review exhaustion: <area> — <reviewer> renewed BLOCKER after dev addressed round 1" \
+  --context pipeline/code-review/by-<reviewer>.md,pipeline/pr-<area>.md,pipeline/brief.md,pipeline/design-spec.md \
+  --headless
+```
+
+**Three possible outcomes from the ruling:**
+
+**Outcome A — BLOCKER is valid; dev must implement Principal's ruling.**
+The Principal specifies exactly what must change. Clear the area's build gate
+and re-run with the ruling as the constraint:
+
+```bash
+rm pipeline/gates/stage-04.<area>.json pipeline/gates/stage-04.json
+devteam stage build --patch --from stage-05.<area> --skip-completed --headless
+devteam merge build
+devteam stage pre-review --headless
+devteam stage peer-review --headless   # reviewer sees the ruling-driven change
+```
+
+**Outcome B — BLOCKER is not valid; reviewer must approve.**
+The Principal rules the reviewer's interpretation is wrong. The reviewer
+updates their review file section to `REVIEW: APPROVED`, then:
+
+```bash
+devteam derive-approvals pipeline/code-review/by-<reviewer>.md
+devteam merge peer-review
+devteam next   # should advance past Stage 5
+```
+
+**Outcome C — Fundamental disagreement; pipeline explicitly FAILs.**
+The Principal finds neither side is clearly right and the feature should not
+proceed as designed. The gate is written with `status: "FAIL"` and a `PRINCIPAL-RULING:`
+entry in `pipeline/context.md` naming the design change needed. This requires
+a return to Stage 2 (design) with a new ADR for the disputed decision — not a
+build patch.
+
+```bash
+devteam stage design --headless   # Principal re-opens design with new ADR scope
+# Then full build re-run from Stage 4
+```
+
+---
+
 ## See also
 
 - `rules/escalation.md` — the protocol spec (what fields go where, when to escalate vs FAIL)
 - `docs/faq.md` § "When do I write `status: ESCALATE`?" — common scenarios
 - `docs/user-guide.md` § `devteam next says resolve-escalation` — the one-paragraph version
 - `core/hooks/approval-derivation.js` — how Stage 5 gates derive from review files
+- [`fix-and-retry.md`](fix-and-retry.md) — for FAIL (not ESCALATE) cases: red-team, QA, pre-review, peer-review, PM sign-off, deploy
+- [`deploy-failure.md`](deploy-failure.md) — Stage 8 failure: diagnose, investigate, and rollback procedures
