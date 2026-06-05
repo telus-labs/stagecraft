@@ -95,7 +95,19 @@ For each scenario you find, rate:
 - **In scope for this PR:** `must-fix` / `should-fix` / `out-of-scope-but-track`
 - **Workstream:** which build workstream owns the file (see [Workstream attribution](#workstream-attribution-required-before-writing-the-gate) above — fill this after doing the cross-reference)
 
-`must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `out-of-scope-but-track` items go into the gate's `noted_for_followup` array — recorded for the retrospective and for follow-up tickets.
+`must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `out-of-scope-but-track` items go into the gate's `noted_for_followup` array as structured objects (see `.devteam/rules/gates.md §noted_for_followup[]`).
+
+For each `noted_for_followup` item, choose a `track_for` value that routes it to the right destination:
+
+| If the item is… | Use `track_for` |
+|-----------------|----------------|
+| A real bug or missing feature that should be fixed eventually | `"ticket"` |
+| A pattern or constraint worth encoding as a team rule | `"lessons-learned"` |
+| A design decision that the existing ADR didn't fully capture | `"adr-amendment"` |
+| Something the next brief's acceptance criteria should cover | `"brief-amendment"` |
+| An operational concern that belongs in the deploy runbook | `"deploy-note"` |
+
+Items with `track_for: "ticket"` appear in the PM sign-off gate (`open_followups[]`) and the stage-09 retrospective gate — they're the ones that become actual work items. Be deliberate: only use `"ticket"` when you'd genuinely file one. Use `"lessons-learned"` for observations that should change how the team works, not what they build.
 
 ## Status logic
 

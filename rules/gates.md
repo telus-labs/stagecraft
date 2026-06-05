@@ -48,6 +48,60 @@ Omitting `affected_workstreams` on a FAIL gate is not a validator hard-stop
 (existing gates without it remain valid), but newly written FAIL gates should
 include it. The validator emits an advisory when it is absent on a FAIL gate.
 
+### `noted_for_followup[]` — structured objects, not plain strings
+
+Gates that produce non-blocking observations (red-team, QA) emit them in
+`noted_for_followup` as objects, not plain strings. Each entry must carry:
+
+| Field | Required | Notes |
+|-------|----------|-------|
+| `id` | yes | Stable identifier within the gate, e.g. `RT-06`, `QA-02` |
+| `text` | yes | One-sentence description of the observation |
+| `track_for` | yes | Where this should land — see values below |
+| `file` | no | Source file (with optional `:line`), when applicable |
+| `effort` | no | `XS / S / M / L / XL` — rough fix cost |
+
+**`track_for` values:**
+
+| Value | Meaning |
+|-------|---------|
+| `ticket` | Needs a tracked work item — surfaces in stage-07 `open_followups[]` and stage-09 gate |
+| `lessons-learned` | Strong candidate for promotion to `pipeline/lessons-learned.md` in the retrospective |
+| `adr-amendment` | An existing ADR should be updated to capture this decision or constraint |
+| `brief-amendment` | A future brief's acceptance criteria should include this |
+| `deploy-note` | Should be documented in the deploy runbook before this goes to production |
+
+Example:
+
+```json
+"noted_for_followup": [
+  {
+    "id": "RT-06",
+    "text": "--cloudtrail-days 0 silently falls back to 90 due to falsy guard; user intent is ignored.",
+    "track_for": "ticket",
+    "file": "src/cli.js:127",
+    "effort": "XS"
+  },
+  {
+    "id": "RT-08",
+    "text": "No retry logic for transient AWS errors; design-spec §9 requires exponential backoff.",
+    "track_for": "ticket",
+    "file": "src/backend/collectors/aws-cloudtrail.js",
+    "effort": "S"
+  },
+  {
+    "id": "RT-12",
+    "text": "Same evidence_hash across records for multi-control artifacts — by design per OQ-5.",
+    "track_for": "adr-amendment",
+    "effort": "XS"
+  }
+]
+```
+
+Plain-string `noted_for_followup` entries are still accepted by the validator
+(backwards compatibility), but newly written gates should use the object form.
+The retrospective step and stage-07 PM sign-off only process object-form entries.
+
 The legacy `agent` field has been removed. The orchestrator adds `orchestrator` automatically — the role writing the gate does not provide it.
 
 ## Workstream vs. stage gates

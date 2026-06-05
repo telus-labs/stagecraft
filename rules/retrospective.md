@@ -90,6 +90,27 @@ schema as a regular lesson, but phrased as a positive rule ("Use
 constructor injection for service dependencies …") rather than a
 corrective one. The 2-per-retro promotion cap still applies.
 
+### Step 9a-followup — Followup triage (Principal, after contribution pass)
+
+Before synthesis begins, the Principal reads `noted_for_followup[]` from every
+gate that emits it — primarily `pipeline/gates/stage-04c.json` (red-team) and
+`pipeline/gates/stage-04.qa.json` / `pipeline/gates/stage-06.json` (QA). Only
+object-form entries are processed; plain-string entries are noted but not routed.
+
+For each object-form entry, route by `track_for`:
+
+| `track_for` | Action |
+|-------------|--------|
+| `ticket` | Copy into the stage-09 gate's `open_followups[]` array (see gate schema below). This is the audit record that the item was seen and intentionally deferred. |
+| `lessons-learned` | Add to the candidate pool that Step 9b synthesis draws from when selecting promotions. Competes on the same 2-per-retro cap as agent-contributed lessons. |
+| `adr-amendment` | Append to `pipeline/retrospective.md` under `## ADR Amendments Needed` with the item's `id` and `text`. The Principal assigns an owner and target ADR if known. |
+| `brief-amendment` | Append to `pipeline/retrospective.md` under `## Brief Amendments for Next Run` so the PM sees it before writing the next brief. |
+| `deploy-note` | Append to `pipeline/context.md` under `## Deploy Notes` so the platform role picks it up at Stage 8. |
+
+Items already addressed during the patch cycle (i.e., the same `id` appears in
+a subsequent gate with `status: PASS`) are skipped — the orchestrator marks them
+resolved before invoking the Principal.
+
 ### Step 9b — Synthesis (Principal chairs)
 
 Invoke: `principal` agent.  
@@ -136,8 +157,32 @@ Output:
      ```
 
 3. Write `pipeline/gates/stage-09.json` — informational, always `"status": "PASS"`
-   unless synthesis itself failed. Includes `lessons_promoted` and
-   `lessons_retired` arrays.
+   unless synthesis itself failed. Includes `lessons_promoted`,
+   `lessons_retired`, and `open_followups` arrays.
+
+   `open_followups` is the deduplicated list of all `noted_for_followup` items
+   with `track_for: "ticket"` that were not resolved during this pipeline run.
+   Each entry preserves the original object shape (`id`, `text`, `file`,
+   `effort`) plus a `source` field identifying which gate it came from:
+
+   ```json
+   "open_followups": [
+     {
+       "id": "RT-06", "source": "stage-04c",
+       "text": "--cloudtrail-days 0 silently falls back to 90 due to falsy guard.",
+       "file": "src/cli.js:127", "effort": "XS"
+     },
+     {
+       "id": "RT-08", "source": "stage-04c",
+       "text": "No retry logic for transient AWS errors; design-spec §9 requires backoff.",
+       "file": "src/backend/collectors/aws-cloudtrail.js", "effort": "S"
+     }
+   ]
+   ```
+
+   This array is the machine-readable handoff to external ticket systems. An
+   operator or CI step can read `pipeline/gates/stage-09.json | jq
+   .open_followups` to generate tickets without re-reading every gate.
 
 ### Severity rubric
 

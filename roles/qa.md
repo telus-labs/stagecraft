@@ -121,6 +121,33 @@ Before any test authoring or review work, read:
    acceptance criterion has a dedicated test and no test covers multiple
    criteria with distinct verify conditions. When in doubt, set `false`.
 
+   **`noted_for_followup[]` (non-blocking observations).** When you observe
+   something worth tracking that isn't a test failure — a coverage gap, a
+   testability concern, a missing edge-case scenario the brief didn't require
+   — emit it in `noted_for_followup` as a structured object rather than a
+   `warnings[]` string. Use `warnings[]` for transient issues (e.g. test
+   suite configuration problems); use `noted_for_followup` for durable work
+   items that should survive the pipeline run. Schema and `track_for` values
+   are in `.devteam/rules/gates.md §noted_for_followup[]`.
+
+   ```json
+   "noted_for_followup": [
+     {
+       "id": "QA-01",
+       "text": "No test covers the case where --output-dir is not writable; silent failure risk.",
+       "track_for": "ticket",
+       "file": "src/cli.js",
+       "effort": "S"
+     },
+     {
+       "id": "QA-02",
+       "text": "AC-8 integration test mocks the credential check; a real expired-credential path test would be more reliable.",
+       "track_for": "brief-amendment",
+       "effort": "M"
+     }
+   ]
+   ```
+
    **`affected_workstreams` (required on FAIL).** When `status` is `FAIL`,
    set `affected_workstreams` to the deduplicated, sorted list of
    `assigned_to` values from `failing_tests`. This tells operators which
