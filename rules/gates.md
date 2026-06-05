@@ -102,6 +102,10 @@ Plain-string `noted_for_followup` entries are still accepted by the validator
 (backwards compatibility), but newly written gates should use the object form.
 The retrospective step and stage-07 PM sign-off only process object-form entries.
 
+Items with `track_for: "ticket"` surface in `open_followups[]` in the stage-07
+and stage-09 gates. To extract those as ticket-ready stubs, see
+[`docs/runbooks/open-followups.md`](../docs/runbooks/open-followups.md).
+
 The legacy `agent` field has been removed. The orchestrator adds `orchestrator` automatically — the role writing the gate does not provide it.
 
 ## Workstream vs. stage gates

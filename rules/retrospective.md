@@ -92,6 +92,8 @@ corrective one. The 2-per-retro promotion cap still applies.
 
 ### Step 9a-followup — Followup triage (Principal, after contribution pass)
 
+> Operator guide for reading the resulting `open_followups[]`: [`docs/runbooks/open-followups.md`](../docs/runbooks/open-followups.md)
+
 Before synthesis begins, the Principal reads `noted_for_followup[]` from every
 gate that emits it — primarily `pipeline/gates/stage-04c.json` (red-team) and
 `pipeline/gates/stage-04.qa.json` / `pipeline/gates/stage-06.json` (QA). Only

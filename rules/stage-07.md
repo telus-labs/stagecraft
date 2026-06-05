@@ -10,6 +10,8 @@ Delta items must not trigger a full pipeline rerun — scope them explicitly.
 
 ### `open_followups[]` — PM acknowledgment of deferred work
 
+> Operator guide for reading this field and creating tickets: [`docs/runbooks/open-followups.md`](../docs/runbooks/open-followups.md)
+
 When the PM agent is invoked, it also reads `noted_for_followup[]` from
 `pipeline/gates/stage-04c.json` and `pipeline/gates/stage-04.qa.json` /
 `pipeline/gates/stage-06.json`, collecting all object-form entries with

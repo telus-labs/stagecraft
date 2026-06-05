@@ -396,4 +396,6 @@ For the broader vocabulary (`BLOCKER:`, `## Verify`, `PRINCIPAL-RULING:`, etc.),
 
 For escalation-shaped halts (`ESCALATE`, vetoes, decision_needed), see [`escalation.md`](escalation.md).
 
+For deferred items that didn't block the pipeline but need tickets, see [`open-followups.md`](open-followups.md) — `jq .open_followups pipeline/gates/stage-09.json` is the starting point.
+
 For the chronological narrative across all this, `devteam log --follow`.
