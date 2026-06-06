@@ -181,6 +181,15 @@ function startServer(opts = {}) {
         sendJSON(res, 200, buildState(cwd));
         return;
       }
+      if (url === "/api/next") {
+        try {
+          const { next } = require("../orchestrator");
+          sendJSON(res, 200, next({ cwd }));
+        } catch (err) {
+          sendJSON(res, 500, { error: err.message });
+        }
+        return;
+      }
       if (url.startsWith("/api/gate/")) {
         const stageId = url.slice("/api/gate/".length);
         const gate = loadGateFile(cwd, stageId);

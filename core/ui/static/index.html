@@ -15,10 +15,27 @@
   </div>
 </header>
 
+<div class="next-action" data-next hidden>
+  <span class="next-icon" data-next-icon></span>
+  <div class="next-body">
+    <span class="next-text" data-next-text></span>
+    <code class="next-command" data-next-command></code>
+  </div>
+  <button class="copy-btn" data-next-copy title="Copy command to clipboard">Copy</button>
+</div>
+
 <main>
   <section class="pipeline">
-    <h2>Pipeline</h2>
+    <div class="pipeline-controls">
+      <div class="progress-summary" data-progress></div>
+      <div class="filter-strip">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="fail">Failing</button>
+        <button class="filter-btn" data-filter="action">Needs action</button>
+      </div>
+    </div>
     <ol class="stages" data-stages></ol>
+    <button class="collapse-pending" data-collapse-pending hidden></button>
   </section>
 
   <aside class="detail" data-detail>
