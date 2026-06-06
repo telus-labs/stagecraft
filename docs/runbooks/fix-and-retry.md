@@ -153,21 +153,20 @@ inspection alone, and the same bug class can resurface.
 After `devteam stage red-team --headless` exits WARN or PASS:
 
 ```bash
-# Invoke QA in augmentation mode to add regression tests for each fix.
-# QA reads pipeline/red-team-report.md + pipeline/context.md PATCH MODE sections
-# and adds tests to src/tests/regression/.
-devteam stage qa-augment --headless
+# Clear only the QA workstream gate (backend/frontend/platform gates survive).
+# --skip-completed ensures only QA re-runs.
+# --from red-team injects the red-team context; QA's role brief (§On a Post-Red-Team
+# Test Augmentation Task) guides it to write regression tests to src/tests/regression/
+# rather than re-running the full Stage 6 suite.
+rm pipeline/gates/stage-04.qa.json
+rm pipeline/gates/stage-04.json     # merged gate must be rebuilt after QA finishes
+
+devteam stage build --patch --from red-team --skip-completed --headless
+devteam merge build
 
 # Confirm all tests still pass (QA gate updated, tests_total incremented).
 devteam next
 # → expect: ▶️ run-stage peer-review (stage-05)
-```
-
-If `devteam stage qa-augment` is not available for your orchestrator version,
-invoke QA directly and pass context:
-
-```bash
-devteam stage build --workstream qa --task augment-red-team-fixes --headless
 ```
 
 See `roles/qa.md §On a Post-Red-Team Test Augmentation Task` for exactly what
