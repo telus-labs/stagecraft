@@ -464,6 +464,200 @@ function tryAutoFoldSignOff(cwd, gatesDir, track) {
   return { ok: true, acCount: briefAcs.length };
 }
 
+// ── Fix-step computation ──────────────────────────────────────────────────────
+
+function _wsFromWorkstreams(gate) {
+  if (!Array.isArray(gate.workstreams)) return [];
+  return gate.workstreams
+    .filter(w => w.status === "FAIL" || w.status === "ESCALATE")
+    .map(w => w.role);
+}
+
+function _wsFromBlockers(gate) {
+  if (!Array.isArray(gate.blockers)) return [];
+  const set = new Set();
+  for (const b of gate.blockers) {
+    if (typeof b === "object" && b.assigned_to) set.add(b.assigned_to);
+  }
+  return [...set];
+}
+
+function _rmBuildGates(workstreams) {
+  const cmds = workstreams.map(w => `rm pipeline/gates/stage-04.${w}.json`);
+  cmds.push("rm pipeline/gates/stage-04.json");
+  return cmds;
+}
+
+/**
+ * Returns an ordered array of { description, commands[] } fix steps for a
+ * failed gate, or null when no stage-specific recipe can be derived.
+ */
+function computeFixSteps(gate, stageDef) {
+  const stage = stageDef.stage;
+
+  // Pre-review (stage-04a): static-check failures
+  if (stage === "stage-04a") {
+    const issues = [];
+    if (gate.lint_passed === false) issues.push("lint errors");
+    if (gate.tests_passed === false) issues.push("failing tests");
+    if (gate.dependency_review_passed === false) issues.push("SCA / dependency findings");
+    if (gate.license_check_passed === false) issues.push("license violations");
+
+    const ws = _wsFromBlockers(gate);
+    if (!ws.length && gate.workstream) ws.push(gate.workstream);
+
+    const steps = [];
+    steps.push({
+      description: issues.length
+        ? `Fix pre-review failures: ${issues.join(", ")}`
+        : "Address pre-review blockers listed above",
+      commands: [],
+    });
+    if (ws.length) {
+      steps.push({
+        description: `Clear build workstream gate${ws.length > 1 ? "s" : ""}: ${ws.join(", ")}`,
+        commands: _rmBuildGates(ws),
+      });
+    }
+    steps.push({
+      description: "Re-run build with pre-review blockers as context",
+      commands: ["devteam stage build --patch --from pre-review --skip-completed --headless"],
+    });
+    steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
+    steps.push({ description: "Re-run pre-review", commands: ["devteam stage pre-review --headless"] });
+    return steps;
+  }
+
+  // Red team (stage-04c): must-address findings
+  if (stage === "stage-04c") {
+    const findings = gate.must_address_before_peer_review || [];
+    const wsSet = new Set(gate.affected_workstreams || []);
+    for (const f of findings) {
+      if (f.workstream) wsSet.add(f.workstream);
+      if (f.assigned_to) wsSet.add(f.assigned_to);
+    }
+    const ws = [...wsSet];
+
+    const steps = [];
+    if (findings.length) {
+      steps.push({
+        description: `Address ${findings.length} must-fix finding${findings.length !== 1 ? "s" : ""} before peer review`,
+        commands: [],
+      });
+    }
+    if (ws.length) {
+      steps.push({
+        description: `Clear affected build workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
+        commands: _rmBuildGates(ws),
+      });
+    }
+    steps.push({
+      description: "Re-run build with red-team findings as context",
+      commands: ["devteam stage build --patch --from red-team --skip-completed --headless"],
+    });
+    steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
+    steps.push({ description: "Re-run red team", commands: ["devteam stage red-team --headless"] });
+    return steps;
+  }
+
+  // Build merged (stage-04): find failing workstreams and patch
+  if (stage === "stage-04") {
+    const ws = _wsFromWorkstreams(gate).length
+      ? _wsFromWorkstreams(gate)
+      : _wsFromBlockers(gate);
+
+    const steps = [];
+    if (ws.length) {
+      steps.push({
+        description: `Clear failing workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
+        commands: _rmBuildGates(ws),
+      });
+    } else {
+      steps.push({
+        description: "Clear the merged build gate",
+        commands: ["rm pipeline/gates/stage-04.json"],
+      });
+    }
+    steps.push({
+      description: "Re-run build in patch mode",
+      commands: ["devteam stage build --patch --from build --skip-completed --headless"],
+    });
+    steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
+    return steps;
+  }
+
+  // Peer review (stage-05): changes requested or quorum miss
+  if (stage === "stage-05") {
+    const changesRequested = gate.changes_requested || [];
+    const approvals = gate.approvals || [];
+    const required = gate.required_approvals || 0;
+    const steps = [];
+
+    if (changesRequested.length) {
+      steps.push({
+        description: `Address changes requested by: ${changesRequested.join(", ")}`,
+        commands: [],
+      });
+      const ws = _wsFromBlockers(gate);
+      if (ws.length) {
+        steps.push({
+          description: `Clear build workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
+          commands: _rmBuildGates(ws),
+        });
+        steps.push({
+          description: "Re-run build with peer-review feedback as context",
+          commands: ["devteam stage build --patch --from peer-review --skip-completed --headless"],
+        });
+        steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
+      }
+    } else if (required && approvals.length < required) {
+      steps.push({
+        description: `Obtain ${required - approvals.length} more approval${required - approvals.length !== 1 ? "s" : ""} (${approvals.length}/${required} so far)`,
+        commands: [],
+      });
+    } else {
+      return null;
+    }
+    steps.push({ description: "Re-run peer review", commands: ["devteam stage peer-review --headless"] });
+    return steps;
+  }
+
+  // QA (stage-06): failing tests attributed to workstreams
+  if (stage === "stage-06") {
+    const failing = gate.failing_tests || [];
+    const wsSet = new Set();
+    for (const t of failing) { if (t.assigned_to) wsSet.add(t.assigned_to); }
+    const ws = [...wsSet];
+
+    const steps = [];
+    if (ws.length) {
+      steps.push({
+        description: `Fix failing tests in: ${ws.join(", ")}`,
+        commands: _rmBuildGates(ws),
+      });
+      steps.push({
+        description: "Re-run build with QA context",
+        commands: ["devteam stage build --patch --from qa --skip-completed --headless"],
+      });
+      steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
+    }
+    steps.push({ description: "Re-run QA", commands: ["devteam stage qa --headless"] });
+    return steps.length > 1 ? steps : null;
+  }
+
+  // Sign-off (stage-07)
+  if (stage === "stage-07") {
+    return [
+      { description: "Obtain PM sign-off (and deploy request if applicable)", commands: [] },
+      { description: "Re-run sign-off", commands: ["devteam stage sign-off --headless"] },
+    ];
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function _nextImpl(stageList, gatesDir, track, skipStages = []) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
@@ -577,12 +771,14 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
       };
     }
     if (gate.status === "FAIL") {
+      const fix_steps = computeFixSteps(gate, stageDef);
       return {
         action: "fix-and-retry", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
         blockers: gate.blockers || [],
         reason: "stage failed; address blockers and rewrite the gate",
         command: `devteam stage ${stageName}`,
+        ...(fix_steps ? { fix_steps } : {}),
       };
     }
     // PASS or WARN — proceed to next stage.

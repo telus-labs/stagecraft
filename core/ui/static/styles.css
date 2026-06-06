@@ -45,7 +45,7 @@ header .cwd { font-family: var(--mono); }
 
 /* ── Next-action banner ── */
 .next-action {
-  display: flex; align-items: center; gap: 0.75rem;
+  display: flex; align-items: flex-start; gap: 0.75rem;
   padding: 0.6rem 1.5rem; border-bottom: 1px solid var(--border);
   font-size: 0.85rem; flex-wrap: wrap;
 }
@@ -62,6 +62,38 @@ header .cwd { font-family: var(--mono); }
 .next-action.action-fix_and_retry { background: color-mix(in srgb, var(--warn) 10%, transparent); border-left: 3px solid var(--warn); }
 .next-action.action-resolve_escalation { background: color-mix(in srgb, var(--escalate) 10%, transparent); border-left: 3px solid var(--escalate); }
 .next-action.action-pipeline_complete { background: color-mix(in srgb, var(--pass) 10%, transparent); border-left: 3px solid var(--pass); }
+
+/* ── Fix steps (inside next-action banner) ── */
+.fix-steps {
+  list-style: none; margin: 0.5rem 0 0; padding: 0;
+  width: 100%; display: flex; flex-direction: column; gap: 0.4rem;
+}
+.fix-step {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  padding: 0.4rem 0.6rem;
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+  border-radius: var(--radius); border: 1px solid var(--border);
+}
+.fix-step::before { content: counter(step) "."; }
+.fix-steps { counter-reset: step; }
+.fix-step { counter-increment: step; }
+.fix-step-desc { font-weight: 500; font-size: 0.8rem; }
+.fix-step-cmd-row {
+  display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;
+}
+.fix-step-cmd {
+  font-family: var(--mono); font-size: 0.78rem; color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  padding: 0.15rem 0.4rem; border-radius: 3px; word-break: break-all; flex: 1;
+}
+.fix-step-copy {
+  flex-shrink: 0; padding: 0.1rem 0.4rem; font-size: 0.7rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.fix-step-copy:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); }
+.fix-step-copy.copied { color: var(--pass); border-color: var(--pass); }
 
 /* ── Copy button ── */
 .copy-btn {

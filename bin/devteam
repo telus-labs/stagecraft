@@ -403,9 +403,18 @@ function cmdNext(argv) {
   if (result.remaining) console.log(`   remaining: ${result.remaining.join(", ")}`);
   if (result.blockers && result.blockers.length) {
     console.log(`   blockers:`);
-    for (const b of result.blockers) console.log(`     - ${b}`);
+    for (const b of result.blockers) console.log(`     - ${typeof b === "object" ? (b.message || JSON.stringify(b)) : b}`);
   }
-  if (result.command) console.log(`   → ${result.command}`);
+  if (result.fix_steps && result.fix_steps.length) {
+    console.log(`\n   Fix steps:`);
+    result.fix_steps.forEach((step, i) => {
+      console.log(`   ${i + 1}. ${step.description}`);
+      for (const cmd of step.commands) console.log(`        $ ${cmd}`);
+    });
+    console.log();
+  } else if (result.command) {
+    console.log(`   → ${result.command}`);
+  }
 }
 
 function cmdMemory(argv) {
