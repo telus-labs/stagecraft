@@ -31,11 +31,15 @@ Each finding is triaged by severity × likelihood × scope.
 
 | Field | Type | Notes |
 |---|---|---|
-| `surfaces_walked` | string[] | Which of the 10 surfaces were assessed |
+| `surfaces_walked` | string[] | Which of the 10 surfaces were actively assessed |
+| `surfaces_skipped` | object[] | Surfaces declared N/A; each has `surface` (snake_case name) and `reason` (one-line) |
 | `findings_count` | number | Total findings across all surfaces |
 | `severity_breakdown` | object | `critical`, `high`, `medium`, `low` counts |
-| `must_address_before_peer_review` | string[] | Blocking findings; non-empty → FAIL |
-| `noted_for_followup` | string[] | Non-blocking findings to track |
+| `affected_workstreams` | string[] | Build workstreams that own blocking findings (derived from `files_written[]` cross-reference) |
+| `must_address_before_peer_review` | object[] | Blocking findings with `id`, `workstream`, `file`, `severity`, `scenario`; non-empty → FAIL |
+| `noted_for_followup` | object[] | Non-blocking findings with `id`, `text`, `track_for`, `file`, `effort` (see `rules/gates.md §noted_for_followup[]`) |
+
+`surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces. A gate missing coverage for any surface emits a validator advisory. This is how a fast PASS stays trustworthy: operators can see which surfaces the agent actually exercised vs. declared out of scope.
 
 **FAIL condition:** `must_address_before_peer_review` is non-empty. The implementer addresses each item, re-runs build, red-team re-runs, eventually PASS.
 

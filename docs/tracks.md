@@ -15,8 +15,8 @@ Or override per-invocation: `devteam stage build --track quick`.
 
 | Change type | Track | Why |
 |---|---|---|
-| New customer-facing feature | `full` | Full rigor: requirements → design → build → review → tests → sign-off → deploy → retro |
-| Small fix or copy change | `quick` | Skip design + clarification + pre-review; PM brief is still required |
+| Bounded feature or fix with clear requirements and no cross-cutting design concerns | `quick` | Skips design, clarification, pre-review, and red-team; PM brief is still required — good default for most new features that don't touch the stoplist |
+| Complex feature, cross-cutting architecture change, or anything needing formal design or adversarial review | `full` | Full rigor: requirements → design → build → review → tests → sign-off → deploy → retro |
 | Mechanical change with obvious scope (rename a function, bump padding) | `nano` | Build + scoped peer-review (1 reviewer, 1 approval) + qa |
 | Tweaking config/feature-flag values, no code | `config-only` | Build + pre-review + (security if triggered) + qa + sign-off + deploy |
 | Dependency bump or library upgrade | `dep-update` | Build + peer-review + qa + sign-off + deploy |
@@ -116,12 +116,14 @@ It's an escape hatch, not a block.
 Decision tree:
 
 1. **Is this a hotfix for a live incident?** → `hotfix`. Don't skip pre-review and peer-review just because you're in a hurry; the stoplist won't save you.
-2. **Does this touch auth, PII, payments, crypto, migrations, or new deps?** → `full`. Lighter tracks will block on the stoplist anyway.
+2. **Does this touch auth, PII, payments, crypto, migrations, or new external deps?** → `full`. Lighter tracks will block on the stoplist anyway.
 3. **Is the change just config or feature-flag values, no code logic?** → `config-only`.
 4. **Is the change a dependency bump?** → `dep-update`.
 5. **Is the change a mechanical edit (rename, format, copy change)?** → `nano`.
-6. **Is the change a small but real feature with obvious requirements?** → `quick`.
-7. **Otherwise** → `full`.
+6. **Does the change cross multiple systems, require architectural decisions, or carry enough security surface that adversarial review adds real value?** → `full`.
+7. **Otherwise** → `quick`. This covers most bounded features and fixes: a new endpoint, a new UI component, added business logic, a non-trivial bug fix — anything where requirements are clear and the design is contained. When in doubt between `quick` and `full`, start with `quick`; if Stage 2 design review surfaces cross-cutting concerns you didn't anticipate, you can restart on `full`.
+
+> **Note on the config.yml default.** The factory default is `pipeline.default_track: full` — conservative, never wrong. But `full` runs red-team adversarial review and formal design on every change, which is wasteful when most attack surfaces provably don't apply. Re-evaluate the track for each brief rather than letting the config default decide for you.
 
 ## Customizing tracks
 

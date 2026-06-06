@@ -8,6 +8,26 @@ This page is the section-by-section "what to write, why, and what to skip" guide
 
 ---
 
+## Before you write: pick the right track
+
+Before starting the brief, decide which track this change runs on. The track controls which stages fire — choosing `full` for a bounded feature runs red-team adversarial review and formal design on a change where most attack surfaces don't apply. That wastes capacity and delays the pipeline.
+
+Short version of the decision tree (full version at [`docs/tracks.md §Choosing a track`](tracks.md#choosing-a-track)):
+
+| If the change… | Track |
+|---|---|
+| Is a live production incident | `hotfix` |
+| Touches auth, PII, payments, crypto, migrations, or new external deps | `full` |
+| Is config/feature-flag values only, no code | `config-only` |
+| Is a dependency bump | `dep-update` |
+| Is a mechanical edit (rename, format, copy) | `nano` |
+| Crosses multiple systems or needs formal architecture review | `full` |
+| **Is a bounded feature or fix with clear requirements** | **`quick` ← default for most new work** |
+
+Set the track in `.devteam/config.yml` before invoking the pipeline, or pass `--track <name>` to override per-run. When in doubt between `quick` and `full`, start with `quick` — the design stage can surface reasons to escalate.
+
+---
+
 ## Section: Problem
 
 **What to write.** The user-facing problem this change solves, in 1–3 sentences. Not the solution — the problem.

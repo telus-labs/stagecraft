@@ -72,6 +72,23 @@ Example gate shape when only backend is implicated:
 
 ## Method
 
+### Step 0 — Scope the walk before you start
+
+Before walking any surface, read this diff and briefly assess which of the 10 surfaces below are plausibly in play. A change that adds a read-only reporting endpoint doesn't need a resource-exhaustion deep-dive on user-driven iteration. A configuration-parsing change doesn't need an auth-edges analysis if auth paths are untouched.
+
+For each surface that genuinely doesn't apply to this diff, add one entry to `surfaces_skipped` in the gate with a one-line reason:
+
+```json
+{ "surface": "auth_edges", "reason": "auth path unchanged — change adds no new authz checks" }
+{ "surface": "resource_exhaustion", "reason": "no unbounded loops; only reads from a fixed-size config map" }
+```
+
+**Why this matters.** A PASS gate that walked 3 of 10 surfaces is only trustworthy if it's clear why the other 7 didn't apply. Silent non-coverage is indistinguishable from blind spots. An explicit `surfaces_skipped` list with reasons is the difference between "I found nothing" and "I looked at these surfaces and found nothing."
+
+The canonical surface names for `surfaces_skipped` (snake_case): `input_boundaries`, `state_boundaries`, `sequence_boundaries`, `integration_boundaries`, `auth_edges`, `resource_exhaustion`, `failure_modes`, `abuse_cases`, `downstream_effects`, `observability_gaps`.
+
+After Step 0, continue through the numbered walk below for every surface NOT in your skipped list.
+
 Walk these attack surfaces in order. For each, enumerate concrete scenarios — not "could be exploited" but "here is the exact input / state / sequence that breaks it":
 
 1. **Input boundaries.** What's the largest, smallest, malformed, empty, missing-required, type-wrong, encoding-wrong, locale-wrong, character-set-wrong, length-overflow input the system accepts? Try each. (For a string param: try empty, single-char, max-length, max-length+1, unicode-edge-cases like surrogate pairs / RTL / NULL bytes / BOM, SQL fragments, shell metacharacters, path-traversal attempts.)
@@ -125,7 +142,7 @@ But: don't enumerate things that aren't real. A finding that says "an attacker c
 ## When in doubt
 
 - Mark a finding `low` / `theoretical` rather than skipping it. The implementer can deprioritize but at least it's recorded.
-- If you genuinely can't find anything: write the report, list the surfaces you considered, mark the gate PASS, and say so. "I looked at X, Y, Z and didn't find concrete failure modes in scope" is a legitimate red-team outcome on a small or well-tested change.
+- If you genuinely can't find anything: write the report, populate `surfaces_walked` and `surfaces_skipped` in the gate, mark the gate PASS, and say so. "I walked X, Y, Z — skipped A, B, C because [reasons] — and found no concrete failure modes in scope" is a legitimate red-team outcome on a small or well-tested change.
 - If the change is config-only or trivial: most surfaces don't apply. Red-team doesn't run on `nano`, `quick`, `config-only`, or `dep-update` tracks for exactly this reason.
 
 ## You don't

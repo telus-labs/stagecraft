@@ -216,6 +216,34 @@ When the heuristic does not fire, no gate file is written. The
 orchestrator records the skip decision in `pipeline/context.md` under
 `## Brief Changes` as `SECURITY-SKIP: <reason>`.
 
+### Stage 04c (Red-team)
+
+```json
+{
+  "stage": "stage-04c",
+  "workstream": "red-team",
+  "status": "PASS | WARN | FAIL",
+  "surfaces_walked": ["input_boundaries", "state_boundaries", "sequence_boundaries"],
+  "surfaces_skipped": [
+    { "surface": "auth_edges", "reason": "auth path unchanged — change adds no new authz checks" },
+    { "surface": "resource_exhaustion", "reason": "no unbounded loops; only reads from a fixed-size config map" }
+  ],
+  "findings_count": 3,
+  "severity_breakdown": { "critical": 0, "high": 1, "medium": 1, "low": 1 },
+  "affected_workstreams": ["backend"],
+  "must_address_before_peer_review": [
+    { "id": "RT-01", "workstream": "backend", "file": "src/backend/controls/mapping.js", "severity": "high", "scenario": "..." }
+  ],
+  "noted_for_followup": [
+    { "id": "RT-06", "text": "...", "track_for": "ticket", "file": "src/cli.js:127", "effort": "XS" }
+  ]
+}
+```
+
+`surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces (input_boundaries, state_boundaries, sequence_boundaries, integration_boundaries, auth_edges, resource_exhaustion, failure_modes, abuse_cases, downstream_effects, observability_gaps). A gate where the two arrays don't cover all 10 surfaces is incomplete — the validator will emit an advisory.
+
+`surfaces_skipped` entries carry the surface name (matching the canonical snake_case names above) and a one-line reason. This makes a fast PASS trustworthy: operators can verify "I skipped auth_edges because X" rather than inferring that the agent missed it.
+
 ### Stage 05 (Code review, per area)
 ```json
 {
