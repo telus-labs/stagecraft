@@ -71,7 +71,37 @@ Then read `pipeline/brief.md`. Produce `pipeline/design-spec.md` covering:
 1. **System design** — architecture diagram in text/ASCII, component boundaries
 2. **Data models** — schemas with field types and constraints
 3. **API contracts** — endpoints, request/response shapes, auth requirements
-4. **Component ownership** — which dev owns which area (backend/frontend/platform)
+4. **Component ownership and file boundaries** — which dev owns which area
+   (backend/frontend/platform/qa), AND a `## File Ownership` table that maps
+   every `src/` subdirectory and every root-level config file to exactly one
+   owning workstream. If `package.json bin`, `main`, or `module` points to a
+   specific file path, name its owning workstream explicitly.
+
+   This table is the binding contract for Stage 4. Two workstreams writing to
+   the same path without a recorded ruling creates ambiguity that cascades
+   through every subsequent stage: dead code, conflicting configs, `bin` targets
+   that point to an unexercised file. Resolve all path ownership disputes here
+   before build begins — don't leave them to workstreams to self-negotiate.
+
+   Required format:
+
+   ```markdown
+   ## File Ownership
+
+   | Path | Owner | Notes |
+   |------|-------|-------|
+   | `src/backend/` | backend | API, collectors, business logic |
+   | `src/frontend/` | frontend | UI components, output formatters |
+   | `src/tests/` | qa | All test files |
+   | `src/infra/` | platform | CI config, Docker, IaC |
+   | `src/cli.js` ← bin entry | backend | Only this file is the bin target |
+   | `package.json` | platform | Authoritative; other workstreams append, do not overwrite |
+   | `.eslintrc.js` | platform | Single root config; no per-workstream copies |
+   ```
+
+   If a path is contested between workstreams, rule on it here and write an
+   ADR for any non-obvious ownership decision.
+
 5. **Non-functional requirements** — performance targets, security constraints, scalability
 6. **Observability instrumentation** — which metrics, logs, and traces each
    component emits, named thresholds for alerting, and where the feature's

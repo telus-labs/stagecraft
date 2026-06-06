@@ -2,7 +2,7 @@
 
 `devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook is the operational playbook — what to read, how to fix, how to re-run, and how to know it worked.
 
-Most `fix-and-retry` cases come from one of four stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), or **peer-review** (Stage 5). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). The general flow is the same across all cases; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of four stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), or **peer-review** (Stage 5). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md) — different protocol.
 
@@ -142,6 +142,37 @@ devteam next
 
 Costs 4× the build wall-clock (the 3 unaffected agents each render and exit quickly with PR summaries saying "no relevant items in scope"), but is conceptually simpler. Choose based on cost vs effort.
 
+### After red-team PASS/WARN: run QA augmentation before peer-review
+
+When the red-team gate turns WARN or PASS after one or more fix cycles, **do
+not advance directly to Stage 5 peer-review**. A patch cycle with
+`--skip-completed` leaves the QA gate unchanged — no regression tests were
+written for the fixes. Peer reviewers then verify correctness by static
+inspection alone, and the same bug class can resurface.
+
+After `devteam stage red-team --headless` exits WARN or PASS:
+
+```bash
+# Invoke QA in augmentation mode to add regression tests for each fix.
+# QA reads pipeline/red-team-report.md + pipeline/context.md PATCH MODE sections
+# and adds tests to src/tests/regression/.
+devteam stage qa-augment --headless
+
+# Confirm all tests still pass (QA gate updated, tests_total incremented).
+devteam next
+# → expect: ▶️ run-stage peer-review (stage-05)
+```
+
+If `devteam stage qa-augment` is not available for your orchestrator version,
+invoke QA directly and pass context:
+
+```bash
+devteam stage build --workstream qa --task augment-red-team-fixes --headless
+```
+
+See `roles/qa.md §On a Post-Red-Team Test Augmentation Task` for exactly what
+QA does in this mode and what the updated gate looks like.
+
 ### What about the `noted_for_followup` items?
 
 The red-team gate's `noted_for_followup[]` is non-blocking by design. Don't try to fix those items in the patch cycle — bundling them in defeats the scoped re-run and they're explicitly deferred by the red-team agent. Each entry has a `track_for` field describing where it should land (ticket, ADR amendment, deploy README note, brief amendment). Handle these as separate work items.
@@ -210,27 +241,41 @@ cat pipeline/gates/stage-05.json | jq .affected_workstreams
 # → ["backend"]
 
 # 2. Read the extracted BLOCKERs from the per-area gate (no grepping review files).
-cat pipeline/gates/stage-05-backend.json | jq '.blockers[]'
+cat pipeline/gates/stage-05.backend.json | jq '.blockers[]'
 # → { "reviewer": "dev-platform", "text": "Missing pagination on ListUsersCommand" }
 # → { "reviewer": "dev-platform", "text": "iam_admin_users stub always emits PASS" }
 
 # For gates written before blockers[] was added, fall back to the review file:
 grep -A 2 "BLOCKER:" pipeline/code-review/by-*.md
 
-# 3. Address each BLOCKER. Usually a scoped build re-run from the
-#    reviewer's specific concerns:
+# 3. Address each BLOCKER. Scoped build re-run using the merged peer-review gate
+#    as the --from source (reads blockers[] from stage-05.json):
 rm pipeline/gates/stage-04.<owning-area>.json pipeline/gates/stage-04.json
-devteam stage build --patch --from stage-05.<area> --skip-completed --headless
+devteam stage build --patch --from peer-review --skip-completed --headless
 devteam merge build
 
-# 4. Re-run the build-chain stages
+# 4. Re-run the build-chain stages.
 devteam stage pre-review --headless
-devteam stage red-team --headless     # if track includes it
+devteam stage red-team --headless     # if track includes it; see "QA augmentation" note in Case 1
 
 # 5. Re-run peer-review. The reviewers see the patched diff and the
 #    addressed BLOCKER comments; they update their REVIEW: marker.
 devteam stage peer-review --headless
+
+# 6. Merge the per-area gates before reading devteam next.
+#    Skipping this step leaves the old merged gate on disk — devteam next will
+#    report the old blockers even after reviewers have approved the fix.
+devteam merge peer-review
+
+# 7. Confirm advance.
+devteam next   # expect: ▶️ run-stage qa (stage-06) or next track stage
 ```
+
+> **Stale-gate trap.** If `devteam next` still shows the same blockers after you
+> re-ran peer-review, the likely cause is that `devteam merge peer-review` (step 6)
+> was skipped. The per-area gates are updated but the merged `stage-05.json` still
+> holds the old findings. Run `devteam merge peer-review` and then `devteam next`
+> again — the blockers should be gone.
 
 If two rounds of reviews still disagree, that's an [escalation](escalation.md) — `REVIEW-ESCALATED:` lands in context.md and Principal rules.
 

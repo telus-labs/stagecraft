@@ -89,6 +89,36 @@ After all Stage 4 build gates pass and before Stage 5 peer review starts:
 5. Apply the security heuristic (`npm run security:check -- <changed-files>`).
    Record `"security_review_required": true | false` in the Stage 4a gate.
 
+6. **Platform hygiene checks** — these catch problems that reviewers consistently
+   flag in Stage 5 and that have clear, mechanical fixes:
+
+   a. **Runtime engine constraint.** If any ADR specifies a minimum runtime
+      version (e.g., "Node.js LTS v20+"), verify `package.json` carries a
+      matching `"engines"` field:
+      ```json
+      { "engines": { "node": ">=20" } }
+      ```
+      Missing or wrong `engines` when an ADR requires it → BLOCKER in the
+      Stage 4a gate; the ADR is unenforceable without it.
+
+   b. **Test coverage output in `.gitignore`.** If the project's test runner is
+      configured to write a coverage directory (`collectCoverage`, `coverageDirectory`,
+      or equivalent), verify `.gitignore` excludes it. A coverage directory not
+      in `.gitignore` will be committed by accident and diverge across branches.
+      Missing `.gitignore` entry → BLOCKER.
+
+   c. **Duplicate config files.** If the same tool has config at more than one
+      path (e.g., both `.eslintrc.js` at root and `src/infra/eslint.config.js`),
+      both must be documented and cross-referenced, or one must be deleted. An
+      undocumented duplicate with diverging settings silently affects different
+      parts of the codebase differently. Undocumented duplicate → BLOCKER.
+
+   d. **`package.json bin` target exists and is owned.** If `package.json` has a
+      `bin` field, verify the target file path exists in the project AND that it
+      is listed under exactly one workstream's area in the design spec's
+      `## File Ownership` table. A `bin` target pointing to a file not in any
+      workstream's `files_written[]` is a dead entry — record as BLOCKER.
+
 Capture output to `pipeline/lint-output.txt` and `pipeline/pre-review-output.txt`.
 Write `pipeline/gates/stage-04a.json`:
 
