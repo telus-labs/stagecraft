@@ -533,8 +533,15 @@ function computeFixSteps(gate, stageDef) {
     const findings = gate.must_address_before_peer_review || [];
     const wsSet = new Set(gate.affected_workstreams || []);
     for (const f of findings) {
-      if (f.workstream) wsSet.add(f.workstream);
-      if (f.assigned_to) wsSet.add(f.assigned_to);
+      // items may be strings ("F1: ...") or objects
+      if (typeof f === "object" && f !== null) {
+        if (f.workstream) wsSet.add(f.workstream);
+        if (f.assigned_to) wsSet.add(f.assigned_to);
+      }
+    }
+    // blockers may carry assigned_to even when findings don't
+    for (const b of (gate.blockers || [])) {
+      if (typeof b === "object" && b !== null && b.assigned_to) wsSet.add(b.assigned_to);
     }
     const ws = [...wsSet];
 
@@ -549,6 +556,11 @@ function computeFixSteps(gate, stageDef) {
       steps.push({
         description: `Clear affected build workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
         commands: _rmBuildGates(ws),
+      });
+    } else {
+      steps.push({
+        description: "Clear the affected build workstream gate (ls pipeline/gates/stage-04.*.json to identify it)",
+        commands: ["rm pipeline/gates/stage-04.<affected-ws>.json"],
       });
     }
     steps.push({
