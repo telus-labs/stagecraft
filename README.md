@@ -66,6 +66,7 @@ Feature deep-dives:
 - **[docs/observability.md](docs/observability.md)** — OpenTelemetry span schema and collector setup.
 - **[docs/reproducibility.md](docs/reproducibility.md)** — audit trail: gate fingerprint fields, replay readiness, drift detection.
 - **[docs/ci.md](docs/ci.md)** — GitHub Actions workflow: template, environment variables, PR check runs.
+- **[docs/git-workflow.md](docs/git-workflow.md)** — end-to-end git practice for a Stagecraft pipeline run: branch setup, what to commit and when, Stage 4 worktrees, when to open the PR, and how the final branch history should look.
 - **[docs/migration-safety.md](docs/migration-safety.md)** — veto criteria, gate fields, and what triggers the migration heuristic.
 - **[docs/red-team.md](docs/red-team.md)** — 10 attack surfaces, gate fields, routing, and how it differs from security review.
 - **[docs/spec-authoring.md](docs/spec-authoring.md)** — writing AC-N criteria, scaffolding the spec file, drift detection.
