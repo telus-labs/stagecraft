@@ -35,9 +35,10 @@ Each finding is triaged by severity × likelihood × scope.
 | `surfaces_skipped` | object[] | Surfaces declared N/A; each has `surface` (snake_case name) and `reason` (one-line) |
 | `findings_count` | number | Total findings across all surfaces |
 | `severity_breakdown` | object | `critical`, `high`, `medium`, `low` counts |
-| `affected_workstreams` | string[] | Build workstreams that own blocking findings (derived from `files_written[]` cross-reference) |
-| `must_address_before_peer_review` | object[] | Blocking findings with `id`, `workstream`, `file`, `severity`, `scenario`; non-empty → FAIL |
-| `noted_for_followup` | object[] | Non-blocking findings with `id`, `text`, `track_for`, `file`, `effort` (see `rules/gates.md §noted_for_followup[]`) |
+| `affected_workstreams` | string[] | Deduplicated sorted list of `assigned_to` values from `must_address_before_peer_review` findings; used by `devteam next` to name which gates to clear |
+| `blockers` | object[] | Must-fix findings in gate-standard shape: `id`, `assigned_to` (required), `file`, `line`, `summary`; `devteam next` reads `assigned_to` here to generate targeted fix steps |
+| `must_address_before_peer_review` | object[] | Blocking findings in red-team shape: `id`, `assigned_to` (required), `file`, `severity`, `scenario`, `reproducer`, `fix_suggestion`; non-empty → FAIL |
+| `noted_for_followup` | object[] | Non-blocking findings with `id`, `assigned_to`, `text`, `track_for`, `file`, `effort` (see `rules/gates.md §noted_for_followup[]`) |
 
 `surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces. A gate missing coverage for any surface emits a validator advisory. This is how a fast PASS stays trustworthy: operators can see which surfaces the agent actually exercised vs. declared out of scope.
 

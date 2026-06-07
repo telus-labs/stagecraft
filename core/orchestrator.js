@@ -539,9 +539,11 @@ function computeFixSteps(gate, stageDef) {
         if (f.assigned_to) wsSet.add(f.assigned_to);
       }
     }
-    // blockers may carry assigned_to even when findings don't
+    // blockers carry assigned_to (current schema) or workstream (older gates)
     for (const b of (gate.blockers || [])) {
-      if (typeof b === "object" && b !== null && b.assigned_to) wsSet.add(b.assigned_to);
+      if (typeof b !== "object" || b === null) continue;
+      if (b.assigned_to) wsSet.add(b.assigned_to);
+      else if (b.workstream) wsSet.add(b.workstream);
     }
     const ws = [...wsSet];
 

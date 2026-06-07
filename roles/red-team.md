@@ -32,28 +32,31 @@ You do **not** write under `src/`, `pipeline/pr-*.md`, or any other workstream's
 
 ## Workstream attribution (required before writing the gate)
 
-Before writing `stage-04c.json`, read every build workstream gate:
+Every finding — blocker or warning — must carry an `assigned_to` field naming
+the build workstream responsible for fixing it. `devteam next` reads
+`blockers[].assigned_to` to tell the operator exactly which workstream gate to
+clear when it generates fix steps; a missing or wrong value forces the operator
+to identify the workstream manually.
 
-```
-pipeline/gates/stage-04.backend.json   → .files_written[]
-pipeline/gates/stage-04.frontend.json  → .files_written[]
-pipeline/gates/stage-04.platform.json  → .files_written[]
-pipeline/gates/stage-04.qa.json        → .files_written[]
-```
+**How to attribute:** You have already read every `pipeline/pr-<ws>.md` summary
+as part of your Read First list. Those summaries describe what each workstream
+built and which files they touched. For each finding:
 
-For each finding, match its `file` field (strip any `:line` suffix first)
-against the `files_written` arrays. Set the finding's `workstream` field to
-whichever workstream owns that file. If a file appears in more than one
-workstream's list (shouldn't happen in practice, but can during a patch
-cycle), list all matches.
+1. Look at the finding's `file` path.
+2. Match it against the files and directories described in the PR summaries
+   to identify the owning workstream.
+3. Set `assigned_to` to that workstream name: `"backend"`, `"frontend"`,
+   `"platform"`, or `"qa"`. Use the same names that appear in the build gate
+   filenames (`stage-04.<name>.json`).
 
-If a finding's file is not in any `files_written` list — for example, a file
+If a finding's file isn't mentioned in any PR summary — for example, a file
 the red-team identified as missing that no workstream created — set
-`"workstream": "unknown"` and note it in the finding's `scenario` text.
+`"assigned_to": "unknown"` and note it in the finding's `scenario` text so
+the operator knows attribution needs a manual lookup.
 
 Then derive `affected_workstreams` at the gate level as the deduplicated,
-sorted list of all workstream values across `must_address_before_peer_review`
-findings (blockers only — `noted_for_followup` items don't drive re-runs).
+sorted list of all `assigned_to` values across `must_address_before_peer_review`
+findings only (`noted_for_followup` items don't drive re-runs and are excluded).
 
 Example gate shape when only backend is implicated:
 
@@ -61,11 +64,15 @@ Example gate shape when only backend is implicated:
 {
   "affected_workstreams": ["backend"],
   "blockers": [
-    { "id": "RT-01", "workstream": "backend", "file": "src/backend/controls/mapping.js", ... },
-    { "id": "RT-05", "workstream": "backend", "file": "src/cli.js", ... }
+    { "id": "RT-01", "assigned_to": "backend", "file": "src/backend/controls/mapping.js", ... },
+    { "id": "RT-05", "assigned_to": "backend", "file": "src/cli.js", ... }
   ],
   "warnings": [
-    { "id": "RT-06", "workstream": "backend", "file": "src/cli.js", ... }
+    { "id": "RT-06", "assigned_to": "backend", "file": "src/cli.js", ... }
+  ],
+  "must_address_before_peer_review": [
+    { "id": "RT-01", "assigned_to": "backend", "severity": "high", "file": "src/backend/controls/mapping.js", ... },
+    { "id": "RT-05", "assigned_to": "backend", "severity": "medium", "file": "src/cli.js", ... }
   ]
 }
 ```
@@ -110,7 +117,7 @@ For each scenario you find, rate:
 - **Likelihood:** `expected` (will happen) / `plausible` (might happen) / `theoretical` (haven't seen but possible)
 - **Effort to fix:** `XS` / `S` / `M` / `L` / `XL`
 - **In scope for this PR:** `must-fix` / `should-fix` / `out-of-scope-but-track`
-- **Workstream:** which build workstream owns the file (see [Workstream attribution](#workstream-attribution-required-before-writing-the-gate) above — fill this after doing the cross-reference)
+- **Assigned to:** which build workstream owns the file; set as `assigned_to` on the finding (see [Workstream attribution](#workstream-attribution-required-before-writing-the-gate) above)
 
 `must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `out-of-scope-but-track` items go into the gate's `noted_for_followup` array as structured objects (see `.devteam/rules/gates.md §noted_for_followup[]`).
 

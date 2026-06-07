@@ -46,27 +46,29 @@ This is the most common `fix-and-retry`. Red-team walked the 10 attack surfaces,
 
 **First: identify which workstreams to re-run.**
 
+Each blocker in the gate carries an `assigned_to` field naming the workstream
+that owns the file. `devteam next` uses this to generate the fix steps
+automatically; you can also read it directly:
+
 ```bash
+# Primary: read assigned_to from each blocker
+cat pipeline/gates/stage-04c.json | jq '[.blockers[].assigned_to] | unique | sort'
+# → ["backend"]
+
+# Or read the gate-level summary (derived from the same values):
 cat pipeline/gates/stage-04c.json | jq .affected_workstreams
 # → ["backend"]
 ```
 
-`affected_workstreams` is derived by cross-referencing each finding's `file`
-against the build workstream gates' `files_written` arrays. It names exactly
-the workstreams whose gates you need to clear. If you're working with a gate
-written before this field was added, use the fallback:
+Both name exactly the workstreams whose gates you need to clear.
 
 ```bash
-# Fallback: cross-reference manually
-for ws in backend frontend platform qa; do
-  gate="pipeline/gates/stage-04.${ws}.json"
-  [ -f "$gate" ] || continue
-  ws_files=$(jq -r '.files_written[]' "$gate" 2>/dev/null | sort)
-  flagged=$(jq -r '(.blockers // []) | .[].file' pipeline/gates/stage-04c.json \
-            | cut -d: -f1 | sort)
-  matches=$(comm -12 <(echo "$ws_files") <(echo "$flagged"))
-  [ -n "$matches" ] && echo "[$ws] owns: $matches"
-done
+# Fallback for gates written before assigned_to was required — check file paths
+# against the PR summaries to identify the owning workstream manually:
+cat pipeline/gates/stage-04c.json | jq -r '.blockers[].file'
+# → src/backend/app.py
+# → src/cli.js
+# Then cross-reference with pipeline/pr-backend.md, pipeline/pr-platform.md, etc.
 ```
 
 **Concrete example.** A run produced this gate:
@@ -75,10 +77,16 @@ done
 {
   "stage": "stage-04c", "status": "FAIL",
   "affected_workstreams": ["backend"],
+  "blockers": [
+    {
+      "id": "F-01", "assigned_to": "backend",
+      "file": "src/backend/app.py", "line": 146,
+      "summary": "POST /estimate with model=[] returns 500 text/html instead of 400 JSON"
+    }
+  ],
   "must_address_before_peer_review": [{
-    "id": "F-01", "severity": "critical",
+    "id": "F-01", "assigned_to": "backend", "severity": "critical",
     "file": "src/backend/app.py", "line": 146,
-    "workstream": "backend",
     "reproducer": "POST /estimate {\"text\":\"hi\",\"model\":[]}  ->  500 text/html",
     "contracts_violated": ["design-spec §5", "brief AC-6/7/8"],
     "fix_suggestion": "Insert `if not isinstance(model, str)` check before the membership test."
@@ -89,7 +97,7 @@ done
 }
 ```
 
-`affected_workstreams: ["backend"]` confirms only the backend dev needs to re-execute. Sequence:
+`affected_workstreams: ["backend"]` (and `blockers[0].assigned_to: "backend"`) confirms only the backend dev needs to re-execute. Sequence:
 
 ```bash
 # 1. (Optional) Watch the run in a second pane
