@@ -1,0 +1,317 @@
+// Tests for C1 — post-hoc write-audit enforcement.
+//
+// write-audit.js has three exports:
+//   snapshotWritables(cwd) — reads git status, returns { paths: Set, ok: bool }
+//   auditWrites(before, after, allowedWrites) — diffs snapshots, returns violations
+//   isAllowed(filePath, allowedWrites) — pure predicate
+//
+// Tests are organized into:
+//   1. isAllowed — pure function, no side effects
+//   2. auditWrites — constructed snapshots (no git needed)
+//   3. snapshotWritables — real git repo in a temp dir
+//   4. capabilities.json — codex and gemini-cli declare post-hoc-audit
+//   5. allowedWritesCaption — correct wording for post-hoc-audit level
+//   6. Integration: runHeadless returns writeViolations field
+
+const { test, describe } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const os = require("node:os");
+const { execFileSync } = require("node:child_process");
+
+const { isAllowed, auditWrites, snapshotWritables } = require("../core/guards/write-audit");
+
+// ─── 1. isAllowed ─────────────────────────────────────────────────────────────
+
+describe("isAllowed — exact and directory matching", () => {
+  test("exact file match", () => {
+    assert.ok(isAllowed("pipeline/brief.md", ["pipeline/brief.md"]));
+  });
+
+  test("exact file match with multiple entries", () => {
+    assert.ok(isAllowed("pipeline/brief.md", ["pipeline/context.md", "pipeline/brief.md"]));
+  });
+
+  test("directory prefix match (trailing slash)", () => {
+    assert.ok(isAllowed("pipeline/adr/001-design.md", ["pipeline/adr/"]));
+  });
+
+  test("directory prefix matches nested path", () => {
+    assert.ok(isAllowed("pipeline/adr/sub/note.md", ["pipeline/adr/"]));
+  });
+
+  test("directory entry with the bare dir path", () => {
+    assert.ok(isAllowed("pipeline/adr", ["pipeline/adr/"]));
+  });
+
+  test("rejects non-matching path", () => {
+    assert.ok(!isAllowed("src/hack.js", ["pipeline/brief.md"]));
+  });
+
+  test("rejects partial prefix that is not a directory boundary", () => {
+    // "pipeline/br" should not match "pipeline/brief.md"
+    assert.ok(!isAllowed("pipeline/brief.md", ["pipeline/br/"]));
+  });
+
+  test("empty allowedWrites returns false", () => {
+    assert.ok(!isAllowed("pipeline/brief.md", []));
+  });
+
+  test("null allowedWrites returns false", () => {
+    assert.ok(!isAllowed("pipeline/brief.md", null));
+  });
+
+  test("backslash paths normalized (Windows compat)", () => {
+    assert.ok(isAllowed("pipeline\\brief.md", ["pipeline/brief.md"]));
+  });
+
+  test("backslash in allowedWrites normalized", () => {
+    assert.ok(isAllowed("pipeline/brief.md", ["pipeline\\brief.md"]));
+  });
+});
+
+// ─── 2. auditWrites ───────────────────────────────────────────────────────────
+
+function makeSnap(paths) {
+  return { paths: new Set(paths), ok: true };
+}
+const failSnap = { paths: new Set(), ok: false };
+
+describe("auditWrites — diff and violation detection", () => {
+  test("clean write — allowed file added", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/brief.md"]);
+    const { violations, audited } = auditWrites(before, after, ["pipeline/brief.md"]);
+    assert.ok(audited);
+    assert.equal(violations.length, 0);
+  });
+
+  test("violation — unauthorized file added", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["src/hack.js"]);
+    const { violations, audited } = auditWrites(before, after, ["pipeline/brief.md"]);
+    assert.ok(audited);
+    assert.deepEqual(violations, ["src/hack.js"]);
+  });
+
+  test("mixed — one allowed, one violation", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/brief.md", "src/hack.js"]);
+    const { violations } = auditWrites(before, after, ["pipeline/brief.md"]);
+    assert.deepEqual(violations, ["src/hack.js"]);
+  });
+
+  test("pre-existing dirty file excluded from violations", () => {
+    // pipeline/brief.md was already dirty before invoke; not a new write
+    const before = makeSnap(["pipeline/brief.md"]);
+    const after = makeSnap(["pipeline/brief.md"]);
+    const { violations } = auditWrites(before, after, []);
+    assert.equal(violations.length, 0);
+  });
+
+  test("pre-existing dirty file plus new violation", () => {
+    const before = makeSnap(["pipeline/brief.md"]);
+    const after = makeSnap(["pipeline/brief.md", "src/hack.js"]);
+    const { violations } = auditWrites(before, after, ["pipeline/brief.md"]);
+    assert.deepEqual(violations, ["src/hack.js"]);
+  });
+
+  test("directory-allowed write passes", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/adr/001.md"]);
+    const { violations } = auditWrites(before, after, ["pipeline/adr/"]);
+    assert.equal(violations.length, 0);
+  });
+
+  test("audited=false when before snapshot failed", () => {
+    const { audited, violations } = auditWrites(failSnap, makeSnap(["foo.js"]), ["pipeline/"]);
+    assert.ok(!audited);
+    assert.equal(violations.length, 0);
+  });
+
+  test("audited=false when after snapshot failed", () => {
+    const { audited } = auditWrites(makeSnap([]), failSnap, ["pipeline/"]);
+    assert.ok(!audited);
+  });
+
+  test("newPaths contains all newly written paths", () => {
+    const before = makeSnap(["pipeline/brief.md"]);
+    const after = makeSnap(["pipeline/brief.md", "pipeline/context.md", "src/hack.js"]);
+    const { newPaths } = auditWrites(before, after, ["pipeline/"]);
+    assert.ok(newPaths.includes("pipeline/context.md"));
+    assert.ok(newPaths.includes("src/hack.js"));
+    assert.ok(!newPaths.includes("pipeline/brief.md"));
+  });
+});
+
+// ─── 3. snapshotWritables — real git temp repo ────────────────────────────────
+
+describe("snapshotWritables — real git repo", { concurrency: false }, () => {
+  function makeGitRepo() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "write-audit-test-"));
+    execFileSync("git", ["init"], { cwd: dir });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: dir });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd: dir });
+    // Initial commit so git status works
+    fs.writeFileSync(path.join(dir, "README.md"), "hi", "utf8");
+    execFileSync("git", ["add", "README.md"], { cwd: dir });
+    execFileSync("git", ["commit", "-m", "init"], { cwd: dir });
+    return dir;
+  }
+
+  test("clean repo gives empty set", () => {
+    const dir = makeGitRepo();
+    try {
+      const snap = snapshotWritables(dir);
+      assert.ok(snap.ok);
+      assert.equal(snap.paths.size, 0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("untracked file appears in snapshot", () => {
+    const dir = makeGitRepo();
+    try {
+      // Create an untracked file at the repo root so git status shows it.
+      // Writing inside an untracked subdir would make git show only the dir.
+      fs.writeFileSync(path.join(dir, "untracked.txt"), "x", "utf8");
+      const snap = snapshotWritables(dir);
+      assert.ok(snap.ok);
+      assert.ok(snap.paths.size > 0, "expected at least one untracked path");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("modified tracked file appears in snapshot", () => {
+    const dir = makeGitRepo();
+    try {
+      fs.appendFileSync(path.join(dir, "README.md"), "\nmore", "utf8");
+      const snap = snapshotWritables(dir);
+      assert.ok(snap.ok);
+      assert.ok(snap.paths.has("README.md"), `expected README.md in paths: ${[...snap.paths].join(", ")}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("ok=false for non-git directory", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "not-git-"));
+    try {
+      const snap = snapshotWritables(dir);
+      assert.ok(!snap.ok);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── 4. capabilities.json — codex and gemini-cli declare post-hoc-audit ───────
+
+describe("adapter capabilities — post-hoc-audit declared", () => {
+  function loadCap(host) {
+    return JSON.parse(fs.readFileSync(
+      path.join(__dirname, "..", "hosts", host, "capabilities.json"),
+      "utf8",
+    ));
+  }
+
+  test("codex.enforces.allowed_writes = post-hoc-audit", () => {
+    assert.equal(loadCap("codex").enforces.allowed_writes, "post-hoc-audit");
+  });
+
+  test("gemini-cli.enforces.allowed_writes = post-hoc-audit", () => {
+    assert.equal(loadCap("gemini-cli").enforces.allowed_writes, "post-hoc-audit");
+  });
+
+  test("claude-code.enforces.allowed_writes = tool-call-time (unchanged)", () => {
+    assert.equal(loadCap("claude-code").enforces.allowed_writes, "tool-call-time");
+  });
+
+  test("generic.enforces.allowed_writes = prompt-only (unchanged)", () => {
+    assert.equal(loadCap("generic").enforces.allowed_writes, "prompt-only");
+  });
+});
+
+// ─── 5. allowedWritesCaption — correct wording per enforcement level ──────────
+
+describe("allowedWritesCaption — post-hoc-audit wording", () => {
+  const { allowedWritesCaption } = require("../core/adapters/render-helpers");
+
+  test("post-hoc-audit mentions orchestrator write-audit", () => {
+    const caption = allowedWritesCaption("post-hoc-audit", "Codex CLI");
+    assert.ok(caption.includes("write-audit") || caption.includes("post-hoc"), `caption: ${caption}`);
+    assert.ok(caption.includes("FAIL"), `expected FAIL mention in caption: ${caption}`);
+  });
+
+  test("tool-call-time mentions hooks", () => {
+    const caption = allowedWritesCaption("tool-call-time", "Claude Code");
+    assert.ok(caption.includes("hooks"), `caption: ${caption}`);
+  });
+
+  test("prompt-only mentions advisory", () => {
+    const caption = allowedWritesCaption("prompt-only", "Generic");
+    assert.ok(caption.toLowerCase().includes("advisory"), `caption: ${caption}`);
+  });
+});
+
+// ─── 6. Integration: runHeadless returns writeViolations field ────────────────
+
+describe("runHeadless — writeViolations field in result", { concurrency: false }, () => {
+  // Only run when DEVTEAM_HEADLESS_COMMAND=cat (no-op spawn that doesn't write files)
+  // We test that the field is present and is an array (even when empty).
+  test("result includes writeViolations array (claude-code, no audit)", async () => {
+    const { runHeadless } = require("../core/adapters/headless");
+    const { loadAdapter } = require("../core/router");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-integration-"));
+    try {
+      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+      const adapter = loadAdapter("claude-code");
+      const descriptor = {
+        stage: "stage-01", role: "pm", rolesInStage: ["pm"], workstreamId: "stage-01",
+        objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md"],
+        artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
+      };
+      const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
+      const r = await runHeadless(adapter, descriptor, ctx);
+      assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
+      // claude-code uses tool-call-time, so no audit runs — should be empty
+      assert.equal(r.writeViolations.length, 0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? undefined : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat" });
+
+  test("result includes writeViolations array (codex, post-hoc-audit)", async () => {
+    const { runHeadless } = require("../core/adapters/headless");
+    const { loadAdapter } = require("../core/router");
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-integration-codex-"));
+    try {
+      // git init so snapshotWritables works
+      execFileSync("git", ["init"], { cwd: dir });
+      execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: dir });
+      execFileSync("git", ["config", "user.name", "T"], { cwd: dir });
+      fs.writeFileSync(path.join(dir, "README.md"), "hi");
+      execFileSync("git", ["add", "README.md"], { cwd: dir });
+      execFileSync("git", ["commit", "-m", "init"], { cwd: dir });
+      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+
+      const adapter = loadAdapter("codex");
+      const descriptor = {
+        stage: "stage-01", role: "pm", rolesInStage: ["pm"], workstreamId: "stage-01",
+        objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md", "pipeline/gates/stage-01.json"],
+        artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
+      };
+      const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
+      // cat doesn't write any files, so no violations expected
+      const r = await runHeadless(adapter, descriptor, ctx);
+      assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
+      // No files written by cat → no violations
+      assert.equal(r.writeViolations.length, 0, `unexpected violations: ${r.writeViolations.join(", ")}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? undefined : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat" });
+});

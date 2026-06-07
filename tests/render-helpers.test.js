@@ -27,8 +27,8 @@ describe("render-helpers: allowedWritesCaption", () => {
   it("post-hoc-audit enforcement", () => {
     const c = allowedWritesCaption("post-hoc-audit", "anything");
     assert.match(c, /^## Allowed writes/);
-    assert.match(c, /advisory in prompt/);
-    assert.match(c, /gate validator catches violations post-hoc/);
+    assert.match(c, /write-audit|post-hoc/);
+    assert.match(c, /FAIL/);
   });
 
   it("unknown enforcement level falls back to prompt-only wording", () => {

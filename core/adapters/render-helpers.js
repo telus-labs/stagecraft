@@ -21,10 +21,10 @@ function allowedWritesCaption(enforcementLevel, hostDisplayName) {
     case "tool-call-time":
       return `## Allowed writes (enforced by ${hostDisplayName} hooks at tool-call time)`;
     case "post-hoc-audit":
-      return `## Allowed writes (advisory in prompt; the gate validator catches violations post-hoc)`;
+      return `## Allowed writes (enforced post-hoc by the orchestrator write-audit: unauthorized writes flip the gate to FAIL)`;
     case "prompt-only":
     default:
-      return `## Allowed writes (advisory — ${hostDisplayName} enforces this in prompt only; the gate validator catches violations post-hoc)`;
+      return `## Allowed writes (advisory — ${hostDisplayName} enforces this in prompt only; gate validator catches violations post-hoc)`;
   }
 }
 

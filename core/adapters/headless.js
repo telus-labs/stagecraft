@@ -28,6 +28,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { gatesDir, logsDir } = require("../paths");
+const { snapshotWritables, auditWrites } = require("../guards/write-audit");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -44,6 +45,11 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   const prompt = preRenderedPrompt || adapter.renderStagePrompt(descriptor, ctx);
   const gatePath = path.join(gatesDir(ctx.cwd, ctx.changeId), `${descriptor.workstreamId}.json`);
   const [bin, ...args] = cmdString.split(/\s+/);
+
+  // C1: post-hoc write audit for adapters that declare enforces.allowed_writes = "post-hoc-audit".
+  // Snapshot dirty state before spawn; diff after close to find unauthorized writes.
+  const shouldAudit = adapter.capabilities?.enforces?.allowed_writes === "post-hoc-audit";
+  const beforeSnapshot = shouldAudit ? snapshotWritables(ctx.cwd) : null;
   const start = Date.now();
   const timeoutMs = typeof ctx.timeoutMs === "number" ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
 
@@ -144,12 +150,25 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
     child.on("close", (exitCode) => {
       if (timer) clearTimeout(timer);
       endLog(timedOut ? "TIMED OUT" : String(exitCode));
+
+      // C1: diff the dirty-file snapshot; log violations immediately.
+      let writeViolations = [];
+      if (shouldAudit && beforeSnapshot) {
+        const afterSnapshot = snapshotWritables(ctx.cwd);
+        const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
+        writeViolations = violations;
+        for (const v of violations) {
+          try { process.stderr.write(`[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${descriptor.workstreamId})\n`); } catch { /* */ }
+        }
+      }
+
       resolve({
         exitCode: timedOut ? null : exitCode,
         gatePath: fs.existsSync(gatePath) ? gatePath : null,
         logPath,
         durationMs: Date.now() - start,
         timedOut,
+        writeViolations,
       });
     });
   });

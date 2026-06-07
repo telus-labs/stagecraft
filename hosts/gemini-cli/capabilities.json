@@ -12,7 +12,7 @@
   "rolePromptsDir": ".gemini/prompts/roles",
   "skillsDir": ".gemini/skills",
   "enforces": {
-    "allowed_writes": "prompt-only",
+    "allowed_writes": "post-hoc-audit",
     "stoplist": "prompt-only",
     "shell": true,
     "network": true

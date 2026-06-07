@@ -18,6 +18,27 @@ const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
 
+// C1: patch a gate file to record write-audit violations and flip status to FAIL.
+// Called after headless invoke when the adapter reported unauthorized writes.
+// Idempotent — safe to call multiple times (violations are deduplicated by string match).
+function patchGateForWriteViolations(gatePath, violations) {
+  if (!fs.existsSync(gatePath)) return;
+  try {
+    const gate = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    const msgs = violations.map((v) => `[write-audit] unauthorized write: ${v}`);
+    const existing = new Set(Array.isArray(gate.blockers) ? gate.blockers : []);
+    for (const m of msgs) existing.add(m);
+    gate.blockers = [...existing];
+    if (gate.status === "PASS" || gate.status === "WARN") gate.status = "FAIL";
+    fs.writeFileSync(gatePath, JSON.stringify(gate, null, 2) + "\n", "utf8");
+    process.stderr.write(
+      `[devteam] write-audit: ${violations.length} violation(s) added to gate — status flipped to FAIL\n`,
+    );
+  } catch {
+    // Gate unreadable; violations already logged by headless.js
+  }
+}
+
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const ORCHESTRATOR_ID = `devteam@${require("../package.json").version}`;
 
@@ -252,6 +273,11 @@ async function runStageHeadless(stageName, opts = {}) {
         });
         return out;
       });
+      // C1: if write violations were detected, patch the gate to FAIL.
+      if (r.writeViolations && r.writeViolations.length > 0) {
+        const wsGatePath = r.gatePath || path.join(gatesDir, `${ws.descriptor.workstreamId}.json`);
+        patchGateForWriteViolations(wsGatePath, r.writeViolations);
+      }
       return { role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r };
     }));
 
