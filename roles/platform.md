@@ -85,7 +85,44 @@ After all Stage 4 build gates pass and before Stage 5 peer review starts:
 3. Dependency vulnerability scan: `npm audit --audit-level=high` (or
    `pip-audit`, `bundler-audit`, etc. per stack). Any `high` or
    `critical` finding halts.
-4. License allowlist check if the project has one.
+4. **License compatibility check.** For every new or changed direct dependency
+   (compare `package.json` / `requirements.txt` / `Cargo.toml` before and
+   after the PR), determine its declared SPDX license and classify it:
+
+   - **Allowed** (record nothing): MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause,
+     ISC, CC0-1.0, 0BSD, Unlicense, CC-BY-4.0, Python-2.0, PSF-2.0.
+   - **Warned** (record with `policy: "warned"`): UNLICENSED, unknown,
+     proprietary, SSPL-1.0, BUSL-1.1. These require a human review before
+     merge; record in `license_findings[]` and add a `warnings[]` entry.
+   - **Denied** (record with `policy: "denied"`): any GPL-2.0, GPL-3.0,
+     LGPL-2.0, LGPL-2.1, LGPL-3.0, AGPL-3.0, or strong-copyleft variant.
+     Copyleft licenses require distributing source and are incompatible with
+     most commercial projects unless a legal exception is documented. A denied
+     finding sets `license_check_passed: false` and adds a `blockers[]` entry.
+
+   **How to check:**
+   ```bash
+   # Node.js — use npx if license-checker is not installed globally
+   npx license-checker --direct --json 2>/dev/null | jq 'to_entries[] | {package: .key, license: .value.licenses}'
+   # Python
+   pip-licenses --format=json --with-license-file 2>/dev/null
+   # Rust
+   cargo license --json 2>/dev/null
+   ```
+   If no automated tool is available, manually inspect each new dependency's
+   `LICENSE` file or package metadata. When the license field is missing or
+   ambiguous, classify as `warned`.
+
+   If the project has a `.devteam/config.yml` `license.extra_allowed` list,
+   include those SPDX identifiers as allowed. Example config override:
+   ```yaml
+   license:
+     extra_allowed: ["LGPL-2.1"]  # approved by legal on 2026-05-01
+   ```
+
+   Record only non-allowed packages in `license_findings[]`. Set
+   `license_check_passed: true` when no findings have `policy: "denied"`;
+   set it `false` if any do.
 5. Apply the security heuristic (`npm run security:check -- <changed-files>`).
    Record `"security_review_required": true | false` in the Stage 4a gate.
 
@@ -134,6 +171,8 @@ Write `pipeline/gates/stage-04a.json`:
   "type_check_passed": true,
   "sca_findings": { "high": 0, "critical": 0 },
   "dependency_review_passed": true,
+  "license_check_passed": true,
+  "license_findings": [],
   "security_review_required": false,
   "blockers": [],
   "warnings": []

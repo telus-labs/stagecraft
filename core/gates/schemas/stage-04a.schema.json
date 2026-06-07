@@ -8,6 +8,7 @@
     "lint_passed",
     "tests_passed",
     "dependency_review_passed",
+    "license_check_passed",
     "security_review_required"
   ],
   "properties": {
@@ -21,7 +22,25 @@
     },
     "dependency_review_passed": {
       "type": "boolean",
-      "description": "SCA found no high or critical findings in new/changed dependencies."
+      "description": "SCA (vulnerability scan) found no high or critical findings in new/changed dependencies. Separate from license_check_passed."
+    },
+    "license_check_passed": {
+      "type": "boolean",
+      "description": "No denied licenses found in new or changed direct dependencies. See license_findings[] for per-package detail. True when license_findings contains no 'denied' entries (warned entries are acceptable — record as warnings)."
+    },
+    "license_findings": {
+      "type": "array",
+      "description": "Per-package license findings for new or changed direct dependencies. Only include packages whose license is not 'allowed'; include all 'warned' and 'denied' entries. Omit packages on the default allowed list (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, CC0-1.0, 0BSD, Unlicense).",
+      "items": {
+        "type": "object",
+        "required": ["package", "license", "policy"],
+        "properties": {
+          "package":  { "type": "string", "description": "Package name (and optional @version)." },
+          "license":  { "type": "string", "description": "SPDX license identifier as declared by the package." },
+          "policy":   { "type": "string", "enum": ["allowed", "warned", "denied"], "description": "allowed = on the project or default permissive list; warned = unknown or review-required (UNLICENSED, SSPL, BUSL); denied = strong copyleft that requires source disclosure (GPL-*, AGPL-*, LGPL-*)." },
+          "note":     { "type": "string", "description": "Optional. Reason for the policy decision or exception." }
+        }
+      }
     },
     "security_review_required": {
       "type": "boolean",

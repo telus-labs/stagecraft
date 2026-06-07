@@ -126,6 +126,8 @@ const STAGES = {
       lint_passed: false,
       tests_passed: false,
       dependency_review_passed: false,
+      license_check_passed: false,
+      license_findings: [],
       security_review_required: false,
       migration_safety_required: false,
     },

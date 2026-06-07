@@ -187,13 +187,26 @@ See `docs/brief-template.md` for the canonical shape.
   "lint_passed": true,
   "type_check_passed": true,
   "sca_findings": { "high": 0, "critical": 0 },
-  "license_check_passed": true
+  "dependency_review_passed": true,
+  "license_check_passed": true,
+  "license_findings": [
+    { "package": "some-gpl-pkg@1.2.0", "license": "GPL-3.0", "policy": "denied" },
+    { "package": "mystery-pkg@0.1.0",  "license": "UNLICENSED", "policy": "warned", "note": "internal package, no license file" }
+  ],
+  "security_review_required": false,
+  "migration_safety_required": false
 }
 ```
 
-Runs after all three Stage 4 area gates pass and before Stage 5 peer
-review starts. See `.devteam/rules/pipeline.md` Stage 4.5 and
-`roles/dev-platform.md` §"On a Pre-Review Task".
+`license_check_passed` is `false` when any `license_findings` entry has
+`policy: "denied"` (strong copyleft). `policy: "warned"` entries do not
+block the gate — they appear as `warnings[]` for human review.
+`license_findings` only includes non-allowed packages; packages on the
+default permissive list (MIT, Apache-2.0, BSD-*, ISC, CC0, Unlicense) are
+not recorded.
+
+Runs after all Stage 4 area gates pass and before Stage 5 peer review
+starts. See `roles/platform.md` §"On a Pre-Review Task".
 
 ### Stage 04a-security (Security review, conditional)
 ```json
