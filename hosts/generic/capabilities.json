@@ -12,6 +12,8 @@
   "commandsDir": null,
   "enforces": {
     "allowed_writes": "prompt-only",
-    "stoplist": "prompt-only"
+    "stoplist": "prompt-only",
+    "shell": false,
+    "network": false
   }
 }

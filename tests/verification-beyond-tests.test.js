@@ -179,7 +179,7 @@ test("`devteam init --host codex` installs verifier brief + skill", () => {
 });
 
 test("`devteam stage verification-beyond-tests` renders a prompt referencing the role + artifact", () => {
-  const cwd = track(makeTargetProject());
+  const cwd = track(makeTargetProject({ config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n" }));
   runCLI(["init", "--host", "claude-code"], { cwd });
   const r = runCLI(["stage", "verification-beyond-tests", "--feature", "test"], { cwd });
   assert.equal(r.status, 0, r.stderr);

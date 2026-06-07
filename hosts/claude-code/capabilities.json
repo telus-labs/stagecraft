@@ -14,6 +14,8 @@
   "agentsDir": ".claude/agents",
   "enforces": {
     "allowed_writes": "tool-call-time",
-    "stoplist": "tool-call-time"
+    "stoplist": "tool-call-time",
+    "shell": true,
+    "network": true
   }
 }

@@ -28,6 +28,26 @@ function workstreamId(stage, role, roleCount) {
   return roleCount > 1 ? `${stage}.${role}` : stage;
 }
 
+// C5: throw early if the resolved host lacks a capability the stage requires.
+// stageDef.requiredCapabilities is a { capName: true } map; adapter.capabilities.enforces
+// must have capName: true for each entry. Checked on every dispatch — headless or not —
+// so misconfigured routing fails at plan time, not silently at runtime.
+function assertCapabilities(stageDef, role, hostName, adapter) {
+  const required = stageDef.requiredCapabilities;
+  if (!required) return;
+  const enforces = adapter.capabilities?.enforces || {};
+  for (const [cap, needed] of Object.entries(required)) {
+    if (needed && enforces[cap] !== true) {
+      throw new Error(
+        `stage "${stageDef.stage}" (role "${role}") requires the "${cap}" capability ` +
+        `but host "${hostName}" does not provide it (enforces.${cap} !== true). ` +
+        `Update routing in .devteam/config.yml to use a host with ${cap} support ` +
+        `(claude-code, codex, or gemini-cli).`,
+      );
+    }
+  }
+}
+
 // Compute the full dispatch plan for a stage: which (role, host) pairs
 // the orchestrator should invoke, with their workstream ids and gate
 // filenames. Normally there's one entry per role; for peer-review with
@@ -149,6 +169,7 @@ function runStage(stageName, opts = {}) {
         hostName = resolved.hostName;
         adapter = resolved.adapter;
       }
+      assertCapabilities(stageDef, entry.role, hostName, adapter);
       const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId });
       const prompt = withSpan("adapter.renderStagePrompt", {
         "devteam.host": hostName,

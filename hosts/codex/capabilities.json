@@ -13,6 +13,8 @@
   "skillsDir": ".codex/skills",
   "enforces": {
     "allowed_writes": "prompt-only",
-    "stoplist": "prompt-only"
+    "stoplist": "prompt-only",
+    "shell": true,
+    "network": true
   }
 }

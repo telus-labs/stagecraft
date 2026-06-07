@@ -120,6 +120,7 @@ const STAGES = {
     allowedWrites: ["pipeline/pre-review.md", "pipeline/gates/stage-04a.json", "pipeline/context.md"],
     artifact: "pipeline/pre-review.md",
     template: "pre-review-template.md",
+    requiredCapabilities: { shell: true },
     gate: {
       lint_passed: false,
       tests_passed: false,
@@ -234,6 +235,7 @@ const STAGES = {
     allowedWrites: ["src/tests/", "pipeline/test-report.md", "pipeline/gates/stage-06.json", "pipeline/context.md"],
     artifact: "pipeline/test-report.md",
     template: "test-report-template.md",
+    requiredCapabilities: { shell: true },
     gate: {
       all_acceptance_criteria_met: false,
       tests_total: 0,
@@ -294,6 +296,7 @@ const STAGES = {
     allowedWrites: ["pipeline/verification-report.md", "pipeline/gates/stage-06d.json", "pipeline/context.md", "src/tests/property/", "pipeline/formal/"],
     artifact: "pipeline/verification-report.md",
     template: "verification-report-template.md",
+    requiredCapabilities: { shell: true },
     gate: {
       methods_attempted: [],
       methods_skipped: [],
@@ -332,6 +335,7 @@ const STAGES = {
     allowedWrites: ["pipeline/deploy-log.md", "pipeline/gates/stage-08.json", "pipeline/context.md"],
     artifact: "pipeline/deploy-log.md",
     template: "pr-summary-template.md",
+    requiredCapabilities: { shell: true },
     gate: {
       deploy_completed: false,
       smoke_tests_passed: false,
