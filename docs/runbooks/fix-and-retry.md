@@ -2,7 +2,7 @@
 
 `devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook is the operational playbook — what to read, how to fix, how to re-run, and how to know it worked.
 
-Most `fix-and-retry` cases come from one of five stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **peer-review** (Stage 5), or **accessibility-audit** (Stage 6b). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of six stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md) — different protocol.
 
@@ -692,6 +692,88 @@ devteam consistency analyze
 ## After resolution
 
 `devteam next` advances past the failing stage. The auto-injected blocker section in `context.md` is gone (stripped by the validator on PASS/WARN). The audit trail in `pipeline/gates/` shows the failed gate, the patched re-run, and the eventual PASS — the full history is on disk for the retrospective and any future audit.
+
+## Case 9: Verification-beyond-tests (Stage 6d) FAIL — `blocking_findings[]` non-empty
+
+Stage 6d runs property-based testing (Hypothesis/fast-check/PropTest), mutation testing (Stryker/mutmut/mull), and/or formal verification (TLA+/Alloy/Lean) against the changed code. `blocking_findings[]` in the gate is non-empty; those are counterexamples or surviving mutants that must be addressed before advancing.
+
+### Diagnosis
+
+```bash
+# 1. Read what the verifier found
+devteam next --json   # action, blockers[], fix_steps[]
+cat pipeline/gates/stage-06d.json | jq '{status, blocking_findings, methods_attempted}'
+
+# 2. Each blocking_finding has: method, description, counterexample/mutant_id, fix_hint
+cat pipeline/gates/stage-06d.json | jq '.blocking_findings[]'
+```
+
+**What each finding type means:**
+
+| `method` | What it found | What you must fix |
+|---|---|---|
+| `property` | A Hypothesis/fast-check counterexample that falsified a stated invariant | Fix the production code so the property holds for all inputs — or, if the property was wrong, correct the property and document why |
+| `mutation` | A surviving mutant — a deliberate logic error the test suite did not catch | Strengthen the existing test to kill the mutant (add an assertion on the case the mutant exploits), OR fix a real bug the mutant exposed |
+| `formal` | A TLA+/Alloy counterexample to a safety property | Fix the implementation or tighten the spec; do not dismiss — formal counterexamples are precise |
+
+**Reading a property counterexample.** The `counterexample` field contains the minimal failing input Hypothesis shrank to. Apply it directly:
+```python
+# Hypothesis counterexample: model='"' → {"model":"""} (JSONDecodeError)
+# Means: call your function with that input and observe the bug
+```
+The bug is real; the framework verified it reproduces. Fix the production code — the property test itself is the regression.
+
+### Fix
+
+The fix is in the **backend** workstream (or whichever workstream owns the file named in `fix_hint`). This is not a gate-editing exercise:
+
+```bash
+# 1. Apply the fix to production code
+# (edit the file named in fix_hint — the gate's counterexample + fix_hint points exactly there)
+
+# 2. Delete the FAIL gate so the stage can be re-run
+rm pipeline/gates/stage-06d.json
+
+# 3. Also delete the backend build gate if the change is in src/backend/ — it was
+#    produced before the fix; its content claims represent pre-fix code
+rm pipeline/gates/stage-04.backend.json   # adjust area as needed
+
+# 4. Re-run verification-beyond-tests; the verifier re-runs the property/mutation
+#    suite against the fixed code
+devteam stage verification-beyond-tests --headless
+
+# 5. If any blocking_findings[] remain, repeat from step 1
+devteam next --json
+```
+
+**If the property itself was wrong** (not the code): correct the property in the relevant test file, document the invariant you replaced it with in a `# VBT-N: ...` comment, delete the gate, and re-run. The gate MUST reach PASS — do not hand-edit `blocking_findings` to empty.
+
+### Re-run sequence
+
+```bash
+rm pipeline/gates/stage-06d.json
+devteam stage verification-beyond-tests --headless
+devteam next
+```
+
+If the verifier skipped a method with `attempted_but_blocked` (tool not installed), it won't re-run that method — that's expected. The stage can PASS with some methods skipped as long as `blocking_findings` is empty and `methods_skipped[].reason` is substantive (not "didn't have time").
+
+### Verification of PASS
+
+```bash
+cat pipeline/gates/stage-06d.json | jq '{status, blocking_findings, methods_attempted, methods_skipped}'
+# status: "PASS"
+# blocking_findings: []
+# methods_attempted: ["property"]   (or mutation, formal — whatever ran)
+```
+
+### What not to do
+
+- **Do not edit `blocking_findings` to `[]`** — the orchestrator-stamped gate will reflect what the verifier actually produced when re-run. Hand-editing only a FAIL gate to PASS is caught by `devteam consistency analyze` (gate-vs-artifact check) and will surface as drift.
+- **Do not dismiss a formal counterexample** as "theoretically possible but won't happen in prod." Formal methods found an invariant violation — it is a bug.
+- **Surviving mutants point to missing assertions, not to adding more tests.** The question is always "what assertion on existing behavior did I forget?" not "should I add a new test function?"
+
+---
 
 For the broader vocabulary (`BLOCKER:`, `## Verify`, `PRINCIPAL-RULING:`, etc.), see [`docs/conventions.md`](../conventions.md).
 
