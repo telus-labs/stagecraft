@@ -107,7 +107,7 @@ A 2-week pilot answers most adoption questions at low cost.
 
 If you adopt:
 
-1. **Land the install in CI.** Add `devteam init --host <name>` to your project bootstrap script. New devs get the pipeline without ceremony. Re-running `devteam init --force` is idempotent — running it on every CI bootstrap is safe.
+1. **Land the install in CI.** Add `devteam init --host <name>` to your project bootstrap script. New devs get the pipeline automatically. `devteam init --force` is idempotent, so running it on every CI bootstrap is safe.
 
 2. **Document the team's track choices.** Make it explicit in your contributing docs: "Use `nano` for typo fixes, `quick` for single-area changes, `full` for cross-area features, `hotfix` for production incidents." Without a written policy, track selection devolves to everyone picking `full` by default, which then becomes everyone picking `nano` because `full` is too heavy.
 
@@ -182,11 +182,11 @@ The pipeline only earns its keep if you use it. A team bypassing 80% of the time
 ### "How do we onboard new engineers?"
 
 Three artifacts, in order:
-1. **`EXAMPLE.md`** — one full pipeline traced end-to-end. New hire reads this in 15 minutes.
-2. **`docs/concepts.md`** — six primitives in a table. Glance before the example, refer back later.
+1. **`EXAMPLE.md`**: one full pipeline traced end-to-end. New hire reads this in 15 minutes.
+2. **`docs/concepts.md`**: six primitives in a table. Glance before the example, refer back later.
 3. **A 30-minute walkthrough** using [`docs/presentation-notes.md`](presentation-notes.md). Run it as part of new-hire onboarding.
 
-For a deeper example of what the full pipeline produces on a real, non-trivial problem: [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md) — builds a SOC 2 evidence collector CLI through all 17 stages, including conditional stages (security review, migration safety), multi-model peer review, and property-based testing.
+For a deeper example, [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md) builds a SOC 2 evidence collector CLI through all 17 stages, including conditional stages (security review, migration safety), multi-model peer review, and property-based testing.
 
 After that, the first real change they ship goes through the pipeline with a buddy. By their third pipeline run, they're independent.
 
@@ -198,7 +198,7 @@ After 1 month:
 - The audit trail has been used at least once: to explain a decision to a stakeholder, debug an incident, or onboard a new engineer.
 - The team has customized 1–3 things (stoplist additions, a role brief, a custom track, routing) to fit their context.
 - Engineer sentiment per stage is mostly positive; the friction points are known and either accepted or scheduled to fix.
-- Gate pass-rates across stages are <100% — meaning the gates are actually catching things, not rubber-stamping.
+- Gate pass-rates across stages are less than 100%, meaning the gates are catching real issues, not rubber-stamping.
 
 After 6 months:
 
@@ -217,10 +217,10 @@ After 12 months:
 
 Six months in and:
 
-- **Engineers consistently bypass the pipeline** despite training. Means the value isn't landing for them, regardless of theoretical merit.
-- **The audit trail is unused.** Nobody refers to past briefs / designs / reviews. Means the audit value isn't real for your team.
-- **Gate pass-rates are >95% across the board.** Means the gates aren't catching anything; they're rubber-stamping. Either tighten them or admit the framework isn't earning its keep.
-- **Lessons-learned is empty or stale.** Means the retrospective stage isn't producing actionable insights. The pipeline runs but doesn't get better over time.
+- **Engineers consistently bypass the pipeline** despite training. The value is not landing for them, regardless of theoretical merit.
+- **The audit trail is unused.** Nobody refers to past briefs, designs, or reviews. The audit value is not real for your team.
+- **Gate pass-rates are above 95% across the board.** The gates are not catching anything; they are rubber-stamping. Either tighten them or accept that the framework is not earning its keep.
+- **Lessons-learned is empty or stale.** The retrospective stage is not producing actionable insights. The pipeline runs but does not improve over time.
 
 These are signs the pipeline is not earning its overhead. Drop it, or scope it down (e.g., use only `nano` on routine changes; skip the pipeline entirely for certain change classes). Do not continue paying overhead for value that is not materializing.
 

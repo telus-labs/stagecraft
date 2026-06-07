@@ -418,7 +418,7 @@ routing:
 
 Routing precedence: **`stages` → `roles` → `default_host`**. The stage-level override is useful when a specific host is required for a stage regardless of which role is dispatched, for example always running deploy on the host whose agent has deployment credentials.
 
-When a stage with multiple workstreams runs, each workstream is independently routed. `devteam stage build` (four workstreams: backend, frontend, platform, QA) with the config above routes all four to Codex. `devteam stage design` (Principal role) routes to Claude Code. The gate merge is host-agnostic — the orchestrator reads JSON files, and the merged gate's `workstreams[]` array records `"host"` per row so you can see which CLI handled what.
+When a stage with multiple workstreams runs, each workstream is independently routed. `devteam stage build` (four workstreams: backend, frontend, platform, QA) with the config above routes all four to Codex. `devteam stage design` (Principal role) routes to Claude Code. The gate merge is host-agnostic. The orchestrator reads JSON files, and the merged gate's `workstreams[]` array records `"host"` per row so you can see which CLI handled what.
 
 ### Choosing models within a single host
 
@@ -473,7 +473,7 @@ routing:
 
 **Adversarial peer review: run every review area on multiple models simultaneously**
 
-`review_fanout` defaults to an empty list — Stage 5 runs as a single-host review on `default_host` unless you opt in:
+`review_fanout` defaults to an empty list. Stage 5 runs as a single-host review on `default_host` unless you opt in:
 
 ```yaml
 routing:
@@ -542,7 +542,7 @@ while true; do
 done
 ```
 
-`devteam next --json` returns `action: "fix-and-retry"` on FAIL and `action: "resolve-escalation"` on ESCALATE — both fall through to the `*)` branch and halt the loop. MERGE stages (`action: "merge"`) also halt; run `devteam merge <stage>` and re-enter the loop.
+`devteam next --json` returns `action: "fix-and-retry"` on FAIL and `action: "resolve-escalation"` on ESCALATE. Both fall through to the `*)` branch and halt the loop. MERGE stages (`action: "merge"`) also halt; run `devteam merge <stage>` and re-enter the loop.
 
 To handle merge automatically:
 
@@ -566,7 +566,7 @@ When red-team FAILs, running a full build re-run risks touching unrelated code a
 devteam stage build --patch --from red-team --headless
 ```
 
-The flag reads `pipeline/gates/stage-04c.json`, extracts the blockers, and injects a **PATCH MODE** section at the top of the prompt — before the objective — so agents see exactly what to fix and are instructed not to touch anything else.
+The flag reads `pipeline/gates/stage-04c.json`, extracts the blockers, and injects a **PATCH MODE** section at the top of the prompt (before the objective) so agents see exactly what to fix and are instructed not to touch anything else.
 
 `--from` defaults to `red-team` and accepts any stage name. The gate for that stage must already exist in `pipeline/gates/`.
 
