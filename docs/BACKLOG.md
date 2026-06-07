@@ -93,8 +93,8 @@ For high-stakes changes (auth, payments, IaC), peer-review runs **in parallel** 
 ### G2. Closed-loop acceptance criteria → exec spec → tests ✅ landed (Unreleased)
 PM writes numbered acceptance criteria (`AC-N`) in `pipeline/brief.md`. A new stage `stage-03b` (executable-spec) translates each into one Gherkin scenario in `pipeline/spec.feature`, tagged `@AC-N`. QA's stage-06 then maps each scenario 1:1 to a test in the report. The chain — brief → spec → tests — is drift-checked by `devteam spec verify` (CLI), and structurally enforced by the stage-03b gate (`drift`, `all_criteria_mapped` fields) plus the extended stage-06 gate (`scenarios_total`, `scenarios_covered`, `all_scenarios_have_tests`). New `core/spec/gherkin.js` parser + `core/spec/verify.js` drift detector; `devteam spec generate` scaffolds the .feature file from the brief (one tagged Scenario per AC with TODO Given/When/Then placeholders). New duty on the `pm` role (no new role needed — the PM that wrote ACs is the right brain to translate them); new `skills/spec-authoring/SKILL.md` walks the five-phase procedure with Given/When/Then guidance. Track inclusion: `full` + `quick` (the tracks with a requirements stage); skipped on `hotfix`/`nano`/`config-only`/`dep-update`. Drift types caught: orphan ACs, orphan scenarios, duplicate AC numbers, unknown AC refs in tests. `--strict` mode also fails when one AC is mapped by multiple scenarios.
 
-### G3. Production feedback loop
-Post-deploy, monitor error rate / latency / conversion for N days. Synthesize observations back into the brief for the next iteration. The retrospective stage no longer asks "what did we learn building it?" — it asks "what happened in prod?"
+### G3. Production feedback loop (procedure change)
+~~Monitor error rate / latency / conversion for N days~~ → Stagecraft doesn't own the monitoring infrastructure; operators do. The feedback mechanism is a **procedure change**: Stage 9 (retrospective) gains a mandatory "Prior run outcome" section in the brief template — the operator fills in prod error rate, latency delta, and key conversion metrics observed since the last deploy. Stage 1 (brief) gains a matching "Production outcome from last iteration" field, making prior-run learnings a first-class pipeline input. Effort drops to 1 (template-only PR); the monitoring tool remains the operator's choice. The loop closes at the process level, not the infrastructure level.
 
 ### G4. Red-team role between build and peer-review ✅ landed (Unreleased)
 A dedicated `red-team` role and `stage-04c`. Walks 10 attack surfaces (input boundaries, state, sequence, integrations, auth-edges, resource exhaustion, failure modes mid-operation, abuse cases, downstream effects, observability gaps) and produces concrete reproducers — not vibes. Triages findings by severity × likelihood × scope; the `must_address_before_peer_review` array is the gate's `blockers`, blocking Stage 5 until cleared. Always-on for `full` + `hotfix` tracks; skipped on lighter tracks. New skill `skills/red-team/SKILL.md` carries the methodology. Schema `core/gates/schemas/stage-04c.schema.json` enforces the gate shape. ROLE_FRONTMATTER entry on claude-code; codex / gemini-cli / generic pick the role up automatically via `core/roles.listRoles()`. Diversity-aware: the role brief and skill recommend routing red-team to a DIFFERENT host than the build agents for maximum independence.
@@ -114,8 +114,8 @@ Operationalizes the "the architect always remembers" bet on top of D3. Principal
 ### G9. Self-modifying pipeline
 Retrospective stage proposes changes to `stages.js` / `roles/` / `rules/` based on what worked. Proposals queue for human approval. The pipeline learns its own shape from operation.
 
-### G10. Tool-depth-first agents
-Agents that compose deeper tool stacks beat ones that just write code. Roles gain explicit tool budgets — Principal may grep the entire org's codebase, Backend may query the staging DB read-only, Platform may run `kubectl --dry-run`. Each role's tool surface is part of the contract.
+### G10. MCP-based role tool budgets
+Roles gain explicit, negotiated tool surfaces via **MCP (Model Context Protocol)** — the implementation path is clear in 2026: adapters' `capabilities.json` declares which MCP servers they expose; role briefs list permitted MCP servers by name (`filesystem-readonly`, `database-staging-ro`, `kubectl-dryrun`); `assertCapabilities()` extends to MCP server availability at dispatch time. **Principal** may use `filesystem-readonly` + `memory-query`; **Backend** gets `database-staging-ro`; **Platform** gets `kubectl-dryrun`. A medium-smart agent with a deep, well-negotiated tool stack beats a brilliant agent that only writes text (bet #5). Skills are early steps; MCP is the mature mechanism. Claude Code's MCP support is mature in 2026, making this realistic rather than speculative.
 
 ---
 
@@ -133,6 +133,8 @@ By impact ÷ effort, with bias toward (a) items where multiple sources converge,
 4. ~~**E7 — `/goal` integration**~~ ✅ landed. `/goal` prepended on build and qa for goalLoop-capable hosts; 30 tests pass.
 5. ~~**C3 — License compatibility gate**~~ ✅ landed. Per-license schema + platform role procedure + template; no new dependencies.
 6. ~~**B9 — Bounded workspace deltas**~~ ✅ landed. `core/paths.js` helper; `changeIdFromFeature` in config; `ctx.changeId` from feature slug when `isolation: bounded`; path prefixing throughout orchestrator/headless/adapter/validator; 35 tests.
+7. **C6 — Tamper-evident gate chain**. Each gate carries a hash of its prerequisites; mutating an old gate breaks the chain. EU AI Act is in force — compliance audits for AI-driven decisions are asking for tamper-evident audit trails. C4 (reproducible runs) already records *what* decided; C6 makes that record *tamper-evident*. Same compliance story as C4, small implementation delta. Impact grows with delay as compliance scrutiny multiplies.
+8. **G10 — MCP-based role tool budgets**. Claude Code's MCP support is mature in 2026. Adapters declare supported MCP servers; role briefs list permitted servers by name; `assertCapabilities()` extends to MCP availability at dispatch. The jump from "roles have descriptions" to "roles have enforced tool surfaces." Top-tier because MCP's 2026 momentum makes this the right moment — waiting costs position.
 
 ### Mid-tier — next quarter, ~5-8 PRs
 7. ~~**C1 — Filesystem-level `allowedWrites` enforcement**~~ ✅ landed. git-based post-hoc write-audit for codex/gemini-cli; `writeViolations[]` in headless results; gate patched to FAIL on violations; 33 tests.
@@ -144,9 +146,9 @@ Note: B9 has landed (now #6 in the top-tier list).
 
 ### Strategic bets — year horizon (start, don't delay)
 
-11. **G3 — Production feedback loop**. Closes the dev→prod loop. Requires deploy adapter maturity first.
+11. **G3 — Production feedback loop (procedure change)**. Stage 9 retrospective and Stage 1 brief templates gain "Prior run outcome" / "Production outcome from last iteration" fields. Stagecraft drives the protocol; monitoring infrastructure stays with the operator. Effort is now 1 (template-only PR) — the loop closes at the process level.
 12. **D5 maturation — continuous adaptive routing**. Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically.
-13. **G10 — Tool-depth-first agents**. Role tool budgets — Principal greps the org codebase, Backend queries staging DB read-only, Platform runs `kubectl --dry-run`. Where Stagecraft's role briefs gain real teeth.
+13. **G10** → promoted to Top-tier (item 8 above) as "MCP-based role tool budgets".
 
 ### Consciously deprioritized
 
