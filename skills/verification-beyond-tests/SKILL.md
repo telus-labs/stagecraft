@@ -24,12 +24,15 @@ Scan the diff. For each function/module, classify against the methods:
 | Code shape | Method |
 |---|---|
 | Pure functions over structured data — parsers, validators, codecs, transforms, sort/dedupe, math, normalisation | **Property-based** |
+| Custom formatters, serializers, or encoders over user-controlled data — logging formatters, structured log schemas, metric label builders, trace attribute setters | **Property-based** (valid-output invariant: output is parseable/well-formed for all inputs up to the field's documented max) |
 | Critical business logic with example tests — auth, billing, anything with a real test suite | **Mutation** |
 | Concurrent state machines, distributed protocols, consistency invariants, security properties | **Formal** |
 | Glue, UI, CRUD with thin logic | **Skip with reason** |
 
 Write the inventory as a table in the report. Be honest about glue —
 applying mutation to a thin CRUD wrapper produces theatre, not signal.
+
+**Caution on the "glue" classification for observability code.** Logging formatters and structured log helpers look like glue but are serializers over user-controlled input. Python's `logging.Handler.emit()`, Go's `slog` handlers, Java's `Appender.append()`, and equivalent frameworks catch formatter exceptions internally — a `NameError`, `KeyError`, or encoding error in the formatter is written to `stderr` and the application continues normally. HTTP-response tests cannot detect this failure mode; the service returns correct responses while silently dropping every log line. Classify custom log formatters as codecs, not glue. The property to assert is the valid-output invariant: for all inputs up to the field's max length, the formatted output must be parseable by the target consumer.
 
 ## Phase 2 — Pick methods
 
