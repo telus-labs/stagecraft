@@ -115,4 +115,18 @@ function writeConfigIfAbsent(cwd, hosts, opts = {}) {
   return { written: true, path: p };
 }
 
-module.exports = { loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS };
+// B9: derive a filesystem-safe change identifier from the feature name.
+// Lowercases, collapses non-alphanumeric runs to hyphens, strips leading/
+// trailing hyphens, and caps at 64 chars. Returns null for blank input so
+// callers can treat null as "in-place mode".
+function changeIdFromFeature(feature) {
+  if (!feature || typeof feature !== "string") return null;
+  const slug = feature
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  return slug || null;
+}
+
+module.exports = { loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig, writeConfigIfAbsent, changeIdFromFeature, DEFAULTS };

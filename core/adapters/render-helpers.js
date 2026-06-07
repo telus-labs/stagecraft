@@ -39,8 +39,10 @@ function allowedWritesCaption(enforcementLevel, hostDisplayName) {
 //
 // `lines` is mutated in place. The function returns nothing.
 function appendGateFooter(lines, descriptor, ctx, hostName) {
+  const { prefixPipelineRelative } = require("../paths");
+  const gatePath = prefixPipelineRelative(`pipeline/gates/${descriptor.workstreamId}.json`, descriptor.changeId || null);
   lines.push(`## Gate to write`);
-  lines.push(`Write to \`pipeline/gates/${descriptor.workstreamId}.json\`. You provide:`);
+  lines.push(`Write to \`${gatePath}\`. You provide:`);
   lines.push("```json");
   lines.push(JSON.stringify({
     stage: descriptor.stage,

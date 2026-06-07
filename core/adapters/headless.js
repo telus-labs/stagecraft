@@ -27,6 +27,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { gatesDir, logsDir } = require("../paths");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -41,7 +42,7 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   }
 
   const prompt = preRenderedPrompt || adapter.renderStagePrompt(descriptor, ctx);
-  const gatePath = path.join(ctx.cwd, "pipeline", "gates", `${descriptor.workstreamId}.json`);
+  const gatePath = path.join(gatesDir(ctx.cwd, ctx.changeId), `${descriptor.workstreamId}.json`);
   const [bin, ...args] = cmdString.split(/\s+/);
   const start = Date.now();
   const timeoutMs = typeof ctx.timeoutMs === "number" ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
@@ -62,9 +63,9 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   let logEnded = false;
   if (!logDisabled) {
     try {
-      const logsDir = path.join(ctx.cwd, "pipeline", "logs");
-      fs.mkdirSync(logsDir, { recursive: true });
-      logPath = path.join(logsDir, `${descriptor.workstreamId}.log`);
+      const logsDirPath = logsDir(ctx.cwd, ctx.changeId);
+      fs.mkdirSync(logsDirPath, { recursive: true });
+      logPath = path.join(logsDirPath, `${descriptor.workstreamId}.log`);
       logBuffer = [
         `# Stage transcript: ${descriptor.workstreamId}`,
         `# Host: ${adapter.capabilities && adapter.capabilities.name}`,

@@ -30,7 +30,7 @@ A living list of work beyond the initial migration. Organized into seven buckets
 | B6 | **Documentation gate** | 3 | 2 | Public API changed → README/CHANGELOG must reflect it. Mechanical but catches a common drift. |
 | B7 | **Multi-language QA** | 4 | 4 | Stage 6 currently assumes one test framework. Real projects have JS + Python + Go. Per-language test runners with a merged report. |
 | B8 | ~~**Cross-artifact consistency analyze**~~ ✅ landed `[cmp-E-1]` | 4 | 2 | `devteam consistency analyze` walks brief → spec.feature → pr-\*.md → red-team gate → test-report → gate fields and reports drift in one pass. Exit 0 = clean, exit 1 = drift found. `--json` for tooling. Three drift classes: AC-to-scenario (orphan ACs, orphan scenarios), scenario-to-test (unmapped tests, uncovered scenarios), and red-team-to-build (findings referencing files not touched by any workstream PR). Fix recommendations printed per drift item. Builds on `core/spec/verify.js` (G2) + new `core/spec/analyze.js` (345 lines). |
-| B9 | **Bounded workspace deltas** `[cmp-E-2]` | 4 | 3 | Isolate in-flight features under `pipeline/changes/<id>/` instead of mutating the global `pipeline/` directory. Stops context bleed between concurrent features and reduces per-stage token cost. From OpenSpec's `openspec/changes/<id>/` model. Higher leverage as concurrency demand grows; lower urgency today since most users run one feature at a time. |
+| B9 | ~~**Bounded workspace deltas**~~ ✅ landed `[cmp-E-2]` | 4 | 3 | When `.devteam/config.yml` sets `pipeline.isolation: bounded`, every in-flight feature's artifacts (prompts, gates, logs) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. `changeId` is derived by slugifying `opts.feature`. New `core/paths.js` exports `pipelineRoot`, `gatesDir`, `logsDir`, `prefixPipelineRelative`. `changeIdFromFeature` added to `core/config.js`. `orchestrator.js` computes `ctx.changeId`, threads it into `buildDescriptor` (prefixes `readFirst`/`allowedWrites`/`artifact`), and uses path helpers in `runStageHeadless`/`mergeWorkstreamGates`. `headless.js` routes gate + log files to the bounded dir. `render-helpers.js` writes the bounded gate path into the agent prompt. `validator.js` reads `DEVTEAM_CHANGE_ID` env var to validate gates in the bounded dir. Default `in-place` is unchanged — zero impact for existing setups. 35 new tests in `tests/bounded-workspace.test.js`. |
 | B10 | **Discover Standards preprocessing** `[cmp-E-5]` | 3 | 3 | New `devteam standards discover` extracts conventions from the existing codebase (import styles, file structures, linter configs, undocumented patterns) and populates `docs/conventions.md` + per-stage rule files before Stage 1 runs. Brownfield-project win. From Agent OS's extraction-first approach. Complements existing `devteam architecture lookup` (which handles prior-decision continuity, not active-pattern continuity). |
 
 ## C. Quality & safety — enforcement, sandboxing, scanning
@@ -132,14 +132,15 @@ By impact ÷ effort, with bias toward (a) items where multiple sources converge,
 3. ~~**C5 — Capability-required permissions**~~ ✅ landed. `assertCapabilities()` fires at dispatch time; four stages declare `requiredCapabilities: { shell: true }`; all adapters declare `enforces.shell/network`; 31 tests.
 4. ~~**E7 — `/goal` integration**~~ ✅ landed. `/goal` prepended on build and qa for goalLoop-capable hosts; 30 tests pass.
 5. ~~**C3 — License compatibility gate**~~ ✅ landed. Per-license schema + platform role procedure + template; no new dependencies.
+6. ~~**B9 — Bounded workspace deltas**~~ ✅ landed. `core/paths.js` helper; `changeIdFromFeature` in config; `ctx.changeId` from feature slug when `isolation: bounded`; path prefixing throughout orchestrator/headless/adapter/validator; 35 tests.
 
 ### Mid-tier — next quarter, ~5-8 PRs
-
-6. **B9 — Bounded workspace deltas** `[cmp-E-2]` (4 / 3). Structural fix for concurrent-feature context bleed. Retrofitting later is harder than building it now.
 7. **C1 — Filesystem-level `allowedWrites` enforcement** (4 / 4). "Honour system" risk in multi-host runs. Container/overlay-based enforcement. Single-focused-week budget.
 8. **G6 — Stage shopping (AI-inferred tracks)** `[cmp-E-3]` (4-5 / 4). Two sources converge on adaptive pathways. Build *after* B8 (which gives the artifact graph the analyzer needs).
 9. **B10 — Discover Standards preprocessing** `[cmp-E-5]` (3 / 3). Brownfield-project win. Do when Stagecraft gets adopted on a legacy codebase that surfaces the pain.
 10. **B2 — Performance budget stage** (4 / 3). Natural pair to accessibility-audit; slots into existing post-build stage shape.
+
+Note: B9 has landed (now #6 in the top-tier list).
 
 ### Strategic bets — year horizon (start, don't delay)
 

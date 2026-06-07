@@ -36,12 +36,18 @@ const { loadConfig } = require("../config.js");
 // caching forecloses any future caller that wants to require() this module
 // and validate against a different cwd. Lazy resolution preserves the
 // subprocess contract and makes the exports testable.
+//
+// B9: when DEVTEAM_CHANGE_ID is set (orchestrator exports it into the host
+// environment for bounded-isolation runs), gates live under
+// pipeline/changes/<changeId>/gates/ rather than the global pipeline/gates/.
 function gatesDir() {
-  return path.join(process.cwd(), "pipeline", "gates");
+  const { gatesDir: getGatesDir } = require("../paths");
+  return getGatesDir(process.cwd(), process.env.DEVTEAM_CHANGE_ID || null);
 }
 
 function lessonsFile() {
-  return path.join(process.cwd(), "pipeline", "lessons-learned.md");
+  const { pipelineRoot } = require("../paths");
+  return path.join(pipelineRoot(process.cwd(), process.env.DEVTEAM_CHANGE_ID || null), "lessons-learned.md");
 }
 
 // Structured-log mode (audit B-23). When LOG_FORMAT=json, the hook emits a

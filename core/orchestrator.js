@@ -12,7 +12,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage } = require("./pipeline/stages");
-const { loadConfig } = require("./config");
+const { loadConfig, changeIdFromFeature } = require("./config");
+const { gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
@@ -89,6 +90,8 @@ function computeDispatchPlan(stageDef, config, track) {
 function buildDescriptor(stageDef, role, opts = {}) {
   const allowedWrites = stageDef.roleWrites?.[role] ?? stageDef.allowedWrites;
   const wsId = opts.workstreamId || workstreamId(stageDef.stage, role, stageDef.roles.length);
+  const changeId = opts.changeId || null;
+  const prefix = (p) => prefixPipelineRelative(p, changeId);
   return {
     stage: stageDef.stage,
     name: nameForStage(stageDef.stage),
@@ -96,14 +99,15 @@ function buildDescriptor(stageDef, role, opts = {}) {
     rolesInStage: stageDef.roles,
     workstreamId: wsId,
     objective: stageDef.objective,
-    readFirst: stageDef.readFirst,
-    allowedWrites,
-    artifact: stageDef.artifact,
+    readFirst: Array.isArray(stageDef.readFirst) ? stageDef.readFirst.map(prefix) : stageDef.readFirst,
+    allowedWrites: Array.isArray(allowedWrites) ? allowedWrites.map(prefix) : allowedWrites,
+    artifact: prefix(stageDef.artifact),
     template: stageDef.template,
     goalCondition: stageDef.goalCondition
       ? stageDef.goalCondition.replace("{workstreamId}", wsId)
       : null,
     expectedGate: stageDef.gate,
+    changeId,
     // When set, all workstreams of this stage dispatch to the same
     // subagent regardless of role (used by peer-review where the
     // workstreams are areas being reviewed but the dispatched agent
@@ -129,11 +133,14 @@ function runStage(stageName, opts = {}) {
 
   const cwd = opts.cwd || process.cwd();
   const config = opts.config || loadConfig(cwd);
+  const isolation = opts.isolation || config.pipeline.isolation;
+  const feature = opts.feature || "";
   const ctx = {
     track: opts.track || config.pipeline.default_track,
-    feature: opts.feature || "",
+    feature,
     cwd,
-    isolation: opts.isolation || config.pipeline.isolation,
+    isolation,
+    changeId: isolation === "bounded" ? changeIdFromFeature(feature) : null,
     orchestrator: ORCHESTRATOR_ID,
     timeoutMs: typeof opts.timeoutMs === "number" ? opts.timeoutMs : undefined,
     patchItems: Array.isArray(opts.patchItems) && opts.patchItems.length > 0 ? opts.patchItems : null,
@@ -174,7 +181,7 @@ function runStage(stageName, opts = {}) {
         adapter = resolved.adapter;
       }
       assertCapabilities(stageDef, entry.role, hostName, adapter);
-      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId });
+      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId, changeId: ctx.changeId });
       const prompt = withSpan("adapter.renderStagePrompt", {
         "devteam.host": hostName,
         "devteam.stage": stageDef.stage,
@@ -212,7 +219,7 @@ async function runStageHeadless(stageName, opts = {}) {
       throw new Error(`host "${ws.host}" declares headless: true but exports no invoke()`);
     }
   }
-  const gatesDir = path.join(plan.ctx.cwd, "pipeline", "gates");
+  const gatesDir = getGatesDir(plan.ctx.cwd, plan.ctx.changeId);
   return withSpan("pipeline.stage.headless", {
     "devteam.stage": plan.stage,
     "devteam.stage.name": stageName,
@@ -299,7 +306,7 @@ function mergeWorkstreamGates(stageName, opts = {}) {
     "devteam.workstream_count": plan.length,
     "devteam.fanout": plan.some((p) => p.fanout) || undefined,
   }, () => {
-    const gatesDir = opts.gatesDir || path.join(opts.cwd || process.cwd(), "pipeline", "gates");
+    const gatesDir = opts.gatesDir || getGatesDir(opts.cwd || process.cwd(), opts.changeId || null);
     const wsGates = [];
     for (const entry of plan) {
       const wsFile = path.join(gatesDir, entry.gateFile);
