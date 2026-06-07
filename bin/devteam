@@ -184,6 +184,14 @@ Commands:
                                    .devteam/config.yml so subsequent
                                    'devteam next' and 'devteam stage'
                                    use the inferred stage list.
+  standards discover               B10 — scan the project codebase and
+       [--cwd <dir>] [--json]      produce docs/project-conventions.md
+       [--dry-run] [--force]       with detected tech stack, module
+                                   system, file layout, naming style,
+                                   tooling, test config, and common
+                                   import paths. --dry-run prints
+                                   without writing. --json emits the
+                                   structured discovery result.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -2111,6 +2119,51 @@ function cmdAssess(argv) {
   }
 }
 
+// Usage: devteam standards discover [--cwd <dir>] [--json] [--dry-run] [--force]
+//
+// Scans the project codebase (pure static analysis) and writes
+// docs/project-conventions.md. --dry-run prints the report without writing.
+// --json emits the structured discovery result as JSON to stdout.
+// --force overwrites an existing docs/project-conventions.md.
+function cmdStandards(argv) {
+  const sub = argv[0];
+  const rest = argv.slice(1);
+  const { flags } = parseFlags(rest);
+  const cwd = flags.cwd || process.cwd();
+
+  if (sub === "discover") {
+    const { discover, formatReport } = require(
+      path.join(__dirname, "..", "core", "standards", "discover"));
+    const result = discover(cwd);
+
+    if (flags.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    const report = formatReport(result);
+
+    if (flags.dryRun) {
+      console.log(report);
+      return;
+    }
+
+    const outPath = path.join(cwd, "docs", "project-conventions.md");
+    if (fs.existsSync(outPath) && !flags.force) {
+      console.error(`${path.relative(cwd, outPath)} already exists. Use --force to overwrite.`);
+      process.exit(1);
+    }
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, report, "utf8");
+    console.log(`✓ wrote ${path.relative(cwd, outPath)}`);
+    console.log(`  Add it to your AGENTS.md or readFirst lists to inject into agent prompts.`);
+    return;
+  }
+
+  console.error("Usage: devteam standards discover [--cwd <dir>] [--json] [--dry-run] [--force]");
+  process.exit(2);
+}
+
 function main() {
   const [, , command, ...rest] = process.argv;
   switch (command) {
@@ -2135,6 +2188,7 @@ function main() {
     case "spec":     return cmdSpec(rest);
     case "consistency": return cmdConsistency(rest);
     case "assess":   return cmdAssess(rest);
+    case "standards": return cmdStandards(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":
