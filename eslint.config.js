@@ -142,6 +142,7 @@ module.exports = [
         clearTimeout: "readonly",
         setInterval: "readonly",
         clearInterval: "readonly",
+        navigator: "readonly",
       },
     },
   },

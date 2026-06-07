@@ -258,7 +258,7 @@ async function renderNextAction() {
 
   const copyBtn = $("[data-next-copy]");
   copyBtn.hidden = !cmd || (action.fix_steps && action.fix_steps.length > 0);
-  copyBtn.onclick = (e) => copyToClipboard(cmd, copyBtn);
+  copyBtn.onclick = () => copyToClipboard(cmd, copyBtn);
 
   // Fix steps — rendered below the summary line
   let stepsEl = banner.querySelector(".fix-steps");
@@ -268,10 +268,9 @@ async function renderNextAction() {
       stepsEl.className = "fix-steps";
       banner.appendChild(stepsEl);
     }
-    stepsEl.innerHTML = action.fix_steps.map((step, i) => {
+    stepsEl.innerHTML = action.fix_steps.map((step) => {
       const cmdsHtml = step.commands.length
         ? step.commands.map(c => {
-            const id = `fs-${i}-${c.replace(/\W+/g, "-")}`;
             return `<span class="fix-step-cmd-row">
               <code class="fix-step-cmd">${escHtml(c)}</code>
               <button class="fix-step-copy" data-cmd="${escHtml(c)}" title="Copy">Copy</button>
@@ -512,7 +511,7 @@ function renderRequirements(parent, gate) {
     wrap.innerHTML += checkRow("All required sections present", gate.required_sections_complete);
   }
   if (Array.isArray(gate.out_of_scope_items) && gate.out_of_scope_items.length > 0) {
-    const h = addSection(parent, "Out of Scope");
+    addSection(parent, "Out of Scope");
     const ul = el("ul", "oos-list");
     gate.out_of_scope_items.forEach(s => { const li = el("li", null, s); ul.appendChild(li); });
     parent.appendChild(ul);
