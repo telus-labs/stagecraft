@@ -293,6 +293,18 @@ Catches orphan ACs, orphan scenarios, duplicate AC numbers, and unknown AC refs 
 
 See [`docs/spec-authoring.md`](spec-authoring.md) for how to write AC-N criteria, scaffold the spec file, and interpret drift reports.
 
+### Cross-artifact consistency analysis — catch incoherence the gate chain misses
+
+Each gate can pass while the artifacts it governs silently diverge. `devteam consistency analyze` detects that class of bug in one pass.
+
+- Walks the full artifact chain: `pipeline/brief.md` → `pipeline/spec.feature` → `pipeline/pr-*.md` → red-team gate → test-report → gate fields
+- **Three drift classes checked**: AC-to-scenario (orphan acceptance criteria, orphan Gherkin scenarios), scenario-to-test (uncovered scenarios, unmapped test references), red-team-to-build (findings referencing files not touched by any workstream PR)
+- Exit 0 = clean; exit 1 = drift found — safe to use in CI gates
+- `--json` flag for structured output; fix recommendations printed per drift item when running interactively
+- Builds on `devteam spec verify` (G2's AC↔spec↔test drift check) and extends it to the full artifact chain
+
+Use `devteam consistency analyze` after every merge to catch cross-artifact drift before it reaches peer-review.
+
 ### Red-team stage — adversarial review before peer-review
 
 A dedicated `red-team` role runs between build and peer-review on `full` and `hotfix` tracks. It is explicitly routed to a different host than the build agents.
