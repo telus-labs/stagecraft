@@ -1,10 +1,10 @@
 # Stagecraft vs adjacent AI-assisted-engineering control planes — 2026
 
-**Date:** 2026-06-03
+**Date:** 2026-06-07 *(updated from original 2026-06-03 — see §7 for change log)*
 **Comparators:** BMAD-METHOD, GitHub Spec Kit, Agent OS, OpenSpec, AWS Kiro, AI-DLC. Stagecraft is the comparison target.
 **Focus:** process orchestration, spec-driven development, and automated gating.
 
-This document is a synthesis of two independently-written comparative analyses. Both agreed on the strongest framing of the space (four "schools of thought") and on Stagecraft's three distinctive claims. They diverged on framework coverage and evolution opportunities; the synthesis carries forward the best of each, with concrete file references where verifiable.
+This document is a synthesis of two independently-written comparative analyses plus a 2026-06-07 refresh. The original analyses agreed on the strongest framing of the space (four "schools of thought") and on Stagecraft's three distinctive claims. They diverged on framework coverage and evolution opportunities; the synthesis carries forward the best of each, with concrete file references where verifiable. The 2026-06-07 refresh updates the Stagecraft deep-dive and the evolution-opportunities section to reflect features shipped in the four days since the original analysis.
 
 ---
 
@@ -56,14 +56,14 @@ Of the seven frameworks compared here, **Stagecraft sits squarely at Layer 2** (
 | Dimension | **Stagecraft** | **BMAD-METHOD** | **GitHub Spec Kit** | **Agent OS** | **OpenSpec** | **AWS Kiro** | **AI-DLC** |
 |---|---|---|---|---|---|---|---|
 | **School** | Process & Gate | Agile Persona | Spec-Driven | Convention Extraction | Spec-Driven (workspace-bounded) | Convention + IDE | Process & Gate (adaptive) |
-| **Primary primitive** | Stage (17 stages × 6 tracks) | Agent role (12+ domain experts) | Spec → Plan → Tasks cascade | Extracted codebase standard | Spec delta in `openspec/changes/<id>/` | Steering file + Agent Hook | Adaptive pathway through 3 macro-phases |
+| **Primary primitive** | Stage (18 stages × 6 named tracks; `devteam assess` also infers a custom track from description + file heuristics) | Agent role (12+ domain experts) | Spec → Plan → Tasks cascade | Extracted codebase standard | Spec delta in `openspec/changes/<id>/` | Steering file + Agent Hook | Adaptive pathway through 3 macro-phases |
 | **Unit of "done"** | Signed-off gate JSON file | Human-approved conversational milestone | Spec passes `/speckit.analyze` consistency | Standard matches legacy code | Merged change workspace + spec delta | Hook UI passes on file save | Audit-logged operational verification |
-| **What it mandates** | 17 stages, gate-status before advance, `## Verify` forcing function, per-area review matrix | Role separation, scale-adaptive depth, conversational handoffs between phases | Constitution → spec → plan → tasks → implementation; cross-artifact consistency check | Codebase standards extracted + injected into context | Bounded workspace per change; `/openspec:explore` Q&A before proposal | Steering files (`product.md`, `structure.md`, `tech.md`); file-save Agent Hooks | Inception → Construction → Operations with Mob Elaboration / Mob Construction rituals |
+| **What it mandates** | 18 stages, gate-status before advance, `## Verify` forcing function, per-area review matrix; `devteam assess` for track recommendation; bounded workspaces via `pipeline.isolation = "bounded"` | Role separation, scale-adaptive depth, conversational handoffs between phases | Constitution → spec → plan → tasks → implementation; cross-artifact consistency check | Codebase standards extracted + injected into context | Bounded workspace per change; `/openspec:explore` Q&A before proposal | Steering files (`product.md`, `structure.md`, `tech.md`); file-save Agent Hooks | Inception → Construction → Operations with Mob Elaboration / Mob Construction rituals |
 | **Host integration** | **Multi-model dispatch.** Different stages run on different host CLIs (claude-code / codex / gemini-cli / generic) within one pipeline run | **Single-host clustering.** Cross Platform Agent Team v6+ selects one host per session | **Universal agnostic.** "30+ AI coding agents" (Claude Code, Cursor, Codex, Gemini, Copilot, Mistral Vibe…) | **Context injection.** Standards injected into prompts for Cursor / Claude Code / Antigravity / others | **Universal CLI.** Slash commands in local workspaces, host-agnostic | **Native IDE fork.** VS Code OSS fork; CLI + autonomous-agent forms; Bedrock-backed (Claude Sonnet + Nova) | **Agentic engine.** Open-sourced workflow rules (`awslabs/aidlc-workflows`); ties to Amazon Q Project Rules |
 | **Output shape** | Files on disk: `pipeline/brief.md`, `design-spec.md`, `gates/*.json`, `test-report.md`, `runbook.md`, retro | Specs + role-produced artifacts; chat history as primary record | Spec markdown + generated code + tasks file | Standards files + per-agent injected context | Per-change workspace + spec delta describing ADDED/MODIFIED/REMOVED requirements | Spec + steering files + auto-generated tests; PRs from autonomous agent | Adaptive workflow logs + Mob session decisions + IaC + audit trail |
 | **Architectural moat** | Schema-validated gate JSON as the sole orchestrator state; reconstructable from `pipeline/gates/` alone | Conversational scaffolding across role-isolated agents; "Party Mode" | Spec as the compiled source truth; code is the derivative | Static discovery of undocumented team conventions | Bounded workspaces protect token efficiency; spec deltas prevent global-spec churn | Real-time Agent Hooks on file events; deep AWS-ecosystem integration | Dynamic complexity scoring that selects pathways adaptively |
 | **Prior art** | CI/CD, gate-stage manufacturing | Agile/Scrum, CrewAI, SDLC | TDD, design-by-contract, Spec-First | Static analysis, linters, context engineering | Git branch isolation, IaC | VS Code OSS + custom workspace hooks | Classic SDLC, DevSecOps, mob programming |
-| **Maturity signal** | v0.5.0, ~9k LOC, 785 tests, 8 days since first commit | 46.2k GitHub stars; v6.6.0 (April 2026); 5,400+ forks | 106k+ stars (launched mid-2025) | Concept-led; lower-profile star count | Y Combinator launch; "lightweight SDD framework" framing | Production at `kiro.dev`; AWS-announced as Amazon Q Developer's successor | Open-sourced via `awslabs/aidlc-workflows`; AWS re:Invent 2025 reveal |
+| **Maturity signal** | v0.5.0, ~23k LOC, ~1 100 tests, 12 days since first commit | 46.2k GitHub stars; v6.6.0 (April 2026); 5,400+ forks | 106k+ stars (launched mid-2025) | Concept-led; lower-profile star count | Y Combinator launch; "lightweight SDD framework" framing | Production at `kiro.dev`; AWS-announced as Amazon Q Developer's successor | Open-sourced via `awslabs/aidlc-workflows`; AWS re:Invent 2025 reveal |
 | **Best for** | Teams shipping high-stakes production features needing an audit trail across multiple hosts | Solo devs / agile squads who want conversational AI scaffolding | Codebases where the spec is the long-lived asset; brownfield modernization toward a spec | Teams managing brownfield systems with strong existing conventions | Rapidly iterating developers who hit token rot on big repos | Cloud-native teams already in the AWS / Bedrock ecosystem | Enterprises requiring audited compliance + dynamic process adaptation |
 
 ---
@@ -72,13 +72,21 @@ Of the seven frameworks compared here, **Stagecraft sits squarely at Layer 2** (
 
 ### 3.1 Stagecraft (the comparison target)
 
-Stagecraft treats software delivery as an industrial assembly line: up to 17 sequential stages, each producing an artifact and a machine-readable gate. The orchestrator (`core/orchestrator.js`) reads gates to decide what runs next; the LLM chat log is **not** the source of truth — the `pipeline/` directory is.
+Stagecraft treats software delivery as an industrial assembly line: up to 18 sequential stages, each producing an artifact and a machine-readable gate. The orchestrator (`core/orchestrator.js`) reads gates to decide what runs next; the LLM chat log is **not** the source of truth — the `pipeline/` directory is.
 
 **The gating mechanism is non-cooperative.** For stages 04a (pre-review) and 06 (QA), the orchestrator runs the configured lint / test commands itself (`core/verify/runner.js`) and stamps the gate with what it actually observed. Field overrides — where the model's claim disagreed with the orchestrator's truth — are recorded in an `_orchestrator_stamped` audit block. The model can't talk its way past these gates.
 
 **Multi-model dispatch.** Routing precedence is `routing.stages[stage] → routing.roles[role] → routing.default_host`. Different stages — and different roles within a multi-role stage — can land on different host CLIs in the same pipeline run. Multi-model peer review (`routing.review_fanout: [host, host, host]`) takes this further: Stage-5's 4 area workstreams duplicate across N hosts → 4×N parallel reviews; pessimistic merge across all of them. No other framework here goes this far on heterogeneous model dispatch.
 
-**Downstream-of-build coverage.** 11 stages downstream of code generation (pre-review, security-review, red-team, migration-safety, peer-review, QA, accessibility-audit, observability-gate, verification-beyond-tests, sign-off, deploy, retrospective). Several have veto-capable roles (security, migrations); one is adversarial-by-design (red-team). Most spec-driven tools stop at "implementation passes tests"; Stagecraft assumes you stop at "the change has been adversarially reviewed, hardened, observability-instrumented, signed off, and the rollback was tested."
+**Downstream-of-build coverage.** 12 stages downstream of code generation (pre-review, security-review, red-team, migration-safety, peer-review, QA, accessibility-audit, observability-gate, verification-beyond-tests, performance-budget, sign-off, deploy, retrospective). Several have veto-capable roles (security, migrations); one is adversarial-by-design (red-team); the performance-budget stage (stage-06e, shipped 2026-06-07) adds Lighthouse Web Vitals, bundle-size delta, and load-test throughput against configured thresholds. Most spec-driven tools stop at "implementation passes tests"; Stagecraft assumes you stop at "the change has been adversarially reviewed, hardened, observability-instrumented, performance-gated, signed off, and the rollback was tested."
+
+**Cross-artifact consistency.** `devteam consistency analyze [--strict]` (shipped 2026-06-03) checks the full pipeline chain — brief ACs → spec scenarios → `pr-*.md ## Verify` bullets → red-team `must_address` → test-report rows → gate-field reality (e.g., `stage-01.acceptance_criteria_count` vs actual AC count in brief.md). Five drift classes; any drift exits non-zero. This goes materially beyond `devteam spec verify`, which was the narrower brief↔spec↔test-report check — and beyond Spec Kit's `/speckit.analyze`, which doesn't have the gate-vs-artifact reality dimension because Spec Kit has no gate JSON.
+
+**Bounded workspace isolation.** `pipeline.isolation = "bounded"` (shipped 2026-06-06) writes all stage artifacts under `pipeline/changes/<change-id>/` instead of the global `pipeline/`. Context for feature A doesn't leak into feature B's red-team prompt. Concurrency-safe; the orchestrator threads `ctx.changeId` throughout dispatch, headless adapter, and gate validator.
+
+**AI-inferred track selection.** `devteam assess [--description "..."] [--apply] [files...]` (shipped 2026-06-07) recommends a track from keyword patterns and path/content heuristics (security-heuristic.js, migration-heuristic.js). `--apply` writes `pipeline.custom_stages` to `.devteam/config.yml`; `next()` and `summary()` consume it transparently. This closes the gap with AI-DLC's dynamic pathway selection — not yet a complexity-scoring approach, but rule-based assessment that removes the operator's track-picking judgment call in the common cases.
+
+**Standards discovery.** `devteam standards discover` (shipped 2026-06-07) scans a project's file system across seven detection passes — tech stack, module system, file layout, naming conventions, tooling, test config, common imports — and writes `docs/project-conventions.md`. Add this file to `readFirst` lists in per-stage prompts to inject discovered conventions into agent context. This is the Agent OS-inspired preprocessing described in E-5 of the evolution opportunities below.
 
 ### 3.2 BMAD-METHOD
 
@@ -174,7 +182,7 @@ BMAD's Cross Platform Agent Team selects one host per session. Stagecraft's rout
 
 **Claim 3 — Downstream-of-build coverage.**
 
-Spec Kit's flow stops at Implementation. OpenSpec's spec deltas don't prescribe what happens after the code is generated. BMAD's lifecycle covers deployment but is conversational rather than gate-enforced. AI-DLC's Operations phase is closer in shape, but it's a single phase rather than the 11 distinct Stagecraft stages downstream of build, each with its own gate and (sometimes) veto capability. For shipping production features, this is the most material differentiator.
+Spec Kit's flow stops at Implementation. OpenSpec's spec deltas don't prescribe what happens after the code is generated. BMAD's lifecycle covers deployment but is conversational rather than gate-enforced. AI-DLC's Operations phase is closer in shape, but it's a single phase rather than the 12 distinct Stagecraft stages downstream of build, each with its own gate and (sometimes) veto capability. For shipping production features, this is the most material differentiator.
 
 ### 4.2 Three honest cases where Stagecraft is *not* the best fit
 
@@ -192,17 +200,29 @@ Six concrete absorptions from this comparison, ranked by effort × impact. Each 
 
 ### High leverage
 
-**E-1 — Cross-artifact consistency analyze (from Spec Kit).** `devteam spec verify` currently checks brief.md ↔ spec.feature ↔ test-report.md drift. Spec Kit's `/speckit.analyze` is more comprehensive: constitution ↔ spec ↔ plan ↔ tasks ↔ code. A future `devteam consistency analyze` could check the full chain (brief → design-spec → spec.feature → pr-\*.md → test-report.md → red-team-report.md → deploy gate) in one pass and report each drift class. **Effort:** S (~1-2 days). **Impact:** high — catches a class of bugs that gates alone don't catch (semantic drift across stages where each gate individually passed but the chain is incoherent).
+**E-1 — Cross-artifact consistency analyze (from Spec Kit). ✅ Shipped 2026-06-03 as `devteam consistency analyze`.**
 
-**E-2 — Bounded workspace deltas (from OpenSpec).** Stagecraft feeds the whole project context into every per-stage prompt. For multi-feature pipelines or large repos, this is wasteful — the brief / design-spec for feature A doesn't need to leak into feature B's red-team. Emulating OpenSpec's `openspec/changes/<id>/` model — `pipeline/changes/<id>/` for in-flight work — would isolate each change's context and reduce token cost. **Effort:** M (~1 week). **Impact:** high once multiple features run concurrently; nominal cost today since most users run one feature at a time.
+`devteam consistency analyze [--strict] [--json]` checks the full pipeline chain in one pass — five drift classes: brief ACs ↔ spec.feature scenarios, ACs ↔ test-report rows, ACs ↔ `pr-*.md ## Verify` bullets, red-team `must_address` ↔ stage-05 PASS, and gate fields ↔ artifact reality (e.g., `stage-01.acceptance_criteria_count` vs actual AC count). This goes beyond the narrower `devteam spec verify` (brief ↔ spec ↔ test-report only) and has a dimension Spec Kit's `/speckit.analyze` cannot match: gate-vs-artifact reality, which only exists because Stagecraft has machine-readable gate JSON as the inter-stage contract. New module `core/spec/analyze.js` (~280 lines).
+
+**E-2 — Bounded workspace deltas (from OpenSpec). ✅ Shipped 2026-06-06 as `pipeline.isolation = "bounded"`.**
+
+Setting `pipeline.isolation: bounded` in `.devteam/config.yml` causes all stage artifacts (gates, logs, prompts) to land under `pipeline/changes/<change-id>/` instead of the global `pipeline/`. Context for feature A can't leak into feature B's red-team prompt. The `changeId` is derived from the feature name slug (≤64 chars, lowercase-hyphenated); `core/paths.js` is the new path-helper; `ctx.changeId` threads throughout orchestrator, headless adapter, render-helpers, and gate validator. `changeId = null` is a strict no-op (in-place mode requires zero conditional changes in callers). 35 tests.
 
 ### Medium leverage
 
-**E-3 — Adaptive pathways (from AI-DLC and BMAD).** Stagecraft's tracks (`full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`) are hardcoded in `core/pipeline/stages.js`. Adding an initial complexity-assessment stage that **computes** the pathway from the change's structural impact (files touched, surface area, security-heuristic matches, migration presence) would replace the operator's track-picking decision with a data-driven one. **Effort:** M to L (~1-2 weeks). **Impact:** medium — the static tracks already work; the dynamic version is more elegant but only earns its complexity if real workloads land in the "between two tracks" zone where current picks are wrong.
+**E-3 — Adaptive pathways (from AI-DLC and BMAD). ✅ Partially shipped 2026-06-07 as `devteam assess`.**
+
+`devteam assess [--description "..."] [--apply] [files...]` recommends a track from keyword patterns and path/content heuristics (`security-heuristic.js`, `migration-heuristic.js`). Priority order: hotfix keywords → dep-file paths → config-file paths → nano keywords → quick keywords → full (default). Heuristic overrides: migration-required bumps lighter tracks to full; security-required bumps nano to quick. `--apply` writes `pipeline.custom_stages` to `.devteam/config.yml`; `next()`, `summary()`, and `runStage()` consume it transparently. `orderedStageNamesForTrack()` accepts custom stage arrays in addition to named tracks. 38 tests.
+
+What's not yet done: AI-DLC's true complexity scoring (structural impact analysis, surface area measurement) — the current approach is rule-based, not learning-based. The gap matters if real workloads commonly land between two tracks where heuristics pick wrong. The operator escape hatch is `--apply` + manual edit of `pipeline.custom_stages`. Track toward a feedback loop from gate-pass-rate data (D4/D5 analytics) to make the assessment data-driven.
 
 **E-4 — Conversational stage mode (from BMAD).** BMAD's Party Mode is more accessible for non-engineers than Stagecraft's run-stage / read-gate / decide loop. Optional `devteam stage requirements --interactive` could open a chat with the PM subagent — refine the brief through Q&A before producing the artifact. Architecture supports it (host adapters could expose a streaming-conversation interface alongside the one-shot render). **Effort:** M (~1 week, mostly per-host adapter work). **Impact:** medium — would broaden the operator audience for requirements / design / clarification stages specifically. Worth doing only if user feedback says the gate-driven loop is too cold for those upstream stages.
 
-**E-5 — Discover Standards preprocessing (from Agent OS).** Agent OS's defining move is to *extract* conventions from the existing codebase before the agent starts generating new files — import styles, file structures, linter rules, undocumented "tribal" patterns. A `devteam standards discover` preprocessing routine, run automatically before Stage 1 (Requirements) on first invocation in a project, would scan the codebase and populate `docs/conventions.md` + per-stage rule files with project-specific conventions. Downstream stage prompts then carry the convention context, so the PM brief reflects existing patterns, the design-spec respects existing module boundaries, and the Stage-04 build dispatches don't reinvent helpers that already exist. **Effort:** M (~1-2 weeks; the extraction logic is the bulk). **Impact:** medium-high for brownfield projects; lower for greenfield. The closest existing pieces (`devteam architecture lookup` over an ADR memory store) cover prior-decision continuity but not active-pattern continuity, so this is genuinely additive.
+**E-5 — Discover Standards preprocessing (from Agent OS). ✅ Shipped 2026-06-07 as `devteam standards discover`.**
+
+`devteam standards discover [--cwd <dir>] [--json] [--dry-run] [--force]` runs seven static-analysis passes — tech stack (JS/TS/Python/Go/Rust via manifests), module system (ESM/CJS/mixed), file layout (top-level + source subdirs), naming style (kebab/PascalCase/camelCase/snake_case), tooling (TypeScript/ESLint/Prettier/Biome/Husky/EditorConfig), test config (framework, co-location, pattern), and common imports (top-10 non-relative sources by frequency) — and writes `docs/project-conventions.md`. Add this file to each stage's `readFirst` list in per-stage prompts; Stage-04 build agents then see project-specific import styles, naming patterns, and test framework choices before generating files. `--dry-run` prints without writing; `--json` emits the structured result. 67 tests. `core/standards/discover.js` (~565 lines).
+
+The full Agent OS vision (continuous re-discovery, convention drift detection) is still open — `standards discover` is a one-shot preprocessing command, not a live extraction pass. The natural next step is integrating it as a pre-requirements setup hook so it runs automatically on first `devteam stage requirements` invocation in a new project.
 
 ### Lower leverage / wait-and-see
 
@@ -233,7 +253,7 @@ These frameworks compose. The most powerful pipelines combine layers from differ
                   └──────────────────┬──────────────────┘
                                      │
                   ┌──────────────────▼──────────────────┐
-                  │            Stagecraft               │  17-stage pipeline + multi-model
+                  │            Stagecraft               │  18-stage pipeline + multi-model
                   │      (Gate-controlled delivery)     │  dispatch + downstream-of-build
                   └──────────────────┬──────────────────┘
                                      │
@@ -244,22 +264,24 @@ These frameworks compose. The most powerful pipelines combine layers from differ
 ```
 
 - **Developer workspace (Kiro + OpenSpec).** Developer works inside Kiro IDE with Bedrock-backed autonomous agents. `/openspec:explore` interactively refines a feature proposal into a localized, bounded change workspace.
-- **Engineering pipeline (Stagecraft).** Stagecraft consumes the OpenSpec proposal as its starting `pipeline/brief.md`. The 17-stage pipeline runs across multiple model hosts — different stages on different LLMs to exploit per-model strengths.
+- **Engineering pipeline (Stagecraft).** Stagecraft consumes the OpenSpec proposal as its starting `pipeline/brief.md`. The 18-stage pipeline runs across multiple model hosts — different stages on different LLMs to exploit per-model strengths. Bounded workspace isolation (`pipeline.isolation = "bounded"`) keeps each OpenSpec change workspace's artifacts separate inside `pipeline/changes/<id>/`.
 - **Enterprise compliance layer (AI-DLC).** AI-DLC scores Stagecraft's gate outputs, validates compliance logs, organizes Mob Construction reviews before final deployment.
 
-This four-layer stack is theoretical — the integration points aren't shipped today. The most natural near-term integrations:
+This four-layer stack is theoretical — the integration points aren't all shipped today. The most natural integrations:
 - **Spec Kit → Stagecraft**: Spec Kit's `tasks.md` becomes Stagecraft's `pipeline/brief.md`. One-way handoff at the spec-to-implementation boundary.
-- **Agent OS → Stagecraft**: Agent OS extracts conventions, writes them to `docs/conventions.md` and per-stage rule files; Stagecraft renders them into prompts.
+- **Agent OS → Stagecraft**: The structural equivalent (`devteam standards discover`, shipped 2026-06-07) is now native. Agent OS-style extraction produces `docs/project-conventions.md`; Stagecraft stage prompts reference it via `readFirst` to inject discovered conventions.
+- **OpenSpec → Stagecraft**: Stagecraft's bounded workspace isolation (`pipeline.isolation = "bounded"`, shipped 2026-06-06) is the native equivalent of OpenSpec's bounded change workspaces. When consuming an OpenSpec proposal, its change ID can map directly to Stagecraft's `changeId` slug, keeping artifacts isolated.
 
 ---
 
 ## 7. Method note
 
-This comparison was synthesized from three independently-written analyses:
+This comparison was synthesized from three independently-written analyses, then refreshed on 2026-06-07:
 
 1. **First**, generated in Claude Code on 2026-06-03. Covered BMAD-METHOD, Spec Kit, and Agent OS via WebFetch summaries of their GitHub repos.
 2. **Second**, contributed by the user (origin not stated; structure suggests Claude Chat or similar). Introduced OpenSpec, AWS Kiro, and AI-DLC as comparators and offered a cleaner four-school taxonomy.
 3. **Third (v2)**, contributed by the user as a refinement of the second. Introduced the 5-layer functional stack as an alternative lens and a sharpened "Discover Standards" preprocessing opportunity (E-5).
+4. **2026-06-07 refresh**, generated in Claude Code against the current repo state. Updated §2 (matrix), §3.1 (Stagecraft deep-dive), §4.1 Claim 3, and §5 (evolution opportunities) to reflect features shipped between the original analysis and the refresh date: `devteam consistency analyze` (E-1 / B8), bounded workspace isolation (E-2 / B9), `devteam assess` (E-3 / G6), `devteam standards discover` (E-5 / B10), and `stage-06e` performance-budget (B2). Stage count updated 17 → 18; downstream-of-build count updated 11 → 12; maturity signal updated to ~23k LOC / ~1 100 tests / 12 days. No external frameworks were re-verified in this refresh — other-framework descriptions are unchanged from the 2026-06-03 analysis.
 
 The synthesis adopts:
 - The four-school taxonomy from the second analysis (cleaner than the first's five-category split).
