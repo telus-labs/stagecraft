@@ -26,7 +26,6 @@ const {
   detectTooling,
   detectTestConfig,
   detectCommonImports,
-  collectSourceFiles,
   classifyFilename,
   discover,
   formatReport,

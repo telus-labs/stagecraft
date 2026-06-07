@@ -18,7 +18,6 @@ const { REPO_ROOT, makeTargetProject, cleanup, seedGate } = require("./_helpers"
 
 const {
   STAGES,
-  STAGES_BY_TRACK,
   orderedStageNamesForTrack,
   isStageInTrack,
   getStage,

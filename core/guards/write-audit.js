@@ -19,7 +19,6 @@
 // returned and the audit is skipped rather than false-positiving.
 
 const { execFileSync } = require("node:child_process");
-const path = require("node:path");
 
 /**
  * Capture the current set of modified/untracked paths visible to git.

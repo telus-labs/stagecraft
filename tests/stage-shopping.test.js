@@ -23,7 +23,7 @@ const {
   NANO_PATTERN,
   QUICK_PATTERN,
 } = require("../core/stage-shopping/assess");
-const { orderedStageNamesForTrack, trackLabel, STAGES_BY_TRACK } = require("../core/pipeline/stages");
+const { orderedStageNamesForTrack, trackLabel } = require("../core/pipeline/stages");
 const { loadConfig, clearConfigCache } = require("../core/config");
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -362,7 +362,7 @@ describe("config.pipeline.custom_stages", () => {
     ].join("\n") + "\n");
     fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
     try {
-      const { buildDescriptor } = require("../core/orchestrator");
+      require("../core/orchestrator");
       // buildDescriptor is the internal but we can verify track via runStage not throwing
       // Just verify config loads the custom_stages
       const cfg = loadConfig(dir);
