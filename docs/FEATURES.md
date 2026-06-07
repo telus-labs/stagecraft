@@ -82,6 +82,26 @@ Pick at `devteam stage requirements --feature "..." --track full`.
 
 Build and peer-review can run parallel workstreams — frontend, backend, and infra simultaneously — within a single stage. Each workstream writes its own gate; they merge into one stage-level gate.
 
+### License compatibility gate — dependency licenses checked at pre-review
+
+`stage-04a` (pre-review) runs a license check on all installed packages as part of Platform's pre-review pass.
+
+- Gate carries `license_check_passed` (bool) and `license_findings[]` (per-package `{ package, license, policy: allowed|warned|denied, note? }`)
+- Default policy: MIT/Apache-2.0/BSD-*/ISC/CC0/Unlicense → allowed; UNLICENSED/SSPL/BUSL → warned; GPL-*/AGPL-*/LGPL-* → denied
+- Override with `license.extra_allowed: ["LicenseId"]` in `.devteam/config.yml` to whitelist additional licenses for your project
+- Denied licenses cause `license_check_passed: false` and fail the pre-review gate
+
+### Performance budget gate — Lighthouse, bundle size, load tests
+
+New `stage-06e`, role `qa`. Runs after stage-06d on `full`; after stage-06c on `quick`/`hotfix`. Not included in nano/config-only/dep-update.
+
+- Checks Lighthouse Web Vitals, bundle size delta, and load-test throughput (k6 / autocannon) against configured budgets in `performance.budget.json` or `.devteam/config.yml` defaults
+- Gate carries `budget_exceeded`, `checks_run[]`, and `skipped_reason` (for changes with no performance-relevant surface)
+- `budget_exceeded: true` → FAIL; `skipped_reason` populated → PASS with a note
+- **Requires shell capability** — `assertCapabilities()` refuses at dispatch if the routed host doesn't declare `enforces.shell: true`
+
+See `skills/performance-budget/SKILL.md` for the 7-step procedure and `templates/performance-report-template.md`.
+
 ### Accessibility audit — WCAG findings in the gate
 
 Runs automatically after QA on `full`, `quick`, and `hotfix` tracks.
@@ -112,6 +132,36 @@ See [`docs/migration-safety.md`](migration-safety.md) for the veto criteria, gat
 ## Safety and auditability
 
 Two categories of guarantee: things Stagecraft prevents from happening, and things it always records so any AI decision can be explained and replayed.
+
+### Filesystem-level `allowedWrites` enforcement — cross-workstream writes caught on all hosts
+
+Each build workstream's prompt declares `allowedWrites` — the set of paths that workstream is permitted to touch. Enforcement method depends on the host:
+
+- **claude-code**: blocks unauthorized writes at tool-call time via its `PreToolUse Write|Edit` hook. The write never reaches disk.
+- **codex and gemini-cli**: run a post-hoc git-status diff after the workstream exits. Any file outside `allowedWrites` is captured in `writeViolations[]` and the orchestrator patches the gate to `FAIL` with violations listed in `blockers[]`.
+
+The `generic` adapter declares `prompt-only` enforcement — violations are discouraged but not technically blocked.
+
+`writeViolations[]` appears in the orchestrator's result when violations are found; it is merged into the gate `blockers[]` so `devteam next` reports `fix-and-retry`.
+
+### Capability-required permissions — stages declare what they need; adapters declare what they have
+
+Four stages require shell execution to do their work: pre-review (stage-04a), qa (stage-06), verification-beyond-tests (stage-06d), and deploy (stage-08), plus the new performance-budget (stage-06e). Each declares `requiredCapabilities: { shell: true }` in `stages.js`.
+
+At dispatch time, `assertCapabilities()` in the orchestrator checks that the routed host's adapter declares the required capabilities. If not, the orchestrator throws a named error before invoking the host. This prevents silent failures where a stage appears to run but skips all shell-dependent checks because the host can't execute them.
+
+All three primary adapters (claude-code, codex, gemini-cli) declare `enforces.shell: true`. The generic adapter does not — use `routing.stages` overrides in `.devteam/config.yml` to route shell-requiring stages to a capable host.
+
+### Bounded workspace isolation — separate artifact trees per feature
+
+When multiple features are in flight, enable bounded workspace mode so their pipeline artifacts stay separate:
+
+```yaml
+pipeline:
+  isolation: bounded
+```
+
+With `isolation: bounded`, artifacts (gates, logs, context files) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value. `devteam next` and `devteam summary` can distinguish in-flight features; `devteam validate` reads `DEVTEAM_CHANGE_ID` from the environment to validate gates in the bounded directory. Default is `in-place` — no impact on existing setups.
 
 ### Secret scanning — blocks credentials from reaching the repo
 
@@ -196,6 +246,21 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 ### Core commands — the everyday loop
 
+**`devteam assess [--description "..."] [--json] [--apply] [files...]`** — rule-based track recommendation before starting a run.
+
+- Analyzes description keywords and file/content heuristics (security patterns, migration files, config-only paths) to recommend a track
+- Priority order: hotfix keywords → dep-update → config-only → nano → quick → full (default)
+- Heuristic overrides: migration-safety-required bumps lighter tracks to full; security-required bumps nano to quick
+- `--apply` writes `pipeline.custom_stages` to `.devteam/config.yml` so `devteam next`/`devteam summary`/`devteam stage` all use the custom stage list automatically
+- `--json` emits structured output including recommended track, rationale, and which heuristics fired
+
+**`devteam standards discover [--cwd <dir>] [--json] [--dry-run] [--force]`** — static analysis of a project's conventions.
+
+- Scans the project file system and writes `docs/project-conventions.md` with seven detected properties: tech stack (JS/TS/Python/Go/Rust), module system (ESM/CJS/mixed), file layout (top-level dirs + source subdirs), naming style (kebab/PascalCase/camelCase/snake_case plurality), tooling (TypeScript/ESLint/Prettier/Biome/Husky/EditorConfig), test configuration (framework, co-location, pattern), and most-used imports (top 10 by frequency, skipping builtins)
+- `--dry-run` prints without writing; `--json` emits the structured discovery result; `--force` overwrites an existing file
+- Pure static analysis — no external processes, no network, no AI. Reads manifests, source files, and config files only
+- Add `docs/project-conventions.md` to your AGENTS.md or readFirst lists to inject discovered conventions into agent prompts
+
 **`devteam init`** — set up a project for the first time.
 
 - Writes `.devteam/config.yml`, lays down role briefs, rules, skills, and the `/devteam` slash command for the chosen host
@@ -272,6 +337,14 @@ See [`docs/ci.md`](ci.md) for the full workflow template and environment variabl
 ## Advanced AI capabilities
 
 These stages go beyond what conventional dev pipelines can enforce. They're only possible because the pipeline is AI-native — the AI isn't just writing code, it's doing work that no static tool could do.
+
+### `/goal` injection — convergent headless stages loop until their objective is met
+
+For `build` (stage-04) and `qa` (stage-06) stages, hosts that declare `capabilities.goalLoop: true` (claude-code and codex) automatically receive `/goal "<condition>"` prepended to the headless prompt. The condition is a workstream-specific exit criterion from `stages.js`; the host loops internally until its stated objective is met rather than running a fixed number of turns.
+
+- Automatically active when: stage has a `goalCondition`, host declares `goalLoop: true`, and workstream runs headless
+- Gemini CLI and generic adapter do not declare `goalLoop: true` — unaffected; receive the prompt unchanged
+- Interactive (non-headless) runs are also unaffected
 
 ### Multi-model peer review — diversity as a correctness strategy
 

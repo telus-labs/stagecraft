@@ -331,9 +331,9 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 - **Stage 3b — Executable spec (PM, G2).** Runs on `full` + `quick` after clarification. PM translates each numbered `AC-N` in `pipeline/brief.md` into one Gherkin scenario in `pipeline/spec.feature`, tagged `@AC-N`. Use `devteam spec generate` to scaffold the file from the brief (one tagged Scenario per AC with TODO Given/When/Then placeholders) and `devteam spec verify` to drift-check brief.md ↔ spec.feature ↔ test-report.md. Gate carries `criteria_count`, `scenarios_count`, the full `criteria_to_scenario_mapping` array, `all_criteria_mapped`, and `drift`. PASS requires `drift: false` AND `all_criteria_mapped: true`. The .feature file becomes the canonical contract that QA's tests must map to in stage-06.
 
-- **Stage 4 — Build (4 workstreams).** Backend / Frontend / Platform / QA each write to their owned source dir and produce a PR summary. **Each workstream sees a narrower `allowedWrites`** — backend cannot write `src/frontend/`. Per-workstream gates at `pipeline/gates/stage-04.<role>.json`; `devteam merge build` aggregates.
+- **Stage 4 — Build (4 workstreams).** Backend / Frontend / Platform / QA each write to their owned source dir and produce a PR summary. **Each workstream sees a narrower `allowedWrites`** — backend cannot write `src/frontend/`. Per-workstream gates at `pipeline/gates/stage-04.<role>.json`; `devteam merge build` aggregates. **Enforcement varies by host**: claude-code blocks unauthorized writes at tool-call time via its `PreToolUse` hook; codex and gemini-cli run a post-hoc git-status diff after the workstream exits — any file outside `allowedWrites` is captured in `writeViolations[]` and the gate is patched to `FAIL` with violations in `blockers[]`.
 
-- **Stage 4a — Pre-review (Platform).** Lint, type-check, dep review, security heuristic. Gate carries `lint_passed`, `tests_passed`, `dependency_review_passed`, `security_review_required`. The last flag conditionally triggers Stage 4b.
+- **Stage 4a — Pre-review (Platform).** Lint, type-check, dep review, license check, security heuristic. Gate carries `lint_passed`, `tests_passed`, `dependency_review_passed`, `license_check_passed`, `license_findings[]`, `security_review_required`. `license_findings[]` contains per-package entries `{ package, license, policy }` where policy is `allowed`, `warned`, or `denied`. Default policy: MIT/Apache-2.0/BSD-*/ISC/CC0/Unlicense → allowed; UNLICENSED/SSPL/BUSL → warned; GPL-*/AGPL-*/LGPL-* → denied. Override with `license.extra_allowed: ["LicenseId"]` in `.devteam/config.yml`. The `security_review_required` flag conditionally triggers Stage 4b.
 
 - **Stage 4b — Security review (Security, conditional).** Runs only when `stage-04a.security_review_required` is `true`. Gate carries `security_approved`, `veto`, `triggering_conditions`. **A `veto: true` halts the pipeline regardless of any subsequent approvals.**
 
@@ -350,6 +350,8 @@ All other stages run unconditionally on their track. If you want to verify wheth
 - **Stage 6c — Observability gate (Platform).** Verifies that every metric / log / trace promised by brief §9 is actually emitted in the shipped code. Gate carries `metrics` / `logs` / `traces` each with `{required[], verified[], gap[]}`. PASS requires every `gap` empty. Weak verification methods (`code-grep` only) PASS with WARN; the gold standard is `runtime-probe`.
 
 - **Stage 6d — Verification beyond tests (Verifier, full-only, G7).** Runs AFTER stage-06 (qa) PASS. New `verifier` role applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Read-only on production code; writes property tests under `src/tests/property/` and formal specs under `pipeline/formal/`. Gate carries `methods_attempted[]`, `methods_skipped[{method, reason}]`, `candidates_inventoried`, per-method stats (`property_based` / `mutation` / `formal`), `findings_count`, `blocking_findings[]`. **A surviving mutant on a critical path, a property counterexample to a stated invariant, or a formal counterexample to a safety property → FAIL.** Tooling not installed → method is `attempted_but_blocked:<method>` (recorded honestly, surfaces a warning). Track inclusion: `full` only — the heavy stuff opted into rigour-over-speed; other tracks rely on stage-06 example tests as their verification floor. See `skills/verification-beyond-tests/SKILL.md` for the five-phase procedure and `roles/verifier.md` for the role contract.
+
+- **Stage 6e — Performance budget (QA, full/quick/hotfix).** Runs after Stage 6d on `full`; after Stage 6c on `quick`/`hotfix`. QA role checks Lighthouse Web Vitals, bundle size delta, and load-test throughput (k6 / autocannon) against configured budgets in `performance.budget.json` or `.devteam/config.yml` defaults. Gate carries `budget_exceeded` (bool), `checks_run[]` (list of checks that ran), and `skipped_reason` (populated when the change has no performance-relevant surface — documentation-only, dep-update, config-only). `budget_exceeded: true` → FAIL. **Requires shell capability**: the routed host must declare `enforces.shell: true`; if not, `assertCapabilities()` refuses at dispatch time with a clear error (see [Troubleshooting](#host-lacks-required-capability)). See `skills/performance-budget/SKILL.md` for the 7-step procedure.
 
 - **Stage 7 — Sign-off (PM + Platform).** PM signs off on QA results; Platform prepares `pipeline/runbook.md`. **Auto-fold:** if Stage 6 reports `all_acceptance_criteria_met: true` AND `criterion_to_test_mapping_is_one_to_one: true`, the orchestrator writes Stage 7's gate automatically with `auto_from_stage_06: true` — you don't run Stage 7 manually. This is intentional: if QA proved every criterion was met with a 1:1 test, sign-off is automatic. If you run Stage 6 and then see Stage 7 already has a gate, that's why.
 
@@ -826,6 +828,17 @@ A full process audit takes ~30 minutes on a `full`-track feature; it's the singl
 
 ## When things go wrong
 
+### "Host lacks required capability"
+
+```
+devteam: stage "pre-review" requires capability "shell" but host "generic" does not declare it.
+```
+
+Stages that need to run shell commands (pre-review, qa, verification-beyond-tests, deploy, performance-budget) declare `requiredCapabilities: { shell: true }`. If the host routed to that stage doesn't declare shell support, `assertCapabilities()` refuses at dispatch time with this error. Resolution:
+
+- Switch to a shell-capable host for that stage: add `stages: pre-review: claude-code` (or `codex` or `gemini-cli`) to `routing:` in `.devteam/config.yml`.
+- Or skip the stage entirely with `pipeline.skip_stages: [pre-review]` if it's not relevant to your workflow.
+
 ### "Unknown stage" or "No adapter found"
 
 You typo'd a stage or host name. Use `devteam stages` and `devteam hosts` to see what's known.
@@ -992,6 +1005,30 @@ pipeline:
   skip_stages:
     - verification-beyond-tests  # skip on UI-only changes
 ```
+
+### Bounded workspace isolation
+
+When multiple features are in flight simultaneously and you want their pipeline artifacts to stay separate, enable bounded workspace mode:
+
+```yaml
+pipeline:
+  isolation: bounded
+```
+
+With `isolation: bounded`, every run's artifacts — gates, logs, context files — land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value passed to `devteam stage requirements`. Different features share the same working directory but write to distinct subdirectories, so `devteam next` and `devteam summary` can distinguish them.
+
+Default is `in-place` (global `pipeline/`). Zero impact on existing setups unless you explicitly set `isolation: bounded`.
+
+### `/goal` injection for convergent stages
+
+Hosts that declare `goalLoop: true` (claude-code and codex) automatically receive a `/goal "<condition>"` prepended to the prompt when running headless for build (stage-04) and qa (stage-06) stages. The condition is a workstream-specific exit criterion so the host can loop internally until its objective is met rather than running a fixed number of turns.
+
+This is automatic — no config required. It fires when:
+- The stage has a `goalCondition` in `stages.js` (currently build and qa)
+- The routed host declares `capabilities.goalLoop: true`
+- The workstream runs headless (`--headless`)
+
+Gemini CLI and the generic adapter do not declare `goalLoop: true` and are unaffected. Interactive (non-headless) runs also skip the `/goal` prepend.
 
 ### Stoplist
 
