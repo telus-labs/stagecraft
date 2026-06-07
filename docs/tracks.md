@@ -24,7 +24,7 @@ Or override per-invocation: `devteam stage build --track quick`.
 
 | Change type | Track | Why |
 |---|---|---|
-| Bounded feature or fix with clear requirements and no cross-cutting design concerns | `quick` | Skips design, clarification, pre-review, and red-team; PM brief is still required — good default for most new features that don't touch the stoplist |
+| Bounded feature or fix with clear requirements and no cross-cutting design concerns | `quick` | Skips design, clarification, pre-review, and red-team; PM brief is still required. Good default for most new features that don't touch the stoplist |
 | Complex feature, cross-cutting architecture change, or anything needing formal design or adversarial review | `full` | Full rigor: requirements → design → build → review → tests → sign-off → deploy → retro |
 | Mechanical change with obvious scope (rename a function, bump padding) | `nano` | Build + scoped peer-review (1 reviewer, 1 approval) + qa |
 | Tweaking config/feature-flag values, no code | `config-only` | Build + pre-review + (security if triggered) + qa + sign-off + deploy |
