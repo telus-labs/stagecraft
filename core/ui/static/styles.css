@@ -95,6 +95,9 @@ header .cwd { font-family: var(--mono); }
 .fix-step-copy:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); color: var(--fg); }
 .fix-step-copy.copied { color: var(--pass); border-color: var(--pass); }
 
+/* Fix steps inside the detail panel — same components, tighter top margin */
+.detail-fix-steps { margin-top: 0; }
+
 /* ── Copy button ── */
 .copy-btn {
   flex-shrink: 0; padding: 0.25rem 0.6rem; font-size: 0.75rem;

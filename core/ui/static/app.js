@@ -81,6 +81,7 @@ const SURFACE_LABELS = {
 
 let _state = null;
 let _selectedStage = null;
+let _nextAction = null;    // last result from /api/next; read by renderDetailFixSteps
 let _filter = "all";       // "all" | "fail" | "action"
 let _focusedIdx = -1;
 let _pendingCollapsed = false;
@@ -231,6 +232,7 @@ function renderHosts(state) {
 
 async function renderNextAction() {
   const action = await fetchNext();
+  _nextAction = action;  // cache for renderDetailFixSteps
   const banner = $("[data-next]");
   if (!action) { banner.hidden = true; return; }
 
@@ -455,6 +457,7 @@ function renderGate(parent, gate) {
     default: break;
   }
 
+  renderDetailFixSteps(parent, gate);
   renderBlockers(parent, gate);
   renderWarnings(parent, gate);
   renderWorkstreams(parent, gate);
@@ -966,6 +969,33 @@ function renderRetro(parent, gate) {
 }
 
 // ── Common sections (blockers, warnings, workstreams, raw JSON) ────────────────
+
+function renderDetailFixSteps(parent, gate) {
+  if (gate.status !== "FAIL") return;
+  if (!_nextAction || _nextAction.action !== "fix-and-retry") return;
+  if (_nextAction.stage !== (gate.stage || "").split(".")[0]) return;
+  const steps = _nextAction.fix_steps;
+  if (!steps || !steps.length) return;
+
+  addSection(parent, "Fix steps");
+  const ol = el("ol", "fix-steps detail-fix-steps");
+  ol.innerHTML = steps.map((step) => {
+    const cmdsHtml = step.commands.length
+      ? step.commands.map(c => `<span class="fix-step-cmd-row">
+          <code class="fix-step-cmd">${escHtml(c)}</code>
+          <button class="fix-step-copy" data-cmd="${escHtml(c)}" title="Copy command">Copy</button>
+        </span>`).join("")
+      : "";
+    return `<li class="fix-step">
+      <span class="fix-step-desc">${escHtml(step.description)}</span>
+      ${cmdsHtml}
+    </li>`;
+  }).join("");
+  ol.querySelectorAll(".fix-step-copy").forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); copyToClipboard(btn.dataset.cmd, btn); };
+  });
+  parent.appendChild(ol);
+}
 
 function renderBlockers(parent, gate) {
   const blockers = gate.blockers;
