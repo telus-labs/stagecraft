@@ -55,7 +55,7 @@ Or override per-invocation: `devteam stage build --track quick`.
 
 ## Safety: the stoplist
 
-Lighter tracks (`quick`, `nano`, `config-only`, `dep-update`) refuse to run when the change description matches the **stoplist** — a list of phrases that flag changes too consequential for an abbreviated pipeline. The list lives in `core/guards/stoplist.js` and triggers on:
+Lighter tracks (`quick`, `nano`, `config-only`, `dep-update`) refuse to run when the change description matches the **stoplist**: a list of phrases that flag changes too consequential for an abbreviated pipeline. The list lives in `core/guards/stoplist.js` and triggers on:
 
 - `auth`, `authentication`, `authorization`, `session handling`
 - `cryptography`, `key management`, `secret rotation`
@@ -86,7 +86,7 @@ The active track is read from `.devteam/config.yml` (`pipeline.default_track`), 
 
 ## Conditional dispatch within a track
 
-`stage-04b` (security review) is in the track lists for `full`, `config-only`, and `hotfix` — but whether it actually runs depends on `stage-04a`'s `security_review_required` flag. The Platform engineer setting that flag at Stage 4a is what triggers (or skips) the security review.
+`stage-04b` (security review) is in the track lists for `full`, `config-only`, and `hotfix`, but whether it actually runs depends on `stage-04a`'s `security_review_required` flag. The Platform engineer sets that flag at Stage 4a, which triggers or skips the security review.
 
 ```
 $ devteam next
@@ -102,7 +102,7 @@ $ devteam next
    multi-role stage not started
 ```
 
-The skip is silent — see `devteam summary` for visibility:
+The skip is silent. Use `devteam summary` for visibility:
 
 ```
 ✅ pre-review        stage-04a  PASS
@@ -146,4 +146,4 @@ const STAGES_BY_TRACK = {
 };
 ```
 
-Then update `TRACKS` (the validation set) and `config-only`/`dep-update`/`hotfix` to leave the new entry untouched. Tests in `tests/contract.test.js` will fail if any track lists an unknown stage — that's intended.
+Then update `TRACKS` (the validation set) and `config-only`/`dep-update`/`hotfix` to leave the new entry untouched. Tests in `tests/contract.test.js` will fail if any track lists an unknown stage; this is intentional.
