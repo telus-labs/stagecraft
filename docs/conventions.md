@@ -21,7 +21,7 @@ These appear on their own line, with lowercase content after the colon. Most can
 
 A question that needs a human decision. Common during requirements, design, and clarification.
 
-- **Where:** `pipeline/context.md` (canonical) — also propagated into `pipeline/brief.md`'s § *Open Questions*. Edit context.md; leave brief.md alone.
+- **Where:** `pipeline/context.md` (canonical). Also propagated into `pipeline/brief.md`'s § *Open Questions*. Edit context.md; leave brief.md alone.
 - **Written by:** PM (most common), Principal (during design), any dev (mid-build).
 - **Format:** `QUESTION: <text>` with `@PM` or `@PRINCIPAL` etc. naming who must answer.
 - **Read by:** Stage 3 (clarification) checks for any `QUESTION:` not followed by `PM-ANSWER:`; if any exist, invokes PM. The orchestrator's startup check (`rules/orchestrator.md`) halts the pipeline if questions exist at advance time.
@@ -32,7 +32,7 @@ The answer to a `QUESTION:`. Written directly below the question.
 
 - **Where:** `pipeline/context.md`, on the line right after the `QUESTION:` it answers.
 - **Written by:** **You** (the human operator), or the PM agent during Stage 3 clarification.
-- **Format:** `PM-ANSWER: <text>`. Multi-line is fine — readers consume everything between this line and the next blank line or marker.
+- **Format:** `PM-ANSWER: <text>`. Multi-line is fine; readers consume everything between this line and the next blank line or marker.
 - **Read by:** Devs at Stage 4 build (they trace every changed hunk to brief / design-spec / a `PM-ANSWER:`).
 
 **Worked example.** See [`user-guide.md` § Answering an open question between stages](user-guide.md#answering-an-open-question-between-stages).
@@ -142,7 +142,7 @@ Wrapped in `<!-- devteam:red-team-blockers:begin/end -->`. Auto-injected when st
 
 Wrapped in `<!-- devteam:qa-build-blockers:begin/end -->`. Auto-injected when stage-04.qa writes FAIL. Auto-stripped on PASS/WARN.
 
-If you need to clear either of these manually (e.g. you're restarting the originating stage from scratch), use `devteam restart <stage>` — it strips the section.
+To clear either of these manually (e.g. when restarting the originating stage from scratch), use `devteam restart <stage>`, which strips the section.
 
 ## Section markers (in `pipeline/pr-<area>.md`)
 
@@ -172,10 +172,10 @@ Things the dev noticed but did not fix because they're outside the brief.
 
 ## Auto-captured stage transcripts (`pipeline/logs/`)
 
-Per-stage logs written by `devteam stage X --headless` — the full stdout/stderr from the host CLI for that stage, with a header (start time, command, host) and trailer (end time, exit code).
+Per-stage logs written by `devteam stage X --headless`. Contains the full stdout/stderr from the host CLI for that stage, with a header (start time, command, host) and trailer (end time, exit code).
 
 - **Where:** `pipeline/logs/<workstreamId>.log`. For multi-role stages, one file per workstream (`stage-04.backend.log`, `stage-04.frontend.log`, etc.).
-- **Written by:** `core/adapters/headless.js → runHeadless()` — automatic when a stage runs in `--headless` mode. Does not apply to user-driven mode (devteam doesn't see the agent's I/O there; the transcript lives in the host tool's session log).
+- **Written by:** `core/adapters/headless.js → runHeadless()`, automatically when a stage runs in `--headless` mode. Does not apply to user-driven mode; the transcript lives in the host tool's session log.
 - **Read by:** You, post-hoc. `cat pipeline/logs/stage-04.backend.log` for the full transcript of one workstream.
 - **Opt out:** `DEVTEAM_NO_LOG=1` in the environment.
 - **Companion command:** `devteam log [--follow]` for a chronological cross-stage timeline. The per-stage logs are the deep-dive; `devteam log` is the overview.
