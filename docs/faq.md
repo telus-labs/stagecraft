@@ -307,14 +307,38 @@ A **quorum miss**, not an objection. The merged `stage-05.json` aggregates four 
 
 Key vocabulary trip: at Stage 5, `workstreams[]` are **areas of code being reviewed**, not reviewers. A FAIL on `workstreams[].workstream: "qa"` means "the qa *area* didn't reach quorum," not "the qa reviewer objected." See [`concepts.md` §Stage-5 vocabulary callout](concepts.md#stage-5-vocabulary-callout).
 
-Diagnose with:
+**Before reading any gate as authoritative, sync it:**
 
 ```bash
-cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals, required_approvals, changes_requested}'
-# If changes_requested is [] and approvals.length < required_approvals → quorum miss, no objections.
+# Always run this first — per-area gates may be stale if review files were written
+# in a prior session or without the hook active.
+devteam derive-approvals
 ```
 
-Resolve by appending a `## Review of <area>` section with `REVIEW: APPROVED` to a non-area reviewer's `pipeline/code-review/by-*.md` file, then running `devteam derive-approvals pipeline/code-review/by-<reviewer>.md` to update the per-area gate, then `devteam merge peer-review` to rebuild the merged gate. The `devteam derive-approvals` step is needed because the `approval-derivation` hook is a Claude Code `PostToolUse` hook — it fires only when an agent writes the file inside a Claude Code session, not when you edit it from your shell or editor. Full operational sequence — including when overriding the merged gate to WARN is defensible and what gotchas come with it — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
+Then diagnose:
+
+```bash
+cat pipeline/gates/stage-05.<area>.json \
+  | jq '{status, approvals, required_approvals, changes_requested, failure_reason, action_required}'
+# If changes_requested is [] and approvals.length < required_approvals → quorum miss.
+# failure_reason will be "INSUFFICIENT_APPROVALS".
+# action_required will list eligible reviewers and the exact steps to resolve.
+```
+
+You may also see `WARN: self-review skipped` in the hook's stderr output. This is
+expected and non-blocking — it means a reviewer's file contained a `## Review of <area>`
+section for their own workstream, which the hook skips (self-reviews don't count toward
+quorum). If the area is still under-approved after the warning, you need a different
+reviewer to cover it.
+
+Resolve by having an eligible reviewer (see `rules/stage-05.md` matrix table for who
+covers which areas) append a `## Review of <area>` section to their
+`pipeline/code-review/by-<role>.md` file, then running `devteam derive-approvals`
+(no-arg form processes all review files), then `devteam merge peer-review`. The
+`devteam derive-approvals` step is needed because the `approval-derivation` hook fires
+only when an agent writes a file inside an active Claude Code session — shell or editor
+saves bypass it. Full operational sequence — including the override-to-WARN escape hatch
+and its caveats — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
 
 ### How do I roll back a deploy?
 

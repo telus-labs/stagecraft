@@ -38,6 +38,15 @@
     "escalated_to_principal": {
       "type": "boolean",
       "description": "True after the two-round review limit fires and the principal is invoked for a binding ruling."
+    },
+    "failure_reason": {
+      "type": "string",
+      "enum": ["INSUFFICIENT_APPROVALS", "CHANGES_REQUESTED"],
+      "description": "Hook-written on every FAIL update; absent on PASS. INSUFFICIENT_APPROVALS means quorum has not been reached but no reviewer has objected — run 'devteam derive-approvals' first (approvals may be stale), then add a missing area review if still failing. CHANGES_REQUESTED means at least one reviewer wrote REVIEW: CHANGES REQUESTED — see changes_requested[] and blockers[] for details."
+    },
+    "action_required": {
+      "type": "string",
+      "description": "Hook-written plain-language next step when failure_reason is INSUFFICIENT_APPROVALS. States how many more approvals are needed, reminds the operator to run 'devteam derive-approvals' first, and lists eligible reviewers (all mapped reviewer names not yet in approvals[]). Absent when status is PASS or failure_reason is CHANGES_REQUESTED."
     }
   },
   "additionalProperties": true

@@ -2,7 +2,7 @@
 
 `devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook is the operational playbook — what to read, how to fix, how to re-run, and how to know it worked.
 
-Most `fix-and-retry` cases come from one of four stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), or **peer-review** (Stage 5). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of five stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **peer-review** (Stage 5), or **accessibility-audit** (Stage 6b). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md) — different protocol.
 
@@ -302,51 +302,84 @@ At Stage 5 (peer-review), `workstreams[]` in the merged `stage-05.json` are the 
 
 The merged gate is an aggregate; the actual FAIL lives in the per-area gate.
 
+**Before reading any gate as authoritative, sync it from the review files.** The
+`approval-derivation` hook fires only when a file is written inside an active Claude
+Code session — if review files were written in a prior session (or by a host that
+wasn't running the hook), the per-area gates may not reflect what's in the markdown.
+This is the single most common source of false quorum misses.
+
+```bash
+# 0. Sync all per-area gates from the current review files.
+#    Safe to run at any time — idempotent, append-only.
+devteam derive-approvals
+```
+
+Then read the gate state:
+
 ```bash
 # 1. Which area is FAIL?
 cat pipeline/gates/stage-05.json | jq '.workstreams'
 
 # 2. Open the per-area gate for that area.
-cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals, required_approvals, changes_requested}'
-# Expect to see:
+cat pipeline/gates/stage-05.<area>.json \
+  | jq '{status, approvals, required_approvals, changes_requested, failure_reason, action_required}'
+# Expect to see on a quorum miss:
 #   status: "FAIL"
-#   approvals: ["dev-backend"]   ← only one
+#   approvals: ["dev-backend"]         ← only one
 #   required_approvals: 2
-#   changes_requested: []        ← nobody objected
+#   changes_requested: []              ← nobody objected
+#   failure_reason: "INSUFFICIENT_APPROVALS"
+#   action_required: "Need 1 more approval(s). Run 'devteam derive-approvals'…
+#                     Eligible reviewers: [dev-frontend, dev-platform, dev-qa]."
 ```
 
-If `changes_requested` is empty and `approvals.length < required_approvals`, this is a **quorum miss with no objections**. The matrix (in `rules/stage-05.md`) excludes self-reviews — `dev-qa` reviewing the qa area doesn't count toward quorum for that area — so an area can sit at 1 approval if only one non-area reviewer wrote a `## Review of <area>` section.
+The `failure_reason` field distinguishes a quorum miss (`INSUFFICIENT_APPROVALS`) from a
+reviewer objection (`CHANGES_REQUESTED`) without requiring you to read the review files.
+`action_required` lists exactly how many more approvals are needed and which reviewers are
+eligible.
+
+If `changes_requested` is empty and `approvals.length < required_approvals`, this is a
+**quorum miss with no objections**. The matrix (in `rules/stage-05.md`) excludes
+self-reviews — the hook skips any `## Review of <area>` section in the reviewer's own
+file and emits a warning to stderr (`WARN: self-review skipped`). That warning is
+expected and non-blocking; it just means that approval doesn't count toward quorum.
 
 ```bash
-# 3. Confirm by grepping the reviewer files
-grep -l "^## Review of <area>" pipeline/code-review/by-*.md
-# If only one non-area file matches, that's your quorum miss.
+# 3. Confirm by grepping the reviewer files — after running devteam derive-approvals.
+grep -rn "^## Review of <area>" pipeline/code-review/by-*.md
+# Count non-area-owner matches. If fewer than required_approvals → quorum miss confirmed.
 ```
 
 ### Two operator paths
 
-**Legitimate: add the missing area review.** Pick a reviewer who *can* review that area per the matrix (any non-area seat) and append a `## Review of <area>` section to their existing review file. Then run `devteam derive-approvals` to update the per-area gate, then `devteam merge peer-review` to rebuild the merged gate.
+**Legitimate: add the missing area review.** Check `rules/stage-05.md` for the
+matrix assignment table — it shows exactly which areas each reviewer is assigned to
+cover. Pick a reviewer whose assignment includes the failing area (or who hasn't yet
+written a section for it) and append a `## Review of <area>` section to their existing
+review file. The review should be substantive — read the area's source files and PR
+summary, not a rubber stamp.
 
 ```bash
-# 1. Append to an existing review file (e.g., dev-platform reviewing the qa area).
-cat <<'EOF' >> pipeline/code-review/by-platform.md
+# 1. Append to an existing review file for an eligible reviewer.
+#    See rules/stage-05.md for the matrix assignment (who reviews which areas).
+cat <<'EOF' >> pipeline/code-review/by-<reviewer>.md
 
 ## Review of <area>
 
-<2-3 sentences of substantive review against AC-N and design-spec §X.
+<2-3 sentences of substantive review against the relevant ACs and design-spec sections.
 The audit trail should show a real read of the area, not a rubber stamp.>
 
 REVIEW: APPROVED
 EOF
 
-# 2. Re-derive the per-area gate from the updated review file.
-#    Without this, a shell/editor save doesn't trigger the approval-derivation
-#    hook — see the host-lifecycle note below.
-devteam derive-approvals pipeline/code-review/by-platform.md
+# 2. Re-derive all per-area gates.
+#    Using no argument re-processes every by-*.md file — safer than a single-file
+#    run when multiple review files may have been updated since the last derive.
+devteam derive-approvals
 
 # 3. Confirm the gate flipped to PASS.
-cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals}'
-# Expect: status "PASS", approvals ["dev-backend", "dev-platform"]
+cat pipeline/gates/stage-05.<area>.json | jq '{status, approvals, failure_reason}'
+# Expect: status "PASS", approvals length >= required_approvals, no failure_reason
 
 # 4. Re-merge the per-area gates into the merged stage gate, then advance.
 devteam merge peer-review
@@ -406,25 +439,37 @@ Real run, full track, multi-area diff. The merged gate looked like:
 }
 ```
 
-The per-area gate showed the truth:
+The per-area gate (after running `devteam derive-approvals`) showed:
 
 ```json
 {
   "stage": "stage-05", "workstream": "qa", "area": "qa",
   "status": "FAIL",
   "review_shape": "matrix", "required_approvals": 2,
-  "approvals": ["dev-backend"],
+  "approvals": ["dev-platform"],
   "changes_requested": [],
   "blockers": [],
-  "warnings": ["…SUGGESTION:…", "…SUGGESTION:…"]
+  "warnings": ["…SUGGESTION:…", "…SUGGESTION:…"],
+  "failure_reason": "INSUFFICIENT_APPROVALS",
+  "action_required": "Need 1 more approval(s). … Eligible reviewers: [dev-backend, dev-frontend, dev-qa]."
 }
 ```
 
-`dev-backend` wrote `## Review of qa` with `REVIEW: APPROVED`. Neither `dev-frontend` nor `dev-platform` wrote one. The QA reviewer's own file doesn't count (matrix excludes self-reviews). Pure quorum miss; nothing wrong with the code.
+`dev-platform` wrote `## Review of qa` with `REVIEW: APPROVED`. The qa reviewer's own
+file doesn't count (matrix excludes self-reviews; hook emits `WARN: self-review skipped`
+and continues). Per `rules/stage-05.md`, the qa area is assigned to `dev-backend` and
+`dev-frontend` — neither had written a qa section. Pure quorum miss; nothing wrong with
+the code. The `action_required` field confirmed exactly which reviewers were eligible.
 
-Fixed by appending a `## Review of qa` section to `by-platform.md` with a substantive review of `src/tests/` against AC-11 / AC-13 and `REVIEW: APPROVED`, then running `devteam derive-approvals pipeline/code-review/by-platform.md`. The gate flipped to PASS in milliseconds; `devteam merge peer-review` rebuilt the merged gate; `devteam next` advanced to stage-06.
+Fixed by appending a `## Review of qa` section to `by-frontend.md` with a substantive
+review of `src/tests/` against the relevant ACs and `REVIEW: APPROVED`, then running
+`devteam derive-approvals` (no-arg form, to catch any other stale approvals at the same
+time). The gate flipped to PASS; `devteam merge peer-review` rebuilt the merged gate;
+`devteam next` advanced to stage-06.
 
-The SUGGESTION items in `warnings[]` carried through to the merged gate as warnings, where the retrospective will see them. SUGGESTIONs are deferred follow-ups, not merge-blockers — that's the convention (see [`conventions.md`](../conventions.md)).
+The SUGGESTION items in `warnings[]` carried through to the merged gate as warnings,
+where the retrospective will see them. SUGGESTIONs are deferred follow-ups, not
+merge-blockers — that's the convention (see [`conventions.md`](../conventions.md)).
 
 ---
 
@@ -496,7 +541,95 @@ Until then, read the items and identify the owning workstream manually.
 
 ---
 
-## Case 7: Consistency drift — `devteam consistency analyze` exits non-zero
+## Case 7: Accessibility audit (Stage 6b) FAIL — `blockers[]` non-empty
+
+Stage 6b (`pipeline/gates/stage-06b.json`) runs the accessibility audit against the
+frontend. Blockers carry an `A11Y-*` ID, a WCAG criterion reference, the severity
+(`critical`, `serious`, `moderate`, `minor`), and the specific HTML element or
+interaction pattern at fault. All WCAG criterion references in the gate cite a
+specific success criterion (e.g. `WCAG 4.1.3`, `WCAG 1.3.1`).
+
+```bash
+# 1. Read the blockers — they name the element and the missing attribute.
+cat pipeline/gates/stage-06b.json | jq '{status, blockers, affected_workstreams}'
+# e.g.:
+# blockers: [
+#   "A11Y-S-01: #error element lacks role=\"alert\" or aria-live — WCAG 4.1.3 (serious)",
+#   "A11Y-S-02: #results section lacks aria-live=\"polite\" — WCAG 4.1.3 (serious)"
+# ]
+# affected_workstreams: ["frontend"]
+```
+
+Blockers always attribute `affected_workstreams: ["frontend"]` — accessibility
+violations are properties of the rendered HTML, which lives in `src/frontend/`.
+
+### Fix the HTML
+
+Open `src/frontend/index.html` and apply the attribute named in each blocker. Common
+patterns:
+
+| Blocker text | Fix |
+|---|---|
+| `lacks role="alert" or aria-live` | Add `role="alert"` to the element. `role="alert"` is preferred over `aria-live="assertive"` for error messages — it is semantically more precise and implicitly sets `aria-live="assertive"`. |
+| `lacks aria-live="polite"` | Add `aria-live="polite"` to the element. Use `polite` for results or status regions that update after user action; use `assertive` (or `role="alert"`) only for errors that interrupt the current task. |
+| `lacks aria-label or aria-labelledby` | Add a visible `<label>` element associated via `for`/`id`, or add `aria-label="…"` directly to the element. |
+| `missing role on interactive element` | Add the named ARIA role to the element, or replace the element with its native semantic HTML equivalent (a `<button>` instead of a `<div role="button">`). |
+
+**ARIA attributes are non-functional changes** — they don't affect Python backend logic,
+test assertions, or JavaScript behavior. You do not need to re-run the backend build
+workstream or update the test suite unless a blocker requires structural HTML changes
+(adding new elements, changing IDs, or altering form structure).
+
+### Re-run sequence
+
+```bash
+# 1. After editing src/frontend/index.html, clear the failing gate.
+rm pipeline/gates/stage-06b.json
+
+# 2. Re-run the accessibility audit.
+devteam stage accessibility-audit --headless
+
+# 3. Confirm it passed.
+cat pipeline/gates/stage-06b.json | jq '{status, violations}'
+# Expect: status "PASS", all violation counts 0 (or non-zero for known deferred items)
+
+# 4. Advance.
+devteam next
+```
+
+> **Do not re-run the full build chain for ARIA-only fixes.** If the only change is
+> adding `role="alert"`, `aria-live`, `aria-label`, or similar attributes to existing
+> elements, the existing QA test suite and pre-review checks remain valid. Re-running
+> `devteam stage build --headless` is unnecessary overhead and risks invalidating gates
+> that are already passing.
+
+### When you DO need to rebuild
+
+Re-run the frontend build workstream and downstream stages when the fix requires:
+
+- **New HTML elements** — e.g. the audit requires a visible `<label>` where none
+  existed, or a skip-navigation link. Tests that assert HTML structure may need
+  updating.
+- **Changed element IDs** — the JavaScript and/or tests reference element IDs; if the
+  fix renames or adds IDs, update those references too.
+- **Changed interaction model** — e.g. replacing a `<div>` with a `<button>` to fix
+  keyboard accessibility changes the element's semantics in ways tests may have
+  assumed.
+
+In those cases, use the same scoped re-run pattern as Case 2:
+
+```bash
+rm pipeline/gates/stage-04.frontend.json pipeline/gates/stage-04.json
+devteam stage build --patch --from stage-06b --skip-completed --headless
+devteam merge build
+devteam stage pre-review --headless
+devteam stage accessibility-audit --headless
+devteam next
+```
+
+---
+
+## Case 8: Consistency drift — `devteam consistency analyze` exits non-zero
 
 `devteam consistency analyze` walks the full artifact chain — brief → spec →
 `pr-*.md §Verify` → red-team `must_address` → test-report → gate field reality

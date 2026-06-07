@@ -68,7 +68,23 @@ plus its trailing `REVIEW:` marker and updates the corresponding
 
 In **scoped** review mode (`review_shape: "scoped"` on the gate, set by the
 orchestrator when the diff is area-contained), write one section.
-In **matrix** review mode, write two sections.
+In **matrix** review mode, write exactly two sections per the assignment
+table below. Do NOT write a section for your own workstream — the hook
+skips self-reviews and they will not count toward quorum.
+
+**Matrix-mode assignments** (full / quick / hotfix / dep-update / config-only tracks):
+
+| Your role    | Write `## Review of`               |
+|--------------|------------------------------------|
+| `backend`    | `platform`  and  `qa`              |
+| `frontend`   | `backend`   and  `qa`              |
+| `platform`   | `backend`   and  `frontend`        |
+| `qa`         | `frontend`  and  `platform`        |
+
+**Completion checklist (matrix mode):**
+- [ ] Wrote exactly the two `## Review of <area>` sections assigned to my role
+- [ ] Did NOT write a section for my own workstream
+- [ ] Each section ends with a single `REVIEW: APPROVED` or `REVIEW: CHANGES REQUESTED` line
 
 ### Rubric
 

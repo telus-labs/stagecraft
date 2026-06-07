@@ -36,14 +36,41 @@ regardless of Stage 5 approvals.
 
 **Matrix review** — `review_shape: "matrix"`, `required_approvals: 2`.
 
-Used when the diff touches more than one area. The original v1 matrix
-applies:
-  `dev-backend`  reviews: frontend + platform → writes `pipeline/code-review/by-backend.md`
-  `dev-frontend` reviews: backend + platform  → writes `pipeline/code-review/by-frontend.md`
-  `dev-platform` reviews: backend + frontend  → writes `pipeline/code-review/by-platform.md`
+Used when the diff touches more than one area. Each reviewer writes
+exactly two `## Review of <area>` sections — never their own workstream.
+
+| Role (file)       | Writes sections for     |
+|-------------------|-------------------------|
+| `dev-backend`     | `platform` + `qa`       |
+| `dev-frontend`    | `backend` + `qa`        |
+| `dev-platform`    | `backend` + `frontend`  |
+| `dev-qa`          | `frontend` + `platform` |
+
+Coverage: every workstream receives exactly 2 approvals from distinct reviewers:
+- `backend`:  dev-frontend + dev-platform
+- `frontend`: dev-platform + dev-qa
+- `platform`: dev-backend + dev-qa
+- `qa`:       dev-backend + dev-frontend
+
+**Self-review is invalid.** A reviewer MUST NOT write a `## Review of <area>`
+section for the workstream they own. The `approval-derivation.js` hook
+skips and warns on self-reviews; the gate will not count them.
 
 Each area's stage-05 gate accumulates two approvals from reviewers
 whose own area is different.
+
+**Operator guidance — FAIL with no `changes_requested`.** When a gate shows
+`status: "FAIL"` and `changes_requested` is empty, it means quorum has not
+been reached — no one has blocked the change. Steps:
+
+1. Run `devteam derive-approvals` first. The hook processes all existing
+   `by-*.md` files; approvals written in a prior session are not automatically
+   re-derived on session start.
+2. If still FAIL after re-derive, read the gate's `action_required` field —
+   it lists how many more approvals are needed and which reviewers are eligible.
+3. Have an eligible reviewer add the missing `## Review of <area>` section to
+   their `pipeline/code-review/by-<role>.md`, then run `devteam derive-approvals`
+   and `devteam merge peer-review`.
 
 ### Review file format
 

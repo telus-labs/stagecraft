@@ -179,6 +179,15 @@ function reviewerNameFromPath(filePath) {
   return REVIEWER_MAP[m[1]] || m[1];
 }
 
+// Returns the raw role key (e.g. "backend") without mapping — used for
+// self-review detection. For fanout files (by-codex.md) this returns the
+// host name, which won't match any KNOWN_AREAS entry, so the check is safe.
+function reviewerRoleFromPath(filePath) {
+  const base = path.basename(filePath);
+  const m = base.match(/^by-([\w-]+)\.md$/);
+  return m ? m[1] : null;
+}
+
 // Return the host segment when the filename is host-based ("by-codex.md",
 // "by-claude-code.md", etc.); null otherwise. Drives fanout gate naming.
 function hostFromPath(filePath) {
@@ -268,6 +277,26 @@ function applyVerdict({ area, verdict, reviewer, host }) {
     const hasBlockers = gate.changes_requested.length > 0;
     gate.status = hasEnough && !hasBlockers ? "PASS" : "FAIL";
     gate.timestamp = new Date().toISOString();
+
+    // Diagnostic fields — cleared on every update so stale values don't persist.
+    delete gate.failure_reason;
+    delete gate.action_required;
+    if (gate.status === "FAIL") {
+      if (hasBlockers) {
+        gate.failure_reason = "CHANGES_REQUESTED";
+      } else {
+        gate.failure_reason = "INSUFFICIENT_APPROVALS";
+        const needed = required - gate.approvals.length;
+        const eligible = Object.values(REVIEWER_MAP).filter(r => !gate.approvals.includes(r));
+        gate.action_required =
+          `Need ${needed} more approval(s). ` +
+          `Run 'devteam derive-approvals' to pick up any existing review-file verdicts. ` +
+          `If still failing, have an eligible reviewer add ` +
+          `'## Review of ${area}' + 'REVIEW: APPROVED' to their ` +
+          `pipeline/code-review/by-<role>.md. ` +
+          `Eligible reviewers: [${eligible.join(", ")}].`;
+      }
+    }
     // Backfill identity for legacy gates that predate the field, but do NOT
     // overwrite. For fanout gates, gate.host was set at creation to the
     // fanout target host (e.g. "codex") — clobbering it to HOST here would
@@ -311,8 +340,16 @@ function main() {
     const reviewer = reviewerNameFromPath(fullPath);
     if (!reviewer) continue;
     const host = hostFromPath(fullPath);  // null unless it's a fanout file
+    const role = reviewerRoleFromPath(fullPath); // raw key, e.g. "backend"
     const verdicts = parseReviewFile(fullPath);
     for (const v of verdicts) {
+      // Self-review guard: skip sections where the reviewer's own workstream
+      // matches the area being reviewed. Only applies to non-fanout files
+      // (fanout hosts like "codex" don't own a workstream).
+      if (!host && role && v.area === role) {
+        console.error(`[approval-derivation] WARN: self-review skipped — ${file} contains "## Review of ${v.area}" but that is the reviewer's own workstream`);
+        continue;
+      }
       applyVerdict({ area: v.area, verdict: v.verdict, reviewer, host });
     }
   }
