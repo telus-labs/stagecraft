@@ -174,6 +174,16 @@ Commands:
                                    verify' to every intermediate
                                    artifact + the gate-vs-reality
                                    dimension. Exits non-zero on drift.
+  assess [--description "..."]    G6 — infer the best track for the
+       [--json] [--apply]          current change. Reads pipeline/
+       [--cwd <dir>] [files...]    changed-files.txt (or explicit file
+                                   list) and applies path/content/
+                                   description heuristics to recommend
+                                   a track. --apply writes the result
+                                   to pipeline.custom_stages in
+                                   .devteam/config.yml so subsequent
+                                   'devteam next' and 'devteam stage'
+                                   use the inferred stage list.
   stages                           List known stage names.
   hosts                            List available host adapters.
   help                             Show this message.
@@ -226,6 +236,9 @@ function parseFlags(argv) {
     if (a === "--context") { flags.context = argv[++i]; continue; }
     if (a === "--target-gate") { flags.targetGate = argv[++i]; continue; }
     if (a === "--follow")  { flags.follow  = true;      continue; }
+    if (a === "--description") { flags.description = argv[++i]; continue; }
+    if (a === "--apply")   { flags.apply   = true;      continue; }
+    if (a === "--no-content") { flags.noContent = true; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -2038,6 +2051,66 @@ function cmdConsistency(argv) {
   process.exit(2);
 }
 
+// G6: Infer the best track for the current change.
+// Usage: devteam assess [--description "..."] [--files f1 f2...] [--apply] [--json] [--cwd dir]
+//
+// Reads changed-files.txt from pipeline/ unless --files is given.
+// With --apply, writes pipeline.custom_stages to .devteam/config.yml.
+function cmdAssess(argv) {
+  const { assess } = require(path.join(__dirname, "..", "core", "stage-shopping", "assess"));
+  const { positional, flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+
+  // Resolve file list: positional args > --files > pipeline/changed-files.txt
+  let files = positional.length > 0 ? positional : [];
+  if (files.length === 0) {
+    const changedFilesPath = path.join(cwd, "pipeline", "changed-files.txt");
+    if (fs.existsSync(changedFilesPath)) {
+      files = fs.readFileSync(changedFilesPath, "utf8").split(/\r?\n/).filter(Boolean);
+    }
+  }
+
+  const description = flags.description || "";
+  const result = assess(description, files, { scanContent: !flags.noContent });
+
+  if (flags.json) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const conf = { high: "high ✓", medium: "medium", low: "low" }[result.confidence] || result.confidence;
+    console.log(`Recommended track: ${result.recommendedTrack}  (confidence: ${conf})`);
+    console.log(`Stages (${result.stages.length}): ${result.stages.join(" → ")}`);
+    console.log("");
+    console.log("Reasons:");
+    for (const r of result.reasons) console.log(`  • ${r}`);
+    if (result.securityRequired) console.log("  ⚠  security review required");
+    if (result.migrationRequired) console.log("  ⚠  migration safety required");
+    console.log("");
+    if (flags.apply) {
+      console.log(`Applying: writing pipeline.custom_stages to .devteam/config.yml…`);
+    } else {
+      console.log("To apply this track, run with --apply or set pipeline.custom_stages in .devteam/config.yml:");
+      console.log(`  pipeline:`);
+      console.log(`    custom_stages: [${result.stages.map((s) => `"${s}"`).join(", ")}]`);
+    }
+  }
+
+  if (flags.apply) {
+    const yaml = require("js-yaml");
+    const { configPath: getConfigPath } = require(path.join(__dirname, "..", "core", "config"));
+    const cfgPath = getConfigPath(cwd);
+    let parsed = {};
+    if (fs.existsSync(cfgPath)) {
+      try { parsed = yaml.load(fs.readFileSync(cfgPath, "utf8")) || {}; } catch { parsed = {}; }
+    } else {
+      fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+    }
+    parsed.pipeline = parsed.pipeline || {};
+    parsed.pipeline.custom_stages = result.stages;
+    fs.writeFileSync(cfgPath, yaml.dump(parsed, { lineWidth: 120 }), "utf8");
+    if (!flags.json) console.log(`  ✓ wrote ${path.relative(cwd, cfgPath)}`);
+  }
+}
+
 function main() {
   const [, , command, ...rest] = process.argv;
   switch (command) {
@@ -2061,6 +2134,7 @@ function main() {
     case "ci":       return cmdCi(rest);
     case "spec":     return cmdSpec(rest);
     case "consistency": return cmdConsistency(rest);
+    case "assess":   return cmdAssess(rest);
     case "stages": return cmdStages();
     case "hosts":  return cmdHosts();
     case "help":

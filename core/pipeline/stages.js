@@ -467,15 +467,26 @@ function orderedStageNames() {
 }
 
 function orderedStageNamesForTrack(track = "full") {
+  // G6: accept a custom stage array (e.g. ["requirements","build","peer-review"])
+  if (Array.isArray(track)) {
+    return track.filter((n) => STAGES[n]);
+  }
   const list = STAGES_BY_TRACK[track];
   if (!list) {
-    throw new Error(`Unknown track "${track}". Valid: ${TRACKS.join(", ")}.`);
+    throw new Error(`Unknown track "${track}". Valid: ${TRACKS.join(", ")}, or a custom stage array.`);
   }
   return list.filter((n) => STAGES[n]);
 }
 
 function isStageInTrack(stageName, track) {
   return orderedStageNamesForTrack(track).includes(stageName);
+}
+
+// Produce a display-friendly string for a track — handles both named
+// tracks ("full") and custom stage arrays (["build","qa"] → "build,qa").
+function trackLabel(track) {
+  if (Array.isArray(track)) return track.join(",");
+  return track || "full";
 }
 
 function getStage(name) {
@@ -492,6 +503,7 @@ module.exports = {
   orderedStageNames,
   orderedStageNamesForTrack,
   isStageInTrack,
+  trackLabel,
   getStage,
   rolesForStage,
   requiredApprovalsFor,

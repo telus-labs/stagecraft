@@ -24,6 +24,11 @@ const DEFAULTS = {
     // scripts or skip"; explicit null on a field means "skip even if
     // discoverable." See core/verify/runner.js → resolveCommands.
     verify: {},
+    // G6: custom_stages overrides default_track when set. An array of
+    // stage names, e.g. ["requirements","build","pre-review","peer-review"].
+    // Produced by `devteam assess --apply` or set manually. null = use
+    // default_track.
+    custom_stages: null,
   },
 };
 
@@ -56,6 +61,7 @@ function loadConfig(cwd = process.cwd()) {
         isolation: parsed.pipeline?.isolation ?? DEFAULTS.pipeline.isolation,
         skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
         verify: (parsed.pipeline && typeof parsed.pipeline.verify === "object" && parsed.pipeline.verify !== null) ? parsed.pipeline.verify : {},
+        custom_stages: Array.isArray(parsed.pipeline?.custom_stages) ? parsed.pipeline.custom_stages : null,
       },
       _source: "file",
       _path: p,

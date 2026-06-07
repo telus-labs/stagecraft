@@ -11,7 +11,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage } = require("./pipeline/stages");
+const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage, trackLabel } = require("./pipeline/stages");
 const { loadConfig, changeIdFromFeature } = require("./config");
 const { gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
 const { resolveAdapter } = require("./router");
@@ -156,8 +156,12 @@ function runStage(stageName, opts = {}) {
   const config = opts.config || loadConfig(cwd);
   const isolation = opts.isolation || config.pipeline.isolation;
   const feature = opts.feature || "";
+  // G6: custom_stages in config overrides default_track when no explicit track is passed.
+  const track = opts.track
+    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
+    || config.pipeline.default_track;
   const ctx = {
-    track: opts.track || config.pipeline.default_track,
+    track,
     feature,
     cwd,
     isolation,
@@ -178,7 +182,7 @@ function runStage(stageName, opts = {}) {
   return withSpan("pipeline.stage", {
     "devteam.stage": stageDef.stage,
     "devteam.stage.name": stageName,
-    "devteam.track": ctx.track,
+    "devteam.track": trackLabel(ctx.track),
     "devteam.roles": stageDef.roles.join(","),
     "devteam.workstream_count": plan.length,
     "devteam.fanout": plan.some((p) => p.fanout) || undefined,
@@ -320,7 +324,10 @@ function mergeWorkstreamGates(stageName, opts = {}) {
   const stageDef = getStage(stageName);
   if (!stageDef) throw new Error(`Unknown stage "${stageName}"`);
   const config = opts.config || loadConfig(opts.cwd || process.cwd());
-  const track = opts.track || config.pipeline.default_track;
+  // G6: custom_stages in config overrides default_track when no explicit track is passed.
+  const track = opts.track
+    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
+    || config.pipeline.default_track;
   const plan = computeDispatchPlan(stageDef, config, track);
   if (plan.length <= 1) {
     return { merged: false, reason: "single-workstream stage; no merge needed" };
@@ -424,12 +431,16 @@ function next(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const gatesDir = path.join(cwd, "pipeline", "gates");
   const config = opts.config || loadConfig(cwd);
-  const track = opts.track || config.pipeline.default_track || "full";
+  // G6: custom_stages in config overrides default_track when no explicit track is passed.
+  const track = opts.track
+    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
+    || config.pipeline.default_track
+    || "full";
   const skipStages = config.pipeline.skip_stages || [];
   const stageList = orderedStageNamesForTrack(track);
 
   return withSpan("pipeline.next", {
-    "devteam.track": track,
+    "devteam.track": trackLabel(track),
   }, () => {
     const result = _nextImpl(stageList, gatesDir, track, skipStages);
     setSpanAttributes({
@@ -878,7 +889,11 @@ function summary(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const gatesDir = path.join(cwd, "pipeline", "gates");
   const config = opts.config || loadConfig(cwd);
-  const track = opts.track || config.pipeline.default_track || "full";
+  // G6: custom_stages in config overrides default_track when no explicit track is passed.
+  const track = opts.track
+    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
+    || config.pipeline.default_track
+    || "full";
   const skipStages = config.pipeline.skip_stages || [];
   const stageList = orderedStageNamesForTrack(track);
 
