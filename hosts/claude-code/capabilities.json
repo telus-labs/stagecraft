@@ -8,6 +8,7 @@
   "worktrees": true,
   "headless": true,
   "headlessCommand": "claude --dangerously-skip-permissions --print",
+  "goalLoop": true,
   "skillFormat": "markdown-with-frontmatter",
   "skillsDir": ".claude/skills",
   "commandsDir": ".claude/commands",

@@ -88,17 +88,21 @@ function computeDispatchPlan(stageDef, config, track) {
 
 function buildDescriptor(stageDef, role, opts = {}) {
   const allowedWrites = stageDef.roleWrites?.[role] ?? stageDef.allowedWrites;
+  const wsId = opts.workstreamId || workstreamId(stageDef.stage, role, stageDef.roles.length);
   return {
     stage: stageDef.stage,
     name: nameForStage(stageDef.stage),
     role,
     rolesInStage: stageDef.roles,
-    workstreamId: opts.workstreamId || workstreamId(stageDef.stage, role, stageDef.roles.length),
+    workstreamId: wsId,
     objective: stageDef.objective,
     readFirst: stageDef.readFirst,
     allowedWrites,
     artifact: stageDef.artifact,
     template: stageDef.template,
+    goalCondition: stageDef.goalCondition
+      ? stageDef.goalCondition.replace("{workstreamId}", wsId)
+      : null,
     expectedGate: stageDef.gate,
     // When set, all workstreams of this stage dispatch to the same
     // subagent regardless of role (used by peer-review where the
@@ -228,7 +232,12 @@ async function runStageHeadless(stageName, opts = {}) {
         "devteam.workstream.role": ws.role,
         "devteam.workstream.id": ws.descriptor.workstreamId,
       }, async (span) => {
-        const out = await ws.adapter.invoke(ws.descriptor, plan.ctx, ws.prompt);
+        // E7: prepend /goal directive for hosts that support a goal loop
+        // and stages that declare a convergence condition.
+        const prompt = ws.adapter.capabilities.goalLoop && ws.descriptor.goalCondition
+          ? `/goal "${ws.descriptor.goalCondition}"\n\n${ws.prompt}`
+          : ws.prompt;
+        const out = await ws.adapter.invoke(ws.descriptor, plan.ctx, prompt);
         if (span) span.setAttributes({
           "devteam.invoke.exit_code": out.exitCode,
           "devteam.invoke.duration_ms": out.durationMs,

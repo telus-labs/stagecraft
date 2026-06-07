@@ -52,6 +52,9 @@ Capability semantics:
 | `worktrees`      | Honor `isolation: isolated` mode                                      | All work in-place               |
 | `headless`       | Adapter can drive the host non-interactively (`cli-driven` mode)      | `user-driven` only              |
 | `enforces.<rule>`| Where the host enforces a core rule. Values: `tool-call-time` (blocked at write), `post-hoc-audit` (gate validator catches it), `prompt-only` (instructed in prompt, not enforced). | Orchestrator runs post-hoc audit. |
+| `enforces.shell` | `true` if the agent can execute shell commands (bash tool). Required by pre-review, qa, verification-beyond-tests, deploy. | Orchestrator refuses dispatch with a named error. |
+| `enforces.network` | `true` if the agent can make outbound network requests. | Orchestrator refuses dispatch with a named error. |
+| `goalLoop`       | Host supports a session-level convergence directive (`/goal "condition"`). When `true`, the orchestrator prepends `/goal "…"` to the prompt for stages that declare `goalCondition`. | Prompt is sent as-is; no goal loop. |
 
 ## adapter.js methods
 
@@ -107,6 +110,7 @@ interface StageDescriptor {
   artifact: string;                      // "pipeline/build-plan.md"
   template: string;                      // "build-template.md"
   expectedGate: object;                  // JSON Schema for the gate file
+  goalCondition: string | null;          // Convergence condition for goal-loop hosts; null if none
 }
 
 interface PipelineContext {

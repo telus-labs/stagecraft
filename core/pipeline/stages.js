@@ -107,6 +107,7 @@ const STAGES = {
     },
     artifact: "pipeline/build-plan.md",
     template: "build-template.md",
+    goalCondition: "pipeline/gates/{workstreamId}.json exists with status: \"PASS\", lint_passed: true, and tests_passed: true",
     gate: {
       pr_summaries_written: [],
       local_verification: [],
@@ -236,6 +237,7 @@ const STAGES = {
     artifact: "pipeline/test-report.md",
     template: "test-report-template.md",
     requiredCapabilities: { shell: true },
+    goalCondition: "pipeline/gates/{workstreamId}.json exists with status: \"PASS\", all_acceptance_criteria_met: true, and tests_failed: 0",
     gate: {
       all_acceptance_criteria_met: false,
       tests_total: 0,
