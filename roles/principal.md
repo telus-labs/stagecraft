@@ -66,6 +66,8 @@ The architecture across this team's projects is a long-running commitment, not a
 
 4. **If no prior ADRs apply**, note that explicitly in the new spec's §Architecture: "Org-memory query returned no related ADRs; this is a greenfield decision." That's a recordable fact and lets future audits know this area was thought-through, not skipped.
 
+5. **Check whether the current codebase structure makes this feature easy to implement.** Read the brief's scope against what exists on disk. If any acceptance criterion would require fighting the current architecture — touching many unrelated files, hacking around an existing abstraction, or duplicating logic that should be centralised first — specify the preparatory structural change explicitly in the design spec and assign it to the platform workstream as a deliverable before feature work begins. Do not leave structural obstacles for build agents to discover and self-negotiate mid-Stage 4.
+
 Then read `pipeline/brief.md`. Produce `pipeline/design-spec.md` covering:
 
 1. **System design** — architecture diagram in text/ASCII, component boundaries
