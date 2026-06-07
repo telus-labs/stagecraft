@@ -570,7 +570,7 @@ The flag reads `pipeline/gates/stage-04c.json`, extracts the blockers, and injec
 
 `--from` defaults to `red-team` and accepts any stage name. The gate for that stage must already exist in `pipeline/gates/`.
 
-Note: when red-team writes a FAIL gate, the validator automatically writes the blockers into `pipeline/context.md` (between `<!-- devteam:red-team-blockers:begin -->` markers) so they persist across re-runs. `--patch` reads from the gate itself and is additive — you get both the context.md signal and the explicit prompt scope.
+When red-team writes a FAIL gate, the validator automatically writes the blockers into `pipeline/context.md` (between `<!-- devteam:red-team-blockers:begin -->` markers) so they persist across re-runs. `--patch` reads from the gate itself and is additive: you get both the `context.md` signal and the explicit prompt scope.
 
 After the patch build, continue the usual chain:
 
@@ -580,11 +580,11 @@ devteam stage security-review --headless   # if still required
 devteam stage red-team --headless          # verifies fixes
 ```
 
-For the complete procedure with a worked example — including the `rm pipeline/gates/stage-04.backend.json` optimization to re-run only the affected workstream, what happens to non-target workstreams, the `noted_for_followup` question, and the equivalent flow for QA/pre-review/peer-review FAIL — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+For the complete procedure with a worked example (including the `rm pipeline/gates/stage-04.backend.json` optimization to re-run only the affected workstream, what happens to non-target workstreams, the `noted_for_followup` question, and the equivalent flow for QA/pre-review/peer-review FAIL), see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
 
 ### Fixing QA failures within build
 
-When QA's workstream gate within Stage 4 is FAIL, the bugs belong to the other build roles — typically backend or platform. The validator automatically writes the QA blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
+When QA's workstream gate within Stage 4 is FAIL, the bugs belong to the other build roles (typically backend or platform). The validator automatically writes the QA blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
 
 **Step 1 — Delete the affected gates.** Leave passing workstreams' gates on disk; `--skip-completed` will skip those automatically.
 
