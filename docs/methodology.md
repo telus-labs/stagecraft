@@ -25,7 +25,7 @@ AC-N in brief.md
 
 If a criterion has no scenario, Stage 3b's gate fails. If a scenario has no test, QA's gate fails. Neither can be skipped without a `FAIL` or `ESCALATE` halting the pipeline.
 
-The `full` and `quick` tracks run this loop. `nano` and `hotfix` skip requirements and spec stages — acceptance criteria are assumed known; QA still verifies whatever tests exist.
+The `full` and `quick` tracks run this loop. `nano` and `hotfix` skip requirements and spec stages; acceptance criteria are assumed known. QA still verifies whatever tests exist.
 
 See [`docs/spec-authoring.md`](spec-authoring.md) for the authoring procedure and [`docs/concepts.md`](concepts.md) → *Executable spec* for the stage mechanics.
 
@@ -39,8 +39,8 @@ The methodology is enforced by the pipeline, not by convention. The `stage-02.js
 
 Two stages hold veto power that peer-review approvals cannot override:
 
-- **Security review** (Stage 4b, conditional) — fires when pre-review flags sensitive paths. A `FAIL` from security blocks sign-off regardless of peer-review outcome.
-- **Migration safety** (Stage 4d, conditional) — fires on data-layer diffs. An empty rollback plan, an untested rollback on a breaking change, or a missing backfill strategy auto-vetoes. The migrations role must re-review after any fix.
+- **Security review** (Stage 4b, conditional): fires when pre-review flags sensitive paths. A `FAIL` from security blocks sign-off regardless of peer-review outcome.
+- **Migration safety** (Stage 4d, conditional): fires on data-layer diffs. An empty rollback plan, an untested rollback on a breaking change, or a missing backfill strategy auto-vetoes. The migrations role must re-review after any fix.
 
 See [`docs/concepts.md`](concepts.md) → *Gate* and [`docs/migration-safety.md`](migration-safety.md) for the veto criteria.
 
