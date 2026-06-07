@@ -193,6 +193,14 @@ function stageExtras(gate) {
       const total = (v.critical || 0) + (v.serious || 0) + (v.moderate || 0) + (v.minor || 0);
       parts.push(`${total} WCAG findings`);
     }
+  } else if (stage === "stage-06e") {
+    if (typeof gate.budget_exceeded === "boolean") parts.push(gate.budget_exceeded ? "budget exceeded" : "budgets met");
+    if (Array.isArray(gate.checks_performed) && gate.checks_performed.length > 0) {
+      parts.push(gate.checks_performed.join("+"));
+    }
+    if (gate.lighthouse && gate.lighthouse.score != null) {
+      parts.push(`LH ${Math.round(gate.lighthouse.score * 100)}`);
+    }
   } else if (stage === "stage-07") {
     if (gate.auto_from_stage_06) parts.push("auto-fold");
     if (gate.pm_signoff) parts.push("PM signoff");

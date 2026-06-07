@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:stage-06e",
+  "title": "Stage 06e Performance Budget Gate",
+  "description": "Stage 6e (Performance Budget) gate. Authored by the QA role after measuring Lighthouse scores, bundle size delta, and/or k6 load-test throughput against configured budgets. FAIL when budget_exceeded is true. PASS when all measured metrics meet their budgets, or when the change has no performance-relevant surface (skipped_reason set).",
+  "type": "object",
+  "allOf": [{ "$ref": "urn:stagecraft:schema:gate" }],
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings",
+    "checks_performed",
+    "budget_exceeded"
+  ],
+  "properties": {
+    "checks_performed": {
+      "type": "array",
+      "description": "Which performance checks ran in this invocation. Subset of [\"lighthouse\", \"bundle\", \"load-test\"]. Empty only when skipped_reason is set.",
+      "items": { "type": "string", "enum": ["lighthouse", "bundle", "load-test"] }
+    },
+    "lighthouse": {
+      "type": ["object", "null"],
+      "description": "Lighthouse performance audit results. Populated when 'lighthouse' is in checks_performed. Null otherwise.",
+      "properties": {
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Overall Lighthouse performance score (0–1). Budget default: 0.8 (≥ 80)."
+        },
+        "lcp_ms": {
+          "type": ["number", "null"],
+          "description": "Largest Contentful Paint in ms. Budget default: ≤ 2500ms (Good), ≤ 4000ms (Needs Improvement)."
+        },
+        "inp_ms": {
+          "type": ["number", "null"],
+          "description": "Interaction to Next Paint in ms (replaces FID). Budget default: ≤ 200ms (Good)."
+        },
+        "cls": {
+          "type": ["number", "null"],
+          "description": "Cumulative Layout Shift score (unitless). Budget default: ≤ 0.1 (Good)."
+        },
+        "fcp_ms": {
+          "type": ["number", "null"],
+          "description": "First Contentful Paint in ms. Budget default: ≤ 1800ms."
+        },
+        "ttfb_ms": {
+          "type": ["number", "null"],
+          "description": "Time to First Byte in ms. Budget default: ≤ 800ms."
+        },
+        "budget_score": {
+          "type": ["number", "null"],
+          "description": "The minimum acceptable Lighthouse score (0–1). Configured in performance.budget.json or .devteam/config.yml. Null = default (0.8)."
+        },
+        "url": {
+          "type": ["string", "null"],
+          "description": "The URL that was audited."
+        },
+        "tool": {
+          "type": ["string", "null"],
+          "description": "How Lighthouse was invoked: lighthouse-ci, @lhci/cli, lighthouse CLI, etc."
+        }
+      },
+      "additionalProperties": true
+    },
+    "bundle": {
+      "type": ["object", "null"],
+      "description": "Bundle size analysis results. Populated when 'bundle' is in checks_performed. Null otherwise.",
+      "properties": {
+        "total_size_kb": {
+          "type": ["number", "null"],
+          "description": "Total JS/CSS bundle size after build, in KB."
+        },
+        "delta_kb": {
+          "type": ["number", "null"],
+          "description": "Change in bundle size vs. baseline branch (positive = larger). Negative = improvement."
+        },
+        "budget_kb": {
+          "type": ["number", "null"],
+          "description": "Maximum allowed total bundle size in KB. Configured in performance.budget.json. Null = unconstrained (warn only)."
+        },
+        "delta_budget_kb": {
+          "type": ["number", "null"],
+          "description": "Maximum allowed delta per PR in KB. Configured in performance.budget.json. Null = unconstrained."
+        },
+        "budget_exceeded": {
+          "type": "boolean",
+          "description": "True if total_size_kb > budget_kb OR delta_kb > delta_budget_kb."
+        },
+        "tool": {
+          "type": ["string", "null"],
+          "description": "How bundle size was measured: bundlesize, size-limit, esbuild --analyze, webpack-bundle-analyzer, etc."
+        }
+      },
+      "additionalProperties": true
+    },
+    "load_test": {
+      "type": ["object", "null"],
+      "description": "Load test results. Populated when 'load-test' is in checks_performed. Null otherwise.",
+      "properties": {
+        "tool": {
+          "type": ["string", "null"],
+          "description": "Load testing tool: k6, autocannon, wrk, locust, artillery, etc."
+        },
+        "scenario": {
+          "type": ["string", "null"],
+          "description": "Which load scenario ran (e.g. 'steady-50rps', 'spike-200rps')."
+        },
+        "p95_ms": {
+          "type": ["number", "null"],
+          "description": "95th percentile response time in ms. Primary latency SLO."
+        },
+        "p99_ms": {
+          "type": ["number", "null"],
+          "description": "99th percentile response time in ms."
+        },
+        "rps": {
+          "type": ["number", "null"],
+          "description": "Actual requests per second achieved during the test."
+        },
+        "error_rate": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Fraction of requests that errored (0–1). Budget default: ≤ 0.01 (1%)."
+        },
+        "budget_p95_ms": {
+          "type": ["number", "null"],
+          "description": "Maximum acceptable p95 latency in ms. Configured in performance.budget.json."
+        },
+        "budget_rps": {
+          "type": ["number", "null"],
+          "description": "Minimum required RPS the service must sustain. Configured in performance.budget.json."
+        },
+        "budget_error_rate": {
+          "type": ["number", "null"],
+          "description": "Maximum acceptable error rate (0–1). Default: 0.01."
+        },
+        "budget_exceeded": {
+          "type": "boolean",
+          "description": "True if p95_ms > budget_p95_ms OR rps < budget_rps OR error_rate > budget_error_rate."
+        }
+      },
+      "additionalProperties": true
+    },
+    "budget_exceeded": {
+      "type": "boolean",
+      "description": "Top-level summary: true if ANY check (lighthouse, bundle, load-test) exceeded its budget. Any true here → stage FAIL."
+    },
+    "skipped_reason": {
+      "type": ["string", "null"],
+      "description": "When set, all checks were skipped (e.g. 'backend-only change, no HTTP surface exposed', 'static doc changes only'). Status should be PASS, checks_performed [], budget_exceeded false. Captured for audit trail."
+    }
+  },
+  "additionalProperties": true
+}

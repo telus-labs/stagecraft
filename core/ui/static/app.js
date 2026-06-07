@@ -24,6 +24,7 @@ const STAGE_NAMES = {
   "stage-06b": "Accessibility Audit",
   "stage-06c": "Observability",
   "stage-06d": "Verification Beyond Tests",
+  "stage-06e": "Performance Budget",
   "stage-07": "Sign-off",
   "stage-08": "Deploy",
   "stage-09": "Retrospective",
@@ -44,6 +45,7 @@ const ARTIFACT_PATHS = {
   "stage-06b": "pipeline/accessibility-report.md",
   "stage-06c": "pipeline/observability-report.md",
   "stage-06d": "pipeline/verification-report.md",
+  "stage-06e": "pipeline/performance-report.md",
   "stage-07": "pipeline/runbook.md",
   "stage-08": "pipeline/deploy-log.md",
   "stage-09": "pipeline/retrospective.md",
@@ -450,6 +452,7 @@ function renderGate(parent, gate) {
     case "stage-06b": renderAccessibility(parent, gate); break;
     case "stage-06c": renderObservability(parent, gate); break;
     case "stage-06d": renderVerification(parent, gate); break;
+    case "stage-06e": renderPerformanceBudget(parent, gate); break;
     case "stage-07": renderSignOff(parent, gate); break;
     case "stage-08": renderDeploy(parent, gate); break;
     case "stage-09": renderRetro(parent, gate); break;
@@ -909,6 +912,74 @@ function renderVerification(parent, gate) {
       card.innerHTML = `<span>${badge(f.method, "fail")}</span><span>${f.summary}${f.file ? ` <span style="font-family:var(--mono);font-size:0.78rem;color:var(--muted)">${f.file}${f.line ? `:${f.line}` : ""}</span>` : ""}</span>`;
       parent.appendChild(card);
     });
+  }
+}
+
+function renderPerformanceBudget(parent, gate) {
+  addSection(parent, "Performance Budget");
+
+  if (gate.skipped_reason) {
+    parent.appendChild(el("div", "alert-banner alert-warn", `Skipped: ${gate.skipped_reason}`));
+    return;
+  }
+
+  const exceeded = gate.budget_exceeded;
+  parent.appendChild(el("div", `alert-banner ${exceeded ? "alert-fail" : "alert-pass"}`,
+    exceeded ? "❌ Budget exceeded — see blockers" : "✅ All budgets met"));
+
+  if (Array.isArray(gate.checks_performed) && gate.checks_performed.length > 0) {
+    addFieldRow(parent, "Checks", gate.checks_performed.join(", "));
+  }
+
+  if (gate.lighthouse) {
+    const lh = gate.lighthouse;
+    addSection(parent, "Lighthouse");
+    if (lh.score != null) {
+      const pct = Math.round(lh.score * 100);
+      const cls = pct >= 90 ? "all-pass" : pct >= 50 ? "some-fail" : "fail";
+      const wrap = el("div", "test-bar-wrap");
+      wrap.innerHTML = `<div class="test-bar-label">Score: <strong>${pct}/100</strong>${lh.budget_score != null ? ` (budget ≥ ${Math.round(lh.budget_score * 100)})` : ""}</div><div class="test-bar"><div class="test-bar-fill ${cls}" style="width:${pct}%"></div></div>`;
+      parent.appendChild(wrap);
+    }
+    const vitals = [["LCP", lh.lcp_ms, "ms"], ["INP", lh.inp_ms, "ms"], ["CLS", lh.cls, ""], ["FCP", lh.fcp_ms, "ms"], ["TTFB", lh.ttfb_ms, "ms"]];
+    const table = el("div", "perf-vitals-grid");
+    vitals.forEach(([label, val, unit]) => {
+      if (val == null) return;
+      const cell = el("div", "perf-vital-cell");
+      cell.innerHTML = `<span class="vital-label">${label}</span><span class="vital-value">${val}${unit}</span>`;
+      table.appendChild(cell);
+    });
+    if (table.childElementCount > 0) parent.appendChild(table);
+    if (lh.url) addFieldRow(parent, "URL", `<code>${lh.url}</code>`);
+    if (lh.tool) addFieldRow(parent, "Tool", lh.tool);
+  }
+
+  if (gate.bundle) {
+    const b = gate.bundle;
+    addSection(parent, "Bundle Size");
+    if (b.total_size_kb != null) addFieldRow(parent, "Total", `${b.total_size_kb} KB`);
+    if (b.delta_kb != null) {
+      const sign = b.delta_kb > 0 ? "+" : "";
+      const cls = b.delta_kb > 0 ? (b.budget_exceeded ? "status-fail" : "status-warn") : "status-pass";
+      addFieldRow(parent, "Delta", `<span class="${cls}">${sign}${b.delta_kb} KB</span>`);
+    }
+    if (b.budget_kb != null) addFieldRow(parent, "Budget", `≤ ${b.budget_kb} KB total`);
+    if (b.delta_budget_kb != null) addFieldRow(parent, "Delta budget", `≤ ${b.delta_budget_kb} KB`);
+    if (b.tool) addFieldRow(parent, "Tool", b.tool);
+  }
+
+  if (gate.load_test) {
+    const lt = gate.load_test;
+    addSection(parent, "Load Test");
+    if (lt.p95_ms != null) addFieldRow(parent, "p95 latency", `${lt.p95_ms}ms${lt.budget_p95_ms ? ` (budget ≤ ${lt.budget_p95_ms}ms)` : ""}`);
+    if (lt.p99_ms != null) addFieldRow(parent, "p99 latency", `${lt.p99_ms}ms`);
+    if (lt.rps != null) addFieldRow(parent, "Throughput", `${lt.rps} RPS${lt.budget_rps ? ` (budget ≥ ${lt.budget_rps})` : ""}`);
+    if (lt.error_rate != null) {
+      const pct = (lt.error_rate * 100).toFixed(2);
+      addFieldRow(parent, "Error rate", `${pct}%`);
+    }
+    if (lt.tool) addFieldRow(parent, "Tool", lt.tool);
+    if (lt.scenario) addFieldRow(parent, "Scenario", lt.scenario);
   }
 }
 

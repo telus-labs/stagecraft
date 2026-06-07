@@ -21,6 +21,7 @@ function seedAll(cwd, _untilSignOff = true) {
   const passes = [
     "stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
     "stage-04c", "stage-05", "stage-06", "stage-06b", "stage-06c", "stage-06d",
+    "stage-06e",
   ];
   for (const s of passes) {
     seedGate(cwd, s, {

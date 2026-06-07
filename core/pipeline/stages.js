@@ -313,6 +313,32 @@ const STAGES = {
       non_blocking_findings: [],
     },
   },
+  // B2 — performance budget gate. Runs AFTER stage-06 (qa) PASS on
+  // full + quick + hotfix. QA role measures Lighthouse scores, bundle
+  // size delta, and k6 load-test throughput against configured budgets.
+  // A single exceeded budget flips the gate to FAIL. When the change
+  // has no relevant surface (backend-only with no load concern, doc-only)
+  // the agent sets skipped_reason and status PASS. Budget thresholds
+  // come from the project's performance.budget.json or .devteam/config.yml;
+  // the skill walks sensible defaults when neither file exists.
+  "performance-budget": {
+    stage: "stage-06e",
+    roles: ["qa"],
+    objective: "Measure Lighthouse performance scores, bundle size delta, and load-test throughput against project budgets. FAIL if any budget is exceeded. PASS (with skipped_reason) when the change has no performance-relevant surface.",
+    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/test-report.md"],
+    allowedWrites: ["pipeline/performance-report.md", "pipeline/gates/stage-06e.json", "pipeline/context.md"],
+    artifact: "pipeline/performance-report.md",
+    template: "performance-report-template.md",
+    requiredCapabilities: { shell: true },
+    gate: {
+      checks_performed: [],
+      lighthouse: null,
+      bundle: null,
+      load_test: null,
+      budget_exceeded: false,
+      skipped_reason: null,
+    },
+  },
   "sign-off": {
     stage: "stage-07",
     roles: ["pm", "platform"],
@@ -380,6 +406,7 @@ const ORDERED_STAGE_NAMES = [
   "accessibility-audit",
   "observability-gate",
   "verification-beyond-tests",
+  "performance-budget",
   "sign-off",
   "deploy",
   "retrospective",
@@ -406,6 +433,12 @@ const ORDERED_STAGE_NAMES = [
 // heavy stuff (property-based / mutation / formal) belongs on the
 // track that explicitly opted into rigour-over-speed. Other tracks
 // rely on stage-06's example tests as their verification floor.
+// Performance-budget (stage-06e, B2) runs on full, quick, and hotfix
+// — the same tracks as accessibility-audit. Skipped on nano (trivial
+// changes have no performance surface), config-only (no code changes),
+// and dep-update (dependency bumps are audited at peer-review, not
+// benchmarked). Budget thresholds come from performance.budget.json or
+// .devteam/config.yml; the skill provides sensible defaults.
 // Peer-review on nano is a scoped variant — see PEER_REVIEW_SIZING below.
 // Audit Tier-2 policy decision: nano was previously [build, qa] which
 // skipped the entire methodology; even trivial changes deserve a
@@ -414,11 +447,11 @@ const ORDERED_STAGE_NAMES = [
 // marquee review property.
 const STAGES_BY_TRACK = {
   full:          ORDERED_STAGE_NAMES,
-  quick:         ["requirements", "executable-spec", "build", "peer-review", "qa", "accessibility-audit", "sign-off", "deploy", "retrospective"],
+  quick:         ["requirements", "executable-spec", "build", "peer-review", "qa", "accessibility-audit", "performance-budget", "sign-off", "deploy", "retrospective"],
   nano:          ["build", "peer-review", "qa"],
   "config-only": ["build", "pre-review", "security-review", "migration-safety", "qa", "sign-off", "deploy"],
   "dep-update":  ["build", "peer-review", "qa", "sign-off", "deploy"],
-  hotfix:        ["build", "pre-review", "security-review", "red-team", "migration-safety", "peer-review", "qa", "accessibility-audit", "observability-gate", "sign-off", "deploy", "retrospective"],
+  hotfix:        ["build", "pre-review", "security-review", "red-team", "migration-safety", "peer-review", "qa", "accessibility-audit", "observability-gate", "performance-budget", "sign-off", "deploy", "retrospective"],
 };
 
 // Per-track sizing for peer-review (stage-05). For trivial changes
