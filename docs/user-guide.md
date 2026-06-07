@@ -329,7 +329,7 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 - **Stage 3b — Executable spec (PM, G2).** Runs on `full` + `quick` after clarification. PM translates each numbered `AC-N` in `pipeline/brief.md` into one Gherkin scenario in `pipeline/spec.feature`, tagged `@AC-N`. Use `devteam spec generate` to scaffold the file from the brief (one tagged Scenario per AC with TODO Given/When/Then placeholders) and `devteam spec verify` to drift-check brief.md ↔ spec.feature ↔ test-report.md. Gate carries `criteria_count`, `scenarios_count`, the full `criteria_to_scenario_mapping` array, `all_criteria_mapped`, and `drift`. PASS requires `drift: false` AND `all_criteria_mapped: true`. The .feature file becomes the canonical contract that QA's tests must map to in stage-06.
 
-- **Stage 4 — Build (4 workstreams).** Backend / Frontend / Platform / QA each write to their owned source dir and produce a PR summary. **Each workstream sees a narrower `allowedWrites`** — backend cannot write `src/frontend/`. Per-workstream gates at `pipeline/gates/stage-04.<role>.json`; `devteam merge build` aggregates. **Enforcement varies by host**: claude-code blocks unauthorized writes at tool-call time via its `PreToolUse` hook; codex and gemini-cli run a post-hoc git-status diff after the workstream exits — any file outside `allowedWrites` is captured in `writeViolations[]` and the gate is patched to `FAIL` with violations in `blockers[]`.
+- **Stage 4 — Build (4 workstreams).** Backend / Frontend / Platform / QA each write to their owned source dir and produce a PR summary. Each workstream sees a narrower `allowedWrites` (backend cannot write `src/frontend/`). Per-workstream gates land at `pipeline/gates/stage-04.<role>.json`; `devteam merge build` aggregates. **Enforcement varies by host**: claude-code blocks unauthorized writes at tool-call time via its `PreToolUse` hook; codex and gemini-cli run a post-hoc git-status diff after the workstream exits. Any file outside `allowedWrites` is captured in `writeViolations[]` and the gate is patched to `FAIL` with violations in `blockers[]`.
 
 - **Stage 4a — Pre-review (Platform).** Lint, type-check, dep review, license check, security heuristic. Gate carries `lint_passed`, `tests_passed`, `dependency_review_passed`, `license_check_passed`, `license_findings[]`, `security_review_required`. `license_findings[]` contains per-package entries `{ package, license, policy }` where policy is `allowed`, `warned`, or `denied`. Default policy: MIT/Apache-2.0/BSD-*/ISC/CC0/Unlicense → allowed; UNLICENSED/SSPL/BUSL → warned; GPL-*/AGPL-*/LGPL-* → denied. Override with `license.extra_allowed: ["LicenseId"]` in `.devteam/config.yml`. The `security_review_required` flag conditionally triggers Stage 4b.
 
@@ -603,7 +603,7 @@ devteam merge build
 devteam next
 ```
 
-`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a **PATCH MODE** section at the top of each dispatched prompt, telling agents to fix only the listed items. `--skip-completed` skips dispatching any workstream whose gate file already exists — so frontend, which passed, never gets re-run.
+`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a **PATCH MODE** section at the top of each dispatched prompt, telling agents to fix only the listed items. `--skip-completed` skips dispatching any workstream whose gate file already exists, so frontend (which passed) never gets re-run.
 
 The agents see: the QA blockers already in `context.md` (written by the validator when QA's gate was first validated), plus the explicit PATCH MODE list in the prompt. Both signals reinforce the same fix targets.
 
@@ -630,7 +630,7 @@ devteam stage red-team --headless --timeout-ms 1800000   # 30 min
 devteam stage red-team --headless --timeout-ms 0          # no cap
 ```
 
-The timeout is per workstream, not per stage — a multi-role stage with three parallel workstreams gets 3 × N ms total wall-clock.
+The timeout is per workstream, not per stage. A multi-role stage with three parallel workstreams gets 3 × N ms total wall-clock.
 
 ### Stubbing for tests
 
@@ -652,7 +652,7 @@ Boots a local HTTP server (default `http://127.0.0.1:3737/`) and opens it in you
 
 - **Top bar:** active track, configured hosts.
 - **Stage rows:** one per stage in the active track. Status icon + color. Multi-role stages expand to show per-workstream rows.
-- **Click a row:** opens the gate detail panel — identity fields, blockers, warnings, workstreams table, raw JSON.
+- **Click a row:** opens the gate detail panel (identity fields, blockers, warnings, workstreams table, raw JSON).
 - **Click a role chip:** opens that role's brief inline.
 
 Live updates: the UI watches `pipeline/gates/` via `fs.watch` and pushes changes over Server-Sent Events. Run a stage in another terminal; rows light up in the browser as gates land. No refresh needed.
