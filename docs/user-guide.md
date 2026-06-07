@@ -306,11 +306,11 @@ devteam merge build
 # → Merged → /…/pipeline/gates/stage-04.json (status: PASS)
 ```
 
-`devteam next` will tell you when a merge is needed — you don't have to remember.
+`devteam next` will tell you when a merge is needed.
 
 ### Conditional stages
 
-Some stages only run when a preceding stage's gate sets a specific flag. The orchestrator checks these automatically — `devteam next` silently skips a conditional stage whose condition isn't met and moves on.
+Some stages only run when a preceding stage's gate sets a specific flag. The orchestrator checks these automatically; `devteam next` silently skips a conditional stage whose condition is not met.
 
 | Stage | Condition |
 |---|---|
@@ -416,7 +416,7 @@ routing:
     stage-08: claude-code          # deploy always on claude-code, regardless of role
 ```
 
-Routing precedence: **`stages` → `roles` → `default_host`**. The stage-level override is useful for stages where a specific host is required regardless of which role is dispatched there — for example, always running deploy on the host whose agent has deployment credentials.
+Routing precedence: **`stages` → `roles` → `default_host`**. The stage-level override is useful when a specific host is required for a stage regardless of which role is dispatched, for example always running deploy on the host whose agent has deployment credentials.
 
 When a stage with multiple workstreams runs, each workstream is independently routed. `devteam stage build` (four workstreams: backend, frontend, platform, QA) with the config above routes all four to Codex. `devteam stage design` (Principal role) routes to Claude Code. The gate merge is host-agnostic — the orchestrator reads JSON files, and the merged gate's `workstreams[]` array records `"host"` per row so you can see which CLI handled what.
 
