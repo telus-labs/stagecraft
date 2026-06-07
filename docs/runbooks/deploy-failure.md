@@ -1,16 +1,10 @@
 # Runbook: Deploy Failure (Stage 8)
 
-`devteam next` reports `fix-and-retry` with `stage: "stage-08"`, or the Stage 8
-gate shows `status: "FAIL"`. This runbook covers how to diagnose, decide between
-investigating vs. rolling back, and how to proceed in either direction.
+`devteam next` reports `fix-and-retry` with `stage: "stage-08"`, or the Stage 8 gate shows `status: "FAIL"`. This runbook covers how to diagnose the failure, decide between investigating and rolling back, and proceed in either direction.
 
-Stage 8 is **adapter-driven** — the exact failure signals differ between
-`docker-compose`, `kubernetes`, `terraform`, and `custom` adapters. The
-diagnostic steps below are common to all; adapter-specific details follow.
+Stage 8 is **adapter-driven**. The exact failure signals differ between `docker-compose`, `kubernetes`, `terraform`, and `custom` adapters. The diagnostic steps below apply to all; adapter-specific details follow.
 
-> **Do not auto-rollback.** The rules explicitly prohibit it. A deploy failure
-> is not necessarily a broken deploy — smoke tests can fail for reasons unrelated
-> to the application (network, timing, seed data). Read before acting.
+> **Do not auto-rollback.** The rules explicitly prohibit it. A deploy failure is not necessarily a broken deploy — smoke tests can fail for reasons unrelated to the application (network timing, seed data). Diagnose before acting.
 
 ---
 
@@ -132,9 +126,7 @@ investigation has stalled and you need to restore service first.
 grep -A 40 "## Rollback" pipeline/runbook.md
 ```
 
-Follow that procedure exactly — it was written for this specific deploy by
-`dev-platform` at Stage 8. The commands in `§Rollback` are the authoritative
-rollback for this release.
+Follow that procedure exactly. It was written for this specific deploy by `dev-platform` at Stage 8. The commands in `§Rollback` are the authoritative rollback for this release.
 
 After rollback:
 
@@ -196,9 +188,7 @@ devteam stage deploy --headless
 - **`runbook_referenced: false` on a PASS gate** — impossible by design; the gate
   validates this. If you see it, the gate was hand-edited. Re-run
   `devteam verify stage-08` to re-stamp.
-- **Retrying without a root cause** — a second identical deploy failure will
-  produce `retry_number: 2` and eventually auto-escalate. Don't retry until you
-  know what changed.
+- **Retrying without a root cause** — a second identical deploy failure produces `retry_number: 2` and eventually auto-escalates. Do not retry until the root cause is identified.
 - **Rollback doesn't clear the gate** — after a successful rollback, the gate
   still shows FAIL. That's correct — the audit trail should reflect the failed
   deploy. Don't hand-edit it to PASS. The next successful deploy will write a new

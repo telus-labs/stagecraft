@@ -1,6 +1,12 @@
 # Methodology
 
-Stagecraft enforces **ATDD with phase-gate progression, an adversarial red-team, and multi-role peer review**. Every feature traces from an acceptance criterion through a Gherkin scenario through a named test — and can't move to the next phase until the gate for the current one passes. The red-team role is structurally separate from the build roles and runs by default; peer review runs across four area reviewers (and optionally across multiple model families) on every change.
+Stagecraft enforces **ATDD with phase-gate progression, an adversarial red-team, and multi-role peer review**. Every feature traces from an acceptance criterion through a Gherkin scenario to a named test, and cannot advance to the next phase until the current gate passes. The red-team role is structurally separate from the build roles and runs by default. Peer review runs across four area reviewers, optionally across multiple model families, on every change.
+
+- [1. Acceptance-test-driven development](#1-acceptance-test-driven-development)
+- [2. Phase-gate progression](#2-phase-gate-progression)
+- [3. Review layers](#3-review-layers)
+- [4. Four coding principles](#4-four-coding-principles)
+- [How it fits together](#how-it-fits-together)
 
 ---
 
@@ -29,7 +35,7 @@ See [`docs/spec-authoring.md`](spec-authoring.md) for the authoring procedure an
 
 Every stage writes a machine-readable gate to `pipeline/gates/`. The orchestrator reads the gate before dispatching the next stage. A `FAIL` gate stops forward progress; an `ESCALATE` gate halts the entire pipeline until a human resolves it.
 
-The practical effect: **the methodology is enforced by the pipeline, not by convention.** You can't skip design review by forgetting to look at the design doc — the `stage-02.json` gate must be present and `PASS` before Stage 3 runs. You can't merge until sign-off gates exist for both PM and Platform roles.
+The methodology is enforced by the pipeline, not by convention. The `stage-02.json` gate must be present and `PASS` before Stage 3 runs; there is no way to skip design review by omission. Merging requires sign-off gates from both PM and Platform roles.
 
 Two stages hold veto power that peer-review approvals cannot override:
 
@@ -42,13 +48,13 @@ See [`docs/concepts.md`](concepts.md) → *Gate* and [`docs/migration-safety.md`
 
 ## 3. Review layers
 
-The pipeline runs two distinct review layers between build and sign-off. They have different roles, different methods, and different success criteria — conflating them is a source of false confidence.
+The pipeline runs two distinct review layers between build and sign-off. They have different roles, different methods, and different success criteria. Conflating them produces false confidence.
 
-**Adversarial review — Red-team (Stage 4c).** Runs after build, before peer-review. The red-team role is *constitutionally separate* from build roles and exists specifically to find the strongest objections to the change. Walks 10 attack surfaces (input boundaries, state machines, sequence assumptions, integrations, auth edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps) and produces concrete reproducers — not vibes. Items listed under `must_address_before_peer_review` block Stage 5 until the implementer addresses them. Always-on for `full` and `hotfix` tracks. Route to a different host than the build agents — diversity of model matters because the adversarial signal comes from a reviewer with different training data than the builder.
+**Adversarial review — Red-team (Stage 4c).** Runs after build, before peer-review. The red-team role is structurally separate from build roles and exists to find the strongest objections to the change. It walks 10 attack surfaces (input boundaries, state machines, sequence assumptions, integrations, auth edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps) and produces concrete reproducers. Items listed under `must_address_before_peer_review` block Stage 5 until addressed. Always-on for `full` and `hotfix` tracks. Route to a different host than the build agents: adversarial signal depends on a reviewer with different training data than the builder.
 
-**Peer review (Stage 5).** Four area-specific reviewers (`reviewer-backend`, `reviewer-frontend`, `reviewer-platform`, `reviewer-qa`) each produce an independent review against the four coding principles. With `routing.review_fanout` configured, Stage 5 duplicates across N hosts (multi-model peer review) and aggregates pessimistically — any FAIL anywhere blocks the stage. Patterns that survive all reviewers are promoted to `pipeline/lessons-learned.md` at retrospective; the Principal then decides whether to encode them as pipeline rules.
+**Peer review (Stage 5).** Four area-specific reviewers (`reviewer-backend`, `reviewer-frontend`, `reviewer-platform`, `reviewer-qa`) each produce an independent review against the four coding principles. With `routing.review_fanout` configured, Stage 5 duplicates across N hosts (multi-model peer review) and aggregates pessimistically: any FAIL anywhere blocks the stage. Patterns that survive all reviewers are promoted to `pipeline/lessons-learned.md` at retrospective; the Principal then decides whether to encode them as pipeline rules.
 
-The two layers serve different purposes: Stage 4c hunts for *attacks the author didn't think of* with a different method (the 10 surfaces walkthrough). Stage 5 checks for *principles the author didn't apply* with the standard reviewer rubric. Both have value; calling Stage 5 "adversarial" by itself would overclaim — the diversity it gets is execution-diversity (different model families), not method-diversity.
+The two layers serve different purposes. Stage 4c hunts for attacks the author didn't consider, using the 10-surface walkthrough. Stage 5 checks for principles the author didn't apply, using the standard reviewer rubric. Both have value. Calling Stage 5 "adversarial" would overclaim: the diversity it provides is execution-diversity (different model families), not method-diversity.
 
 See [`docs/red-team.md`](red-team.md) for the attack-surface methodology and [`docs/user-guide.md`](user-guide.md) → *Multi-model peer review* for fanout configuration.
 
@@ -91,4 +97,4 @@ QA (Stage 6)             Verifies every AC-N scenario has a passing test
 Sign-off → Deploy → Retro
 ```
 
-The gate at each arrow is a `PASS/WARN/FAIL/ESCALATE` record on disk. The pipeline is reconstructable — and auditable — from the gate files alone.
+The gate at each arrow is a `PASS/WARN/FAIL/ESCALATE` record on disk. The pipeline is fully reconstructable and auditable from the gate files alone.

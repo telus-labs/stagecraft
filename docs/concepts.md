@@ -1,6 +1,14 @@
 # Concepts
 
-Six primitives make up Stagecraft. Skim this page before reading anything else — every other doc assumes you know these words.
+Six primitives make up Stagecraft. Every other doc assumes you know these terms.
+
+- [How they compose](#how-they-compose)
+- [Rules of thumb](#rules-of-thumb)
+- [Secondary vocabulary](#secondary-vocabulary)
+- [Tracks at a glance](#tracks-at-a-glance)
+- [Files at a glance](#files-at-a-glance)
+- [Two distinct workflows](#two-distinct-workflows)
+- [What you can stop reading now](#what-you-can-stop-reading-now)
 
 | Concept | Lives in | Set by | What it is |
 |---|---|---|---|
@@ -11,7 +19,7 @@ Six primitives make up Stagecraft. Skim this page before reading anything else �
 | **Gate** | `pipeline/gates/<stage>*.json` | The model writes it; the validator enforces it | A JSON record of one workstream's (or stage's) outcome. **The stable seam between stages.** Required fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. |
 | **Track** | `core/pipeline/stages.js` | Your `.devteam/config.yml` (`pipeline.default_track`) | Which stages run for this kind of change. Six tracks: `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Tracks shape *which* stages run; never *what* a stage does. |
 
-That's the load-bearing vocabulary. The rest of this page builds on it.
+The rest of this page builds on these six concepts.
 
 ---
 
@@ -30,7 +38,7 @@ The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator n
 
 ### Stage-5 vocabulary callout
 
-At Stage 5 (peer-review), the merged `stage-05.json` gate's `workstreams[]` array means something different from every other multi-role stage. Read carefully — this trips most new operators.
+At Stage 5 (peer-review), the merged `stage-05.json` gate's `workstreams[]` array means something different from every other multi-role stage. The distinction is a common source of confusion for new operators.
 
 At **Stage 4 (build)**, `workstreams[]` are the four **implementers**. Each entry's `status` is the verdict that implementer wrote about *their own* gate (PASS = they finished their slice cleanly, FAIL = they ran into a problem).
 
@@ -85,11 +93,11 @@ These come up frequently but build on the primitives above:
 - **Approval-derivation** — Stage 5's mechanism. Reviewers write per-area `REVIEW: APPROVED` / `REVIEW: CHANGES REQUESTED` markers in `pipeline/code-review/by-<reviewer>.md`; a Claude Code `PostToolUse Write|Edit` hook parses them and upserts the per-area workstream gates. The hook fires only on agent-driven writes inside an active host session — shell or editor edits to review files bypass it. Use `devteam derive-approvals [<file>]` to re-run the hook from the shell after hand-editing a review file. You never write Stage 5 gates by hand directly.
 - **Auto-fold (Stage 7)** — when Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 criterion-to-test mapping, the orchestrator authors Stage 7 sign-off directly with `auto_from_stage_06: true`. No human action.
 - **Retrospective synthesis (Stage 9)** — Principal harvests `PATTERN:` lines from Stage 5 reviews, reconciles with `pipeline/lessons-learned.md`, promotes ≤2 rules per retro, retires stale ones via the auto-age-out rule.
-- **Multi-model peer review** — opt-in fanout (`routing.review_fanout: [host, host, host]` in config). Stage-05's 4 area workstreams duplicate across N hosts → 4×N parallel reviews; pessimistic merge across all of them. Reviewers all run the same four-principles rubric; the cross-model signal — different training data, different blind spots — is what the fanout buys. For *method* diversity (a different role applying a different methodology), see stage-04c red-team.
+- **Multi-model peer review** — opt-in fanout (`routing.review_fanout: [host, host, host]` in config). Stage-05's 4 area workstreams duplicate across N hosts, producing 4×N parallel reviews; pessimistic merge applies across all of them. Reviewers all run the same four-principles rubric. The cross-model signal (different training data, different blind spots) is what the fanout buys. For method diversity (a different role applying a different methodology), see stage-04c red-team.
 - **Red team (stage-04c)** — adversarial-by-design role between build (Stage 4) and peer review (Stage 5). Always-on for `full` + `hotfix` tracks. Walks 10 attack surfaces (input boundaries, state, sequence, integrations, auth edges, resource exhaustion, failure modes, abuse cases, downstream effects, observability gaps) and produces concrete reproducers. `must_address_before_peer_review` items block Stage 5 until the implementer addresses them. Distinct from security-engineer (narrower remit, conditional, has veto) and reviewer (general code review). Diversity matters — route to a different host than the build agents. See `skills/red-team/SKILL.md` for methodology.
 - **Executable spec (stage-03b)** — closed-loop AC → Scenario → test bridge. PM translates every numbered `AC-N` line in `pipeline/brief.md` into one Gherkin scenario in `pipeline/spec.feature`, tagged `@AC-N`. The gate carries the full `criteria_to_scenario_mapping` array; `devteam spec verify` cross-checks brief.md ↔ spec.feature ↔ test-report.md and exits non-zero on drift (orphan ACs, orphan scenarios, duplicate IDs, unknown AC refs in tests). Runs on `full` + `quick` (tracks with a `requirements` stage to derive ACs from). Skipped on `hotfix`/`nano`/`config-only`/`dep-update`. See `skills/spec-authoring/SKILL.md` for the authoring procedure.
 - **Migration safety (stage-04d)** — conditional safety review for data-layer diffs. Fires when stage-04a's heuristic flags schema files, migration directories, or DDL fragments. Walks six questions (what does it do? breaking? backfill required? dual-write required? rollback plan? rollback tested?) and writes a gate covering each. **Has veto power**: an empty rollback plan, an untested rollback on a breaking change, or a missing backfill strategy on a backfill-required migration each auto-veto. Peer-review approvals CANNOT override a veto — the migrations role must personally re-review the fix. See `skills/migration-safety/SKILL.md` for methodology and the auto-veto criteria.
-- **Verification beyond tests (stage-06d)** — full-track-only stage that runs AFTER stage-06 (qa) PASS. New `verifier` role applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Read-only on production code; writes property tests under `src/tests/property/` and formal specs under `pipeline/formal/`. Gate carries `methods_attempted[]`, `methods_skipped[{method, reason}]`, per-method stats, and `blocking_findings[]` (a counterexample to a stated invariant, a surviving mutant on a critical path, or a formal counterexample to a safety property). Non-empty `blocking_findings` halts sign-off; the implementer addresses, the stage re-runs. The role brief is explicit about NOT faking runs — if a tool isn't installed, the method is `attempted_but_blocked` with the install hint, not a fabricated 97% score. "Tests pass" becomes the floor; this stage is the ceiling. See `skills/verification-beyond-tests/SKILL.md` for the five-phase procedure and the property-shape vocabulary (round-trip / idempotence / commutativity / monotonicity / invariant preservation / oracle).
+- **Verification beyond tests (stage-06d)** — full-track-only stage that runs AFTER stage-06 (qa) PASS. New `verifier` role applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Read-only on production code; writes property tests under `src/tests/property/` and formal specs under `pipeline/formal/`. Gate carries `methods_attempted[]`, `methods_skipped[{method, reason}]`, per-method stats, and `blocking_findings[]` (a counterexample to a stated invariant, a surviving mutant on a critical path, or a formal counterexample to a safety property). Non-empty `blocking_findings` halts sign-off; the implementer addresses, then the stage re-runs. The role brief prohibits fabricating results: if a tool isn't installed, the method is `attempted_but_blocked` with the install hint, not a fabricated score. See `skills/verification-beyond-tests/SKILL.md` for the five-phase procedure and the property-shape vocabulary (round-trip / idempotence / commutativity / monotonicity / invariant preservation / oracle).
 - **Persistent memory** — `devteam memory ingest|query` builds a per-project semantic index of briefs, design specs, ADRs, retros, and lessons. Local embedder by default; offline after first download.
 
 ---
@@ -136,4 +144,4 @@ When the user says "build feature X" → `devteam stage requirements --feature "
 
 ## What you can stop reading now
 
-If you can describe what a **workstream**, **gate**, and **track** are, you have enough to use the pipeline. If you know `/audit` produces a `docs/audit/10-roadmap.md` you can act on, you have enough to use the audit. Everything else is detail that surfaces when you need it — chase the cross-references when they come up.
+If you can describe what a **workstream**, **gate**, and **track** are, you have enough to use the pipeline. If you know `/audit` produces a `docs/audit/10-roadmap.md` you can act on, you have enough to use the audit. Everything else is detail that surfaces when you need it. Follow the cross-references as they come up.

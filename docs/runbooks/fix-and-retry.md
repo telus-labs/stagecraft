@@ -1,10 +1,25 @@
 # Runbook: Fix and Retry
 
-`devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook is the operational playbook — what to read, how to fix, how to re-run, and how to know it worked.
+`devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook covers what to read, how to fix, how to re-run, and how to confirm the fix took.
 
-Most `fix-and-retry` cases come from one of six stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review can fail in two distinct shapes — with reviewer objections (Case 4) or with no objections at all (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of six stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review fails in two distinct shapes: with reviewer objections (Case 4) or with no objections but insufficient approvals (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
 
-For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md) — different protocol.
+For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md).
+
+---
+
+- [The general pattern](#the-general-pattern)
+- [Case 1: Red-team FAIL](#case-1-red-team-fail--must_address_before_peer_review-non-empty)
+- [Case 2: QA-within-build FAIL](#case-2-qa-within-build-fail)
+- [Case 3: Pre-review FAIL](#case-3-pre-review-stage-4a-fail--lint-or-test-failure)
+- [Case 4: Peer-review CHANGES\_REQUESTED](#case-4-peer-review-stage-5-changes_requested--fail)
+- [Case 5: Peer-review quorum miss](#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss)
+- [Case 6: PM sign-off FAIL](#case-6-pm-sign-off-stage-7-fail--delta_items-non-empty)
+- [Case 7: Accessibility audit FAIL](#case-7-accessibility-audit-stage-6b-fail--blockers-non-empty)
+- [Case 8: Consistency drift](#case-8-consistency-drift--devteam-consistency-analyze-exits-non-zero)
+- [Case 9: Verification-beyond-tests FAIL](#case-9-verification-beyond-tests-stage-6d-fail--blocking_findings-non-empty)
+- [Common gotchas](#common-gotchas)
+- [After resolution](#after-resolution)
 
 ---
 
@@ -148,15 +163,11 @@ devteam stage red-team --headless
 devteam next
 ```
 
-Costs 4× the build wall-clock (the 3 unaffected agents each render and exit quickly with PR summaries saying "no relevant items in scope"), but is conceptually simpler. Choose based on cost vs effort.
+This costs 4× the build wall-clock (the three unaffected agents render and exit quickly with PR summaries saying "no relevant items in scope"), but is simpler to reason about. Choose based on cost versus effort.
 
 ### After red-team PASS/WARN: run QA augmentation before peer-review
 
-When the red-team gate turns WARN or PASS after one or more fix cycles, **do
-not advance directly to Stage 5 peer-review**. A patch cycle with
-`--skip-completed` leaves the QA gate unchanged — no regression tests were
-written for the fixes. Peer reviewers then verify correctness by static
-inspection alone, and the same bug class can resurface.
+When the red-team gate turns WARN or PASS after one or more fix cycles, do not advance directly to Stage 5 peer-review. A patch cycle with `--skip-completed` leaves the QA gate unchanged — no regression tests were written for the fixes. Peer reviewers then verify correctness by static inspection alone, and the same bug class can resurface.
 
 After `devteam stage red-team --headless` exits WARN or PASS:
 
@@ -234,7 +245,7 @@ devteam stage pre-review --headless    # orchestrator re-runs the commands
 devteam next
 ```
 
-The orchestrator re-stamps stage-04a on the next run; you can't fake a PASS by hand-editing the gate (well, you can, but `devteam verify stage-04a` will re-stamp and flip you back to FAIL).
+The orchestrator re-stamps stage-04a on the next run. Hand-editing the gate to PASS will be overwritten — `devteam verify stage-04a` re-stamps and restores FAIL.
 
 ---
 
@@ -477,7 +488,7 @@ merge-blockers — that's the convention (see [`conventions.md`](../conventions.
 
 - **`--patch` without `--from`** defaults to `red-team`. Fine in the common case; explicit `--from <stage>` is clearer.
 - **`--from` accepts both friendly name and gate id.** `--from red-team` and `--from stage-04c` are equivalent.
-- **The non-target workstreams will re-render and exit fast.** When you run `devteam stage build --patch --from red-team --headless` (without `--skip-completed`), all four build workstreams re-dispatch. The three not implicated by the patch items write quick PASS gates with PR summaries saying "no relevant items in scope." Costs wall-clock but is correct.
+- **The non-target workstreams will re-render and exit fast.** When you run `devteam stage build --patch --from red-team --headless` (without `--skip-completed`), all four build workstreams re-dispatch. The three not implicated by the patch items write quick PASS gates with PR summaries saying "no relevant items in scope." This costs wall-clock time but is correct.
 - **Don't hand-edit gate status to PASS.** Orchestrator-stamped verification (stage-04a, stage-06) will re-stamp on next validate and flip you back. The right way to override an automated decision is the [escalation runbook](escalation.md) → Principal ruling.
 - **Stage 5 is the exception — and only for quorum misses, not objections.** The merged `stage-05.json` is *not* orchestrator-stamped, so you can hand-edit it (Case 5, the override path). But the `approval-derivation` hook will overwrite per-area gates (`stage-05.<area>.json`) on any review-file save *from inside Claude Code*, and a subsequent `devteam merge peer-review` will re-derive the merged gate from those per-area gates. The override sticks only if neither happens. Adding the missing area review (and running `devteam derive-approvals`) is the durable fix.
 - **Editor saves don't fire the approval-derivation hook.** The hook is registered as a Claude Code `PostToolUse Write|Edit` event — it fires when an agent uses the `Write` or `Edit` tool inside an active session, not when you save the file from vim, VS Code outside Claude Code, or `cat >>` from your shell. After any manual edit to `pipeline/code-review/by-*.md`, run `devteam derive-approvals [<file>]` to update the per-area gates. Without an argument it processes every review file under `pipeline/code-review/`.

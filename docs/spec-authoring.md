@@ -2,6 +2,14 @@
 
 Stage 3b (executable-spec) and the `devteam spec` commands. The pipeline enforces an unbroken chain from acceptance criteria in the brief to Gherkin scenarios in a feature file to test rows in the test report.
 
+- [The chain](#the-chain)
+- [Writing acceptance criteria](#writing-acceptance-criteria)
+- [Scaffolding the spec file](#scaffolding-the-spec-file)
+- [Stage 3b gate](#stage-3b-gate)
+- [Checking for drift](#checking-for-drift)
+- [QA gate requirement](#qa-gate-requirement)
+- [References](#references)
+
 ---
 
 ## The chain
@@ -104,7 +112,7 @@ This compares the three sources — `pipeline/brief.md`, `pipeline/spec.feature`
 - **Unknown AC refs in tests** — test report references `@AC-N` that doesn't exist in brief
 - **Untested scenarios** — scenario in spec.feature with no test row
 
-Use `devteam spec verify` before the QA stage to catch drift early.
+Run `devteam spec verify` before the QA stage to catch drift early.
 
 ---
 

@@ -1,20 +1,32 @@
 # Reproducibility (C4)
 
-Stagecraft records exactly what produced each gate — model version, temperature, seed, max_tokens, a hash of the system prompt, a hash of the tool surface. Six months later, the gate JSON tells you not just *that* a change was made, but *what configuration* made it.
+Stagecraft records exactly what produced each gate: model version, temperature, seed, max_tokens, a hash of the system prompt, a hash of the tool surface. The gate JSON tells you not just *that* a change was made, but *what configuration* made it.
 
-This is the **C4** BACKLOG item. It pairs with **E6** (`devteam replay <stage>`, which re-runs a recorded gate and diffs against the original) and matters concretely for any audit that asks "show me how this change was developed" — SOC 2, EU AI Act, internal compliance reviews.
+This is the **C4** BACKLOG item. It pairs with **E6** (`devteam replay <stage>`, which re-runs a recorded gate and diffs against the original) and supports audits that require evidence of how a change was developed: SOC 2, EU AI Act, and internal compliance reviews.
+
+- [What "reproducible" honestly means with LLMs](#what-reproducible-honestly-means-with-llms)
+- [The recorded fields](#the-recorded-fields)
+- [How fields land in the gate](#how-fields-land-in-the-gate)
+- [Using the recorded fields](#using-the-recorded-fields)
+- [Replay readiness levels](#replay-readiness-levels)
+- [What this enables now vs later](#what-this-enables-now-vs-later)
+- [Replay (E6)](#replay-e6)
+- [Caveats](#caveats--be-honest-about-whats-recorded)
+- [See also](#see-also)
 
 ## What "reproducible" honestly means with LLMs
 
-Let me say what reproducibility is **not** before saying what it is:
+Reproducibility here has a specific, bounded meaning.
+
+What it is **not**:
 
 - **Not strict determinism.** Even at `temperature: 0`, most LLM APIs are nondeterministic across serving updates. Vendors change underlying infrastructure; the same prompt today and tomorrow can produce different outputs without warning.
 - **Not a guarantee.** Recording `seed: 42` only matters if the host honors seeded sampling. Anthropic's API does at temperature 0; not all hosts implement it consistently.
 
 What it **is**:
 
-- **Auditability.** Six months from now, you can answer "what model, what temperature, what prompt, what tools" with the gate JSON alone. No guessing, no chasing config history.
-- **Drift detection.** Re-render the prompt today, hash it, compare to the gate's hash. Drift means the prompt changed (role brief edited, skill updated, rules file revised). Visible at a glance.
+- **Auditability.** The gate JSON alone answers "what model, what temperature, what prompt, what tools." No guessing, no chasing config history.
+- **Drift detection.** Re-render the prompt today, hash it, compare to the gate's hash. Drift means the prompt changed: role brief edited, skill updated, or rules file revised.
 - **Replay readiness.** With enough recorded fields, `devteam replay <stage-id>` re-invokes the host with the current config and diffs the result against the original. The model itself may still drift, but the *configuration* is preserved.
 
 ## The recorded fields
@@ -37,7 +49,7 @@ All optional. Agents fill them in when they know; missing fields show up as `nul
 
 Three paths:
 
-1. **Orchestrator-computed.** `system_prompt_hash` is computed by the adapter at prompt-render time. The hash is embedded directly in the gate skeleton hint the agent sees — the agent stamps it verbatim into the gate JSON.
+1. **Orchestrator-computed.** `system_prompt_hash` is computed by the adapter at prompt-render time. The hash is embedded directly in the gate skeleton hint the agent sees; the agent stamps it verbatim into the gate JSON.
 
 2. **Agent-self-reports.** `model_version`, `temperature`, `seed`, `max_tokens`, `tools_hash` are filled in by the agent when it knows them. Claude Code subagents have access to their own `model:` frontmatter; headless invocations get them from the CLI flags they were invoked with.
 
@@ -117,8 +129,8 @@ replayReadiness(gate)
 ## What this enables now vs later
 
 **Now:**
-- Audit: "what configuration produced this artifact?" — answer is in the gate.
-- Drift detection: "would the same prompt render today?" — `devteam reproduce` compares hashes.
+- Audit: "what configuration produced this artifact?" The answer is in the gate.
+- Drift detection: "would the same prompt render today?" `devteam reproduce` compares hashes.
 - **Re-run with diff:** `devteam replay <stage-id>` re-invokes the host with current config and diffs the new gate against the original (see § Replay below).
 - Compliance evidence: SOC 2 / EU AI Act ask for records of how AI decisions were made. The gate JSON + these tools together are that record.
 
@@ -128,7 +140,7 @@ replayReadiness(gate)
 
 ## Replay (E6)
 
-`devteam replay <stage-id>` re-runs a recorded stage against the **current** configuration and writes the result to a non-clobbering path. Honest framing — what replay does and doesn't do:
+`devteam replay <stage-id>` re-runs a recorded stage against the **current** configuration and writes the result to a non-clobbering path. What replay does and doesn't do:
 
 **What replay does:**
 - Reads the original gate at `pipeline/gates/<stage-id>.json`.
@@ -139,12 +151,12 @@ replayReadiness(gate)
 - Diffs the two gates and prints what changed: status, blockers, cost / tokens / duration, reproducibility fields.
 
 **What replay does NOT do:**
-- Pin per-invocation params (temperature, seed, model_version) at the host CLI level. That's separate work — different hosts expose those flags differently. Replay uses *current* config; the diff makes the drift visible.
-- Recover from upstream nondeterminism. The model itself may produce different output for the same prompt + same params. Vendor serving changes drift independently.
+- Pin per-invocation params (temperature, seed, model_version) at the host CLI level. Different hosts expose those flags differently; that is separate work. Replay uses *current* config and the diff makes drift visible.
+- Recover from upstream nondeterminism. The model itself may produce different output for the same prompt and same params when vendor serving changes.
 
-**The practical answer it gives:**
-- "Is this stage still producing similar output today?" — a smoke test on a recorded run, six months later.
-- Combined with `devteam reproduce`'s drift check: "exactly what's different between then and now."
+**What replay tells you:**
+- Whether this stage still produces similar output today — a smoke test against a recorded run.
+- Combined with `devteam reproduce`'s drift check: exactly what is different between the original run and now.
 
 ### Usage
 
@@ -189,26 +201,26 @@ Replay complete → pipeline/gates/replay/stage-04.backend.2026-11-30T10-15-43-9
 
 ### How replay decides "a new gate was written"
 
-Replay captures the original gate file's mtime before invoking the host, then requires the file's mtime to advance after the invocation. This catches the case where the host CLI exits 0 but writes nothing — without the mtime check, the framework would mistake "no-op" for "success."
+Replay captures the original gate file's mtime before invoking the host, then requires the mtime to advance after invocation. This catches the case where the host CLI exits 0 but writes nothing. Without the mtime check, the framework would mistake a no-op for success.
 
 ### `--dry-run` mode
 
-`devteam replay <stage-id> --dry-run` prints the plan (original metadata, current host, prompt-hash drift) without invoking the host. Good for:
-- Quick audit checks ("would replay match?")
+`devteam replay <stage-id> --dry-run` prints the plan (original metadata, current host, prompt-hash drift) without invoking the host. Use it for:
+- Quick audit checks before a real replay
 - CI checks that surface drift without spending LLM dollars
-- Previewing before committing to a real replay
+- Previewing the plan before committing to a full replay
 
 ### Output paths
 
 Original gate stays at `pipeline/gates/<stage-id>.json` (restored after the headless run overwrites it).
-Replay gates land at `pipeline/gates/replay/<stage-id>.<iso-timestamp>.json`. The replay subdirectory is deliberately outside what the validator scans — replay gates don't participate in normal pipeline-state decisions.
+Replay gates land at `pipeline/gates/replay/<stage-id>.<iso-timestamp>.json`. The replay subdirectory is outside what the validator scans; replay gates do not participate in normal pipeline-state decisions.
 
 ## Caveats — be honest about what's recorded
 
-- **Cached prompt segments.** Anthropic and OpenAI both support prompt caching (cached portions of the input don't count toward billing the same way). `system_prompt_hash` covers the full prompt; cache state isn't reflected. Two runs with identical hashes may still have different cache hits and different cost profiles. Cost (D6) and prompt hash (C4) are independent dimensions.
-- **Multimodal inputs.** If a stage's prompt includes images (G5, not yet shipped), the hash treats them as opaque base64 — the image bytes are part of the hash. Re-encoding the same image differently would change the hash.
-- **Tool surface drift.** `tools_hash` captures the *names* of available tools, sorted. Two hosts with the same tool names but different tool *implementations* will hash identically. This is honest about what the model could call, not how the call resolves.
-- **Time of day, region, vendor's serving state.** Not captured by any hash. These can affect output without leaving a trace. Reproducibility at the framework layer doesn't fix vendor-side nondeterminism.
+- **Cached prompt segments.** Anthropic and OpenAI both support prompt caching; cached portions bill differently. `system_prompt_hash` covers the full prompt but does not reflect cache state. Two runs with identical hashes may have different cache hits and different cost profiles. Cost (D6) and prompt hash (C4) are independent dimensions.
+- **Multimodal inputs.** If a stage's prompt includes images (G5, not yet shipped), the hash treats them as opaque base64. Re-encoding the same image differently would change the hash.
+- **Tool surface drift.** `tools_hash` captures the *names* of available tools, sorted. Two hosts with the same tool names but different tool *implementations* hash identically. The hash reflects what the model could call, not how the call resolves.
+- **Time of day, region, vendor serving state.** Not captured by any hash. These can affect output without leaving a trace. Framework-level reproducibility does not address vendor-side nondeterminism.
 
 ## See also
 

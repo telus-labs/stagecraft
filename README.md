@@ -1,8 +1,6 @@
 # Stagecraft
 
-> *"I'm not coding anymore — I'm reviewing a confident intern with amnesia who ships faster than I can read. When he's right, only the chat log knows why."*
-
-**Stagecraft is an orchestrator that runs your AI coding tool through a structured 17-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage can't start until the gate passes. You see the whole run on disk, auditable, resumable, not in a chat log.
+**Stagecraft is an orchestrator that runs your AI coding tool through a structured 17-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage cannot start until the gate passes. The full run is on disk: auditable, resumable, not buried in a chat log.
 
 Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the seam.
 
@@ -16,9 +14,27 @@ devteam next                           # → "▶️ run-stage design (stage-02)
 
 > The CLI binary is `devteam`. Stagecraft is the project; `devteam` is what you type.
 
+## Table of contents
+
+- [First 30 minutes](#first-30-minutes)
+- [Documentation map](#documentation-map)
+- [Why "Stagecraft"?](#why-stagecraft)
+- [What this gives you](#what-this-gives-you)
+- [Prerequisites](#prerequisites)
+- [Quick start](#quick-start)
+- [What `devteam init` installs](#what-devteam-init-installs)
+- [CLI reference](#cli-reference)
+- [Auditing an existing codebase](#auditing-an-existing-codebase)
+- [Architecture in one diagram](#architecture-in-one-diagram)
+- [Repository layout](#repository-layout)
+- [Design decisions](#design-decisions)
+- [What's deferred](#whats-deferred)
+- [Why this exists](#why-this-exists)
+- [License](#license)
+
 ## First 30 minutes
 
-If you're evaluating Stagecraft, this is the cheapest path to "does it work for my team?":
+If you're evaluating Stagecraft, this is the fastest path to a working answer:
 
 1. **(5 min) Install the framework.** `git clone <this-repo> && cd stagecraft && npm install && npm link`. Verify with `devteam --help`.
 2. **(2 min) Initialize a throwaway target project.** `mkdir /tmp/scratch && cd /tmp/scratch && devteam init --host claude-code`. Then `devteam doctor` should be all green.
@@ -31,7 +47,7 @@ If you're evaluating Stagecraft, this is the cheapest path to "does it work for 
    Walk forward through design, build, peer-review, qa, sign-off. For deploy, write the gate by hand if you don't want to actually deploy: `echo '{"stage":"stage-08","status":"PASS","track":"full","timestamp":"'$(date -u +%FT%TZ)'","blockers":[],"warnings":[]}' > pipeline/gates/stage-08.json`.
 5. **(5 min) Inspect the audit trail.** `ls pipeline/gates/` — every stage's outcome on disk. `cat pipeline/brief.md`, `pipeline/design-spec.md`, `pipeline/code-review/by-*.md`. The pipeline is reconstructable from these files alone.
 
-If after 30 minutes you can see how this would help your team, run a 2-week pilot ([adoption-guide.md](docs/adoption-guide.md) has the script). If you can't, drop it — it's not the right tool for every team.
+If after 30 minutes you can see how this would help your team, run a 2-week pilot ([adoption-guide.md](docs/adoption-guide.md) has the script). If you can't, it may not be the right tool for your team.
 
 ## Documentation map
 
@@ -74,9 +90,9 @@ Feature deep-dives:
 
 ## Why "Stagecraft"?
 
-The pipeline is a staged production. PM writes the brief. Principal directs the architecture. Specialist developers each build their part. Reviewers critique. QA tests. The curtain rises on deploy. Each stage has its cast, its script (the rules under `rules/`), and its gate that decides if the show moves on. Multi-model peer review is the panel of critics; the red-team is the adversary in the wings. The discipline of putting all of that together — staged work by specialized roles in a choreographed production — is **stagecraft**.
+The pipeline is a staged production. PM writes the brief. Principal directs the architecture. Specialist developers each build their part. Reviewers critique. QA tests. Deploy is the curtain. Each stage has its cast, its script (the rules under `rules/`), and its gate that decides whether the show moves on. Multi-model peer review is the panel of critics; the red-team is the adversary in the wings. The discipline of coordinating specialized roles in a sequenced production is **stagecraft**.
 
-The vocabulary extends naturally: a *run* is one pipeline invocation, *dress rehearsal* is pre-review (Stage 4a), *curtain call* is the retrospective (Stage 9), and *notes* are peer-review comments. The metaphor isn't decoration — it's how the system thinks.
+The vocabulary extends naturally: a *run* is one pipeline invocation, *dress rehearsal* is pre-review (Stage 4a), *curtain call* is the retrospective (Stage 9), and *notes* are peer-review comments. The metaphor is structural, not decorative.
 
 ## What this gives you
 
@@ -113,11 +129,11 @@ devteam init --host claude-code         # or: codex / gemini-cli / claude-code,c
 devteam doctor                           # should be all green
 ```
 
-Then drive the pipeline. **There are two ways to run a stage.** Pick the one that matches what you want to see:
+Then drive the pipeline. There are two ways to run a stage:
 
-### Path A — `--headless` (single terminal, simpler — start here)
+### Path A — `--headless` (single terminal, start here)
 
-The orchestrator drives the host CLI for you (`claude --print`, `codex exec`, `gemini`). You type one command, watch model output stream to your terminal, then move on. Best for your first run, CI, and scripted use.
+The orchestrator drives the host CLI for you (`claude --print`, `codex exec`, `gemini`). One command per stage; model output streams to your terminal. Best for first runs, CI, and scripted use.
 
 ```bash
 devteam stage requirements --feature "Add SMS notification opt-in" --headless
@@ -135,9 +151,9 @@ devteam stage design --headless           # next stage
 
 One terminal. One command per stage. The gate file appears when the model is done. `devteam next` tells you the next command.
 
-### Path B — Interactive in Claude Code (two windows, see the agent work)
+### Path B — Interactive in Claude Code (two windows)
 
-Useful when you want to see what the subagent is doing, watch the file edits, intervene mid-stage. The slash command `/devteam` was installed by `devteam init`.
+Use this when you want to watch the subagent work, observe file edits, or intervene mid-stage. The slash command `/devteam` is installed by `devteam init`.
 
 ```bash
 # Terminal 1 (your project dir):
@@ -175,7 +191,7 @@ Repeat for each stage.
 | Auth | `claude --version` must work | Claude Code app/CLI logged in |
 | Speed | usually faster (no UI overhead) | usually slower (UI overhead, human pauses) |
 
-**Recommendation for first-timers:** Path A. One terminal, one command per stage, results on disk. You can switch to Path B later when you want to watch a specific stage.
+**Recommendation for first-timers:** Path A. One terminal, one command per stage, results on disk. Switch to Path B when you want to observe a specific stage in detail.
 
 For a complete walked-through example with the actual output you'll see at each step, read **[EXAMPLE.md](EXAMPLE.md)**.
 
@@ -231,7 +247,7 @@ See `devteam help` for the up-to-date list with flags.
 
 ## Auditing an existing codebase
 
-Separate from the pipeline (which *builds* features), Stagecraft's **audit** workflow *analyzes* an existing codebase and produces a prioritized improvement roadmap under `docs/audit/00–10` + a `status.json` for resume. Read-only by design — writes findings, never source code. The `implement` skill consumes `docs/audit/10-roadmap.md` to pick the next change.
+The pipeline builds features. The **audit** workflow analyzes an existing codebase and produces a prioritized improvement roadmap under `docs/audit/00–10`, plus a `status.json` for resume. It is read-only by design: it writes findings, never source code. The `implement` skill consumes `docs/audit/10-roadmap.md` to pick the next change.
 
 Inside Claude Code:
 
@@ -331,7 +347,7 @@ stagecraft/
 
 ## Why this exists
 
-Pre-existing tools `claude-dev-team` and `codex-dev-team` did the same pipeline differently — same templates, same schemas, same ~80% of scripts, slowly drifting forks. This project unifies them into a single core with thin per-host adapters. The stress-test that locked the design is in [docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md) — one feature traced end-to-end through a mixed-host pipeline.
+`claude-dev-team` and `codex-dev-team` ran the same pipeline with the same templates, schemas, and ~80% of scripts, but as separate forks that were slowly diverging. This project unifies them into a single core with thin per-host adapters. The stress-test that locked the design is in [docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md): one feature traced end-to-end through a mixed-host pipeline.
 
 ## License
 

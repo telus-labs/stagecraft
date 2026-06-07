@@ -1,13 +1,8 @@
 # Runbook: Open Followups — Extracting Ticket Content
 
-After a pipeline run completes, deferred work items are collected in
-`open_followups[]` in both the stage-07 PM sign-off gate and the stage-09
-retrospective gate. This runbook shows how to extract that content as
-ticket-ready stubs without a JIRA integration.
+After a pipeline run completes, deferred work items are collected in `open_followups[]` in both the stage-07 PM sign-off gate and the stage-09 retrospective gate. This runbook shows how to extract that content as ticket-ready stubs without a JIRA integration.
 
-For the integration protocol when a JIRA (or Linear / GitHub Issues) connection
-is available, see [`escalation.md`](escalation.md) § External integrations —
-that section is a placeholder until the integration is wired up.
+For the integration protocol when a JIRA (or Linear / GitHub Issues) connection is available, see [`escalation.md`](escalation.md) § External integrations.
 
 ---
 
@@ -18,9 +13,7 @@ that section is a placeholder until the integration is wired up.
 | `pipeline/gates/stage-09.json` | After retrospective (Stage 9) completes | Preferred — retrospective may have resolved some items |
 | `pipeline/gates/stage-07.json` | After PM sign-off (Stage 7) completes | Fallback when retrospective hasn't run yet |
 
-Both gates carry `open_followups[]` in the same shape. The stage-09 list may be
-shorter because the Principal's Step 9a-followup triage can mark items resolved
-if they were addressed during the patch cycle.
+Both gates carry `open_followups[]` in the same shape. The stage-09 list may be shorter: the Principal's Step 9a-followup triage can mark items resolved if they were addressed during the patch cycle.
 
 ---
 
@@ -125,7 +118,7 @@ When you create a ticket, record its ID in `pipeline/context.md` under
 | RT-08 | PROJ-1043 | AWS retry backoff missing |
 ```
 
-This is the manual equivalent of what a JIRA integration would do automatically.
+This is the manual equivalent of what a JIRA integration performs automatically.
 
 ---
 

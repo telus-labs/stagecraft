@@ -1,6 +1,15 @@
 # Tracks
 
-A **track** is a named subset of pipeline stages. Picking a track is how you tell Stagecraft how much rigor a change needs. The six tracks reflect a year+ of operational tuning over which stages are skippable for which change types — they were lifted verbatim from `claude-dev-team`.
+A **track** is a named subset of pipeline stages. It tells Stagecraft how much rigor a change requires. The six tracks reflect over a year of operational tuning on which stages are skippable for which change types, carried over from `claude-dev-team`.
+
+- [Pick by what you're shipping](#pick-by-what-youre-shipping)
+- [What each track runs](#what-each-track-runs)
+- [Safety: the stoplist](#safety-the-stoplist)
+- [How `devteam next` honors the track](#how-devteam-next-honors-the-track)
+- [Conditional dispatch within a track](#conditional-dispatch-within-a-track)
+- [When you've picked the wrong track](#when-youve-picked-the-wrong-track)
+- [Choosing a track](#choosing-a-track)
+- [Customizing tracks](#customizing-tracks)
 
 You set the active track in `.devteam/config.yml`:
 
@@ -67,11 +76,11 @@ Stoplist defined in .devteam/rules/pipeline.md §Stage 0.
 (Active track: nano. Stoplist guarded.)
 ```
 
-`full` and `hotfix` bypass the stoplist by design — full runs everything anyway; hotfix has its own safety story (mandatory pre-review + peer-review + tests).
+`full` and `hotfix` bypass the stoplist by design. `full` runs everything anyway; `hotfix` has mandatory pre-review, peer-review, and tests.
 
 ## How `devteam next` honors the track
 
-`next` walks **only** the active track's stage list. So on `nano`, after `build` is PASSED, `next` advances directly to `qa` (skipping design/clarification/pre-review/peer-review). On `full`, the walk hits all 17 stages in order.
+`next` walks only the active track's stage list. On `nano`, after `build` passes, `next` advances directly to `qa`, skipping design, clarification, pre-review, and peer-review. On `full`, the walk hits all 17 stages in order.
 
 The active track is read from `.devteam/config.yml` (`pipeline.default_track`), with `--track` as an override.
 
@@ -109,21 +118,21 @@ The `devteam stage <name>` command warns on stderr (but still runs) when you inv
 if this is unintended, change pipeline.default_track in .devteam/config.yml.
 ```
 
-It's an escape hatch, not a block.
+This is an escape hatch, not a block.
 
 ## Choosing a track
 
 Decision tree:
 
-1. **Is this a hotfix for a live incident?** → `hotfix`. Don't skip pre-review and peer-review just because you're in a hurry; the stoplist won't save you.
+1. **Is this a hotfix for a live incident?** → `hotfix`. Pre-review and peer-review are mandatory; urgency is not a reason to skip them.
 2. **Does this touch auth, PII, payments, crypto, migrations, or new external deps?** → `full`. Lighter tracks will block on the stoplist anyway.
 3. **Is the change just config or feature-flag values, no code logic?** → `config-only`.
 4. **Is the change a dependency bump?** → `dep-update`.
 5. **Is the change a mechanical edit (rename, format, copy change)?** → `nano`.
-6. **Does the change cross multiple systems, require architectural decisions, or carry enough security surface that adversarial review adds real value?** → `full`.
-7. **Otherwise** → `quick`. This covers most bounded features and fixes: a new endpoint, a new UI component, added business logic, a non-trivial bug fix — anything where requirements are clear and the design is contained. When in doubt between `quick` and `full`, start with `quick`; if Stage 2 design review surfaces cross-cutting concerns you didn't anticipate, you can restart on `full`.
+6. **Does the change cross multiple systems, require architectural decisions, or carry significant security surface?** → `full`.
+7. **Otherwise** → `quick`. This covers most bounded features and fixes: a new endpoint, a new UI component, added business logic, a non-trivial bug fix. Requirements must be clear and design self-contained. When in doubt between `quick` and `full`, start with `quick`; if Stage 2 design review surfaces cross-cutting concerns, restart on `full`.
 
-> **Note on the config.yml default.** The factory default is `pipeline.default_track: full` — conservative, never wrong. But `full` runs red-team adversarial review and formal design on every change, which is wasteful when most attack surfaces provably don't apply. Re-evaluate the track for each brief rather than letting the config default decide for you.
+> **Note on the config.yml default.** The factory default is `pipeline.default_track: full`, which is conservative and always safe. However, `full` runs red-team adversarial review and formal design on every change, which is wasteful when most attack surfaces don't apply. Evaluate the appropriate track for each brief rather than relying on the config default.
 
 ## Customizing tracks
 

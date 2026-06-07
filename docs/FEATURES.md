@@ -1,6 +1,14 @@
 # Features
 
-Stagecraft is an orchestrator that runs your AI coding tool through a structured software development pipeline. It is not a model — it renders prompts, reads the artifacts and gate files the AI writes back, and decides what to run next. State lives on disk, not in a chat log. This document covers every shipped feature, organized by area. For planned work, see [BACKLOG.md](./BACKLOG.md).
+Stagecraft is an orchestrator that runs your AI coding tool through a structured software development pipeline. It is not a model. It renders prompts, reads the artifacts and gate files the AI writes back, and decides what to run next. State lives on disk, not in a chat log. This document covers every shipped feature, organized by area. For planned work, see [BACKLOG.md](./BACKLOG.md).
+
+- [Supported hosts](#supported-hosts)
+- [Pipeline stages](#pipeline-stages)
+- [Safety and auditability](#safety-and-auditability)
+- [Observability and learning](#observability-and-learning)
+- [Developer tools](#developer-tools)
+- [Integrations](#integrations)
+- [Advanced AI capabilities](#advanced-ai-capabilities)
 
 ---
 
@@ -135,12 +143,12 @@ Two categories of guarantee: things Stagecraft prevents from happening, and thin
 
 ### Filesystem-level `allowedWrites` enforcement — cross-workstream writes caught on all hosts
 
-Each build workstream's prompt declares `allowedWrites` — the set of paths that workstream is permitted to touch. Enforcement method depends on the host:
+Each build workstream's prompt declares `allowedWrites`, which is the set of paths that workstream is permitted to touch. Enforcement method depends on the host:
 
 - **claude-code**: blocks unauthorized writes at tool-call time via its `PreToolUse Write|Edit` hook. The write never reaches disk.
 - **codex and gemini-cli**: run a post-hoc git-status diff after the workstream exits. Any file outside `allowedWrites` is captured in `writeViolations[]` and the orchestrator patches the gate to `FAIL` with violations listed in `blockers[]`.
 
-The `generic` adapter declares `prompt-only` enforcement — violations are discouraged but not technically blocked.
+The `generic` adapter declares `prompt-only` enforcement: violations are discouraged but not technically blocked.
 
 `writeViolations[]` appears in the orchestrator's result when violations are found; it is merged into the gate `blockers[]` so `devteam next` reports `fix-and-retry`.
 
@@ -150,7 +158,7 @@ Four stages require shell execution to do their work: pre-review (stage-04a), qa
 
 At dispatch time, `assertCapabilities()` in the orchestrator checks that the routed host's adapter declares the required capabilities. If not, the orchestrator throws a named error before invoking the host. This prevents silent failures where a stage appears to run but skips all shell-dependent checks because the host can't execute them.
 
-All three primary adapters (claude-code, codex, gemini-cli) declare `enforces.shell: true`. The generic adapter does not — use `routing.stages` overrides in `.devteam/config.yml` to route shell-requiring stages to a capable host.
+All three primary adapters (claude-code, codex, gemini-cli) declare `enforces.shell: true`. The generic adapter does not; use `routing.stages` overrides in `.devteam/config.yml` to route shell-requiring stages to a capable host.
 
 ### Bounded workspace isolation — separate artifact trees per feature
 
@@ -161,7 +169,7 @@ pipeline:
   isolation: bounded
 ```
 
-With `isolation: bounded`, artifacts (gates, logs, context files) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value. `devteam next` and `devteam summary` can distinguish in-flight features; `devteam validate` reads `DEVTEAM_CHANGE_ID` from the environment to validate gates in the bounded directory. Default is `in-place` — no impact on existing setups.
+With `isolation: bounded`, artifacts (gates, logs, context files) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value. `devteam next` and `devteam summary` can distinguish in-flight features; `devteam validate` reads `DEVTEAM_CHANGE_ID` from the environment to validate gates in the bounded directory. Default is `in-place`, which has no impact on existing setups.
 
 ### Secret scanning — blocks credentials from reaching the repo
 
@@ -184,7 +192,7 @@ See [`docs/reproducibility.md`](reproducibility.md) for the gate fields, replay 
 
 ## Observability and learning
 
-The pipeline records enough data to answer a question most teams can't answer today: which model is actually best for each role on your specific codebase? It surfaces the answer without you having to analyse it manually.
+The pipeline records enough data to identify which model performs best for each role on your specific codebase, without manual analysis.
 
 ### Cost and token tracking — know what each stage costs
 
@@ -311,7 +319,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 ## Integrations
 
-Surface pipeline state in the tools your team already uses. The design choice here: validate and publish gates that were produced locally, rather than running the pipeline itself in CI — LLM pipelines are expensive and human-in-the-loop by design.
+Surface pipeline state in the tools your team already uses. The integration approach is to validate and publish gates produced locally, rather than running the pipeline itself in CI. LLM pipelines are expensive and human-in-the-loop by design.
 
 ### GitHub PR integration — pipeline state as PR checks
 
@@ -336,7 +344,7 @@ See [`docs/ci.md`](ci.md) for the full workflow template and environment variabl
 
 ## Advanced AI capabilities
 
-These stages go beyond what conventional dev pipelines can enforce. They're only possible because the pipeline is AI-native — the AI isn't just writing code, it's doing work that no static tool could do.
+These stages perform work that static tooling cannot replicate. They depend on the pipeline being AI-native.
 
 ### `/goal` injection — convergent headless stages loop until their objective is met
 
@@ -350,9 +358,9 @@ For `build` (stage-04) and `qa` (stage-06) stages, hosts that declare `capabilit
 
 When `routing.review_fanout` is configured, Stage 5 (peer-review) duplicates each of the four area reviews across the listed hosts in parallel. 4 areas × 3 hosts = 12 parallel reviews; merge is pessimistic (any FAIL blocks the stage).
 
-- Different training data means different blind spots — the diversity comes from model family, not from changing the rubric
-- Each reviewer applies the same four-principles rubric; the cross-model signal is what makes this load-bearing
-- This is execution-diversity, not method-diversity — for adversarial *method*, see the Red-team stage below
+- Different training data produces different blind spots. The diversity comes from model family, not from changing the rubric.
+- Each reviewer applies the same four-principles rubric; the cross-model signal is the value of fanout.
+- This is execution-diversity, not method-diversity. For adversarial method, see the Red-team stage below.
 
 ### Closed-loop acceptance criteria → spec → tests — drift caught structurally
 
@@ -388,7 +396,7 @@ A dedicated `red-team` role runs between build and peer-review on `full` and `ho
 
 See [`docs/red-team.md`](red-team.md) for the 10 attack surfaces, gate fields, and how it differs from the conditional security review (stage 4b).
 
-### Verification beyond tests — make "tests pass" a floor, not a ceiling
+### Verification beyond tests — structural verification after QA
 
 Full-track-only stage that runs after QA passes. The `verifier` role applies three methods to the changed code:
 
@@ -400,7 +408,7 @@ A surviving mutant on a critical path, a property counterexample, or a formal co
 
 See [`docs/verification-beyond-tests.md`](verification-beyond-tests.md) for candidate identification, gate fields, and skip-reason policy.
 
-### Architecture continuity — the architect always remembers
+### Architecture continuity — binding architectural decisions across projects
 
 Prior architectural decisions become binding commitments across every future project in the org.
 

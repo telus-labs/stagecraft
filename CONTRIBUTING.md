@@ -2,7 +2,20 @@
 
 Concrete recipes for the four most common kinds of change.
 
-Before anything: read [`AGENTS.md`](AGENTS.md) for the load-bearing contracts. Edits that break them in the wrong way silently corrupt downstream behavior — Stagecraft has a tier-1 test suite that catches most contract regressions, so the burden is on you.
+Before starting: read [`AGENTS.md`](AGENTS.md) for the load-bearing contracts. Edits that break them can silently corrupt downstream behavior. The tier-1 test suite catches most contract regressions, but the burden of verification is on the contributor.
+
+## Table of contents
+
+- [Setup](#setup)
+- [Recipe 1 — Adding a host adapter](#recipe-1--adding-a-host-adapter)
+- [Recipe 2 — Adding a stage](#recipe-2--adding-a-stage)
+- [Recipe 3 — Adding a role](#recipe-3--adding-a-role)
+- [Recipe 4 — Adding a skill](#recipe-4--adding-a-skill)
+- [Style guidance](#style-guidance)
+- [Testing your change](#testing-your-change)
+- [Commit & PR style](#commit--pr-style)
+- [Where to ask](#where-to-ask)
+- [Two anti-patterns](#two-anti-patterns)
 
 ## Setup
 
@@ -128,7 +141,7 @@ You want a new role (e.g. `compliance`, `accessibility`, `data-engineer`).
 
 ## Recipe 4 — Adding a skill
 
-Skills are task-oriented helpers the LLM consults when doing specific tasks (writing code to a convention, running a self-review, etc.). They're host-neutral.
+Skills are task-oriented helpers the LLM consults for specific tasks (writing code to a convention, running a self-review, etc.). They are host-neutral.
 
 1. **Create the skill directory** at `skills/<name>/` with at minimum a `SKILL.md`. Optional sub-files for examples or longer explanations.
 
@@ -145,7 +158,7 @@ Skills are task-oriented helpers the LLM consults when doing specific tasks (wri
    1. …
    ```
 
-3. **No additional registration needed.** Both `hosts/claude-code/adapter.js` and `hosts/codex/adapter.js` auto-iterate `skills/` and copy each directory into the host's expected skills path.
+3. **No registration needed.** Both `hosts/claude-code/adapter.js` and `hosts/codex/adapter.js` auto-iterate `skills/` and copy each directory into the host's expected skills path.
 
 4. **Reference from a role brief if relevant.** Skills don't "fire" automatically — they have to be invoked. The role brief is where you tell the LLM "consult this skill when doing X."
 
@@ -166,11 +179,11 @@ Skills are task-oriented helpers the LLM consults when doing specific tasks (wri
 
 ## Testing your change
 
-Today: manual smoke test against a temp target project (see Setup above).
+For now: manual smoke test against a temp target project (see Setup above).
 
-Soon ([`docs/TESTING.md`](docs/TESTING.md)): `npm test`. Until the tier-1 test suite lands, **the burden of regression-checking is on you**.
+Once available ([`docs/TESTING.md`](docs/TESTING.md)): `npm test`. Until the tier-1 test suite lands, regression-checking is the contributor's responsibility.
 
-If your change touches a load-bearing contract from `AGENTS.md`, add the test in lockstep — don't wait for the suite to "happen later."
+If your change touches a load-bearing contract from `AGENTS.md`, add the test in lockstep with the code change.
 
 ## Commit & PR style
 
@@ -188,6 +201,6 @@ If your change touches a load-bearing contract from `AGENTS.md`, add the test in
 
 ## Two anti-patterns
 
-1. **Editing installed copies in a target project.** The single source of truth is here in `roles/`, `rules/`, `skills/`. Target-project copies are *rendered* by adapters at install time. Edits to the rendered copies get lost on the next install.
+1. **Editing installed copies in a target project.** The single source of truth is `roles/`, `rules/`, and `skills/` in this repo. Target-project copies are rendered by adapters at install time. Edits to those rendered copies are lost on the next install.
 
-2. **Introducing host-specific logic in `core/`.** The core never invokes a model and never knows about `claude --print` or `codex exec`. If you need host-specific behavior, it goes in `hosts/<host>/adapter.js`. If you need shared host-behavior helpers, they go under `core/adapters/`.
+2. **Introducing host-specific logic in `core/`.** The core never invokes a model and has no knowledge of `claude --print` or `codex exec`. Host-specific behavior goes in `hosts/<host>/adapter.js`. Shared host-behavior helpers go under `core/adapters/`.

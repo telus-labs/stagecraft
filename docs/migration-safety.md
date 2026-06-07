@@ -2,6 +2,13 @@
 
 Stage 4d. Conditional — fires only when the pre-review heuristic (stage 4a) detects data-layer changes. Has veto power: a failing migration safety gate halts the pipeline regardless of peer-review approval.
 
+- [What triggers it](#what-triggers-it)
+- [What the migrations role reviews](#what-the-migrations-role-reviews)
+- [Veto criteria](#veto-criteria)
+- [Gate fields](#gate-fields)
+- [Routing](#routing)
+- [References](#references)
+
 ---
 
 ## What triggers it
@@ -39,7 +46,7 @@ The gate sets `veto: true` automatically when any of these conditions are met:
 | `breaking_change: true` AND `rollback_tested: false` | Yes — breaking changes must have a verified rollback |
 | `backfill_required: true` AND `backfill_strategy` is empty | Yes — a missing backfill strategy is a data-loss risk |
 
-**A veto halts the pipeline.** Peer-review approvals cannot override it. The migrations role must personally re-review the fix after it's addressed.
+**A veto halts the pipeline.** Peer-review approvals cannot override it. The migrations role must re-review the fix after it is addressed.
 
 ---
 
@@ -61,7 +68,7 @@ The gate sets `veto: true` automatically when any of these conditions are met:
 
 ## Routing
 
-Route to a different host than the build agents — migration review is most valuable when the reviewer has different context than the implementer.
+Route to a different host than the build agents. Migration review is most effective when the reviewer has different context than the implementer.
 
 ```yaml
 routing:

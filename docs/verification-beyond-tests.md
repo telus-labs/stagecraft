@@ -1,6 +1,11 @@
 # Verification beyond tests
 
-Stage 6d. Runs after QA passes on the `full` track only. The `verifier` role applies three methods to the changed code to make "tests pass" a floor rather than a ceiling.
+Stage 6d. Runs after QA passes on the `full` track only. The `verifier` role applies three methods to the changed code. A passing test suite is the minimum bar; this stage checks what the tests miss.
+
+- [What it does](#what-it-does)
+- [Gate fields](#gate-fields)
+- [Track inclusion](#track-inclusion)
+- [References](#references)
 
 ---
 
@@ -12,7 +17,7 @@ The verifier reads the changed code and applies up to three formal verification 
 
 Tools: fast-check (JS/TS), hypothesis (Python), proptest (Rust).
 
-Generates large numbers of random inputs and checks that stated properties (invariants) hold across all of them. Catches entire classes of bugs that example-based tests don't find — the author's tests only cover cases the author thought of; the property harness doesn't share that bias.
+Generates large numbers of random inputs and checks that stated properties (invariants) hold across all of them. Catches entire classes of bugs that example-based tests miss, because the property harness explores inputs the author did not anticipate.
 
 The verifier identifies candidates in the changed code: pure functions with stateable invariants, data transformations, parsers, serializers, algorithms with mathematical properties.
 
@@ -53,13 +58,13 @@ Any of these populates `blocking_findings[]` and gates at FAIL.
 
 **Skipped methods:**
 
-Tooling not installed is recorded as `attempted_but_blocked:<method>` — a WARN, not a FAIL. "Didn't have time" is not an accepted skip reason.
+Tooling not installed is recorded as `attempted_but_blocked:<method>` — a WARN, not a FAIL. Unavailability of time is not an accepted skip reason.
 
 ---
 
 ## Track inclusion
 
-`full` only. The `quick`, `nano`, `hotfix`, `config-only`, and `dep-update` tracks rely on stage-06 example tests as their verification floor — they opt into speed over rigour. The `full` track opts into rigour.
+`full` only. The `quick`, `nano`, `hotfix`, `config-only`, and `dep-update` tracks rely on stage-06 example tests as their verification ceiling, trading rigour for speed. The `full` track runs this stage in addition to those tests.
 
 ---
 

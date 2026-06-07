@@ -2,13 +2,13 @@
 
 Host-neutral context for any LLM working on the **Stagecraft** codebase itself. (The CLI binary is `devteam`; the project is Stagecraft.)
 
-If you're using Stagecraft to drive *another* project's pipeline, this file is not for you — read the [`README.md`](README.md) and [`docs/concepts.md`](docs/concepts.md) instead. This file is for someone editing the framework.
+If you are using Stagecraft to drive another project's pipeline, this file is not for you. Read [`README.md`](README.md) and [`docs/concepts.md`](docs/concepts.md) instead. This file is for contributors editing the framework.
 
 ## What this is
 
-A model-agnostic AI dev team pipeline. A single model-neutral core plus per-host adapters that lay down host-native surfaces (subagents, slash commands, hooks, role prompts) into target projects.
+A model-agnostic AI dev team pipeline: a single model-neutral core plus per-host adapters that lay down host-native surfaces (subagents, slash commands, hooks, role prompts) into target projects.
 
-It replaces two prior forks (`claude-dev-team`, `codex-dev-team`) that diverged ~80% identical. The unification is the whole reason this repo exists.
+It replaces two prior forks (`claude-dev-team`, `codex-dev-team`) that were ~80% identical and diverging. Unification is the reason this repo exists.
 
 ## What to read first, in order
 
@@ -42,7 +42,7 @@ It replaces two prior forks (`claude-dev-team`, `codex-dev-team`) that diverged 
 
 ## Load-bearing contracts (do not break)
 
-These are the things downstream code, tests, and adapters depend on. Edit only with conscious intent — and update tests in lockstep.
+These are the things downstream code, tests, and adapters depend on. Edit only with deliberate intent, and update tests in lockstep.
 
 1. **Gate JSON identity fields**: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. Workstream gates additionally carry `workstream` and `host`. Merged stage gates carry a `workstreams[]` array. **The legacy `agent` field is removed.** Schema: `core/gates/schemas/gate.schema.json`.
 
@@ -66,19 +66,19 @@ These are the things downstream code, tests, and adapters depend on. Edit only w
 
 ## Decisions deferred (do not solve in the wrong place)
 
-- **Auth, cost limits, model routing inside a host** — that's the host's job, not ours. Budget *tracking* lives in `scripts/budget.js` as an out-of-band tool (`npm run budget`) and is host-neutral; budget *enforcement at the API level* belongs to the host.
+- **Auth, cost limits, model routing inside a host** — the host's responsibility. Budget *tracking* lives in `scripts/budget.js` as an out-of-band tool (`npm run budget`) and is host-neutral; budget *enforcement at the API level* belongs to the host.
 - **Multi-language reach** — Node only for now. See locked decision #11.
-- **Where the orchestrator runs** — user's machine for now. CI / cloud-worker dispatch is in the backlog.
+- **Where the orchestrator runs** — the user's machine for now. CI and cloud-worker dispatch are in the backlog.
 
 ## Conventions
 
 - **No `agent` field anywhere.** Use `workstream` and `host` (workstream gates) or `orchestrator` (stage-level gates).
 - **Host-neutral paths in shared content.** `.devteam/rules/...`, `AGENTS.md`, `roles/...`. Adapters do path transforms at install time if their host needs `.claude/`-flavored paths.
 - **Idempotent installs.** Every adapter's `install()` must be safe to re-run; second call returns `written: 0, skipped: N`. Force flag overrides.
-- **No comments-as-documentation in code.** If a fact needs explaining and isn't obvious from the code, it goes in `ARCHITECTURE.md`, `host-adapter.md`, or a rule file under `rules/`. One-line "why this is here" comments are fine; multi-paragraph docstrings aren't.
+- **No comments-as-documentation in code.** If a fact needs explaining and is not obvious from the code, put it in `ARCHITECTURE.md`, `host-adapter.md`, or a rule file under `rules/`. One-line "why this is here" comments are fine; multi-paragraph docstrings are not.
 - **Single source of truth.** Role briefs in `roles/`, rules in `rules/`, skills in `skills/`. Adapters render these into host-specific paths at install time. **Do not edit installed copies in target projects.**
 - **`node:` prefix on built-in imports.** `require("node:fs")`, `require("node:path")`, `require("node:child_process")`. Every JS file in the codebase uses this form.
-- **stdout for primary output; stderr for everything else.** stdout carries the artifact a user reads as the command's main result (rendered prompts, JSON when `--json` is set, gate summaries). stderr carries warnings, errors, side-channel framing (the onboarding preamble printed by `bin/devteam stage`), progress logs. The convention means `devteam stage ... > prompt.md` produces a clean prompt file with all the framing kept out of the redirect. Validator + hooks are the exception: they're exit-code-driven, and their prose goes to stdout (consumed by Claude Code's hook log).
+- **stdout for primary output; stderr for everything else.** stdout carries the artifact the user reads as the command's main result (rendered prompts, JSON when `--json` is set, gate summaries). stderr carries warnings, errors, and side-channel framing (such as the onboarding preamble printed by `bin/devteam stage`) and progress logs. This convention ensures `devteam stage ... > prompt.md` produces a clean prompt file with all framing excluded from the redirect. Validator and hooks are the exception: they are exit-code-driven, and their prose goes to stdout (consumed by Claude Code's hook log).
 
 ## Adding things
 
@@ -104,10 +104,8 @@ Stagecraft has a tier-1 + tier-2 test suite (300+ tests; run `npm test`). See [`
 
 ## Working on this codebase
 
-Practical:
-
 - `npm install` then `./bin/devteam help` to verify the CLI loads.
-- Most smoke testing uses `mktemp -d` as a fake target project, runs `./bin/devteam init --host claude-code --cwd $TMPDIR`, then exercises subcommands against that.
-- `DEVTEAM_HEADLESS_COMMAND=cat` or `=true` stubs the host CLI for testing `--headless` without `claude` / `codex` installed.
-- Stage prompts go to stdout; orchestrator logs go to stderr (`[devteam] …`). Don't mix.
-- Every contract change should land with: (a) the code change, (b) the doc update under `ARCHITECTURE.md` / `rules/gates.md` / `core/adapters/host-adapter.md` as relevant, (c) a corresponding test (once the test suite exists).
+- Most smoke testing uses `mktemp -d` as a scratch target project, runs `./bin/devteam init --host claude-code --cwd $TMPDIR`, then exercises subcommands against it.
+- `DEVTEAM_HEADLESS_COMMAND=cat` or `=true` stubs the host CLI for testing `--headless` without `claude` or `codex` installed.
+- Stage prompts go to stdout; orchestrator logs go to stderr (`[devteam] …`). Do not mix.
+- Every contract change should land with: (a) the code change, (b) the doc update in `ARCHITECTURE.md`, `rules/gates.md`, or `core/adapters/host-adapter.md` as relevant, (c) a corresponding test (once the test suite exists).

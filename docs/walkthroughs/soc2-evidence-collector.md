@@ -1,22 +1,44 @@
 # Walkthrough: SOC 2 evidence collector
 
-A complete scenario for building `soc2-collect` — a CLI tool that automates SOC 2 Type II evidence collection — using the Stagecraft full pipeline. Use this as a showcase of what a structured AI dev pipeline produces that ad-hoc chat-based development doesn't.
+A complete scenario for building `soc2-collect` — a CLI tool that automates SOC 2 Type II evidence collection — using the Stagecraft full pipeline. This walkthrough traces each stage and shows what the pipeline produces at each step.
 
 ---
 
 ## The scenario
 
-You're a startup's engineering lead. Your first SOC 2 Type II audit is in 8 weeks. The auditor wants evidence for each of the 29 Common Criteria controls: access logs, encryption configs, change management records, incident timelines. Right now that means manually pulling screenshots from GitHub, AWS Console, and your ticketing system and dropping them into a shared folder. It takes a week and goes stale immediately.
+An engineering lead preparing for a first SOC 2 Type II audit needs evidence for each of the 29 Common Criteria controls: access logs, encryption configs, change management records, incident timelines. Collecting this manually — pulling screenshots from GitHub, AWS Console, and a ticketing system — takes a week and goes stale immediately.
 
-`soc2-collect` automates that collection. Point it at your GitHub org, AWS account, and Terraform state, and it produces an audit-ready package: a structured `evidence.json` (one immutable record per piece of evidence, content-addressed) and a human-readable `report.md` (control-by-control status with gap reasons).
+`soc2-collect` automates that collection. Point it at a GitHub org, AWS account, and Terraform state, and it produces an audit-ready package: a structured `evidence.json` (one immutable record per piece of evidence, content-addressed) and a human-readable `report.md` (control-by-control status with gap reasons).
 
-**Why this project showcases Stagecraft well:**
+**Why this project is a useful pipeline example:**
 
-- 29 controls → 40+ acceptance criteria → 40+ Gherkin scenarios → 40+ tests. The spec-tracing chain (`devteam spec verify`) catches drift the moment you add or remove a control.
+- 29 controls → 40+ acceptance criteria → 40+ Gherkin scenarios → 40+ tests. The spec-tracing chain (`devteam spec verify`) catches drift whenever a control is added or removed.
 - Three integrations (GitHub, AWS, Terraform) → natural multi-workstream build.
-- Security review fires on a tool that handles AWS credentials and raw audit logs — exactly when you want it to.
-- Red-team catches the cases that would embarrass a compliance tool: collecting partial API pages and claiming PASS, credentials leaking into log output, silent failure on rate limits.
-- The pipeline's own gate records — model version, prompt hash, timestamp — form a complete record of how the tool was designed and reviewed. For a SOC 2 tool, that's a feature.
+- Security review fires on a tool that handles AWS credentials and raw audit logs.
+- Red-team catches the cases that matter for a compliance tool: collecting partial API pages and claiming PASS, credentials leaking into log output, silent failure on rate limits.
+- The pipeline's gate records — model version, prompt hash, timestamp — form a complete record of how the tool was designed and reviewed.
+
+---
+
+- [Prerequisites](#prerequisites)
+- [Set up the project](#set-up-the-project)
+- [Run the pipeline](#run-the-pipeline)
+  - [Stage 1 — Requirements](#stage-1--requirements)
+  - [Stage 2 — Design](#stage-2--design)
+  - [Stage 3 — Clarification](#stage-3--clarification)
+  - [Stage 3b — Executable spec](#stage-3b--executable-spec)
+  - [Stage 4 — Build](#stage-4--build)
+  - [Stage 4a — Pre-review](#stage-4a--pre-review)
+  - [Stage 4b — Security review](#stage-4b--security-review-conditional)
+  - [Stage 4c — Red-team](#stage-4c--red-team)
+  - [Stage 5 — Peer review](#stage-5--peer-review)
+  - [Stage 6 — QA](#stage-6--qa)
+  - [Stage 6c — Observability gate](#stage-6c--observability-gate)
+  - [Stage 6d — Verification beyond tests](#stage-6d--verification-beyond-tests)
+- [What the output looks like](#what-the-output-looks-like)
+- [Timing reference](#timing-reference)
+- [Reproducing a specific run](#reproducing-a-specific-run)
+- [See also](#see-also)
 
 ---
 
@@ -220,7 +242,7 @@ What security review checks for this project in particular:
 - Does the IAM policy template follow least privilege, or does it request `*:*`?
 - Does the tool write raw audit data to disk in a way that could expose it to other processes?
 
-A SOC 2 compliance tool that fails its own security review is an embarrassing gap. This stage catches it before peer review.
+A compliance tool that fails its own security review undermines its core purpose. This stage catches such issues before peer review.
 
 ```bash
 devteam next            # → run-stage red-team (stage-04c)
@@ -262,7 +284,7 @@ With `review_fanout: [claude-code, codex, gemini-cli]` in `.devteam/config.yml`,
 
 Each reviewer is prompted adversarially: find the strongest objection to this change, not confirm it works.
 
-For a compliance tool, the question is concrete: *does this code actually collect what it claims to collect for each control?* A cooperative reviewer (same model that wrote the integration code) shares the author's assumptions about what the GitHub API returns. An adversarial reviewer from a different model family will check the actual API docs and the actual response shape.
+For a compliance tool, the question is concrete: does this code actually collect what it claims to collect for each control? A reviewer using the same model that wrote the integration code shares the author's assumptions about what the GitHub API returns. A reviewer from a different model family will check the actual API docs and response shape.
 
 ```bash
 devteam next            # → run-stage qa (stage-06)
@@ -333,7 +355,7 @@ devteam next            # → run-stage deploy (stage-08)
 devteam stage deploy --headless
 devteam next            # → run-stage retrospective (stage-09)
 devteam stage retrospective --headless
-# 🎉 pipeline-complete
+# pipeline-complete
 ```
 
 Run `devteam summary` at any point to see the full pipeline state. After a completed run it looks like this:

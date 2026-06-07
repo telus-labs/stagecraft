@@ -1,12 +1,21 @@
 # Pipeline Conventions
 
-The pipeline has a small vocabulary of **markers** — short prefixes and section headings that agents (and you) use to communicate across stages. Most of it is documented inside agent prompts; this page is the operator-facing catalogue. If you're reading a `pipeline/*.md` file and see something cryptic like `QUESTION: ... @PM` or `BLOCKER:`, this is the lookup.
+The pipeline uses a small vocabulary of **markers**: short prefixes and section headings that agents use to communicate across stages. Most markers are documented inside agent prompts; this page is the operator-facing catalogue for when you encounter something like `QUESTION: ... @PM` or `BLOCKER:` in a `pipeline/*.md` file.
 
-Each entry: *where the marker lives*, *who writes it*, *what format*, *what reads it*.
+Each entry covers: where the marker lives, who writes it, its format, and what reads it.
+
+- [Inline line markers](#inline-line-markers)
+- [Section markers (in `pipeline/context.md`)](#section-markers-in-pipelinecontextmd)
+- [Auto-injected sections (validator-managed)](#auto-injected-sections-validator-managed)
+- [Section markers (in `pipeline/pr-<area>.md`)](#section-markers-in-pipelinepr-areamd)
+- [Auto-captured stage transcripts (`pipeline/logs/`)](#auto-captured-stage-transcripts-pipelinelogs)
+- [Magic comments (in source code)](#magic-comments-in-source-code)
+- [Cheat sheet](#cheat-sheet)
+- [See also](#see-also)
 
 ## Inline line markers
 
-These appear on their own line, lowercase content after the colon. Most can appear in `pipeline/context.md` or in stage-specific files; the table notes where.
+These appear on their own line, with lowercase content after the colon. Most can appear in `pipeline/context.md` or in stage-specific files; the table notes where.
 
 ### `QUESTION: <text> @<role>`
 
@@ -55,8 +64,8 @@ The reviewer's verdict for an area, one per `## Review of <area>` section.
 
 - **Where:** `pipeline/code-review/by-<reviewer>.md`, at the end of each area section.
 - **Written by:** Stage 5 reviewers.
-- **Format:** literal text. Exactly one per area section.
-- **Read by:** `core/hooks/approval-derivation.js` parses each section's `REVIEW:` marker and writes the corresponding per-area workstream gate. Don't write the gate yourself; the hook does it.
+- **Format:** Literal text. Exactly one per area section.
+- **Read by:** `core/hooks/approval-derivation.js` parses each section's `REVIEW:` marker and writes the corresponding per-area workstream gate. Do not write the gate directly; the hook does it.
 
 ### `ESCALATE: <text>` (inline override)
 
@@ -65,7 +74,7 @@ When a reviewer or agent wants the merged gate to land as `ESCALATE` regardless 
 - **Where:** `pipeline/code-review/by-<reviewer>.md` (Stage 5) or any review/report file.
 - **Written by:** The escalating agent.
 - **Format:** `ESCALATE: <one-sentence reason>` followed by `ESCALATE-TO: <role>` if a specific role should rule (typically Principal).
-- **Read by:** The user-driven path — operator notices the inline marker and resolves via the [escalation runbook](runbooks/escalation.md). Note: the approval-derivation hook does not currently auto-flip the gate status based on this marker; the operator (or reviewer) sets `status: ESCALATE` directly in the gate.
+- **Read by:** The operator notices the inline marker and resolves it via the [escalation runbook](runbooks/escalation.md). Note: the approval-derivation hook does not currently auto-flip the gate status based on this marker; the operator (or reviewer) sets `status: ESCALATE` directly in the gate.
 
 ### `REVIEW-ESCALATED: <text>`
 
@@ -171,15 +180,15 @@ Per-stage logs written by `devteam stage X --headless` — the full stdout/stder
 - **Opt out:** `DEVTEAM_NO_LOG=1` in the environment.
 - **Companion command:** `devteam log [--follow]` for a chronological cross-stage timeline. The per-stage logs are the deep-dive; `devteam log` is the overview.
 
-Not committed to git by default — typically `.gitignore` `pipeline/logs/` (they're large and easy to regenerate). Audit-grade pipelines may want to commit them; that's a team policy decision.
+Not committed to git by default. Typically `.gitignore` `pipeline/logs/` since the files are large and easy to regenerate. Audit-grade pipelines may want to commit them; that is a team policy decision.
 
 ## Magic comments (in source code)
 
-Single-line `// comment` markers that change framework behavior at write-time.
+Single-line `// comment` markers that change framework behavior at write time.
 
 ### `devteam-allow-secret: <reason>`
 
-Suppresses the secret-scan PreToolUse hook for a single line. Use when the hook fires a false positive on something that looks like a credential but is intentional (e.g. an example in `docs/`, a test fixture, or a config schema).
+Suppresses the secret-scan PreToolUse hook for a single line. Use when the hook fires a false positive on something that resembles a credential but is intentional (e.g. an example in `docs/`, a test fixture, or a config schema).
 
 - **Where:** Inline comment on the same line as the would-be-blocked content.
 - **Format:** `// devteam-allow-secret: <one-sentence justification>` (or the language's comment syntax — `#`, `;`, `--`).

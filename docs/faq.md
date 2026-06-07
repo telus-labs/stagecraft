@@ -1,8 +1,24 @@
 # FAQ
 
-Common questions about Stagecraft. Grouped by topic. Grows organically; PRs welcome.
+Common questions about Stagecraft, grouped by topic.
 
-If you can't find what you need: skim [`docs/user-guide.md`](user-guide.md)'s "When things go wrong" section, [`docs/concepts.md`](concepts.md) for vocabulary, or open an issue.
+If you can't find what you need: check [`docs/user-guide.md`](user-guide.md)'s "When things go wrong" section, [`docs/concepts.md`](concepts.md) for vocabulary, or open an issue.
+
+- [Setup & install](#setup--install)
+- [Using the pipeline](#using-the-pipeline)
+- [Multi-host routing](#multi-host-routing)
+- [Comparing to other tools](#comparing-to-other-tools)
+- [Customization](#customization)
+- [Operational](#operational)
+- [Roadmap](#roadmap)
+- [Stuck pipelines and recovery](#stuck-pipelines-and-recovery)
+- [Running offline / in CI](#running-offline--in-ci)
+- [Auditing past runs](#auditing-past-runs)
+- [Multi-host specifics](#multi-host-specifics)
+- [Memory and learning](#memory-and-learning)
+- [Operational gotchas](#operational-gotchas)
+- [Auditing a codebase](#auditing-a-codebase)
+- [Comparing to /goal and similar features](#comparing-to-goal-and-similar-features)
 
 ## Setup & install
 
@@ -181,11 +197,11 @@ Yes. The orchestrator tracks workstreams individually. `devteam next` will repor
 
 ### How does this compare to LangGraph / AutoGen / CrewAI?
 
-Different problem space. Those are agent-framework libraries — you write Python (mostly) and they coordinate LLM calls. Stagecraft is a *pipeline scaffold* for AI coding tools (Claude Code, Codex, Gemini CLI): it installs role prompts and orchestrates which one runs when, but the actual model invocation happens inside the coding tool, not via a framework SDK. If your team already lives in Claude Code or Codex, Stagecraft meets you there; if you're building a custom agent app, those frameworks are the right tools.
+Different problem space. Those are agent-framework libraries: you write Python and they coordinate LLM calls. Stagecraft is a pipeline scaffold for AI coding tools (Claude Code, Codex, Gemini CLI). It installs role prompts and orchestrates which one runs when, but model invocation happens inside the coding tool, not via a framework SDK. If your team already uses Claude Code or Codex, Stagecraft integrates with that; if you're building a custom agent app, those frameworks are the right choice.
 
 ### How does this compare to Aider's `/architect` mode or Cursor's composer?
 
-Those are single-session multi-agent modes within one tool. Stagecraft is a structured *pipeline* with persistent gates, conditional dispatch, multi-host routing, and a stop/resume model that survives across sessions. The trade-off: more setup, more discipline, more durable for non-trivial features. Use Aider's architect mode for quick interactive sessions; use Stagecraft when you want auditability and stage gates.
+Those are single-session multi-agent modes within one tool. Stagecraft is a structured pipeline with persistent gates, conditional dispatch, multi-host routing, and a stop/resume model that survives across sessions. The trade-off: more setup, more discipline, more durable for non-trivial features. Use Aider's architect mode for quick interactive sessions; use Stagecraft when you need auditability and stage gates.
 
 ### Our CI/CD already validates code — does Stagecraft replace that or layer on top?
 
@@ -196,7 +212,7 @@ Layer on top. Stagecraft is not a CI/CD system. It doesn't replace:
 
 What Stagecraft adds is the structured AI-authored *artifacts* (brief, design spec, test plan, runbook, retro) and the *gate contract* between them. The actual mechanical verification (does the code compile, do tests pass) still runs in your existing CI. Stage 4b's build agents are expected to run `npm test`, `cargo check`, etc., and include the result in the gate; they don't replace those tools.
 
-Think of it as: Stagecraft is the project management and code-quality reasoning layer; your CI is the mechanical verification layer.
+Stagecraft is the project management and code-quality reasoning layer; your CI is the mechanical verification layer.
 
 ### How is this different from claude-dev-team or codex-dev-team?
 
@@ -342,7 +358,7 @@ and its caveats — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/f
 
 ### How do I roll back a deploy?
 
-The role's role brief explicitly says **don't auto-rollback** — the runbook (`pipeline/runbook.md`) names the rollback procedure and a human decides whether to roll back or investigate. The deploy gate records `rollback_executed: false` by default; PASS requires this to be false.
+The role brief explicitly prohibits auto-rollback. The runbook (`pipeline/runbook.md`) names the rollback procedure and a human decides whether to roll back or investigate. The deploy gate records `rollback_executed: false` by default; PASS requires this to be false.
 
 ### Where do I see the cumulative cost of a pipeline run?
 
@@ -368,7 +384,7 @@ See [`docs/BACKLOG.md`](BACKLOG.md). Top items by impact/effort:
 
 ### When will this hit 1.0?
 
-1.0 is reserved for a substantial future release — when the public surface (gate JSON shape, host adapter contract, CLI subcommands, `.devteam/config.yml` schema) is stable enough that we're willing to commit to semver. We're currently in 0.x specifically because we may break those surfaces before 1.0. The pace of breaking changes has slowed considerably; expect 1.0 within a few months if nothing major surfaces.
+1.0 is reserved for when the public surface (gate JSON shape, host adapter contract, CLI subcommands, `.devteam/config.yml` schema) is stable enough to commit to semver. The project is currently in 0.x because those surfaces may still change. The pace of breaking changes has slowed considerably; expect 1.0 within a few months if nothing major surfaces.
 
 ## Stuck pipelines and recovery
 
@@ -581,7 +597,7 @@ npm run dashboard -- --since 2026-03-01         # time-windowed
 npm run dashboard -- --json                     # machine-readable
 ```
 
-Useful for monthly pipeline retrospectives — "which stages are flakiest?" / "which model is best at which role?" / "are we trending up or down?".
+Useful for monthly pipeline retrospectives: which stages are flakiest, which model performs best at which role, and whether pass rates are trending up or down.
 
 ### Can I see who approved what?
 
@@ -781,12 +797,12 @@ Use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventio
 
 ### Should I use Stagecraft or Claude Code's `/goal` command?
 
-Both, for different things. `/goal` is a *continuation primitive* — set a session-level condition and the host loops until the condition holds. Stagecraft is a *decomposition primitive* — one feature → 17 stages with defined artifacts and gates.
+Both, for different purposes. `/goal` is a continuation primitive: set a session-level condition and the host loops until it holds. Stagecraft is a decomposition primitive: one feature decomposes into 17 stages with defined artifacts and gates.
 
-They compose: you could plausibly set a `/goal` like "tests pass and lint clean" at the start of stage-04 build, and let Claude loop on it. Then read the gate. We don't emit `/goal` invocations from the adapter today — that's BACKLOG E-series. Manually setting one before running a convergence-shaped stage works fine.
+They compose: you can set a `/goal` like "tests pass and lint clean" at the start of stage-04 build and let Claude loop on it, then read the gate. The adapter does not emit `/goal` invocations today (BACKLOG E-series). Setting one manually before a convergence-shaped stage works fine.
 
 ### Where does Stagecraft fit relative to Codex's autonomous task mode?
 
-Codex's autonomous mode (the "agentic" loop) is one model running until a task is done. Stagecraft is a structured *pipeline* across roles, with artifacts and gates between them. If your task fits in one model's context and you trust it to converge — use Codex's autonomous mode. If your task needs structure across stages, multiple roles, or auditability — use Stagecraft.
+Codex's autonomous mode is one model running until a task is done. Stagecraft is a structured pipeline across roles, with artifacts and gates between them. If your task fits in one model's context and you trust it to converge, use Codex's autonomous mode. If your task needs structure across stages, multiple roles, or auditability, use Stagecraft.
 
 You can also run Stagecraft with Codex as the host. The `codex` adapter dispatches each workstream as a separate `codex exec` invocation. Codex still operates autonomously per workstream; Stagecraft provides the cross-workstream structure.

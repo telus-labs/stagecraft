@@ -1,8 +1,21 @@
 # Persistent project memory
 
-Stagecraft indexes the artifacts a pipeline produces — briefs, design specs, ADRs, retrospectives, lessons-learned — into a per-project semantic memory. Once indexed, you can ask "have we built anything like this before?" and get the relevant past sections back, ranked by similarity.
+Stagecraft indexes the artifacts a pipeline produces — briefs, design specs, ADRs, retrospectives, lessons-learned — into a per-project semantic memory. Once indexed, queries against that memory return ranked past sections by similarity.
 
 This is the **D7** item from the BACKLOG (per-project memory). Cross-project sharing landed in **D3 + G8** — see "Org-shared memory" below.
+
+- [Quick start](#quick-start)
+- [What it does](#what-it-does)
+- [Storage layout](#storage-layout)
+- [Privacy](#privacy)
+- [Embedder](#embedder)
+- [Chunking](#chunking)
+- [Performance](#performance)
+- [When to ingest](#when-to-ingest)
+- [What's NOT in memory](#whats-not-in-memory)
+- [Troubleshooting](#troubleshooting)
+- [Org-shared memory (D3 + G8)](#org-shared-memory-d3--g8)
+- [Reference](#reference)
 
 ## Quick start
 
@@ -22,7 +35,7 @@ devteam memory stats
 devteam memory clear
 ```
 
-The first `ingest` downloads the embedding model (~33MB for BGE-small) into `~/.cache/huggingface/`. Subsequent runs use the cached copy — fully offline.
+The first `ingest` downloads the embedding model (~33MB for BGE-small) into `~/.cache/huggingface/`. Subsequent runs use the cached copy. The model runs fully offline.
 
 ## What it does
 
@@ -46,15 +59,15 @@ When you query, your query text is embedded and ranked by cosine similarity agai
 └── chunks-lessons-learned.json
 ```
 
-JSON files are deliberately git-friendly. Most teams will gitignore `.devteam/memory/` (it can contain sensitive snippets from briefs and designs), but if you want to commit a curated subset to share across the team, the file format makes that possible.
+JSON files are git-friendly by design. Most teams will gitignore `.devteam/memory/` because it can contain sensitive snippets from briefs and designs. If you want to commit a curated subset to share across the team, the file format supports that.
 
 ## Privacy
 
-The store contains plaintext copies of every chunk it embeds — which includes whatever was in the brief, design spec, etc. Treat it like a backup:
+The store contains plaintext copies of every chunk it embeds, including whatever was in the brief, design spec, and similar artifacts. Treat it like a backup:
 
 - **Add `.devteam/memory/` to your project's `.gitignore`** unless you have a deliberate sharing strategy.
 - **Opt out per-artifact** by including the marker `stagecraft-no-memory` anywhere in the file (a comment line works). Stagecraft will skip that artifact at ingest time.
-- **No cross-project leakage by default** — the per-project store is strictly per-project. Cross-project sharing (D3 + G8) is **explicit**: you must run `devteam memory promote` to copy this project's records to the org-shared store. Nothing flows automatically.
+- **No cross-project leakage by default.** The per-project store is strictly per-project. Cross-project sharing (D3 + G8) is **explicit**: you must run `devteam memory promote` to copy this project's records to the org-shared store. Nothing flows automatically.
 
 ## Embedder
 
@@ -95,7 +108,7 @@ Chunks under 32 chars are dropped (typically just empty sections). Documents wit
 
 For the realistic scale of a single project (10–100 artifacts, 100–1000 chunks), the in-memory cosine search runs in single-digit milliseconds. Local embedding adds 50–200ms per chunk on a modern CPU. A 12-chunk brief ingests in 1–3 seconds.
 
-The JSON backend's ceiling is roughly 1k chunks per project before query latency becomes noticeable. Past that, switch to the planned sqlite-vec backend (interface ready in `core/memory/store.js`; impl planned for v0.3).
+The JSON backend's ceiling is roughly 1k chunks per project before query latency becomes noticeable. Beyond that, switch to the planned sqlite-vec backend (interface ready in `core/memory/store.js`; implementation planned for v0.3).
 
 ## When to ingest
 
@@ -104,7 +117,7 @@ Two trigger points:
 1. **Manual** — `devteam memory ingest` after any artifact-producing stage finishes. Safe to run repeatedly: re-ingesting an artifact replaces its old chunks (no duplicates).
 2. **End of pipeline** — typically after Stage 9 (retrospective). The retrospective is when the team's view of "what we built and learned" crystallizes; ingesting then captures the most-complete picture.
 
-Future: automatic ingest on retro-gate write, via a hook. Not in v1 — manual `devteam memory ingest` is the explicit interface for now.
+Automatic ingest on retro-gate write (via a hook) is planned but not in v1. The explicit interface for now is manual `devteam memory ingest`.
 
 ## What's NOT in memory
 
@@ -127,11 +140,11 @@ Deliberately excluded:
 
 ## Org-shared memory (D3 + G8)
 
-The per-project store is strictly per-project. The **org-shared store** (rooted at `~/.stagecraft/memory/` by default, overridable via `STAGECRAFT_ORG_MEMORY_DIR`) holds artifacts explicitly promoted from individual projects. Architectural decisions and durable lessons benefit from cross-project visibility; everything else (briefs, designs, retros) stays per-project unless you opt in.
+The per-project store is strictly per-project. The **org-shared store** (rooted at `~/.stagecraft/memory/` by default, overridable via `STAGECRAFT_ORG_MEMORY_DIR`) holds artifacts explicitly promoted from individual projects. Architectural decisions and durable lessons benefit from cross-project visibility; briefs, designs, and retros stay per-project unless you opt in.
 
 ### Promotion
 
-Promotion is explicit — nothing flows automatically.
+Promotion is explicit. Nothing flows automatically.
 
 ```bash
 # In each project, after running the pipeline:
@@ -143,7 +156,7 @@ devteam memory promote adr                # ADRs only
 devteam memory promote adr lessons-learned design-spec  # custom set
 ```
 
-The promote step copies records (with embeddings) from the project store to the org store, tagged with `project_cwd` so query results name their origin. Re-running `promote` is idempotent — re-promoting overwrites without duplicating.
+The promote step copies records (with embeddings) from the project store to the org store, tagged with `project_cwd` so query results name their origin. Re-running `promote` is idempotent: it overwrites without duplicating.
 
 ### Querying org memory
 
@@ -157,7 +170,7 @@ devteam architecture lookup "pagination"
 devteam architecture lookup "auth" --kind lessons-learned
 ```
 
-`devteam architecture lookup` is a friendlier wrapper around `devteam memory query --org --kind adr` — defaults to ADRs, and the principal role brief points designers at this command before drafting any new spec.
+`devteam architecture lookup` is a wrapper around `devteam memory query --org --kind adr`. It defaults to ADRs, and the principal role brief directs designers to run it before drafting any new spec.
 
 ### Architecture continuity (G8)
 
@@ -167,20 +180,20 @@ Two outcomes:
 - **Honor the prior ADR.** Cite it in the new design's "Prior commitments considered" section.
 - **Supersede it.** Write a new ADR with a `Supersedes: <prior-id>` field and a rationale (what changed, what was learned). The new ADR carries the same gravity as the original.
 
-The design gate (`pipeline/gates/stage-02.json`) optionally records `adrs_consulted` and `adrs_superseded` arrays — the audit trail. Silent disagreement with a prior ADR is forbidden by the role brief.
+The design gate (`pipeline/gates/stage-02.json`) optionally records `adrs_consulted` and `adrs_superseded` arrays as an audit trail. Silent disagreement with a prior ADR is forbidden by the role brief.
 
 ### Trust + privacy
 
 Cross-project sharing changes the trust model. Some notes:
 
-- **The org store contains plaintext.** Same as the per-project store — promoted ADRs and lessons sit on disk as readable JSON.
+- **The org store contains plaintext.** Same as the per-project store: promoted ADRs and lessons sit on disk as readable JSON.
 - **Add `~/.stagecraft/memory/` to your dotfiles `.gitignore`** (or whatever protects your home dir). Per-machine isolation is your friend.
-- **Multi-tenant?** If you work on multiple clients on the same machine and don't want their ADRs cross-pollinating, override `STAGECRAFT_ORG_MEMORY_DIR` per shell (`~/.stagecraft-client-A/memory/` vs `~/.stagecraft-client-B/memory/`).
-- **Embedder consistency.** The org store inherits the first promoter's embedder model. If a project's vectors are from a different model, promote fails with a clear error pointing at `devteam memory reindex`. Mixed vectors would silently degrade retrieval.
+- **Multi-tenant.** If you work on multiple clients on the same machine and need their ADRs isolated, override `STAGECRAFT_ORG_MEMORY_DIR` per shell (`~/.stagecraft-client-A/memory/` vs `~/.stagecraft-client-B/memory/`).
+- **Embedder consistency.** The org store inherits the first promoter's embedder model. If a project's vectors were produced by a different model, promotion fails with an error pointing at `devteam memory reindex`. Mixed vectors silently degrade retrieval.
 
 ### Limitations
 
-- The org store is per-machine by default. Sharing across team members requires syncing `~/.stagecraft/memory/` via your team's preferred mechanism (a shared network mount, git for the JSON shards, etc.). A first-class team-sync feature is BACKLOG candidate.
+- The org store is per-machine by default. Sharing across team members requires syncing `~/.stagecraft/memory/` via a shared network mount, git, or similar mechanism. A first-class team-sync feature is a BACKLOG candidate.
 - No automatic promotion. Each promote is a deliberate human action.
 - No deletion of org records per-project. `devteam memory clear --org` wipes everything; selective per-project removal needs the (planned) sqlite-vec backend's better delete semantics.
 

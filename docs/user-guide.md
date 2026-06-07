@@ -7,13 +7,30 @@ How to use Stagecraft day to day. Companion to:
 - [`docs/concepts.md`](concepts.md) — the six primitives in a table.
 - [`docs/tracks.md`](tracks.md) — which track to pick for which kind of change.
 
-If you've never used Stagecraft before, read EXAMPLE first. This page is a reference you reach for during real work.
+If you've never used Stagecraft before, read EXAMPLE first. This page is a reference for active use.
+
+- [The shape of one run](#the-shape-of-one-run)
+- [Your three moments of control](#your-three-moments-of-control)
+- [Install + first run](#install--first-run)
+- [Daily loop](#daily-loop)
+- [Running each stage](#running-each-stage)
+- [Multi-host setups](#multi-host-setups)
+- [Headless mode](#headless-mode)
+- [The web UI](#the-web-ui)
+- [Persistent memory](#persistent-memory)
+- [Observability (OpenTelemetry)](#observability-opentelemetry)
+- [Multi-model peer review](#multi-model-peer-review)
+- [Auditing a codebase](#auditing-a-codebase)
+- [When things go wrong](#when-things-go-wrong)
+- [Customizing for your project](#customizing-for-your-project)
+- [Upgrading](#upgrading)
+- [What's not covered here](#whats-not-covered-here)
 
 ---
 
 ## The shape of one run
 
-Before the procedural reference, the mental model. One pipeline run looks like this:
+One pipeline run looks like this:
 
 ```
    you                                                          you
@@ -44,11 +61,11 @@ Before the procedural reference, the mental model. One pipeline run looks like t
   field has a specific value.
 ```
 
-You're the loop's start, end, and decision-maker. The framework does the bookkeeping — which stage's next, what to dispatch, where the gate goes, whether it's valid, whether the pipeline can advance.
+You initiate and review each cycle; the framework handles bookkeeping: which stage is next, what to dispatch, where the gate goes, whether it's valid, and whether the pipeline can advance.
 
 ## Your three moments of control
 
-If you remember nothing else from this guide, remember these:
+Three points define how you interact with the pipeline:
 
 1. **At the start.** You pick the track and write the feature brief in one paragraph. Everything downstream flows from this.
    ```bash
@@ -62,28 +79,9 @@ If you remember nothing else from this guide, remember these:
    devteam ui --open             # web UI with live updates
    ```
 
-3. **At escalations.** When the pipeline halts (`status: ESCALATE` or `veto: true`), you make a binding call. Resolve the gate to PASS or stop the pipeline. Nobody else can decide for you.
+3. **At escalations.** When the pipeline halts (`status: ESCALATE` or `veto: true`), you make a binding call. Resolve the gate to PASS or stop the pipeline.
 
-Everything else — which subagent to invoke, which file to write, what schema the gate has, how to aggregate workstreams — is the framework's job, not yours.
-
----
-
-## Table of contents
-
-1. [Install + first run](#install--first-run)
-2. [Daily loop](#daily-loop)
-3. [Running each stage](#running-each-stage)
-4. [Multi-host setups](#multi-host-setups)
-5. [Headless mode](#headless-mode)
-6. [The web UI](#the-web-ui)
-7. [Persistent memory](#persistent-memory)
-8. [Observability (OpenTelemetry)](#observability-opentelemetry)
-9. [Multi-model peer review](#multi-model-peer-review)
-10. [Auditing a codebase](#auditing-a-codebase)
-11. [When things go wrong](#when-things-go-wrong)
-11. [Customizing for your project](#customizing-for-your-project)
-12. [Upgrading](#upgrading)
-13. [What's not covered here](#whats-not-covered-here)
+Which subagent to invoke, which file to write, what schema the gate has, and how to aggregate workstreams are all handled by the framework.
 
 ---
 
@@ -125,11 +123,11 @@ Verify with:
 devteam doctor
 ```
 
-A green doctor means the framework, the adapter install, and (if applicable) the host CLI on PATH are all wired. Read `cat .devteam/config.yml` to see/edit the routing.
+A green result confirms the framework, adapter install, and (if applicable) the host CLI on PATH are all wired. Read `.devteam/config.yml` to view or edit the routing.
 
 ## Daily loop
 
-Two commands cover 80% of usage:
+Most pipeline work uses two commands:
 
 ```bash
 devteam next            # "what's next?"
@@ -160,9 +158,9 @@ A **gate** is a JSON file the model writes to `pipeline/gates/` at the end of ea
 - **PASS** — stage complete; pipeline advances.
 - **WARN** — stage complete with concerns; pipeline advances but the warning is preserved in the merged gate.
 - **FAIL** — stage did not meet its criteria; `devteam next` returns `fix-and-retry`. The `blockers[]` array explains what must be fixed. Re-run the stage; the new gate overwrites the old one.
-- **ESCALATE** — a human decision is required before the pipeline can advance (e.g. the model isn't confident enough to PASS or FAIL; the change scope grew; a security finding is ambiguous). The pipeline halts until you resolve it — see [resolve-escalation](#devteam-next-says-resolve-escalation).
+- **ESCALATE** — a human decision is required before the pipeline can advance (e.g. the model isn't confident enough to PASS or FAIL; the change scope grew; a security finding is ambiguous). The pipeline halts until you resolve it. See [`devteam next` says `resolve-escalation`](#devteam-next-says-resolve-escalation).
 
-You can hand-edit a gate file if the model got something wrong. Just keep the required fields and write valid JSON — the validator will tell you what's missing.
+You can hand-edit a gate file if the model got something wrong. Keep the required fields and write valid JSON; the validator will report what's missing.
 
 ### `devteam next` actions explained
 
@@ -183,7 +181,7 @@ For a snapshot of where the pipeline is right now:
 devteam summary
 ```
 
-Looks like:
+Example output:
 
 ```
 Pipeline state — track: full
@@ -199,13 +197,13 @@ Pipeline state — track: full
 …
 ```
 
-For a live view, use `devteam ui --open` — see [the web UI](#the-web-ui).
+For a live view, use `devteam ui --open`. See [the web UI](#the-web-ui).
 
 ### Following pipeline progress
 
-Three ways to keep visibility while a pipeline runs, each suited to a different operator preference:
+Three options for tracking pipeline progress, suited to different workflows:
 
-**1. `devteam log` — chronological terminal narrative.** Reads every gate and every artifact file from `pipeline/`, sorts by mtime, prints one line per event with key fields per stage:
+**1. `devteam log`.** Reads every gate and artifact file from `pipeline/`, sorts by mtime, and prints one line per event with key fields per stage:
 
 ```bash
 $ devteam log
@@ -220,23 +218,23 @@ $ devteam log
 
 Add `--follow` to tail the directory at 1-second poll — new events stream in as gates land and artifacts get written. Add `--json` for one NDJSON event per line if you're piping to another tool. Works identically in headless and user-driven modes (it reads on-disk state, not the agent's transcript).
 
-**2. `pipeline/logs/*.log` — per-stage transcripts (headless only).** When you run `devteam stage X --headless`, the host CLI's stdout/stderr stream to your terminal AND get teed to `pipeline/logs/<workstreamId>.log`. After a run, `cat pipeline/logs/stage-04.backend.log` shows everything the agent printed, with a header (start time, command) and trailer (end time, exit code). Disable with `DEVTEAM_NO_LOG=1`. Doesn't apply to user-driven mode because the transcript lives in your AI tool's session, not in devteam's process.
+**2. `pipeline/logs/*.log` — per-stage transcripts (headless only).** When you run `devteam stage X --headless`, the host CLI's stdout/stderr streams to your terminal and is teed to `pipeline/logs/<workstreamId>.log`. After a run, `cat pipeline/logs/stage-04.backend.log` shows everything the agent printed, with a header (start time, command) and trailer (end time, exit code). Disable with `DEVTEAM_NO_LOG=1`. Does not apply to user-driven mode because the transcript lives in your AI tool's session, not in devteam's process.
 
-**3. `devteam ui --open` — live web dashboard.** Same data as `devteam log` but as a tree, updated via Server-Sent Events when gates change. Best if you're using two monitors or prefer a UI. See [the web UI](#the-web-ui).
+**3. `devteam ui --open`.** The same data as `devteam log` rendered as a tree, updated via Server-Sent Events when gates change. Suited for two-monitor setups or when a browser view is preferred. See [the web UI](#the-web-ui).
 
-The three are complementary — use whichever fits the moment. A common pattern: `devteam log --follow` in one terminal pane while running the pipeline in another.
+The three options are complementary. A common pattern: `devteam log --follow` in one terminal pane while running the pipeline in another.
 
 ### Answering an open question between stages
 
-Stages 1 (requirements) and 2 (design) sometimes produce questions only a human can answer. They appear as `QUESTION:` lines in both `pipeline/brief.md` (in the *Open Questions* section) and `pipeline/context.md`. The pipeline halts at Stage 3 (clarification) until each one is answered — or, by default, dispatches the PM agent to answer them.
+Stages 1 (requirements) and 2 (design) sometimes produce questions only a human can answer. They appear as `QUESTION:` lines in both `pipeline/brief.md` (in the *Open Questions* section) and `pipeline/context.md`. The pipeline halts at Stage 3 (clarification) until each one is answered, or by default dispatches the PM agent to answer them.
 
-If you'd rather answer yourself instead of invoking PM:
+To answer questions yourself rather than invoking PM:
 
-**Where:** `pipeline/context.md` — directly below the `QUESTION:` line. Don't edit `brief.md`. The brief stays as the original intent; context.md is where answers and decisions accumulate across the run.
+**Where:** `pipeline/context.md`, directly below the `QUESTION:` line. Do not edit `brief.md`. The brief stays as the original intent; `context.md` is where answers and decisions accumulate across the run.
 
-**Format:** A `PM-ANSWER:` line on the line below. Multi-line answers are fine — readers consume everything until the next blank line or marker.
+**Format:** A `PM-ANSWER:` line on the line below. Multi-line answers are fine; readers consume everything until the next blank line or marker.
 
-**Example.** Before:
+Before:
 
 ```markdown
 ## Open Questions
@@ -259,19 +257,19 @@ PM-ANSWER: Separate column `sms_optin_at` (nullable timestamptz). updated_at cha
 
 Save the file and run `devteam next`. Stage 3's `grep QUESTION: not followed by PM-ANSWER:` check passes; the pipeline advances to design without invoking PM.
 
-**If your answer changes the brief itself** (e.g. adds an acceptance criterion), add a `## Brief Changes` section to `pipeline/context.md` rather than editing `brief.md`. Devs at every later stage read both. Keeps the audit trail honest.
+**If your answer changes the brief itself** (e.g. adds an acceptance criterion), add a `## Brief Changes` section to `pipeline/context.md` rather than editing `brief.md`. Agents at every later stage read both files, keeping the audit trail intact.
 
 For the full vocabulary of markers like `QUESTION:` / `PM-ANSWER:` / `CONCERN:` / `BLOCKER:` etc., see [`docs/conventions.md`](conventions.md).
 
 ## Running each stage
 
-The CLI emits a prompt aimed at the routed host. You consume the prompt by invoking the named subagent in your AI tool — typically via a slash command or natural language.
+The CLI renders a prompt for the routed host. Run it by invoking the named subagent in your AI tool, via a slash command or natural language.
 
 ```bash
 devteam stage requirements --feature "Add SMS notification opt-in"
 ```
 
-When run user-driven (the default), the output is framed with a preamble explaining what to do with the prompt and a postamble pointing at the next action:
+In user-driven mode (the default), the output includes a preamble explaining what to do with the prompt and a postamble pointing at the next action:
 
 ```
 ═══════════════════════════════════════════════════════════════════════
@@ -365,15 +363,15 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 A *host* is the AI coding CLI that Stagecraft hands work to: Claude Code (`claude`), Codex CLI (`codex`), or Gemini CLI (`gemini`). Stagecraft never calls a model API directly. It renders a stage prompt and pipes it to the host, which manages the model invocation, tool permissions, and output capture itself.
 
-**Host and model are two different things.** Which host you route to determines which CLI runs. Which model *that CLI uses* is configured inside the host — not in Stagecraft. For Claude Code, the `model:` field in each agent file (`.claude/agents/<role>.md`) controls this. For Codex and Gemini, it's their own settings.
+**Host and model are two different things.** Which host you route to determines which CLI runs. Which model that CLI uses is configured inside the host, not in Stagecraft. For Claude Code, the `model:` field in each agent file (`.claude/agents/<role>.md`) controls this. For Codex and Gemini, use their own settings.
 
-This distinction matters when you're optimizing cost or comparing model quality: you can run Opus for some roles and Sonnet for others without changing hosts at all, purely by editing the agent frontmatter. You only need multiple hosts when you want to mix CLIs — Claude Code for some roles, Codex for others.
+When optimizing cost or comparing model quality, you can run Opus for some roles and Sonnet for others by editing the agent frontmatter, with no host changes required. Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
 
 ### Why use multiple hosts?
 
-**Cost.** Opus-class models cost roughly 5× more per token than Sonnet. Multi-host lets you route expensive models only to the roles that justify the price — typically Principal, Security, and Red-team for their reasoning demands — and cheaper models for the bulk of implementation work. Net cost on a full pipeline run typically drops 30–50%.
+**Cost.** Opus-class models cost roughly 5× more per token than Sonnet. Multi-host lets you route expensive models only to the roles that warrant it (typically Principal, Security, and Red-team) and cheaper models for implementation work. Net cost on a full pipeline run typically drops 30–50%.
 
-**Model diversity.** Different models have different blind spots. A bug Claude rationalizes as acceptable, Codex or Gemini might flag. Routing specific roles to specific models captures independent opinions without manual effort. The formalized version of this — where every code-review area runs on all configured hosts in parallel — is [multi-model peer review](#multi-model-peer-review). Neither of these happens automatically: red-team routes to `default_host` unless you add a `roles: red-team:` override, and multi-model peer review is off unless you set `review_fanout`.
+**Model diversity.** Different models have different blind spots. Routing specific roles to specific models captures independent opinions without manual effort. The formalized version, where every code-review area runs on all configured hosts in parallel, is [multi-model peer review](#multi-model-peer-review). Neither is automatic: red-team routes to `default_host` unless you add a `roles: red-team:` override, and multi-model peer review requires setting `review_fanout`.
 
 **Tool fit.** Claude Code is strong on design, complex review, and reasoning about architecture. Codex CLI is fast at backend implementation. Gemini CLI is inexpensive for pattern-matching tasks like QA. Use the right tool for the job.
 
@@ -397,7 +395,7 @@ routing:
   default_host: claude-code
 ```
 
-**Installing both hosts does not automatically split work between them.** Until you edit the config, every stage routes to `default_host` — in this case, claude-code. Codex's installed files sit on disk unused. The pipeline behaves identically to `devteam init --host claude-code` until you add `roles:` or `stages:` overrides.
+**Installing both hosts does not automatically split work between them.** Until you edit the config, every stage routes to `default_host` (in this case, claude-code). Codex's installed files sit on disk unused. The pipeline behaves identically to `devteam init --host claude-code` until you add `roles:` or `stages:` overrides.
 
 ### Configuring routing
 
@@ -715,7 +713,7 @@ Tracing is no-op (zero overhead) when no endpoint is configured. To force-disabl
 
 ## Multi-model peer review
 
-Opt-in: have Stage 5 (peer-review) run across multiple hosts simultaneously. Each area gets reviewed by every configured host; the merged gate is pessimistic. The reviewers all apply the same four-principles rubric — the cross-model signal comes from training-data diversity, not from giving different reviewers different methods. (For *method* diversity — a different role applying a different methodology — see Stage 4c red-team.)
+Stage 5 (peer-review) can run across multiple hosts simultaneously. Each area gets reviewed by every configured host; the merged gate is pessimistic. All reviewers apply the same four-principles rubric. The cross-model signal comes from training-data diversity, not from giving different reviewers different methods. For method diversity (a different role applying a different methodology), see Stage 4c red-team.
 
 ```yaml
 # .devteam/config.yml
@@ -724,13 +722,13 @@ routing:
   review_fanout: [claude-code, codex, gemini-cli]
 ```
 
-With three hosts and four review areas, you get 4×3 = 12 parallel reviews. The approval-derivation hook recognizes host-based filenames (`pipeline/code-review/by-<host>.md`) and writes gates to a three-segment path (`pipeline/gates/stage-05.<area>.<host>.json`). The merge reads all expected fanout gates and aggregates pessimistically — any FAIL anywhere → merged FAIL.
+With three hosts and four review areas, you get 4×3 = 12 parallel reviews. The approval-derivation hook recognizes host-based filenames (`pipeline/code-review/by-<host>.md`) and writes gates to a three-segment path (`pipeline/gates/stage-05.<area>.<host>.json`). The merge reads all expected fanout gates and aggregates pessimistically: any FAIL on any area from any model produces a merged FAIL.
 
-Default is empty list (off). Opt in via config. The cost is N× peer-review time and N× peer-review LLM cost. The benefit: different models have different blind spots; a bug one model rationalizes, another flags.
+Default is empty (off). Opt in via config. The cost is N× peer-review time and N× LLM cost. The benefit is model diversity: a bug one model rationalizes, another may flag.
 
 ## Auditing a codebase
 
-The audit feature is separate from the 17-stage pipeline. Stages *build* features; the audit *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only by design.
+The audit feature is separate from the 17-stage pipeline. Pipeline stages build features; the audit analyzes an existing codebase and produces a prioritized improvement roadmap. It is read-only by design.
 
 ### When to use it
 
@@ -790,9 +788,9 @@ Every finding in those files cites file paths and line numbers; severity / effor
 
 ### Auditing a feature built with Stagecraft — the four modes
 
-When the feature you're auditing was built with Stagecraft, the audit trail is unusually rich: `pipeline/brief.md` (intent), `pipeline/design-spec.md` + `pipeline/adr/` (design rationale), `pipeline/gates/*.json` (every decision), `pipeline/code-review/by-*.md` (review evidence), `pipeline/red-team-report.md` (adversarial findings), `pipeline/spec.feature` + `pipeline/test-report.md` (AC ↔ test mapping), `pipeline/retrospective.md` (lessons). Most audits of an externally-built feature have to reverse-engineer this material from a chat log; for a Stagecraft-built feature you just open the files. That changes which audit modes are worth running.
+When the feature you're auditing was built with Stagecraft, the audit trail is unusually rich: `pipeline/brief.md` (intent), `pipeline/design-spec.md` + `pipeline/adr/` (design rationale), `pipeline/gates/*.json` (every decision), `pipeline/code-review/by-*.md` (review evidence), `pipeline/red-team-report.md` (adversarial findings), `pipeline/spec.feature` + `pipeline/test-report.md` (AC ↔ test mapping), `pipeline/retrospective.md` (lessons). Audits of externally-built features must reverse-engineer this material from chat logs or version history. For a Stagecraft-built feature, the files are already there. This affects which audit modes are most valuable.
 
-"Audit" is the umbrella term — but the `/audit` slash command covers only one of four useful modes. The full set:
+The `/audit` slash command covers only one of four useful audit modes:
 
 | Mode | What it asks | Tool / approach |
 |---|---|---|
@@ -801,16 +799,16 @@ When the feature you're auditing was built with Stagecraft, the audit trail is u
 | **Consistency audit** | "Does the implementation still match the brief / design / spec? Has anything drifted since ship?" | `devteam spec verify --strict` (brief.md ↔ spec.feature ↔ test-report.md), `devteam reproduce <stage-id>` (gate fingerprint check), `devteam replay <stage-id>` (re-run with current config + diff). |
 | **Threat audit** | "Are the threat assumptions from when this was built still valid? New endpoints, new IAM policies, new dependencies?" | `devteam stage red-team --headless` against the current code. Anything new, or anything that was `noted_for_followup` and still isn't fixed, surfaces. |
 
-Pick by intent:
+Choose based on what you need to know:
 
-- **"Is the code quality acceptable?"** → Code audit (`/audit`). Same as for any non-Stagecraft project.
-- **"Did we actually follow our own process?"** → Process audit. Highest-leverage for catching pipeline drift — the place where Stagecraft's safety properties degrade over time.
-- **"Did the spec keep up with the implementation?"** → Consistency audit. Cheapest of the four (`devteam spec verify` is one command); catches the common "we updated the code but forgot the brief" case.
-- **"Is this feature still safe?"** → Threat audit. Most valuable for features that have been in prod for a while as the environment around them shifted.
+- **Code quality** → Code audit (`/audit`). Works the same for Stagecraft-built and externally-built features.
+- **Process compliance** → Process audit. Most useful for catching pipeline drift, which code-quality scans cannot detect.
+- **Brief/spec/implementation alignment** → Consistency audit. `devteam spec verify` is a single command; it catches the common case of code changing without updating the brief.
+- **Ongoing threat exposure** → Threat audit. Most valuable for features that have been in production as the surrounding environment has changed.
 
 #### Process-audit checklist (mode 2)
 
-The process audit is the one mode that's *unique* to Stagecraft-built features and has no CLI tool — it's a structured human read. Walk these five questions:
+The process audit is unique to Stagecraft-built features and has no CLI tool. It is a structured manual review. Walk these five questions:
 
 - **Did every gate genuinely pass, or did anything get rubber-stamped?** Read each `pipeline/gates/stage-NN.json` and the corresponding artifact. A PASS with a sparse `## Verify` section in `pipeline/pr-*.md` is a yellow flag. Stage 4a and Stage 6 are orchestrator-stamped — run `devteam verify stage-04a` and `devteam verify stage-06` to re-stamp on demand; if the current code still passes, the recorded PASS was real.
 - **Are the warnings still defensible?** `jq '.warnings[]' pipeline/gates/*.json` lists every warning that survived to PASS. SUGGESTION-flavored warnings are fine; CONCERN-flavored ones that never got resolved to a ticket are technical debt that's been quietly normalized.
@@ -818,7 +816,7 @@ The process audit is the one mode that's *unique* to Stagecraft-built features a
 - **Did peer review actually exercise the matrix?** `grep -c "^## Review of " pipeline/code-review/by-*.md` should hit each non-self area at least twice (matrix) or once (scoped/nano). If a `by-<reviewer>.md` has only one section, that reviewer's coverage was thin.
 - **Did the retrospective land anything?** `pipeline/retrospective.md` should cite specific incidents from the run. A generic "tests pass and we shipped" retro means the team didn't reflect.
 
-A full process audit takes ~30 minutes on a `full`-track feature; it's the single highest-leverage audit because process drift is invisible to code-quality scans.
+A full process audit takes ~30 minutes on a `full`-track feature. Process drift is invisible to code-quality scans, making this the highest-leverage audit for catching it.
 
 #### Cross-host notes
 
@@ -847,11 +845,11 @@ You typo'd a stage or host name. Use `devteam stages` and `devteam hosts` to see
 
 A stage gate has `status: FAIL`. The blockers are listed in `devteam next`'s output. Address them, re-run the stage, let the new gate overwrite the old one.
 
-If you re-run the same stage more than once without resolution, the model should increment `retry_number` and fill `this_attempt_differs_by` — a non-empty string describing what changed between this attempt and the last. The validator enforces this: a gate with `retry_number >= 1` and an empty or missing `this_attempt_differs_by` is rejected. This prevents silent retry loops where the model just writes the same failing gate again.
+If you re-run the same stage more than once without resolution, the model should increment `retry_number` and fill `this_attempt_differs_by` with a non-empty string describing what changed. The validator enforces this: a gate with `retry_number >= 1` and an empty or missing `this_attempt_differs_by` is rejected. This prevents silent retry loops where the model writes the same failing gate again.
 
-If you've retried several times without progress, consider writing a gate with `status: ESCALATE` — it means "a human decision is needed" rather than "fix the code and retry."
+If retrying several times yields no progress, write a gate with `status: ESCALATE` to signal that a human decision is needed.
 
-For the full procedure — what to read, how to scope the re-run with `--patch` and `--skip-completed`, and the per-stage specifics (red-team, QA-in-build, pre-review, peer-review) — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+For the full procedure (what to read, how to scope the re-run with `--patch` and `--skip-completed`, and per-stage specifics for red-team, QA-in-build, pre-review, and peer-review), see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
 
 ### `devteam next` says `resolve-escalation`
 
@@ -860,19 +858,19 @@ A stage gate has `status: ESCALATE`. Use escalation when:
 - The change scope has grown beyond what the brief covers and a human must decide whether to re-scope or proceed
 - A veto-capable stage (security review, migration safety) found a concern that needs human judgement
 
-The pipeline cannot advance until you resolve it. The summary is: read the gate's `escalation_reason` and `decision_needed`, make the call, then either rewrite the gate to `PASS`/`WARN`/`FAIL` or use `devteam restart <stage>` to clear it and re-run the originating stage.
+The pipeline cannot advance until you resolve it. Read the gate's `escalation_reason` and `decision_needed`, make the call, then either rewrite the gate to `PASS`/`WARN`/`FAIL` or use `devteam restart <stage>` to clear it and re-run the originating stage.
 
-For the full procedure — what to read in what order, how to invoke the Principal role for a binding ruling, how to encode must-fix vs defer decisions, common gotchas — see **[`docs/runbooks/escalation.md`](runbooks/escalation.md)**. That's the operational playbook; this section is the one-paragraph version.
+For the full procedure (what to read in what order, how to invoke the Principal role for a binding ruling, how to encode must-fix vs defer decisions, common gotchas), see **[`docs/runbooks/escalation.md`](runbooks/escalation.md)**.
 
 ### Ad-hoc Principal rulings (`devteam ruling`)
 
-Some decisions need the Principal's judgment but **don't warrant re-running a whole stage**. Examples:
+Some decisions need the Principal's judgment but do not warrant re-running a whole stage, for example:
 
 - A reviewer's `ESCALATE-to-Principal:` marker in `pipeline/code-review/by-<reviewer>.md` calls out an architectural question (e.g. "this approach contradicts ADR-0003 — Principal should rule").
 - An ADR-vs-implementation drift surfaces mid-pipeline ("the ADR says round to 6 decimal places; the code rounds to 8 — which is right?").
 - A consistency-audit finding (`devteam reproduce`) shows the system-prompt hash drifted and you need a Principal call on whether to re-baseline or replay.
 
-`devteam ruling` dispatches the Principal subagent for a focused ruling that lands as a `PRINCIPAL-RULING:` line in `pipeline/context.md` under a `## Principal Rulings` section. **No gate is written** — the ruling is an artifact, not a status change. After reading the ruling, you use `devteam restart <stage>` (must-fix path) or hand-edit the escalating gate (defer path) to act on it.
+`devteam ruling` dispatches the Principal subagent for a focused ruling. The result lands as a `PRINCIPAL-RULING:` line in `pipeline/context.md` under a `## Principal Rulings` section. No gate is written; the ruling is an artifact, not a status change. After reading the ruling, use `devteam restart <stage>` (must-fix path) or hand-edit the escalating gate (defer path) to act on it.
 
 ```bash
 devteam ruling --topic "ADR-0003 round(x,6) vs implementation round(x,8)" \
@@ -886,11 +884,11 @@ Flags:
 - **`--topic "..."`** (required) — short description of what to rule on.
 - **`--context paths`** — comma-separated files Principal should read (the reviewer's file, the ADR, the failing test report, etc.).
 - **`--target-gate path`** — the escalating gate. Principal will read its `escalation_reason` and `decision_needed`.
-- **`--headless`** — pipe the prompt through the Principal-routed host's headless command. Without it, the prompt prints to stdout for paste-into-host (the user-driven mode).
+- **`--headless`** — pipe the prompt through the Principal-routed host's headless command. Without it, the prompt prints to stdout for manual paste (user-driven mode).
 
 Routing: `devteam ruling` resolves the Principal's host from `routing.roles.principal` if set in `.devteam/config.yml`, else `routing.default_host`. Refuses cleanly when the routed host doesn't support `--headless` (e.g., `generic`).
 
-For when to use `ruling` vs `devteam stage`, vs hand-editing gates, vs `devteam restart`, see [`docs/runbooks/escalation.md`](runbooks/escalation.md) — same operational playbook that covers the rest of the escalation flow.
+For when to use `ruling` vs `devteam stage`, vs hand-editing gates, vs `devteam restart`, see [`docs/runbooks/escalation.md`](runbooks/escalation.md).
 
 ### Stoplist blocked my change
 
@@ -900,9 +898,9 @@ Reasons:
   - authentication: matched "auth" in: add auth middleware
 ```
 
-You ran a lighter track (`quick`, `nano`, `config-only`, `dep-update`) and the change description matched a stoplist phrase. Two responses:
+You ran a lighter track (`quick`, `nano`, `config-only`, `dep-update`) and the change description matched a stoplist phrase. Two options:
 
-- **Recommended:** switch to `full` or `hotfix` — the change is consequential enough to warrant the rigor.
+- **Recommended:** switch to `full` or `hotfix`. The change is consequential enough to warrant the rigor.
 - **If false positive:** re-run with `--force` to bypass. Use sparingly.
 
 ### `devteam doctor` reports critical failures
@@ -920,7 +918,7 @@ Run `devteam validate` to see what the validator thinks of your gate. Common cau
 
 - Missing required field (`orchestrator`, `status`, etc.) → validator exits 1 with the field listed.
 - `status: "FAIL"` or `"ESCALATE"` → validator exits 2 or 3; `next` reports `fix-and-retry` or `resolve-escalation`.
-- Bypassed escalation — an older gate has `status: ESCALATE` that's still unresolved → validator exits 3 with `BYPASSED ESCALATION`.
+- Bypassed escalation: an older gate has `status: ESCALATE` that is still unresolved → validator exits 3 with `BYPASSED ESCALATION`.
 
 ### Hooks didn't fire (Claude Code)
 
@@ -946,9 +944,9 @@ If the file is missing or doesn't have the expected blocks (Stop, SubagentStop, 
   Suggestion: remove the literal, read from process.env, or .env (gitignored)
 ```
 
-The PreToolUse hook caught a credential pattern. Three responses:
+The PreToolUse hook caught a credential pattern. Three options:
 
-- **Recommended:** remove the literal, source from env. The scanner exists because credentials in code have bitten teams hard.
+- **Recommended:** remove the literal, source from env.
 - **False positive on a test fixture:** add the marker `devteam-allow-secret: <reason>` on the line above. The hook respects this magic comment.
 - **The file lives in a known-safe path** (e.g. `.env.example`, `docs/`, `examples/`, tests): the path allowlist should already cover this. If not, add to `DEVTEAM_SECRET_SCAN_ALLOW` env var.
 
@@ -968,7 +966,7 @@ Another process is holding the port (likely a previous `devteam ui` invocation y
 
 ### Routing
 
-Edit `.devteam/config.yml`. Routing precedence is `stages > roles > default_host` — most specific wins.
+Edit `.devteam/config.yml`. Routing precedence is `stages > roles > default_host`.
 
 ### Track
 
@@ -985,17 +983,17 @@ pipeline:
     - red-team
 ```
 
-Skipped stages are silently passed over by `devteam next` and shown as `skipped (pipeline.skip_stages)` in `devteam summary`. No gate file is required. The skip applies to all runs in the project — use `--track` for per-run exclusions instead.
+Skipped stages are silently passed over by `devteam next` and shown as `skipped (pipeline.skip_stages)` in `devteam summary`. No gate file is required. The skip applies to all runs in the project. Use `--track` for per-run exclusions instead.
 
 Note that `skip_stages` accepts stage names (e.g. `red-team`, `verification-beyond-tests`), not stage IDs (e.g. `stage-04c`). Run `devteam stages` to see valid names.
 
 ### Controlling token cost
 
-Each stage prompt is sized mainly by three things you control:
+Three factors you control drive most of the token cost per stage:
 
-**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Prune it between features — keep the last few decisions and trim history that's already reflected in the code.
+**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Prune it between features: keep the last few decisions and trim history that's already reflected in the code.
 
-**2. Role routing.** Opus costs ~5× more per token than Sonnet, and Sonnet costs more than Haiku. Assign expensive models only to the roles that need them: Principal and Security for architecture rulings, Sonnet or cheaper for build workstreams. See [Multi-host setups](#multi-host-setups).
+**2. Role routing.** Opus costs ~5× more per token than Sonnet, and Sonnet costs more than Haiku. Route expensive models to roles that require sustained reasoning (Principal and Security); use cheaper models for build workstreams. See [Multi-host setups](#multi-host-setups).
 
 **3. Stage selection.** Stages like `verification-beyond-tests` and `red-team` spawn long-running Opus agents. Use `skip_stages` or `--track quick` to skip them on incremental changes where the risk profile is low.
 
@@ -1015,7 +1013,7 @@ pipeline:
   isolation: bounded
 ```
 
-With `isolation: bounded`, every run's artifacts — gates, logs, context files — land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value passed to `devteam stage requirements`. Different features share the same working directory but write to distinct subdirectories, so `devteam next` and `devteam summary` can distinguish them.
+With `isolation: bounded`, every run's artifacts (gates, logs, context files) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value passed to `devteam stage requirements`. Different features share the same working directory but write to distinct subdirectories, so `devteam next` and `devteam summary` can distinguish them.
 
 Default is `in-place` (global `pipeline/`). Zero impact on existing setups unless you explicitly set `isolation: bounded`.
 
@@ -1023,7 +1021,7 @@ Default is `in-place` (global `pipeline/`). Zero impact on existing setups unles
 
 Hosts that declare `goalLoop: true` (claude-code and codex) automatically receive a `/goal "<condition>"` prepended to the prompt when running headless for build (stage-04) and qa (stage-06) stages. The condition is a workstream-specific exit criterion so the host can loop internally until its objective is met rather than running a fixed number of turns.
 
-This is automatic — no config required. It fires when:
+This is automatic with no config required. It fires when:
 - The stage has a `goalCondition` in `stages.js` (currently build and qa)
 - The routed host declares `capabilities.goalLoop: true`
 - The workstream runs headless (`--headless`)
@@ -1032,7 +1030,7 @@ Gemini CLI and the generic adapter do not declare `goalLoop: true` and are unaff
 
 ### Stoplist
 
-`core/guards/stoplist.js` has the patterns. Adding project-specific stoplist phrases isn't yet a first-class config option — the BACKLOG flags this as a follow-up. For now, edit the file directly (changes survive `devteam init` since the file is in the framework, not the target).
+`core/guards/stoplist.js` has the patterns. Adding project-specific stoplist phrases is not yet a first-class config option (flagged in the BACKLOG). For now, edit the file directly. Changes survive `devteam init` because the file lives in the framework, not in the target project.
 
 ### Adding a project-specific role / stage / skill
 
@@ -1061,9 +1059,9 @@ cd ~/projects/my-app
 devteam init --host claude-code --force   # re-render install with new versions
 ```
 
-The `--force` flag overwrites the installed files. The `.devteam/config.yml` is preserved by default (omit `--force` if you only want to update the agents / rules / skills and keep your config); pass `--force` if you want to regenerate the config too.
+The `--force` flag overwrites the installed files. `.devteam/config.yml` is preserved by default. Omit `--force` to update only agents, rules, and skills while keeping your config; include it to regenerate the config as well.
 
-Custom edits to the target's installed files (`.claude/agents/`, `.devteam/rules/`, etc.) are lost on re-install — that's by design. **Customize in the framework**, not in target copies. See `CONTRIBUTING.md` for the right place to put each kind of change.
+Custom edits to the target's installed files (`.claude/agents/`, `.devteam/rules/`, etc.) are lost on re-install. This is intentional. **Customize in the framework**, not in target copies. See `CONTRIBUTING.md` for the right place to put each kind of change.
 
 ## What's not covered here
 

@@ -2,7 +2,16 @@
 
 Stagecraft is a model-agnostic pipeline for running an AI dev team (PM → Principal → Build → Review → QA → Deploy → Retro) inside any AI coding tool (Claude Code, Codex, Gemini CLI, plain terminal). The CLI binary is `devteam`; the project is Stagecraft.
 
-Today this work is forked across two repos (`claude-dev-team`, `codex-dev-team`) that share ~90% of their code and slowly drift. This project replaces both with a single core and per-host adapters.
+This work was previously split across two repos (`claude-dev-team`, `codex-dev-team`) sharing ~90% of their code and diverging slowly. This project replaces both with a single core and per-host adapters.
+
+## Table of contents
+
+- [Design model](#design-model)
+- [Proposed directory layout](#proposed-directory-layout)
+- [Design decisions (locked)](#design-decisions-locked)
+- [Routing config](#routing-config)
+- [Open design decisions](#open-design-decisions)
+- [Migration from the existing forks](#migration-from-the-existing-forks)
 
 ## Design model
 
@@ -52,7 +61,7 @@ Today this work is forked across two repos (`claude-dev-team`, `codex-dev-team`)
                   core validates, advances, or escalates
 ```
 
-Key insight: **the core never calls a model.** It emits prompts and validates JSON. That's why model-agnosticism is mostly free — only the invocation surface is host-specific.
+**The core never calls a model.** It emits prompts and validates JSON. Model-agnosticism follows directly: only the invocation surface is host-specific.
 
 ## Proposed directory layout
 
@@ -129,13 +138,13 @@ stagecraft/
 └── tests/
 ```
 
-(`devteam init` is implemented in `bin/devteam`, not a standalone script. No `parity-check` exists — Stagecraft is a single core, not parallel forks, so there's nothing to parity-check.)
+(`devteam init` is implemented in `bin/devteam`, not a standalone script. There is no `parity-check` — Stagecraft is a single core, not parallel forks.)
 
-Notes on what changes vs the two existing repos:
+Changes from the two existing repos:
 
-- `templates/`, deploy adapters, `core/guards/`, `core/gates/`, the orchestrator's STAGES table — moved to `core/`, deduplicated. These are already nearly identical between the forks.
-- Role briefs (today duplicated in `.claude/skills/*` and `.codex/skills/*` and drifting) become a single source under `roles/`. Host adapters render them into the host's expected path at `devteam init` time.
-- `.claude/commands/*.md` and `.codex/prompts/roles/*` become **host-specific install payloads**, not part of the core.
+- `templates/`, deploy adapters, `core/guards/`, `core/gates/`, and the orchestrator's STAGES table move to `core/` and are deduplicated. These were already nearly identical between the forks.
+- Role briefs (previously duplicated in `.claude/skills/*` and `.codex/skills/*` and diverging) consolidate under `roles/`. Host adapters render them into the host's expected path at `devteam init` time.
+- `.claude/commands/*.md` and `.codex/prompts/roles/*` become host-specific install payloads, not part of the core.
 
 ## Design decisions (locked)
 
@@ -173,17 +182,17 @@ routing:
                                     # Default: [] (no fanout).
 ```
 
-Resolution order, highest to lowest: `routing.stages.<stage>` → `routing.roles.<role>` → `routing.default_host`. Unresolvable → orchestrator halts with a clear error.
+Resolution order, highest to lowest: `routing.stages.<stage>` → `routing.roles.<role>` → `routing.default_host`. Unresolvable routes halt the orchestrator with an error.
 
-For multi-role stages, resolution runs **per role**. So in stage-04 (`roles: [backend, frontend, platform, qa]`), each role resolves independently — `backend` might land on `codex` while `frontend` lands on `claude-code`. If all roles in a stage resolve to the same host and that host has `subagents: true`, the orchestrator MAY consolidate them into a single host invocation (fan-out via subagents); otherwise each workstream is a separate dispatch.
+For multi-role stages, resolution runs per role. In stage-04 (`roles: [backend, frontend, platform, qa]`), each role resolves independently: `backend` might land on `codex` while `frontend` lands on `claude-code`. If all roles in a stage resolve to the same host and that host has `subagents: true`, the orchestrator may consolidate them into a single host invocation; otherwise each workstream is a separate dispatch.
 
 ## Open design decisions
 
-- **Where the orchestrator runs.** Today: the user's machine. Tomorrow: could a stage run on a CI runner / cloud worker for long-running roles? Affects whether stage state is local-only or networked.
+- **Where the orchestrator runs.** Currently: the user's machine. Running stages on a CI runner or cloud worker for long-running roles is an open question. The answer determines whether stage state is local-only or networked.
 
 ## Migration from the existing forks
 
-Rough order, each step independently shippable:
+Each step below is independently shippable:
 
 1. Land `core/` by deduplicating from `claude-dev-team` (templates, schemas, guards, deploy adapters, validator).
 2. Extract role briefs from both forks → diff → reconcile → `roles/*.md`.

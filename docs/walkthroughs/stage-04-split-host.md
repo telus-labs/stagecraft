@@ -1,8 +1,17 @@
 # Walkthrough: Stage-04 split host
 
-A trace of the multi-host contract working in practice — one feature, the `full` track, backend on Codex and everything else on Claude Code. The point of this walkthrough is to show how the gate JSON seam, role-keyed routing, and capability negotiation cooperate when a single stage fans out to two different hosts.
+A trace of the multi-host contract: one feature, the `full` track, backend on Codex and everything else on Claude Code. This walkthrough shows how the gate JSON seam, role-keyed routing, and capability negotiation cooperate when a single stage fans out to two different hosts.
 
-> Historical note: this document originally proposed a set of contract changes (per-role routing, per-workstream gates, capability `enforces` declarations, host-neutral context files) needed to make a split-host pipeline viable. Those changes have shipped. The trace below shows the resulting flow.
+> Historical note: this document originally proposed contract changes (per-role routing, per-workstream gates, capability `enforces` declarations, host-neutral context files) needed to make a split-host pipeline viable. Those changes have shipped. The trace below shows the resulting flow.
+
+---
+
+- [Scenario](#scenario)
+- [Capability surface](#capability-surface)
+- [Trace](#trace)
+- [What this trace demonstrates](#what-this-trace-demonstrates)
+- [Where the asymmetry leaks through](#where-the-asymmetry-leaks-through-known-and-documented)
+- [See also](#see-also)
 
 ## Scenario
 
@@ -17,7 +26,7 @@ routing:
   roles:
     pm: claude-code
     principal: claude-code
-    backend: codex            # ← the interesting split
+    backend: codex            # the split
     frontend: claude-code
     platform: claude-code
     qa: claude-code
@@ -34,7 +43,7 @@ routing:
 | `claude-code` | ✅ | ✅ | ✅ | ✅ | `claude --dangerously-skip-permissions --print` | `tool-call-time` (hooks) |
 | `codex` | ❌ | ❌ | ❌ | ✅ | `codex exec` | `prompt-only` (advisory) |
 
-Source: `hosts/{claude-code,codex}/capabilities.json`. The orchestrator reads these at dispatch time; the asymmetry is something it has to handle, not paper over.
+Source: `hosts/{claude-code,codex}/capabilities.json`. The orchestrator reads these at dispatch time and handles the asymmetry explicitly rather than hiding it.
 
 ## Trace
 
@@ -97,11 +106,11 @@ The merged gate's `workstreams[]` array lists each contributing workstream with 
 }
 ```
 
-This is the contract working. `backend` was authored entirely by Codex; every other workstream by Claude Code; the merged stage gate carries the audit trail of who did what.
+`backend` was authored entirely by Codex; every other workstream by Claude Code. The merged stage gate carries the audit trail of which host produced each workstream.
 
 ### Stage 04a — Pre-review (Platform → claude-code)
 
-Platform reads every workstream's `pipeline/pr-*.md`, including `pr-backend.md` written by Codex. The reviewer doesn't know or care which host produced which PR summary — it reads files on disk. This is the gate-JSON-as-seam principle paying off: artifacts are exchanged through the filesystem, not through host-specific channels.
+Platform reads every workstream's `pipeline/pr-*.md`, including `pr-backend.md` written by Codex. The reviewer reads files on disk; which host produced which PR summary is irrelevant at this stage. This is the gate-JSON-as-seam principle: artifacts are exchanged through the filesystem, not through host-specific channels.
 
 What *is* asymmetric here: the `allowed_writes` enforcement. Claude Code's hooks block writes outside the role's `allowedWrites` at tool-call time. Codex has no equivalent — the prompt instructs the model not to write outside `src/backend/`, and the validator audits the diff after the fact (`npm run audit:writes` is the recommended post-hoc check; see `core/pipeline/stages.js:102-107` for the per-role allowed-writes table). The pre-review gate flags an `enforcement_method` warning when any workstream ran on a `prompt-only` host.
 
@@ -128,7 +137,7 @@ QA writes the test report; accessibility audit, observability gate, and (on full
 
 ```bash
 devteam next
-# 🎉 pipeline-complete
+# pipeline-complete
 ```
 
 ## What this trace demonstrates

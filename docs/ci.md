@@ -1,8 +1,17 @@
 # CI integration (F4)
 
-Stagecraft ships a CI workflow template that **validates and publishes** pipeline state on pull requests. It does **not** run the pipeline itself in CI — running an LLM pipeline on every PR is expensive and the pipeline is designed to be human-driven anyway. CI's job is to surface the audit trail that local runs produced.
+Stagecraft ships a CI workflow template that **validates and publishes** pipeline state on pull requests. It does **not** run the pipeline itself in CI. Running an LLM pipeline on every PR is expensive, and the pipeline is designed to be human-driven. CI's job is to surface the audit trail that local runs produced.
 
 This is the **F4** BACKLOG item.
+
+- [What the workflow does](#what-the-workflow-does)
+- [Install](#install)
+- [Required GitHub permissions](#required-github-permissions)
+- [What the PR review experience looks like](#what-the-pr-review-experience-looks-like)
+- [Why not run the pipeline in CI?](#why-not-run-the-pipeline-in-ci)
+- [Other CI systems](#other-ci-systems)
+- [Pinning + drift](#pinning--drift)
+- [See also](#see-also)
 
 ## What the workflow does
 
@@ -10,12 +19,12 @@ When a PR touches `pipeline/` or `.devteam/`:
 
 1. **Checks out** the target project at the PR's head commit.
 2. **Checks out Stagecraft** at a pinned version (configurable env var).
-3. **Skips cleanly** if the PR doesn't actually include any gates — `pipeline/gates/` empty/absent → workflow short-circuits with a `::notice::` and exits green.
+3. **Skips cleanly** if the PR includes no gates. If `pipeline/gates/` is empty or absent, the workflow short-circuits with a `::notice::` and exits green.
 4. **Validates** every gate file with Stagecraft's validator. Exit codes propagate: 0 PASS/WARN (job stays green), 1 malformed (fail), 2 FAIL gate (fail), 3 ESCALATE (fail — surfaces needs-resolution).
 5. **Posts each gate as a GitHub check run** on the PR head commit via `scripts/pr-publish.js`. PASS→success, WARN→neutral, FAIL/ESCALATE→failure. Reviewers see "15/17 stages passing" in the PR's status bar with click-through to per-stage detail.
 6. **Reproducibility drift check** (advisory, doesn't block merge): runs `devteam reproduce` on each gate, surfacing any drift between the recorded `system_prompt_hash` and what would render today.
 
-The deliberate choice **not** to invoke the LLM in CI keeps cost predictable and avoids running the pipeline in a context (no human in the loop) where it doesn't belong.
+Not invoking the LLM in CI keeps cost predictable and avoids running the pipeline without human oversight.
 
 ## Install
 
@@ -47,11 +56,11 @@ permissions:
   pull-requests: write
 ```
 
-These are scoped to the workflow run — no PAT needed. The runner's default `GITHUB_TOKEN` is used for posting check runs.
+These are scoped to the workflow run. No PAT is needed. The runner's default `GITHUB_TOKEN` is used for posting check runs.
 
 ## What the PR review experience looks like
 
-Before this workflow: a PR with a `pipeline/gates/stage-04.json` PASS gate looks identical to one with a FAIL gate — reviewers have to read the JSON. After:
+Without this workflow, a PR with a `pipeline/gates/stage-04.json` PASS gate looks identical to one with a FAIL gate. Reviewers have to read the JSON. With it:
 
 ```
 ✓ stagecraft pr-checks / validate-and-publish
@@ -75,11 +84,11 @@ Each line in the PR's "Checks" tab links back to the gate detail. A reviewer can
 
 Three reasons:
 
-1. **Cost.** A `full`-track run is 5–60 minutes of LLM time. Running it on every PR — including draft PRs, force-pushes, etc. — multiplies that by your PR volume. The math gets ugly fast.
-2. **Human-in-the-loop.** Stagecraft's pipeline is designed for a human reading the prompt and decisions at each stage. Running it unattended in CI defeats the design — agents make decisions that nobody sees until after the fact.
-3. **The CI shape doesn't match.** A PR has *already been built*. Running `devteam stage build` against a PR doesn't fit the model — what would the agent do that the developer hasn't already?
+1. **Cost.** A `full`-track run is 5–60 minutes of LLM time. Running it on every PR, including draft PRs and force-pushes, multiplies that by PR volume.
+2. **Human-in-the-loop.** Stagecraft's pipeline is designed for a human reading the prompt and decisions at each stage. Running it unattended in CI means agents make decisions that nobody sees until after the fact.
+3. **Shape mismatch.** A PR has *already been built*. Running `devteam stage build` against a PR doesn't fit the model.
 
-The auditable / publishable path (this workflow) is the genuinely useful CI integration. If your team eventually wants something like "run `nano` track on `dependabot` PRs" or "run an `audit-quick` on PRs that touch sensitive paths," those would be separate workflows — and they'd live as adjacent files in `.github/workflows/`, not as a replacement for this one.
+The validate-and-publish path (this workflow) is the appropriate CI integration. If your team eventually wants to run a `nano` track on `dependabot` PRs, or an `audit-quick` on PRs touching sensitive paths, those belong in separate adjacent workflow files, not as a replacement for this one.
 
 ## Other CI systems
 
@@ -87,7 +96,7 @@ The auditable / publishable path (this workflow) is the genuinely useful CI inte
 
 ## Pinning + drift
 
-The template pins `STAGECRAFT_REF: v0.3.0` — change it on each Stagecraft release you want to adopt. Pinning matters because:
+The template pins `STAGECRAFT_REF: v0.3.0`. Update it on each Stagecraft release you want to adopt. Pinning matters because:
 
 - Validator behavior could change (rare but possible).
 - `scripts/pr-publish.js`'s output shape could evolve.

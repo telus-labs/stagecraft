@@ -1,14 +1,27 @@
 # Runbook: Handling an Escalation
 
-You just ran a stage and `devteam next` reports `resolve-escalation`. This runbook walks through what to read, what to decide, and how to encode the decision so the pipeline can move on. Read top to bottom; it's a procedure, not a reference.
+`devteam next` reports `resolve-escalation`. This runbook covers what to read, what to decide, and how to encode the decision so the pipeline can advance. Follow the sections in order.
 
-For the why-this-mechanism-exists framing, see `rules/escalation.md`. For specific scenarios (security veto, migration veto, two reviewers disagree), see `docs/faq.md` § "When do I write `status: ESCALATE`?".
+For the mechanism's design rationale, see `rules/escalation.md`. For specific scenarios (security veto, migration veto, two reviewers disagree), see `docs/faq.md` § "When do I write `status: ESCALATE`?".
+
+---
+
+- [0. What you're looking at](#0-what-youre-looking-at)
+- [1. Read the three places that hold the disagreement](#1-read-the-three-places-that-hold-the-disagreement)
+- [2. Decide](#2-decide)
+- [3. Get a Principal ruling](#3-get-a-principal-ruling-when-applicable)
+- [4. Encode the decision](#4-encode-the-decision)
+- [4b. Retry loop exhaustion](#4b-retry-loop-exhaustion--a-distinct-escalation-shape)
+- [5. Stop and ask if any of these are true](#5-stop-and-ask-if-any-of-these-are-true)
+- [6. Common gotchas](#6-common-gotchas)
+- [7. After resolution](#7-after-resolution)
+- [7b. Two-round peer review exhaustion](#7b-two-round-peer-review-exhaustion)
+
+---
 
 ## 0. What you're looking at
 
-ESCALATE is the protocol firing when something only a human can decide — not a model bug. The pipeline is doing its job by stopping. The agent that wrote ESCALATE is telling you: "I have a specific question I can't answer without you."
-
-The pipeline halts here on purpose. `devteam next` will keep saying `resolve-escalation` until you act.
+ESCALATE signals that a decision requires human judgment. It is not a model bug. The agent that wrote ESCALATE has a specific question it cannot resolve autonomously. The pipeline halts until you act. `devteam next` will continue to report `resolve-escalation` until the escalation is encoded.
 
 ## 1. Read the three places that hold the disagreement
 
@@ -61,11 +74,11 @@ grep -A 5 "ESCALATE:" pipeline/code-review/by-platform.md
 
 Two broad shapes, and most decisions fit one:
 
-**Shape A — must-fix.** The escalation surfaces a real defect; the right call is to fix it before moving on. Examples: a security finding with a working exploit, a wrong error class that ships a lie to ops dashboards, a migration rollback that doesn't actually roll back. Cost: re-run build (and any later stages that re-run after build).
+**Shape A — must-fix.** The escalation surfaces a real defect that must be resolved before advancing. Examples: a security finding with a working exploit, a wrong error class that misreports to ops dashboards, a migration rollback that doesn't function. Cost: re-run build and any downstream stages.
 
-**Shape B — defer.** The escalation is real but not load-bearing for this release; the right call is to record it as a follow-up and proceed. Examples: an observability gap at a layer that's hard to instrument cleanly, a doc drift that doesn't affect users, a `PATTERN:` worth promoting later. Cost: a ticket and a one-line note in `context.md`.
+**Shape B — defer.** The escalation is real but not load-bearing for this release. Record it as a follow-up and proceed. Examples: an observability gap at a layer that's hard to instrument cleanly, a doc drift that doesn't affect users, a `PATTERN:` worth promoting later. Cost: a ticket and a one-line note in `context.md`.
 
-If you can't tell which shape it is, the question to ask is: **"If I deferred this and we shipped, what's the worst that happens?"** If the answer is "an observability blind spot we'll fix on the next pass," defer. If it's "a customer gets a wrong error message and we don't see it," fix.
+If the shape is unclear, ask: "If I deferred this and shipped, what's the worst outcome?" An observability blind spot that can be addressed next pass is a defer. A wrong error message that reaches customers and is invisible to ops is a fix.
 
 The Principal role is the architecture authority for this kind of call. If the escalation specifically requests Principal review (e.g. `escalated_to_principal: true`, or the reviewer wrote `ESCALATE to Principal:`), invoke the Principal subagent to produce a written ruling. See § 3 below.
 
@@ -109,7 +122,7 @@ parser layer is hard to instrument from middleware without
 bypassing Express's request lifecycle. Tracked as TICKET-1234.
 ```
 
-The `PRINCIPAL-RULING:` prefix is the convention; nothing parses it today, but reviewers and the next reader can grep for it.
+The `PRINCIPAL-RULING:` prefix is the convention. Nothing parses it programmatically today, but reviewers and future readers can grep for it.
 
 ## 4. Encode the decision
 
@@ -263,7 +276,7 @@ Hold the resolution and surface upstream when:
 
 ## 6. Common gotchas
 
-- **The hook will overwrite manually-edited approvals.** For Stage 5 specifically, `approval-derivation.js` re-derives `approvals[]` and `changes_requested[]` from the review files on every `Write|Edit` event. Your manually-set status, blockers, and warnings persist; the approval count doesn't. If you set status to PASS manually, save it — but if a reviewer file then changes, the hook will recompute. Document the final state in `context.md` so the audit trail isn't ambiguous.
+- **The hook will overwrite manually-edited approvals.** For Stage 5, `approval-derivation.js` re-derives `approvals[]` and `changes_requested[]` from the review files on every `Write|Edit` event. Manually-set status, blockers, and warnings persist; the approval count does not. If a reviewer file changes after you set status to PASS manually, the hook recomputes. Document the final state in `context.md` to keep the audit trail unambiguous.
 
 - **Bypassed escalation halts the pipeline globally.** If you write a *newer* gate with PASS without resolving an older ESCALATE, the validator's bypassed-escalation sweep catches it on the next run and halts with `BYPASSED ESCALATION`. Resolve oldest first.
 

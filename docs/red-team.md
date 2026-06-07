@@ -2,11 +2,17 @@
 
 Stage 4c. Runs between build and peer-review on the `full` and `hotfix` tracks. Always-on (not conditional). The red-team role is explicitly routed to a different host than the build agents.
 
+- [What it does](#what-it-does)
+- [Gate fields](#gate-fields)
+- [Why it's separate from security-review (stage 4b)](#why-its-separate-from-security-review-stage-4b)
+- [Routing](#routing)
+- [References](#references)
+
 ---
 
 ## What it does
 
-The red-team role conducts adversarial review of the build. Its job is not general code review (that's stage-05 peer-review) — it's to find the strongest security and reliability objections to the change before review.
+The red-team role conducts adversarial review of the build. Its scope is not general code review (that is stage-05 peer-review). It focuses on security and reliability objections to the change, raised before peer-review.
 
 ### Attack surfaces (10)
 
@@ -40,7 +46,7 @@ Each finding is triaged by severity × likelihood × scope.
 | `must_address_before_peer_review` | object[] | Blocking findings in red-team shape: `id`, `assigned_to` (required), `file`, `severity`, `scenario`, `reproducer`, `fix_suggestion`; non-empty → FAIL |
 | `noted_for_followup` | object[] | Non-blocking findings with `id`, `assigned_to`, `text`, `track_for`, `file`, `effort` (see `rules/gates.md §noted_for_followup[]`) |
 
-`surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces. A gate missing coverage for any surface emits a validator advisory. This is how a fast PASS stays trustworthy: operators can see which surfaces the agent actually exercised vs. declared out of scope.
+`surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces. A gate missing coverage for any surface emits a validator advisory. Operators can see which surfaces the agent exercised and which it declared out of scope, keeping a fast PASS auditable.
 
 **FAIL condition:** `must_address_before_peer_review` is non-empty. The implementer addresses each item, re-runs build, red-team re-runs, eventually PASS.
 
@@ -59,7 +65,7 @@ Each finding is triaged by severity × likelihood × scope.
 
 ## Routing
 
-Route red-team to a **different host than your build agents**. The value of adversarial review comes from different training data and different blind spots — the same model that built the code will rationalize the same mistakes.
+Route red-team to a **different host than your build agents**. A model from a different family brings different training data and different blind spots. The model that built the code is prone to rationalizing its own mistakes.
 
 ```yaml
 # .devteam/config.yml

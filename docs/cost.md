@@ -1,8 +1,15 @@
 # Cost telemetry
 
-Stagecraft records per-workstream LLM cost in the gate JSON, and aggregates it in the dashboard. Cost data is **opt-in per gate** — when the model or agent knows its own token usage, it writes it into the gate; downstream tooling rolls up dollars from there.
+Stagecraft records per-workstream LLM cost in the gate JSON and aggregates it in the dashboard. Cost data is **opt-in per gate**: when the model or agent knows its own token usage, it writes it into the gate; downstream tooling rolls up dollars from there.
 
-This is the **D6** BACKLOG item — foundation for D4 (per-role per-model performance scores) and D5 (adaptive routing). On its own it answers "where did our LLM spend go this sprint?"
+This is the **D6** BACKLOG item. It is the data foundation for D4 (per-role per-model performance scores) and D5 (adaptive routing). On its own it answers "where did our LLM spend go this sprint?"
+
+- [Quick start](#quick-start)
+- [How cost gets into the gate](#how-cost-gets-into-the-gate)
+- [Pricing table](#pricing-table)
+- [What cost data unlocks (D4 + D5)](#what-cost-data-unlocks-d4--d5)
+- [Limitations](#limitations)
+- [See also](#see-also)
 
 ## Quick start
 
@@ -66,7 +73,7 @@ Three ways the fields land:
 - **OpenAI** — GPT-5, GPT-4o, o1 (and their mini variants)
 - **Gemini 2.5** — Pro, Flash
 
-Lookup is exact-match first, then prefix-match — so a dated model id like `claude-opus-4-7-20250515` still resolves to the `claude-opus-4-7` row. Unknown models compute `cost_usd: null` (tokens still aggregate).
+Lookup is exact-match first, then prefix-match, so a dated model id like `claude-opus-4-7-20250515` resolves to the `claude-opus-4-7` row. Unknown models compute `cost_usd: null` (tokens still aggregate).
 
 **The pricing is an estimate, not an invoice.** Prices change; update `core/pricing.js` periodically. Authoritative billing lives in each provider's dashboard.
 
@@ -77,7 +84,7 @@ D6 is the data layer; **D4 and D5 are now built** and turn the data into decisio
 - **D4 — Per-role per-model performance scores** (`npm run performance` / `scripts/performance.js`). For each `(role, host)` pair, computes first-try pass rate, mean retries, mean cost, **cost per pass** (unit cost of a successful dispatch). Headlines pairwise comparisons when 2+ hosts are seen for a role.
 - **D5 — Adaptive routing** (`npm run routing:suggest` / `scripts/routing-suggest.js`). Reads the same gates, compares against the current `.devteam/config.yml`, proposes role-level routing changes. Minimum dispatch threshold (5 default) + minimum pass-rate delta (10pp default) prevent recommendations on noisy data. Outputs a YAML diff by default; `--apply` rewrites the config after a confirmation prompt.
 
-Together they realize the "diversity beats monoculture" bet — the system learns which model is best at which role, not by guessing but by measuring. Try it:
+Together they answer which model performs best at which role, based on measurement rather than assumption. Try it:
 
 ```bash
 # Look at performance so far:
@@ -98,7 +105,7 @@ npm run routing:suggest -- --apply --yes
 - **Token reporting is uneven** across host CLIs. Claude Code exposes precise counts via `--print --output-format json`; Codex and Gemini are less consistent. The simpler model in agent-self-reports gives us the data without per-host parsing complexity.
 - **Pricing drift.** The pricing table needs periodic updates. If prices change between updates, `cost_usd` figures are off by the drift.
 - **Cached input tokens** (Claude's prompt caching, GPT's similar feature) aren't tracked separately. The reported `tokens_in` includes everything; cost calculations don't apply cache discounts. Treat as upper bound.
-- **No latency-cost decomposition.** A slow stage and an expensive stage are different things. `duration_ms` and `cost_usd` are both reported, but no derived "$/min" metric — the dashboard table includes both so you can read what matters.
+- **No latency-cost decomposition.** A slow stage and an expensive stage are different things. `duration_ms` and `cost_usd` are both reported, but with no derived "$/min" metric. The dashboard table includes both columns so you can interpret as needed.
 
 ## See also
 

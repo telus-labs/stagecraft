@@ -1,9 +1,19 @@
 # Git workflow for a Stagecraft pipeline run
 
-This guide covers the end-to-end git practice for a fresh feature built with
-Stagecraft: branch setup, which pipeline artifacts belong in git, when to
-commit, how Stage 4's parallel build interacts with git, when to open the PR,
-and what the final commit history should look like.
+This guide covers the end-to-end git practice for a feature built with Stagecraft: branch setup, which pipeline artifacts belong in git, when to commit, how Stage 4's parallel build interacts with git, when to open the PR, and what the final commit history looks like.
+
+---
+
+- [Starting a feature: create the branch first](#starting-a-feature-create-the-branch-first)
+- [Pipeline artifacts belong in git](#pipeline-artifacts-belong-in-git)
+- [When to commit: after each stage group, not every command](#when-to-commit-after-each-stage-group-not-every-command)
+- [Stage 4: parallel build and git worktrees](#stage-4-parallel-build-and-git-worktrees)
+- [When to open the PR](#when-to-open-the-pr)
+- [The CI connection](#the-ci-connection)
+- [Merging into main](#merging-into-main)
+- [What the final branch history looks like](#what-the-final-branch-history-looks-like)
+- [Quick reference](#quick-reference)
+- [See also](#see-also)
 
 ---
 
@@ -24,11 +34,7 @@ pipeline run.
 
 ## Pipeline artifacts belong in git
 
-Commit `pipeline/` alongside `src/`. These files are the pipeline's audit trail
-— gate JSON, design spec, review files, test report, ADRs — and they're what
-`devteam ci` validates and publishes as GitHub check runs on your PR. Without
-committed gate files, CI has nothing to post and reviewers can't see stage
-status.
+Commit `pipeline/` alongside `src/`. These files are the pipeline's audit trail — gate JSON, design spec, review files, test report, ADRs — and are what `devteam ci` validates and publishes as GitHub check runs on your PR. Without committed gate files, CI has nothing to post and reviewers cannot see stage status.
 
 **What to include and exclude:**
 
@@ -65,9 +71,7 @@ pipeline/gates/replay/
 
 ## When to commit: after each stage group, not every command
 
-Don't commit every `devteam stage X` invocation. Commit at the natural
-checkpoints — groups of stages that passed cleanly and won't be re-run. Interim
-failed states (FAIL gates you deleted and re-ran) should not be in the history.
+Commit at natural checkpoints — groups of stages that passed cleanly and won't be re-run. Do not commit every `devteam stage X` invocation. Interim failed states (FAIL gates you deleted and re-ran) should not appear in history.
 
 **Recommended commit points:**
 
@@ -82,8 +86,7 @@ failed states (FAIL gates you deleted and re-ran) should not be in the history.
 | After Stages 7 + 8 (sign-off + deploy) | `pipeline/runbook.md pipeline/deploy-log.md pipeline/gates/stage-07.json pipeline/gates/stage-08.json` | `stage-07/08: sign-off + deploy PASS` |
 | After Stage 9 (retrospective) | `pipeline/retrospective.md pipeline/lessons-learned.md pipeline/gates/stage-09.json` | `stage-09: retrospective PASS` |
 
-Stage 3 and Stage 7 are short; bundle them with their neighbors unless the
-design session produced substantial ADRs.
+Stages 3 and 7 are short; bundle them with their neighbors unless the design session produced substantial ADRs.
 
 **Practical staging command pattern:**
 
@@ -100,8 +103,7 @@ git add src/ \
 git commit -m "stage-04: build + pre-review + red-team + QA augment PASS"
 ```
 
-Stage files explicitly by name or glob — never `git add -A` or `git add .`
-(risks capturing unrelated files, `node_modules/` artifacts, scratch files).
+Stage files explicitly by name or glob. Never use `git add -A` or `git add .` — these risk capturing unrelated files, `node_modules/` artifacts, and scratch files.
 
 ---
 
@@ -116,12 +118,7 @@ git worktree add ../dev-team-frontend feature/frontend
 git worktree add ../dev-team-platform feature/platform
 ```
 
-**In practice with Claude Code, worktrees are optional.** Claude Code dispatches
-all four build workstreams as concurrent subagents writing to the same working
-directory. Since each workstream has a non-overlapping write surface
-(`src/backend/`, `src/frontend/`, `src/infra/`, `src/tests/`) there are no file
-conflicts and a single working directory is fine. The SOC2 evidence collector
-ran all four workstreams in parallel without worktrees.
+**In practice with Claude Code, worktrees are optional.** Claude Code dispatches all four build workstreams as concurrent subagents writing to the same working directory. Each workstream has a non-overlapping write surface (`src/backend/`, `src/frontend/`, `src/infra/`, `src/tests/`), so there are no file conflicts and a single working directory works. The SOC2 evidence collector ran all four workstreams in parallel without worktrees.
 
 **When you do need worktrees:**
 
@@ -156,7 +153,7 @@ git worktree remove ../dev-team-platform
 
 ## When to open the PR
 
-**Recommended: open as draft after the Stage 4 build chain, mark ready-for-review after Stage 5.**
+**Recommended: open as draft after the Stage 4 build chain; mark ready-for-review after Stage 5.**
 
 ```bash
 # After Stage 4 build chain (stages 4 + 4a + 4b + 4c + QA augment) all pass:
@@ -169,18 +166,13 @@ gh pr create --draft \
 gh pr ready   # convert draft → ready for review
 ```
 
-This approach gives you two things:
-1. CI validates and publishes gate check runs throughout the rest of the pipeline
-   (stages 5–9), so you can watch them progress in the PR's status bar
-2. The draft state signals to teammates that the work isn't ready for merge yet
+This gives two benefits:
+1. CI validates and publishes gate check runs throughout the rest of the pipeline (stages 5–9), visible in the PR's status bar.
+2. The draft state signals to teammates that the work is not yet ready for merge.
 
-**Alternative: open after all stages pass.** Simpler, but you lose CI visibility
-during the pipeline. Fine for small teams where the operator drives the whole
-run end-to-end in one session.
+**Alternative: open after all stages pass.** Simpler, but CI visibility during the pipeline is lost. Acceptable for small teams running the pipeline end-to-end in one session.
 
-Do NOT open the PR before Stage 4 — there's no code for reviewers to look at
-and CI would post FAIL gates that aren't real blockers, just "pipeline in
-progress."
+Do not open the PR before Stage 4. There is no code for reviewers to look at, and CI would post FAIL gates that reflect pipeline-in-progress, not real blockers.
 
 ---
 
@@ -200,9 +192,7 @@ gate in `pipeline/gates/` and posts each as a GitHub check run:
 ...
 ```
 
-This means: **don't commit FAIL gates**. A committed FAIL gate shows as a
-failing check run in the PR. If you've cleared and re-run a stage, commit only
-after the re-run gate is PASS or WARN.
+**Do not commit FAIL gates.** A committed FAIL gate shows as a failing check run in the PR. If you have cleared and re-run a stage, commit only after the re-run gate is PASS or WARN.
 
 See [`docs/ci.md`](ci.md) for the full CI workflow setup.
 
@@ -222,14 +212,9 @@ git commit -m "feat: my-feature-name — full pipeline PASS (stages 1–9)"
 git merge --no-ff feature/my-feature-name
 ```
 
-**Squash-merge** produces a clean main history: one commit per feature, gate
-files at the final passing state. The full per-stage commit history lives on
-the feature branch for as long as you keep it (or until it's pruned per your
-team's branch retention policy).
+**Squash-merge** produces a clean main history: one commit per feature, gate files at the final passing state. The full per-stage commit history lives on the feature branch for as long as it is retained.
 
-**No-ff merge** preserves every stage commit in main. Useful if your team
-audits via `git log` and wants to see stage-by-stage progression in the main
-branch history.
+**No-ff merge** preserves every stage commit in main. Use this if your team audits via `git log` and wants stage-by-stage progression in the main branch history.
 
 Delete the feature branch after merge:
 
@@ -256,10 +241,7 @@ feature/my-feature-name
   └── stage-09: retrospective PASS
 ```
 
-Each commit contains both the pipeline artifacts produced by that stage group
-AND any source changes that stage required (peer-review fixes, etc.). A reader
-checking out any commit gets a consistent snapshot: the gate that passed is
-alongside the code that passed it.
+Each commit contains both the pipeline artifacts produced by that stage group and any source changes that stage required (peer-review fixes, etc.). Checking out any commit yields a consistent snapshot: the gate that passed is alongside the code that passed it.
 
 ---
 

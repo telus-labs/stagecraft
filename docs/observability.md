@@ -1,19 +1,28 @@
 # Observability
 
-Stagecraft emits [OpenTelemetry](https://opentelemetry.io) spans for every pipeline operation. Drop them into Jaeger, Tempo, Honeycomb, Datadog, New Relic, or anything else that speaks OTLP/HTTP.
+Stagecraft emits [OpenTelemetry](https://opentelemetry.io) spans for every pipeline operation. Any OTLP/HTTP-compatible backend works: Jaeger, Tempo, Honeycomb, Datadog, New Relic, and others.
+
+- [Quick start](#quick-start)
+- [Local Jaeger in 30 seconds](#local-jaeger-in-30-seconds)
+- [Environment variables](#environment-variables)
+- [What gets traced](#what-gets-traced)
+- [What's NOT traced (yet)](#whats-not-traced-yet)
+- [Backend-specific cookbooks](#backend-specific-cookbooks)
+- [Testing your instrumentation](#testing-your-instrumentation)
+- [Cost / overhead](#cost--overhead)
 
 ## Quick start
 
-Tracing is **opt-in**. With no environment variables set, the orchestrator uses OTel's no-op tracer — zero runtime overhead.
+Tracing is **opt-in**. With no environment variables set, the orchestrator uses OTel's no-op tracer with zero runtime overhead.
 
-To turn it on, set the standard OTel endpoint:
+To enable tracing, set the standard OTel endpoint:
 
 ```bash
 export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 devteam stage build
 ```
 
-That's it. The OTLP HTTP exporter ships spans to that endpoint. Any OTLP-compatible backend works.
+The OTLP HTTP exporter ships spans to that endpoint.
 
 ## Local Jaeger in 30 seconds
 
@@ -69,13 +78,13 @@ Other spans:
 | `pipeline.merge` | `devteam merge <stage>` | `devteam.stage`, `devteam.merge.result` (`merged` or `missing`), `devteam.merge.status`, `devteam.merge.blockers_count`, `devteam.merge.warnings_count` |
 | `pipeline.next` | `devteam next` | `devteam.track`, `devteam.next.action`, `devteam.next.stage`, `devteam.next.name` |
 
-Spans capture exceptions automatically. If anything throws, the span gets `status=ERROR` and the exception is recorded as a span event.
+Exceptions are captured automatically. If anything throws, the span gets `status=ERROR` and the exception is recorded as a span event.
 
 ## What's NOT traced (yet)
 
-- **The validator** (`core/gates/validator.js`) — runs as a short-lived child process from hooks and calls `process.exit()` on every branch. Tracing it cleanly needs a refactor. Worked around for now: the orchestrator traces validate calls it makes itself (via the `pipeline.next` and `pipeline.merge` spans).
-- **The approval-derivation hook** — same story; spawned by Claude Code's PostToolUse hook, exits immediately.
-- **LLM calls themselves** — we don't make them. The host (Claude Code, Codex) does. Their tracing surface is theirs; we just observe what they wrote (gate files).
+- **The validator** (`core/gates/validator.js`) — runs as a short-lived child process and calls `process.exit()` on every branch. Tracing it cleanly requires a refactor. The orchestrator traces validate calls it makes itself via the `pipeline.next` and `pipeline.merge` spans.
+- **The approval-derivation hook** — same situation; spawned by Claude Code's PostToolUse hook, exits immediately.
+- **LLM calls themselves** — Stagecraft does not make these. The host (Claude Code, Codex) does, and their tracing surface is their own. Stagecraft observes what they wrote to gate files.
 
 Roadmap entries (`docs/BACKLOG.md`):
 - **D2 — gate-pass-rate dashboards** consumes these spans.
@@ -107,7 +116,7 @@ devteam stage build
 
 ### Console exporter (for debugging the trace itself)
 
-The current SDK setup ships to OTLP only. For raw stdout output, override at the SDK level — out of scope for the framework's default, but easily customizable in `core/observability.js`.
+The current SDK setup ships to OTLP only. For raw stdout output, override at the SDK level. This is outside the framework's default configuration but easily customizable in `core/observability.js`.
 
 ## Testing your instrumentation
 
@@ -119,8 +128,8 @@ The current SDK setup ships to OTLP only. For raw stdout output, override at the
 
 ## Cost / overhead
 
-When unconfigured (no env var), tracing uses OTel's no-op tracer: a single function call that returns immediately. Negligible cost.
+When unconfigured, tracing uses OTel's no-op tracer: a single function call that returns immediately. Overhead is negligible.
 
-When configured, span creation + attribute attachment is on the hot path. In our usage (`pipeline.stage` wraps a CLI command that takes seconds to minutes), the OTel overhead is in the microsecond range. Negligible.
+When configured, span creation and attribute attachment are on the hot path. Because `pipeline.stage` wraps CLI commands that take seconds to minutes, the OTel overhead is in the microsecond range. Negligible.
 
-The OTLP HTTP exporter buffers spans and flushes on a background timer + on process exit. CLI runs sometimes exit before the flush — the framework wires `beforeExit` + `SIGINT` + `SIGTERM` handlers to call `sdk.shutdown()`, but very-short-lived runs (sub-second) can still lose the tail of a trace. The orchestrator's normal usage is long-lived enough that this rarely matters.
+The OTLP HTTP exporter buffers spans and flushes on a background timer and on process exit. The framework wires `beforeExit`, `SIGINT`, and `SIGTERM` handlers to call `sdk.shutdown()`, but sub-second runs can still lose the tail of a trace. Normal orchestrator usage is long-lived enough that this rarely matters.
