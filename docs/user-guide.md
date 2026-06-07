@@ -152,7 +152,7 @@ A **gate** is a JSON file the model writes to `pipeline/gates/` at the end of ea
 }
 ```
 
-`orchestrator` and `host` are auto-injected by the validator — the model doesn't need to write them. Stage-specific fields (like `acceptance_criteria_count` or `security_approved`) are documented in each stage's schema under `core/gates/schemas/`.
+`orchestrator` and `host` are auto-injected by the validator; the model does not need to write them. Stage-specific fields (like `acceptance_criteria_count` or `security_approved`) are documented in each stage's schema under `core/gates/schemas/`.
 
 **Gate statuses:**
 - **PASS** — stage complete; pipeline advances.
@@ -216,7 +216,7 @@ $ devteam log
 13:50:15  ✗  stage-04c             FAIL      2 findings, 1 must-fix, 1 blocker
 ```
 
-Add `--follow` to tail the directory at 1-second poll — new events stream in as gates land and artifacts get written. Add `--json` for one NDJSON event per line if you're piping to another tool. Works identically in headless and user-driven modes (it reads on-disk state, not the agent's transcript).
+Add `--follow` to tail the directory at 1-second poll; new events stream in as gates land and artifacts get written. Add `--json` for one NDJSON event per line if you're piping to another tool. Works identically in headless and user-driven modes (it reads on-disk state, not the agent's transcript).
 
 **2. `pipeline/logs/*.log` — per-stage transcripts (headless only).** When you run `devteam stage X --headless`, the host CLI's stdout/stderr streams to your terminal and is teed to `pipeline/logs/<workstreamId>.log`. After a run, `cat pipeline/logs/stage-04.backend.log` shows everything the agent printed, with a header (start time, command) and trailer (end time, exit code). Disable with `DEVTEAM_NO_LOG=1`. Does not apply to user-driven mode because the transcript lives in your AI tool's session, not in devteam's process.
 
@@ -297,7 +297,7 @@ In user-driven mode (the default), the output includes a preamble explaining wha
 
 Inside Claude Code: paste the prompt, or type `/devteam stage requirements --feature "..."`. The PM subagent reads its brief (`.claude/agents/pm.md`), produces `pipeline/brief.md` and the stage-01 gate.
 
-For multi-role stages (`build`, `peer-review`, `sign-off`), one CLI invocation produces multiple prompts — one per role. Each prompt points at its own subagent. You can run them in parallel (claude-code's `subagents: true` capability) or sequentially.
+For multi-role stages (`build`, `peer-review`, `sign-off`), one CLI invocation produces multiple prompts, one per role. Each prompt points at its own subagent. You can run them in parallel (claude-code's `subagents: true` capability) or sequentially.
 
 After all per-role workstreams of a multi-role stage have written their gates:
 
@@ -347,13 +347,13 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 - **Stage 6c — Observability gate (Platform).** Verifies that every metric / log / trace promised by brief §9 is actually emitted in the shipped code. Gate carries `metrics` / `logs` / `traces` each with `{required[], verified[], gap[]}`. PASS requires every `gap` empty. Weak verification methods (`code-grep` only) PASS with WARN; the gold standard is `runtime-probe`.
 
-- **Stage 6d — Verification beyond tests (Verifier, full-only, G7).** Runs AFTER stage-06 (qa) PASS. New `verifier` role applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Read-only on production code; writes property tests under `src/tests/property/` and formal specs under `pipeline/formal/`. Gate carries `methods_attempted[]`, `methods_skipped[{method, reason}]`, `candidates_inventoried`, per-method stats (`property_based` / `mutation` / `formal`), `findings_count`, `blocking_findings[]`. **A surviving mutant on a critical path, a property counterexample to a stated invariant, or a formal counterexample to a safety property → FAIL.** Tooling not installed → method is `attempted_but_blocked:<method>` (recorded honestly, surfaces a warning). Track inclusion: `full` only — the heavy stuff opted into rigour-over-speed; other tracks rely on stage-06 example tests as their verification floor. See `skills/verification-beyond-tests/SKILL.md` for the five-phase procedure and `roles/verifier.md` for the role contract.
+- **Stage 6d — Verification beyond tests (Verifier, full-only, G7).** Runs after stage-06 (qa) PASS. The `verifier` role applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Read-only on production code; writes property tests under `src/tests/property/` and formal specs under `pipeline/formal/`. Gate carries `methods_attempted[]`, `methods_skipped[{method, reason}]`, `candidates_inventoried`, per-method stats (`property_based` / `mutation` / `formal`), `findings_count`, `blocking_findings[]`. A surviving mutant on a critical path, a property counterexample to a stated invariant, or a formal counterexample to a safety property → FAIL. Tooling not installed → method is `attempted_but_blocked:<method>` (recorded, surfaces a warning). Track inclusion: `full` only; other tracks rely on stage-06 example tests as their verification floor. See `skills/verification-beyond-tests/SKILL.md` for the five-phase procedure and `roles/verifier.md` for the role contract.
 
-- **Stage 6e — Performance budget (QA, full/quick/hotfix).** Runs after Stage 6d on `full`; after Stage 6c on `quick`/`hotfix`. QA role checks Lighthouse Web Vitals, bundle size delta, and load-test throughput (k6 / autocannon) against configured budgets in `performance.budget.json` or `.devteam/config.yml` defaults. Gate carries `budget_exceeded` (bool), `checks_run[]` (list of checks that ran), and `skipped_reason` (populated when the change has no performance-relevant surface — documentation-only, dep-update, config-only). `budget_exceeded: true` → FAIL. **Requires shell capability**: the routed host must declare `enforces.shell: true`; if not, `assertCapabilities()` refuses at dispatch time with a clear error (see [Troubleshooting](#host-lacks-required-capability)). See `skills/performance-budget/SKILL.md` for the 7-step procedure.
+- **Stage 6e — Performance budget (QA, full/quick/hotfix).** Runs after Stage 6d on `full`; after Stage 6c on `quick`/`hotfix`. QA role checks Lighthouse Web Vitals, bundle size delta, and load-test throughput (k6 / autocannon) against configured budgets in `performance.budget.json` or `.devteam/config.yml` defaults. Gate carries `budget_exceeded` (bool), `checks_run[]` (list of checks that ran), and `skipped_reason` (populated for documentation-only, dep-update, or config-only changes with no performance-relevant surface). `budget_exceeded: true` → FAIL. **Requires shell capability**: the routed host must declare `enforces.shell: true`; if not, `assertCapabilities()` refuses at dispatch time with a clear error (see [Troubleshooting](#host-lacks-required-capability)). See `skills/performance-budget/SKILL.md` for the 7-step procedure.
 
-- **Stage 7 — Sign-off (PM + Platform).** PM signs off on QA results; Platform prepares `pipeline/runbook.md`. **Auto-fold:** if Stage 6 reports `all_acceptance_criteria_met: true` AND `criterion_to_test_mapping_is_one_to_one: true`, the orchestrator writes Stage 7's gate automatically with `auto_from_stage_06: true` — you don't run Stage 7 manually. This is intentional: if QA proved every criterion was met with a 1:1 test, sign-off is automatic. If you run Stage 6 and then see Stage 7 already has a gate, that's why.
+- **Stage 7 — Sign-off (PM + Platform).** PM signs off on QA results; Platform prepares `pipeline/runbook.md`. **Auto-fold:** if Stage 6 reports `all_acceptance_criteria_met: true` AND `criterion_to_test_mapping_is_one_to_one: true`, the orchestrator writes Stage 7's gate automatically with `auto_from_stage_06: true`. Stage 7 does not need to be run manually. If QA proved every criterion was met with a 1:1 test, sign-off is automatic. If Stage 7 already has a gate after Stage 6 completes, auto-fold triggered.
 
-- **Stage 8 — Deploy (Platform, adapter-driven).** Platform reads `.devteam/config.yml`'s `deploy.adapter` setting, follows `core/deploy/<adapter>.md`. **Do not auto-rollback on FAIL** — the runbook names the rollback procedure; a human decides whether to roll back or investigate.
+- **Stage 8 — Deploy (Platform, adapter-driven).** Platform reads `.devteam/config.yml`'s `deploy.adapter` setting, follows `core/deploy/<adapter>.md`. **Do not auto-rollback on FAIL.** The runbook names the rollback procedure; a human decides whether to roll back or investigate.
 
 - **Stage 9 — Retrospective (Principal).** Principal harvests `PATTERN:` lines from Stage 5 reviews, promotes ≤2 rules into `pipeline/lessons-learned.md`, ages out rules that haven't been reinforced in 10 runs.
 
@@ -668,7 +668,7 @@ devteam ui --cwd /path/to/proj    # view another project's pipeline
 
 ### Security
 
-Loopback bind only by default. If you need to expose the UI on your LAN (the UI has no auth — anyone who can connect can see all pipeline state):
+Loopback bind only by default. If you need to expose the UI on your LAN, note the UI has no auth and anyone who can connect can see all pipeline state:
 
 ```bash
 STAGECRAFT_UI_ALLOW_REMOTE=1 devteam ui --port 8080
@@ -689,7 +689,7 @@ devteam memory clear                                   # wipe
 devteam memory reindex                                 # re-embed (after embedder change)
 ```
 
-The local-default embedder (`Xenova/bge-small-en-v1.5` via `@huggingface/transformers`) is ~33MB, lazy-downloaded to `~/.cache/huggingface/`, and runs entirely offline after the first ingest. JSON-backed storage under `.devteam/memory/` — git-friendly, but **add `.devteam/memory/` to your `.gitignore`** unless you have a deliberate sharing strategy (the store contains plaintext copies of brief / design content).
+The local-default embedder (`Xenova/bge-small-en-v1.5` via `@huggingface/transformers`) is ~33MB, lazy-downloaded to `~/.cache/huggingface/`, and runs entirely offline after the first ingest. JSON-backed storage under `.devteam/memory/` is git-friendly, but **add `.devteam/memory/` to your `.gitignore`** unless you have a deliberate sharing strategy (the store contains plaintext copies of brief / design content).
 
 Opt out per artifact by including the marker `stagecraft-no-memory` anywhere in the file (a comment line works). Stagecraft skips that artifact at ingest.
 
@@ -707,7 +707,7 @@ devteam stage build
 
 Spans emitted: `pipeline.stage`, `pipeline.workstream`, `pipeline.stage.headless`, `pipeline.merge`, `pipeline.next`, `adapter.renderStagePrompt`, `adapter.invoke`. Attributes include stage, workstream id, role, host, and status.
 
-Works with Jaeger / Tempo / Honeycomb / Datadog Agent — anything that speaks OTLP/HTTP. For setup cookbooks: [`docs/observability.md`](observability.md).
+Works with Jaeger, Tempo, Honeycomb, Datadog Agent, and anything else that speaks OTLP/HTTP. For setup cookbooks, see [`docs/observability.md`](observability.md).
 
 Tracing is no-op (zero overhead) when no endpoint is configured. To force-disable even when an endpoint is set (useful in tests that import core modules): `DEVTEAM_OTEL_DISABLE=1`.
 
@@ -732,10 +732,10 @@ The audit feature is separate from the 17-stage pipeline. Pipeline stages build 
 
 ### When to use it
 
-- **Onboarding to a new project.** `/audit-quick` in ~10 minutes gets you a project-context doc, architecture map, and git-history picture — enough to start working.
+- **Onboarding to a new project.** `/audit-quick` in ~10 minutes produces a project-context doc, architecture map, and git-history picture.
 - **Before a refactor.** Full `/audit` produces a roadmap of what to fix in what order. The `implement` skill consumes `docs/audit/10-roadmap.md` directly.
 - **Before a security review.** Phase 2.1 specifically catches secrets hygiene, injection risks, auth gaps, dependency CVEs.
-- **Periodic health check.** Quarterly or after major changes — re-running `/audit` against an audited project shows what got fixed and what new findings have accumulated.
+- **Periodic health check.** Re-running `/audit` quarterly or after major changes shows what got fixed and what new findings have accumulated.
 
 ### How to invoke it
 
@@ -763,7 +763,7 @@ Output lands under `docs/audit/` in your project. Eleven files (00 through 10) p
 - **Phase 2 — Deep analysis.** Security, performance & reliability, code quality.
 - **Phase 3 — Roadmap.** Prioritized backlog (P0/P1/P2/P3/Parked) + sequenced batches.
 
-`/audit` includes human checkpoints between each phase so you can correct course before the deep analysis runs. `/audit-quick` skips Phases 2 and 3 — you can run `/audit --resume` later to complete them.
+`/audit` includes human checkpoints between each phase so you can correct course before the deep analysis runs. `/audit-quick` skips Phases 2 and 3; run `/audit --resume` later to complete them.
 
 ### Extending an audit
 
@@ -775,10 +775,10 @@ Stagecraft was first audited with this feature against its own codebase on **202
 
 - **[`00-project-context.md`](audit-archive/2026-05-28-v0.4.0-initial-dogfood/00-project-context.md)** — what Stagecraft is, ~150 lines.
 - **[`01-architecture.md`](audit-archive/2026-05-28-v0.4.0-initial-dogfood/01-architecture.md)** — component inventory, dependency graph, data flow, configuration surface. ~330 lines, the longest output.
-- **[`06-security.md`](audit-archive/2026-05-28-v0.4.0-initial-dogfood/06-security.md)** — security findings. Includes a real "verify before promoting" lesson: a Finding S5 was initially promoted to "medium severity / needs fix" based on the route signature, then **retracted** when a live curl exploit attempt returned HTTP 404. The verification + retraction is preserved in the file — this is the discipline the audit skill now codifies (see `skills/audit/SKILL.md` § Process discipline).
+- **[`06-security.md`](audit-archive/2026-05-28-v0.4.0-initial-dogfood/06-security.md)** — security findings. Includes a real "verify before promoting" lesson: a Finding S5 was initially promoted to "medium severity / needs fix" based on the route signature, then **retracted** when a live curl exploit attempt returned HTTP 404. The verification and retraction are preserved in the file. This is the discipline the audit skill now codifies (see `skills/audit/SKILL.md` § Process discipline).
 - **[`10-roadmap.md`](audit-archive/2026-05-28-v0.4.0-initial-dogfood/10-roadmap.md)** — sequenced batches with effort estimates. The self-audit identified 0 P0 items, 5 P1 quick wins, 5 P2 targeted items, 1 P3 strategic item.
 
-Every finding in those files cites file paths and line numbers; severity / effort / confidence ratings are concrete; the verification trace for retracted findings is preserved. That's the standard the skill demands of the output — Stagecraft's own audit met it.
+Every finding in those files cites file paths and line numbers; severity / effort / confidence ratings are concrete; the verification trace for retracted findings is preserved. That is the standard the skill demands of the output, and Stagecraft's own audit met it.
 
 ### What the audit does NOT do
 
@@ -795,7 +795,7 @@ The `/audit` slash command covers only one of four useful audit modes:
 | Mode | What it asks | Tool / approach |
 |---|---|---|
 | **Code audit** | "Is the code itself clean, secure, performant, well-documented?" | `/audit` or `/audit-quick` (claude-code) — see "How to invoke it" above. On other hosts, dispatch the `auditor` role with the `audit` skill. Output: `docs/audit/00–10`. |
-| **Process audit** | "Did the pipeline that produced this feature hold up? Any rubber-stamping, skipped reviews, normalized warnings, deferred items that never got tracked?" | Read `pipeline/` skeptically; cross-check with `devteam summary`, `devteam verify stage-04a`, `devteam verify stage-06`. No CLI verdict — it's a human read. |
+| **Process audit** | "Did the pipeline that produced this feature hold up? Any rubber-stamping, skipped reviews, normalized warnings, deferred items that never got tracked?" | Read `pipeline/` skeptically; cross-check with `devteam summary`, `devteam verify stage-04a`, `devteam verify stage-06`. No CLI verdict; this is a manual read. |
 | **Consistency audit** | "Does the implementation still match the brief / design / spec? Has anything drifted since ship?" | `devteam spec verify --strict` (brief.md ↔ spec.feature ↔ test-report.md), `devteam reproduce <stage-id>` (gate fingerprint check), `devteam replay <stage-id>` (re-run with current config + diff). |
 | **Threat audit** | "Are the threat assumptions from when this was built still valid? New endpoints, new IAM policies, new dependencies?" | `devteam stage red-team --headless` against the current code. Anything new, or anything that was `noted_for_followup` and still isn't fixed, surfaces. |
 
@@ -810,9 +810,9 @@ Choose based on what you need to know:
 
 The process audit is unique to Stagecraft-built features and has no CLI tool. It is a structured manual review. Walk these five questions:
 
-- **Did every gate genuinely pass, or did anything get rubber-stamped?** Read each `pipeline/gates/stage-NN.json` and the corresponding artifact. A PASS with a sparse `## Verify` section in `pipeline/pr-*.md` is a yellow flag. Stage 4a and Stage 6 are orchestrator-stamped — run `devteam verify stage-04a` and `devteam verify stage-06` to re-stamp on demand; if the current code still passes, the recorded PASS was real.
+- **Did every gate genuinely pass, or did anything get rubber-stamped?** Read each `pipeline/gates/stage-NN.json` and the corresponding artifact. A PASS with a sparse `## Verify` section in `pipeline/pr-*.md` is a yellow flag. Stage 4a and Stage 6 are orchestrator-stamped. Run `devteam verify stage-04a` and `devteam verify stage-06` to re-stamp on demand; if the current code still passes, the recorded PASS was real.
 - **Are the warnings still defensible?** `jq '.warnings[]' pipeline/gates/*.json` lists every warning that survived to PASS. SUGGESTION-flavored warnings are fine; CONCERN-flavored ones that never got resolved to a ticket are technical debt that's been quietly normalized.
-- **Did red-team's `noted_for_followup` items get tracked anywhere?** `jq '.noted_for_followup' pipeline/gates/stage-04c.json`. Each entry has a `track_for` field saying where it should land (ticket, ADR amendment, runbook note). Grep for those references — if nothing exists, the deferral was theoretical.
+- **Did red-team's `noted_for_followup` items get tracked anywhere?** `jq '.noted_for_followup' pipeline/gates/stage-04c.json`. Each entry has a `track_for` field saying where it should land (ticket, ADR amendment, runbook note). Grep for those references. If nothing exists, the deferral was theoretical.
 - **Did peer review actually exercise the matrix?** `grep -c "^## Review of " pipeline/code-review/by-*.md` should hit each non-self area at least twice (matrix) or once (scoped/nano). If a `by-<reviewer>.md` has only one section, that reviewer's coverage was thin.
 - **Did the retrospective land anything?** `pipeline/retrospective.md` should cite specific incidents from the run. A generic "tests pass and we shipped" retro means the team didn't reflect.
 
@@ -820,8 +820,8 @@ A full process audit takes ~30 minutes on a `full`-track feature. Process drift 
 
 #### Cross-host notes
 
-- **`/audit` and `/audit-quick`** are claude-code-only (slash commands are a claude-code UX surface). On other hosts dispatch the `auditor` role with the `audit` skill — see § How to invoke it above for the exact prompt.
-- **The `auditor` is also registered as a Claude Code subagent** (`hosts/claude-code/adapter.js`), so you can dispatch to it via `Task`. Other hosts don't have an equivalent subagent registration today — you just invoke the role-plus-skill as a single prompt.
+- **`/audit` and `/audit-quick`** are claude-code-only (slash commands are a claude-code UX surface). On other hosts, dispatch the `auditor` role with the `audit` skill. See § How to invoke it above for the exact prompt.
+- **The `auditor` is also registered as a Claude Code subagent** (`hosts/claude-code/adapter.js`), so you can dispatch to it via `Task`. Other hosts do not have an equivalent subagent registration; invoke the role-plus-skill as a single prompt.
 - **Modes 2, 3, 4 are host-agnostic.** They run against files on disk (`pipeline/`, `docs/`, source) and use `devteam` CLI subcommands that don't dispatch to any model. You can do them with no LLM at all, just `jq` and a careful reader.
 
 ## When things go wrong
@@ -866,7 +866,7 @@ For the full procedure (what to read in what order, how to invoke the Principal 
 
 Some decisions need the Principal's judgment but do not warrant re-running a whole stage, for example:
 
-- A reviewer's `ESCALATE-to-Principal:` marker in `pipeline/code-review/by-<reviewer>.md` calls out an architectural question (e.g. "this approach contradicts ADR-0003 — Principal should rule").
+- A reviewer's `ESCALATE-to-Principal:` marker in `pipeline/code-review/by-<reviewer>.md` calls out an architectural question (e.g. "this approach contradicts ADR-0003; Principal should rule").
 - An ADR-vs-implementation drift surfaces mid-pipeline ("the ADR says round to 6 decimal places; the code rounds to 8 — which is right?").
 - A consistency-audit finding (`devteam reproduce`) shows the system-prompt hash drifted and you need a Principal call on whether to re-baseline or replay.
 
@@ -934,7 +934,7 @@ If the file is missing or doesn't have the expected blocks (Stop, SubagentStop, 
 
 `devteam next` says `continue-stage` with the same role listed in `remaining` over and over. Either:
 
-- The user / subagent hasn't actually run that role's workstream yet — invoke the relevant subagent.
+- The user / subagent hasn't actually run that role's workstream yet. Invoke the relevant subagent.
 - The workstream wrote its gate to the wrong filename. Expected: `pipeline/gates/<stage>.<role>.json` (dot separator). Check for stray `.<role>-` (hyphen) or absent `.json` extension.
 
 ### Secret scanner blocked my write
