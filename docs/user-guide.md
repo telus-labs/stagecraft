@@ -51,7 +51,7 @@ One pipeline run looks like this:
                                        devteam next
                                               │
                                               ▼
-   (loop for 15 more stages on the full track)
+   (loop for 16 more stages on the full track)
 
   Multi-role stages (build, peer-review) decompose into per-workstream
   dispatches that each write their own gate. devteam merge <stage>
@@ -728,7 +728,7 @@ Default is empty (off). Opt in via config. The cost is N× peer-review time and 
 
 ## Auditing a codebase
 
-The audit feature is separate from the 17-stage pipeline. Pipeline stages build features; the audit analyzes an existing codebase and produces a prioritized improvement roadmap. It is read-only by design.
+The audit feature is separate from the 18-stage pipeline. Pipeline stages build features; the audit analyzes an existing codebase and produces a prioritized improvement roadmap. It is read-only by design.
 
 ### When to use it
 
@@ -1070,7 +1070,7 @@ Custom edits to the target's installed files (`.claude/agents/`, `.devteam/rules
 - Backlog of next ideas — [`docs/BACKLOG.md`](BACKLOG.md).
 - Test strategy and what's covered — [`docs/TESTING.md`](TESTING.md).
 - A stress-test of the multi-workstream contract — [`docs/walkthroughs/stage-04-split-host.md`](walkthroughs/stage-04-split-host.md).
-- A full 17-stage showcase (SOC 2 evidence collector) — [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md).
+- A full 18-stage showcase (SOC 2 evidence collector) — [`docs/walkthroughs/soc2-evidence-collector.md`](walkthroughs/soc2-evidence-collector.md).
 - The pitch deck — [`docs/presentation-notes.md`](presentation-notes.md).
 - Adoption case + objections — [`docs/adoption-guide.md`](adoption-guide.md).
 - Common operational questions — [`docs/faq.md`](faq.md).

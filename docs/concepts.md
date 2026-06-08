@@ -12,7 +12,7 @@ Six primitives make up Stagecraft. Every other doc assumes you know these terms.
 
 | Concept | Lives in | Set by | What it is |
 |---|---|---|---|
-| **Stage** | `core/pipeline/stages.js` | The framework | A numbered phase of work (e.g. `stage-01` requirements, `stage-04` build, `stage-09` retrospective). 17 stages total (including sub-stages 3b, 4a/4b/4c/4d, 6b/6c/6d). |
+| **Stage** | `core/pipeline/stages.js` | The framework | A numbered phase of work (e.g. `stage-01` requirements, `stage-04` build, `stage-09` retrospective). 18 stages total (including sub-stages 3b, 4a/4b/4c/4d/4e, 6b/6c/6d). |
 | **Role** | `roles/<role>.md` | The framework + your customizations | A named seat at the team — `pm`, `principal`, `backend`, `frontend`, `platform`, `qa`, `reviewer`, `security`. A role's brief is the source of truth for what it does, reads, and writes. |
 | **Workstream** | derived at dispatch time | The orchestrator | One dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review) have several. **The workstream is the unit of gate identity.** Stage 5 is a special case — see the §Stage-5 vocabulary callout below. |
 | **Host** | `hosts/<host>/` | You choose at `devteam init` | The AI tool that actually runs the model: `claude-code`, `codex`, `gemini-cli`, or `generic` (no host). |
@@ -134,7 +134,7 @@ See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety 
 
 Stagecraft does two different kinds of work, with different vocabularies:
 
-1. **Pipeline** — *building* features through 17 staged production steps. The vocabulary above (stage, role, workstream, host, gate, track) applies. Outputs go in `pipeline/`.
+1. **Pipeline** — *building* features through 18 staged production steps. The vocabulary above (stage, role, workstream, host, gate, track) applies. Outputs go in `pipeline/`.
 2. **Audit** — *analyzing* an existing codebase, read-only, to produce a prioritized improvement roadmap. Different vocabulary (phases, findings, severity, themes, batches). Outputs go in `docs/audit/`.
 
 The pipeline produces new code. The audit produces analysis of code that exists. Don't confuse them. The same role briefs are NOT used — the auditor role exists separately from the pipeline roles.

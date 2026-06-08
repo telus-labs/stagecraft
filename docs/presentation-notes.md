@@ -58,7 +58,7 @@ Read the bullets briefly. Land on the last line:
 ```
   BEFORE                                       AFTER (Stagecraft)
   ────────────────────────────────             ──────────────────────────────────────
-  one chat log per feature                     17 staged artifacts + gates per feature
+  one chat log per feature                     18 staged artifacts + gates per feature
   approvals in messages                        approvals in pipeline/gates/stage-05.json
   scope = "what the agent did"                 scope = pipeline/brief.md, version-controlled
   review = "looks good"                        review = REVIEW: APPROVED / CHANGES REQUESTED
@@ -117,7 +117,7 @@ Don't read the JSON. Point at three regions:
 
 ---
 
-## Slide 5: The 17-stage pipeline
+## Slide 5: The 18-stage pipeline
 
 ```
   full track:
@@ -195,7 +195,7 @@ Don't explain every stage. Cover three properties of the whole:
             │
             ▼
    Core (model-agnostic spine, never invokes a model)
-     * 17 stages, 6 tracks
+     * 18 stages, 6 tracks
      * gate schemas + validator
      * routing + orchestrator
             │

@@ -45,7 +45,7 @@ Auto-discovers roles and skills with no host-specific install payload. Use this 
 
 ## Pipeline stages
 
-The pipeline is 17 stages from requirements to retrospective. Every stage renders a prompt, the AI writes an artifact and a JSON gate file, and `devteam next` reads the gate to decide what runs next. State lives on disk — you can stop at any point and pick up exactly where you left off.
+The pipeline is 18 stages from requirements to retrospective. Every stage renders a prompt, the AI writes an artifact and a JSON gate file, and `devteam next` reads the gate to decide what runs next. State lives on disk — you can stop at any point and pick up exactly where you left off.
 
 ### A structured SDLC in the right order
 

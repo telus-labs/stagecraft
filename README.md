@@ -1,6 +1,6 @@
 # Stagecraft
 
-**Stagecraft is an orchestrator that runs your AI coding tool through a structured 17-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage cannot start until the gate passes. The full run is on disk: auditable, resumable, not buried in a chat log.
+**Stagecraft is an orchestrator that runs your AI coding tool through a structured 18-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage cannot start until the gate passes. The full run is on disk: auditable, resumable, not buried in a chat log.
 
 Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the seam.
 
@@ -9,7 +9,7 @@ devteam init --host claude-code        # one-time install in your project
 devteam stage requirements --feature "Add SMS notification opt-in"
 # (model writes brief + gate; hooks validate)
 devteam next                           # → "▶️ run-stage design (stage-02)"
-# … 15 more stages, then "🎉 pipeline-complete"
+# … 16 more stages, then "🎉 pipeline-complete"
 ```
 
 > The CLI binary is `devteam`. Stagecraft is the project; `devteam` is what you type.
@@ -38,7 +38,7 @@ If you're evaluating Stagecraft, this is the fastest path to a working answer:
 
 1. **(5 min) Install the framework.** `git clone <this-repo> && cd stagecraft && npm install && npm link`. Verify with `devteam --help`.
 2. **(2 min) Initialize a throwaway target project.** `mkdir /tmp/scratch && cd /tmp/scratch && devteam init --host claude-code`. Then `devteam doctor` should be all green.
-3. **(3 min) Read [EXAMPLE.md](EXAMPLE.md).** One feature traced through all 17 stages with real CLI captures. Tells you what each stage actually does.
+3. **(3 min) Read [EXAMPLE.md](EXAMPLE.md).** One feature traced through all 18 stages with real CLI captures. Tells you what each stage actually does.
 4. **(15 min) Run one full pipeline yourself.** The simplest path: run each stage with `--headless` and let the orchestrator drive Claude Code directly.
    ```bash
    devteam stage requirements --feature "a one-paragraph feature you understand" --headless
@@ -67,7 +67,7 @@ Reference / extension:
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — recipes for adding a host, role, stage, or skill.
 - **[core/adapters/host-adapter.md](core/adapters/host-adapter.md)** — the host-adapter contract. ~150 lines; defines everything an adapter must implement.
 - **[docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)** — multi-workstream contract stress-test trace.
-- **[docs/walkthroughs/soc2-evidence-collector.md](docs/walkthroughs/soc2-evidence-collector.md)** — end-to-end showcase: building a SOC 2 evidence collector through the full 17-stage pipeline.
+- **[docs/walkthroughs/soc2-evidence-collector.md](docs/walkthroughs/soc2-evidence-collector.md)** — end-to-end showcase: building a SOC 2 evidence collector through the full 18-stage pipeline.
 - **[docs/runbooks/escalation.md](docs/runbooks/escalation.md)** — procedural playbook: what to read, how to decide, and how to encode the result when `devteam next` says `resolve-escalation`.
 - **[docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md)** — procedural playbook for `fix-and-retry` halts: red-team FAIL, QA-within-build FAIL, pre-review FAIL, peer-review CHANGES_REQUESTED. Covers the `--patch --from <stage>` flow with a worked example.
 - **[docs/runbooks/open-followups.md](docs/runbooks/open-followups.md)** — how to extract ticket-ready stubs from `open_followups[]` in the stage-07 and stage-09 gates after a pipeline run completes. Includes field mapping to JIRA, Linear, and GitHub Issues.
@@ -98,7 +98,7 @@ The vocabulary extends naturally: a *run* is one pipeline invocation, *dress reh
 
 A coordinated team of role-specific subagents running a structured software-development pipeline end-to-end:
 
-- **17 stages** — requirements (PM) → design (Principal) → clarification → executable-spec (PM, Gherkin) → build (Backend|Frontend|Platform|QA) → pre-review (Platform) → security review (conditional) → red-team (always-on full+hotfix) → migration-safety (conditional, veto) → peer-review (Reviewer × 4) → qa → accessibility → observability → verification-beyond-tests (full only) → sign-off (PM+Platform) → deploy → retrospective.
+- **18 stages** — requirements (PM) → design (Principal) → clarification → executable-spec (PM, Gherkin) → build (Backend|Frontend|Platform|QA) → pre-review (Platform) → security review (conditional) → red-team (always-on full+hotfix) → migration-safety (conditional, veto) → preflight (mechanical, auto-run) → peer-review (Reviewer × 4) → qa → accessibility → observability → verification-beyond-tests (full only) → sign-off (PM+Platform) → deploy → retrospective.
 - **6 tracks** — `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Pick by change size.
 - **Per-workstream gate JSON** — every stage writes a machine-readable gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
 - **Per-stage host routing** — `.devteam/config.yml` picks which host runs which role. Single-host install is the same code path as multi-host.

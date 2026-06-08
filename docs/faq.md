@@ -57,9 +57,9 @@ If a stage isn't appropriate for your change, pick a track that doesn't include 
 
 If you want to skip a stage that *is* in your active track, just don't run it — the orchestrator won't auto-advance unless the gate exists. But `devteam next` will keep pointing at the skipped stage. If you want to mark it as deliberately bypassed, write a gate by hand with `status: "PASS"` and an explanation in `blockers: []` / `warnings: []` (or set up a custom track in `STAGES_BY_TRACK`).
 
-### Do I have to use all 17 stages?
+### Do I have to use all 18 stages?
 
-No. The track system exists precisely to let you opt out of stages per change. The full track has all 17; nano has 3 (build + a scoped peer-review with 1 reviewer + qa). Pick whatever matches the change's risk profile.
+No. The track system exists precisely to let you opt out of stages per change. The full track has all 18; nano has 3 (build + a scoped peer-review with 1 reviewer + qa). Pick whatever matches the change's risk profile.
 
 ### How do I know which track to use for my change?
 
@@ -297,7 +297,7 @@ The framework does **not** automatically increment `retry_number` — the model 
 
 The framework also does **not** auto-escalate after N retries. If you've retried several times without progress, write the gate with `status: ESCALATE` manually. This is a deliberate decision: auto-escalation would require the framework to define "N retries is too many," which varies by stage and context.
 
-### What's the rough cost of a full 17-stage pipeline run?
+### What's the rough cost of a full 18-stage pipeline run?
 
 Highly variable — depends on feature complexity, model tier, and how many retries occur. Very rough benchmarks on a medium-complexity feature (1-2 weeks of engineering work):
 
@@ -481,7 +481,7 @@ There's no `devteam rewind <stage>` command today (BACKLOG E6 — `devteam repla
 
 ## Running offline / in CI
 
-### Can the full 17-stage pipeline run automatically in CI, or is it meant to be human-driven?
+### Can the full 18-stage pipeline run automatically in CI, or is it meant to be human-driven?
 
 Both modes are valid and serve different needs:
 
@@ -758,7 +758,7 @@ The audit is read-only. It writes findings to `docs/audit/00-project-context.md`
 
 ### What's the difference between the audit and the pipeline?
 
-The **pipeline** (`devteam stage <name>`) *builds* features through 17 staged production steps with gate JSON between them. Audits are NOT pipeline stages.
+The **pipeline** (`devteam stage <name>`) *builds* features through 18 staged production steps with gate JSON between them. Audits are NOT pipeline stages.
 
 The **audit** (`/audit` or `/audit-quick`) *analyzes* an existing codebase and produces a prioritized improvement roadmap. Read-only.
 
@@ -797,7 +797,7 @@ Use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventio
 
 ### Should I use Stagecraft or Claude Code's `/goal` command?
 
-Both, for different purposes. `/goal` is a continuation primitive: set a session-level condition and the host loops until it holds. Stagecraft is a decomposition primitive: one feature decomposes into 17 stages with defined artifacts and gates.
+Both, for different purposes. `/goal` is a continuation primitive: set a session-level condition and the host loops until it holds. Stagecraft is a decomposition primitive: one feature decomposes into 18 stages with defined artifacts and gates.
 
 They compose: you can set a `/goal` like "tests pass and lint clean" at the start of stage-04 build and let Claude loop on it, then read the gate. The adapter does not emit `/goal` invocations today (BACKLOG E-series). Setting one manually before a convergence-shaped stage works fine.
 
