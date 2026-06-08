@@ -330,8 +330,7 @@ The Principal specifies exactly what must change. Clear the area's build gate
 and re-run with the ruling as the constraint:
 
 ```bash
-rm pipeline/gates/stage-04.<area>.json pipeline/gates/stage-04.json
-devteam stage build --patch --from stage-05.<area> --skip-completed --headless
+devteam stage build --patch --from stage-05.<area> --workstream <area> --headless
 devteam merge build
 devteam stage pre-review --headless
 devteam stage peer-review --headless   # reviewer sees the ruling-driven change

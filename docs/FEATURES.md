@@ -62,11 +62,13 @@ Stage sequence for the `full` track:
 | security-review *(conditional)* | Security |
 | red-team | Red-team |
 | migration-safety *(conditional, has veto)* | Migrations |
+| preflight *(mechanical, auto-run before peer-review)* | Platform |
 | peer-review | Reviewer |
 | qa | QA |
 | accessibility-audit | QA |
 | observability-gate | Platform |
 | verification-beyond-tests | Verifier |
+| performance-budget | QA |
 | sign-off | PM + Platform |
 | deploy | Platform |
 | retrospective | Principal |
@@ -77,7 +79,7 @@ Three main tracks, plus variants for specific change types:
 
 | Track | Stages | Best for |
 |---|---|---|
-| `full` | 17 | New features, production changes |
+| `full` | 18 | New features, production changes |
 | `quick` | 9 | Bug fixes, small enhancements |
 | `nano` | 3 | Trivial code change; build + scoped peer-review (1 reviewer, 1 approval) + qa |
 | `hotfix` | 12 | Emergency fixes with safety gates preserved |

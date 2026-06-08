@@ -449,19 +449,14 @@ If neither works: write the gate with `status: "ESCALATE"`, fill `escalation_rea
 
 QA's workstream gate will have `status: FAIL` with the bugs in `blockers[]`. When the validator runs, it automatically writes those blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
 
-Delete the affected gates, then use `--patch` and `--skip-completed`:
+Use `--workstream` to target only the affected roles — no gate deletion needed:
 
 ```bash
-rm pipeline/gates/stage-04.backend.json   # if backend owns a bug
-rm pipeline/gates/stage-04.platform.json  # if platform owns a bug
-rm pipeline/gates/stage-04.qa.json        # QA must re-verify
-rm pipeline/gates/stage-04.json           # merged gate
-
-devteam stage build --patch --from stage-04.qa --skip-completed --headless
+devteam stage build --patch --from stage-04.qa --workstream backend --workstream platform --workstream qa --headless
 devteam merge build
 ```
 
-`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a PATCH MODE block into each dispatched prompt. `--skip-completed` skips any workstream whose gate file still exists on disk — so frontend (which passed) never gets re-dispatched.
+`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a PATCH MODE block into each dispatched prompt. `--workstream` dispatches only the named roles; frontend's gate is left untouched.
 
 See [Fixing QA failures within build](user-guide.md#fixing-qa-failures-within-build) in the user guide for the full workflow including manual `context.md` editing when you need more explicit role assignments.
 

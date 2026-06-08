@@ -51,7 +51,8 @@ devteam next   # should say "▶️ run-stage <next-stage>"
 Two things make this work cleanly:
 
 - **`--patch --from <stage>`** reads the failing gate's blocker list and injects a `## ⚠️ PATCH MODE — targeted fix only` section at the top of every dispatched build prompt. Agents are constrained to those items.
-- **`--skip-completed`** skips dispatching any workstream whose gate file still exists. Combined with `rm pipeline/gates/<workstream>.json` for the workstream(s) that own the bug, this means only the relevant dev re-runs.
+- **`--workstream <role>`** dispatches only the named role(s); all other workstream gate files are left untouched. Repeat the flag for multiple roles. Replaces the old pattern of `rm pipeline/gates/<workstream>.json` + `--skip-completed`.
+- **`--skip-completed`** skips any workstream whose gate file still exists. Useful when re-running all workstreams but skipping ones that already passed (e.g. `devteam restart build` + full re-run without targeting a specific role).
 
 The validator helps too: when red-team or stage-04.qa writes FAIL with blockers, it auto-injects a `## IMMEDIATE: ... — Fix Before X` section into `pipeline/context.md` so every later prompt sees the must-fix list. When the originating stage next writes PASS/WARN, the section is auto-stripped. You don't manage either lifecycle.
 
@@ -120,19 +121,14 @@ cat pipeline/gates/stage-04c.json | jq -r '.blockers[].file'
 # 1. (Optional) Watch the run in a second pane
 devteam log --follow
 
-# 2. Clear ONLY the backend workstream gate + the merged stage-04 gate.
-#    --keep-context preserves the auto-injected red-team-blockers section
-#    we want the agent to read.
-rm pipeline/gates/stage-04.backend.json pipeline/gates/stage-04.json
-
-# 3. Scoped build re-run.
+# 2. Scoped build re-run — backend only.
 #    --patch --from red-team    reads stage-04c.json's must_address_before_peer_review,
 #                                inlines F-01 (with reproducer + fix_suggestion) into
 #                                the dispatched build prompt.
-#    --skip-completed            frontend/platform/qa gates still exist; those
-#                                workstreams won't re-run.
+#    --workstream backend        dispatches only backend; frontend/platform/qa gates
+#                                are left untouched (no manual gate deletion needed).
 #    --headless                  drives Claude Code (or whichever host) automatically.
-devteam stage build --patch --from red-team --skip-completed --headless
+devteam stage build --patch --from red-team --workstream backend --headless
 
 # 4. Merge the rewritten backend gate with the surviving 3.
 devteam merge build
@@ -174,15 +170,11 @@ When the red-team gate turns WARN or PASS after one or more fix cycles, do not a
 After `devteam stage red-team --headless` exits WARN or PASS:
 
 ```bash
-# Clear only the QA workstream gate (backend/frontend/platform gates survive).
-# --skip-completed ensures only QA re-runs.
+# Re-run only the QA workstream (backend/frontend/platform gates are untouched).
 # --from red-team injects the red-team context; QA's role brief (§On a Post-Red-Team
 # Test Augmentation Task) guides it to write regression tests to src/tests/regression/
 # rather than re-running the full Stage 6 suite.
-rm pipeline/gates/stage-04.qa.json
-rm pipeline/gates/stage-04.json     # merged gate must be rebuilt after QA finishes
-
-devteam stage build --patch --from red-team --skip-completed --headless
+devteam stage build --patch --from red-team --workstream qa --headless
 devteam merge build
 
 # Confirm all tests still pass (QA gate updated, tests_total incremented).
@@ -225,14 +217,8 @@ cat pipeline/gates/stage-04.qa.json | jq .affected_workstreams
 # For gates written before affected_workstreams was added, derive it:
 cat pipeline/gates/stage-04.qa.json | jq '[.failing_tests[].assigned_to] | unique | sort'
 
-# 2. Clear the affected gates + QA (which must re-verify) + merged.
-rm pipeline/gates/stage-04.backend.json    # owns backend failures
-rm pipeline/gates/stage-04.platform.json   # owns platform failures
-rm pipeline/gates/stage-04.qa.json         # QA must re-verify after fixes
-rm pipeline/gates/stage-04.json            # merged gate must be rebuilt
-
-# 3. Scoped re-run with --skip-completed (frontend's gate stays).
-devteam stage build --patch --from stage-04.qa --skip-completed --headless
+# 2. Scoped re-run — affected workstreams + QA only (frontend's gate stays).
+devteam stage build --patch --from stage-04.qa --workstream backend --workstream platform --workstream qa --headless
 devteam merge build
 devteam next
 ```
@@ -254,8 +240,7 @@ cat pipeline/gates/stage-04a.json | jq '._orchestrator_stamped.runs'
 npm run lint   # or whatever command is in the stamped record
 
 # 3. Fix via a scoped build re-run (--from stage-04a reads stage-04a.json's blockers[]).
-rm pipeline/gates/stage-04.<owning-area>.json pipeline/gates/stage-04.json
-devteam stage build --patch --from stage-04a --skip-completed --headless
+devteam stage build --patch --from stage-04a --workstream <owning-area> --headless
 devteam merge build
 devteam stage pre-review --headless    # orchestrator re-runs the commands
 devteam next
@@ -284,8 +269,7 @@ grep -A 2 "BLOCKER:" pipeline/code-review/by-*.md
 
 # 3. Address each BLOCKER. Scoped build re-run using the merged peer-review gate
 #    as the --from source (reads blockers[] from stage-05.json):
-rm pipeline/gates/stage-04.<owning-area>.json pipeline/gates/stage-04.json
-devteam stage build --patch --from peer-review --skip-completed --headless
+devteam stage build --patch --from peer-review --workstream <owning-area> --headless
 devteam merge build
 
 # 4. Re-run the build-chain stages.
@@ -536,14 +520,10 @@ which agent owns the gap. The same fallback one-liner from Case 1 applies if
 the responsible file is mentioned in the delta item text.
 
 ```bash
-# 2. Determine owning workstreams from delta items (manual step)
-#    Then clear their gates + the merged gate.
-rm pipeline/gates/stage-04.backend.json   # if backend owns the gap
-rm pipeline/gates/stage-04.json           # merged gate must be rebuilt
-
-# 3. Patch build — constrained to delta items only.
+# 2. Patch build — constrained to delta items only.
 #    --from stage-07 reads delta_items[] and injects them into the build prompt.
-devteam stage build --patch --from stage-07 --skip-completed --headless
+#    --workstream <role> dispatches only the owning workstream (no gate deletion needed).
+devteam stage build --patch --from stage-07 --workstream backend --headless   # adjust role as needed
 devteam merge build
 
 # 4. Re-run the full post-build chain. PM will re-read the test report and
@@ -650,8 +630,7 @@ Re-run the frontend build workstream and downstream stages when the fix requires
 In those cases, use the same scoped re-run pattern as Case 2:
 
 ```bash
-rm pipeline/gates/stage-04.frontend.json pipeline/gates/stage-04.json
-devteam stage build --patch --from stage-06b --skip-completed --headless
+devteam stage build --patch --from stage-06b --workstream frontend --headless
 devteam merge build
 devteam stage pre-review --headless
 devteam stage accessibility-audit --headless

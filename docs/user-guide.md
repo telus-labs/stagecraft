@@ -634,24 +634,15 @@ For the complete procedure with a worked example (including the `rm pipeline/gat
 
 When QA's workstream gate within Stage 4 is FAIL, the bugs belong to the other build roles (typically backend or platform). The validator automatically writes the QA blockers into `pipeline/context.md` (between `<!-- devteam:qa-build-blockers -->` markers) so implementation agents see them on the next re-run.
 
-**Step 1 — Delete the affected gates.** Leave passing workstreams' gates on disk; `--skip-completed` will skip those automatically.
+Use `--workstream` to target only the affected roles — no gate deletion needed:
 
 ```bash
-rm pipeline/gates/stage-04.backend.json   # owns the express.static bug
-rm pipeline/gates/stage-04.platform.json  # owns the Dockerfile bug
-rm pipeline/gates/stage-04.qa.json        # QA must re-verify after fixes
-rm pipeline/gates/stage-04.json           # merged gate must be rebuilt
-```
-
-**Step 2 — Re-run with `--patch` and `--skip-completed`.**
-
-```bash
-devteam stage build --patch --from stage-04.qa --skip-completed --headless
+devteam stage build --patch --from stage-04.qa --workstream backend --workstream platform --workstream qa --headless
 devteam merge build
 devteam next
 ```
 
-`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a **PATCH MODE** section at the top of each dispatched prompt, telling agents to fix only the listed items. `--skip-completed` skips dispatching any workstream whose gate file already exists, so frontend (which passed) never gets re-run.
+`--patch --from stage-04.qa` reads the QA gate's `blockers[]` and injects a **PATCH MODE** section at the top of each dispatched prompt, telling agents to fix only the listed items. `--workstream` dispatches only the named roles; frontend's gate (which passed) is left untouched.
 
 The agents see: the QA blockers already in `context.md` (written by the validator when QA's gate was first validated), plus the explicit PATCH MODE list in the prompt. Both signals reinforce the same fix targets.
 

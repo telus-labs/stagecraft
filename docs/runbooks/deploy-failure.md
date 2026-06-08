@@ -158,12 +158,9 @@ infrastructure configuration fix):
 **Code fix needed** — the failure is a bug that slipped past tests:
 
 ```bash
-# Clear the deploy gate and the build gates for the owning workstream.
+# Clear the deploy gate, then patch-build only the owning workstream.
 rm pipeline/gates/stage-08.json
-rm pipeline/gates/stage-04.<workstream>.json pipeline/gates/stage-04.json
-
-# Patch build, then run the full post-build chain:
-devteam stage build --patch --from stage-08 --skip-completed --headless
+devteam stage build --patch --from stage-08 --workstream <workstream> --headless
 devteam merge build
 devteam stage pre-review --headless
 devteam stage red-team --headless      # if full track

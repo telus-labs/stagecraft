@@ -130,17 +130,17 @@ Commands:
     reindex                        Re-embed everything (after embedder change).
                                    Local embedder by default; ~150MB model
                                    downloaded once on first ingest.
-    promote [<kinds...>]           D3 — copy this project's records to
-                                   the org-shared store. Default kinds:
+    promote [<kinds...>]           Copy this project's records to the
+                                   org-shared store. Default kinds:
                                    adr + lessons-learned. Architectural
-                                   continuity (G8) reads from there.
-  architecture lookup "<topic>"    G8 — query the org-shared store for
+                                   continuity reads from there.
+  architecture lookup "<topic>"    Query the org-shared store for
        [--limit N] [--kind adr|    prior ADRs (or lessons) on a topic.
         lessons-learned]            Principal consults this before designing
                                    so prior commitments are honored or
                                    explicitly superseded — architecture
                                    doesn't drift because the architect remembers.
-  reproduce <stage-id> [--json]    C4 — read pipeline/gates/<stage-id>.json
+  reproduce <stage-id> [--json]    Read pipeline/gates/<stage-id>.json
                                    and report what was recorded for replay
                                    (model_version, temperature, seed, prompt
                                    hash, tools hash). Re-renders the current
@@ -154,20 +154,20 @@ Commands:
                                    model's claim. Commands resolve from
                                    .devteam/config.yml pipeline.verify.* or
                                    package.json scripts.
-  replay <stage-id> [--dry-run]    E6 — re-run a recorded stage with CURRENT
+  replay <stage-id> [--dry-run]    Re-run a recorded stage with CURRENT
        [--json]                     config and diff the result. Writes the
                                    new gate to pipeline/gates/replay/<stage>.
                                    <timestamp>.json. --dry-run prints the
                                    plan + drift check without invoking the
                                    host.
-  ci install [--ci <type>]         F4 — drop a CI workflow template into
+  ci install [--ci <type>]         Drop a CI workflow template into
        [--out <dir>] [--force]      the target project. Currently supports
                                    --ci github-actions (the default). The
                                    workflow validates pipeline/gates/ + posts
                                    each gate as a GitHub check run on PRs.
                                    It does NOT run the pipeline itself in CI.
   ci show [--ci <type>]            Print the workflow template to stdout.
-  spec verify [--strict] [--json]  G2 — drift-check brief.md ↔ spec.feature ↔
+  spec verify [--strict] [--json]  Drift-check brief.md ↔ spec.feature ↔
                                    test-report.md. Exits non-zero if any AC
                                    in brief lacks a scenario, any scenario
                                    lacks an AC tag, or any test references
@@ -185,7 +185,7 @@ Commands:
                                    verify' to every intermediate
                                    artifact + the gate-vs-reality
                                    dimension. Exits non-zero on drift.
-  assess [--description "..."]    G6 — infer the best track for the
+  assess [--description "..."]    Infer the best track for the
        [--json] [--apply]          current change. Reads pipeline/
        [--cwd <dir>] [files...]    changed-files.txt (or explicit file
                                    list) and applies path/content/
@@ -833,7 +833,7 @@ function cmdArchitecture(argv) {
   console.error("");
   console.error("Equivalent to `devteam memory query --org --kind adr \"<topic>\"` — the Principal");
   console.error("role brief uses this name when prompting designers to consult prior commitments");
-  console.error("(BACKLOG G8 architectural continuity).");
+  console.error("See: devteam memory promote + devteam architecture lookup.");
   process.exit(2);
 }
 
