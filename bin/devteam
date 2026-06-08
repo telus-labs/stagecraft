@@ -678,6 +678,16 @@ function cmdNext(argv) {
   } else if (result.command) {
     console.log(`   → ${result.command}`);
   }
+  if (result.action === "resolve-escalation") {
+    console.log(`\n   Escalation resolution steps:`);
+    console.log(`   1. Read the gate: cat ${result.gate}`);
+    console.log(`      Check escalation_reason and decision_needed fields.`);
+    console.log(`   2. Get a Principal ruling (if reviewer conflict or design question):`);
+    console.log(`        devteam ruling --topic "..." --target-gate ${result.gate} [--headless]`);
+    console.log(`   3. Encode the decision (defer → hand-edit gate; must-fix → devteam restart):`);
+    console.log(`        docs/runbooks/escalation.md §4`);
+    console.log(`   4. devteam validate && devteam next`);
+  }
 }
 
 function cmdMemory(argv) {

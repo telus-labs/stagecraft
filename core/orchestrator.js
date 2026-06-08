@@ -892,6 +892,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
         action: "resolve-escalation", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
         reason: gate.escalation_reason || "escalation required; pipeline halted",
+        command: `devteam ruling --topic "..." --target-gate ${stageGatePath} [--headless]`,
       };
     }
     if (gate.status === "FAIL") {
