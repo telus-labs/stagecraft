@@ -133,6 +133,20 @@ For each `noted_for_followup` item, choose a `track_for` value that routes it to
 
 Items with `track_for: "ticket"` appear in the PM sign-off gate (`open_followups[]`) and the stage-09 retrospective gate — they're the ones that become actual work items. Be deliberate: only use `"ticket"` when you'd genuinely file one. Use `"lessons-learned"` for observations that should change how the team works, not what they build.
 
+Each `noted_for_followup` entry **must be a structured object**, not a plain string. Plain strings are tolerated by the tooling but lose classification fidelity. Required shape:
+
+```json
+{
+  "id": "RT-02",
+  "text": "Set ENV NODE_ENV=production in Dockerfile before CMD.",
+  "track_for": "ticket",
+  "severity": "medium",
+  "assigned_to": "platform"
+}
+```
+
+`id` must be unique within the gate (RT-N, QA-N, SEC-N, or similar). `assigned_to` names the build workstream that owns the file.
+
 ## Status logic
 
 - **PASS** — no `must-fix` items. `should-fix` items become warnings (and go in `noted_for_followup`).

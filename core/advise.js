@@ -52,7 +52,14 @@ function gatherFollowups(cwd, opts = {}) {
       continue;
     }
     const items = Array.isArray(gate.noted_for_followup) ? gate.noted_for_followup : [];
-    for (const item of items) {
+    for (const raw of items) {
+      // Agents sometimes write plain strings ("RT-02: summary") instead of
+      // structured objects. Normalise either form so advise can process them.
+      let item = raw;
+      if (typeof raw === "string") {
+        const m = raw.match(/^([^\s:]+):\s*(.*)/s);
+        item = m ? { id: m[1], text: m[2].trim() } : { id: raw, text: raw };
+      }
       if (!item || !item.id) continue;
       byId.set(item.id, { ...item, _source: f });
     }
