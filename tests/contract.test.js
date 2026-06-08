@@ -111,9 +111,17 @@ describe("contract: stages ↔ roles", () => {
 
 describe("contract: ORDERED_STAGE_NAMES ↔ STAGES_BY_TRACK", () => {
   it("ORDERED_STAGE_NAMES contains every defined stage name (no missing, no extras)", () => {
-    const stageSet = new Set(stageNames());
+    // Mechanical stages (roles: []) are auto-run pre-steps, not user-dispatched.
+    // They live in STAGES for schema registration but are intentionally absent
+    // from ORDERED_STAGE_NAMES and all track lists.
+    const mechanicalStages = new Set(
+      Object.entries(STAGES)
+        .filter(([, def]) => def && Array.isArray(def.roles) && def.roles.length === 0)
+        .map(([name]) => name)
+    );
+    const stageSet = new Set([...stageNames()].filter((n) => !mechanicalStages.has(n)));
     const orderedSet = new Set(ORDERED_STAGE_NAMES);
-    assert.deepEqual(orderedSet, stageSet, "ORDERED_STAGE_NAMES is out of sync with STAGES keys");
+    assert.deepEqual(orderedSet, stageSet, "ORDERED_STAGE_NAMES is out of sync with STAGES keys (excluding mechanical stages)");
   });
 
   it("STAGES_BY_TRACK has an entry per track", () => {

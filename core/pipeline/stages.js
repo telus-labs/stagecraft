@@ -208,6 +208,23 @@ const STAGES = {
       triggering_conditions: [],
     },
   },
+  // stage-04e: mechanical pre-peer-review gate. No LLM dispatch — runs
+  // as a Node.js script via `devteam preflight` or automatically at the
+  // start of `devteam stage peer-review`. Checks git hygiene, test import
+  // paths, and deferred red-team item count. roles: [] signals to the
+  // orchestrator that this stage is not LLM-dispatched.
+  preflight: {
+    stage: "stage-04e",
+    roles: [],
+    objective: "Mechanical pre-peer-review checks: committed-but-ignored files, broken test import paths, deferred red-team item count. Runs as a script, not an LLM dispatch.",
+    readFirst: [],
+    allowedWrites: ["pipeline/gates/stage-04e.json"],
+    gate: {
+      git_hygiene_pass: false,
+      import_path_pass: false,
+      deferred_items_count: 0,
+    },
+  },
   "peer-review": {
     stage: "stage-05",
     // Workstreams are AREAS being reviewed, not the role doing the

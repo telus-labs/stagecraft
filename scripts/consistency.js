@@ -99,11 +99,26 @@ function checkTracksReferenceKnownStages() {
 }
 
 function checkOrderedStageNamesCoversAll() {
+  // Mechanical stages (roles: []) are auto-run by the orchestrator as
+  // pre-steps of other stages, not dispatched by `devteam next`. They
+  // register in STAGES so their schemas are known but do NOT appear in
+  // ORDERED_STAGE_NAMES or any track list.
+  const mechanicalStages = new Set(
+    Object.entries(STAGES)
+      .filter(([, def]) => def && Array.isArray(def.roles) && def.roles.length === 0)
+      .map(([name]) => name)
+  );
+
   const stageSet = new Set(stageNames());
   const orderedSet = new Set(ORDERED_STAGE_NAMES);
   for (const n of stageSet) {
-    if (orderedSet.has(n)) pass(`ORDERED_STAGE_NAMES contains "${n}"`);
-    else fail(`ORDERED_STAGE_NAMES`, `missing stage "${n}"`);
+    if (mechanicalStages.has(n)) {
+      pass(`ORDERED_STAGE_NAMES correctly omits mechanical stage "${n}"`);
+    } else if (orderedSet.has(n)) {
+      pass(`ORDERED_STAGE_NAMES contains "${n}"`);
+    } else {
+      fail(`ORDERED_STAGE_NAMES`, `missing stage "${n}"`);
+    }
   }
   for (const n of orderedSet) {
     if (stageSet.has(n)) pass(`STAGES has "${n}" (referenced in ORDERED_STAGE_NAMES)`);
