@@ -506,7 +506,27 @@ For **documentation-only findings** (e.g. "this permission isn't explained in th
 
 If a finding requires a design decision before the build agents can act (e.g. "the permission set is fundamentally too broad — what's the minimum viable scope?"), add a note to `pipeline/context.md` before re-running build. That file is read first by every stage and is the intended channel for human direction between stages.
 
-For the complete operational sequence — including the optimization to re-run only the affected workstream (`rm pipeline/gates/stage-04.<area>.json` + `--skip-completed`), what to do with `noted_for_followup` items, and the equivalent flow for QA / pre-review / peer-review FAIL — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+Use `--workstream <role>` to re-run only the affected build role — no manual gate deletion needed:
+
+```bash
+devteam stage build --workstream backend --patch --from red-team --headless
+devteam merge build
+devteam stage red-team --headless
+```
+
+For the complete operational sequence — including what to do with `noted_for_followup` items and the equivalent flow for QA / pre-review / peer-review FAIL — see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+
+### Can red-team miss a finding on the first pass and catch it on a later run?
+
+Yes, and this is expected. Red-team is an LLM agent, not a static analyser — it walks a checklist of attack surfaces (input validation, state boundaries, sequence ordering, resource exhaustion, abuse cases, etc.) but does not guarantee complete coverage in a single pass. Different runs explore the surface differently.
+
+What this means in practice:
+
+- **First run PASS → second run finds a must-fix.** This happens. A code change in between (even a small one like a Dockerfile fix) can draw the agent's attention to a surface it walked more shallowly the first time. It is not a pipeline bug — it is the probabilistic nature of LLM-driven review.
+- **PASS does not mean "no vulnerabilities."** It means no findings rose to `must-fix` in that pass. Adversarial coverage scales with model capability and how much of the attack surface the agent happened to inspect deeply on that run.
+- **Iterative runs compound coverage.** Each fix-and-retry cycle re-exposes the agent to the full codebase with fresh context. Findings from earlier runs stay in `context.md` (via the validator's injection) so the agent builds on prior work.
+
+For high-assurance work on the `full` track, verification-beyond-tests (stage-06d) adds property-based and mutation testing after QA to catch correctness failures that red-team typically misses.
 
 ### Can I roll back to an earlier stage?
 

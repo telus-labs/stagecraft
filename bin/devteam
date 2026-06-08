@@ -364,11 +364,40 @@ function cmdStage(argv) {
         for (const r of result.results) {
           const ok = !r.timedOut && r.exitCode === 0 && r.gatePath;
           const gateNote = r.gatePath ? ` → ${path.relative(result.ctx.cwd, r.gatePath)}` : " (no gate written)";
-          const status = r.timedOut
+          const agentStatus = r.timedOut
             ? `TIMEOUT after ${r.durationMs}ms`
             : `exit ${r.exitCode}, ${r.durationMs}ms`;
-          console.log(`  ${ok ? "✓" : "✗"} ${r.role} (${r.host}): ${status}${gateNote}`);
-          if (!ok) anyFail = true;
+          if (!ok) {
+            console.log(`  ✗ ${r.role} (${r.host}): ${agentStatus}${gateNote}`);
+            anyFail = true;
+            continue;
+          }
+          // Read gate to surface FAIL/WARN without requiring a separate `devteam next`.
+          let gateStatus = null;
+          try {
+            const gate = JSON.parse(fs.readFileSync(r.gatePath, "utf8"));
+            gateStatus = gate.status;
+            if (gate.status === "FAIL" || gate.status === "ESCALATE") {
+              console.log(`  ✗ ${r.role} (${r.host}): ${agentStatus}${gateNote} [gate: ${gate.status}]`);
+              const blockers = gate.blockers || gate.must_address_before_peer_review || [];
+              for (const b of blockers) {
+                const text = typeof b === "string" ? b : (b.summary || JSON.stringify(b));
+                console.log(`    BLOCKER: ${text}`);
+              }
+              anyFail = true;
+            } else if (gate.status === "WARN") {
+              console.log(`  ⚠ ${r.role} (${r.host}): ${agentStatus}${gateNote} [gate: WARN]`);
+              const warnings = gate.warnings || [];
+              for (const w of warnings) {
+                const text = typeof w === "string" ? w : (w.summary || JSON.stringify(w));
+                console.log(`    WARNING: ${text}`);
+              }
+            } else {
+              console.log(`  ✓ ${r.role} (${r.host}): ${agentStatus}${gateNote}`);
+            }
+          } catch {
+            console.log(`  ✓ ${r.role} (${r.host}): ${agentStatus}${gateNote}`);
+          }
         }
         process.exit(anyFail ? 1 : 0);
       })
