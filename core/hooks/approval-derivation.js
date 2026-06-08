@@ -335,6 +335,12 @@ function main() {
   const reviewFiles = fs.readdirSync(REVIEW_DIR).filter((f) => /^by-[\w-]+\.md$/.test(f));
   if (reviewFiles.length === 0) process.exit(0);
 
+  // Nano track uses a single reviewer (backend) who reviews the backend
+  // workstream — self-review is structural, not a violation.
+  let track = "full";
+  try { track = loadConfig(CWD).pipeline.default_track || "full"; } catch { /* defaults */ }
+  const isSingleReviewer = track === "nano";
+
   for (const file of reviewFiles) {
     const fullPath = path.join(REVIEW_DIR, file);
     const reviewer = reviewerNameFromPath(fullPath);
@@ -345,8 +351,9 @@ function main() {
     for (const v of verdicts) {
       // Self-review guard: skip sections where the reviewer's own workstream
       // matches the area being reviewed. Only applies to non-fanout files
-      // (fanout hosts like "codex" don't own a workstream).
-      if (!host && role && v.area === role) {
+      // (fanout hosts like "codex" don't own a workstream). Not applied on
+      // nano track where the single reviewer IS the workstream owner.
+      if (!host && role && v.area === role && !isSingleReviewer) {
         console.error(`[approval-derivation] WARN: self-review skipped — ${file} contains "## Review of ${v.area}" but that is the reviewer's own workstream`);
         continue;
       }
