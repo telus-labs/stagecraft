@@ -108,6 +108,7 @@ A coordinated team of role-specific subagents running a structured software-deve
 - **Headless invocation** — `devteam stage <name> --headless` drives each workstream's host CLI (`claude --print`, `codex exec`) non-interactively.
 - **Reproducibility + replay** — every gate can record `model_version`, `temperature`, `seed`, `system_prompt_hash`, `tools_hash`. `devteam replay <stage>` re-runs and diffs.
 - **Routing learns from data** — `npm run routing:suggest` reads cost + first-try pass rates per (role, host) and proposes config swaps.
+- **Advisory triage** — `devteam advise` surfaces `noted_for_followup[]` items from any completed gate, classifies their downstream risk (QA blocker, peer-review risk, noise), and applies operator decisions (defer with ticket, scaffold test, amend brief, do nothing) to `pipeline/context.md` so QA and peer-review see the outcome.
 
 ## Prerequisites
 
@@ -219,7 +220,8 @@ For multi-host (`--host claude-code,codex`): both surfaces installed side-by-sid
 |---|---|
 | `devteam init --host <name>[,<name>...]` | Install host adapter(s) into the current project; write `.devteam/config.yml` |
 | `devteam stage <name> [--feature "..."] [--headless]` | Render (and optionally execute) a stage prompt; `--headless` drives the host CLI automatically |
-| `devteam next [--json]` | Report the next action the pipeline needs (run-stage, merge, fix-and-retry, resolve-escalation, pipeline-complete) |
+| `devteam next [--json] [--skip-advise]` | Report the next action the pipeline needs (run-stage, merge, fix-and-retry, resolve-escalation, pipeline-complete). Emits a ⚠ advisory notice when unresolved follow-up items may block downstream stages. |
+| `devteam advise [--apply <decisions>] [--json]` | Show advisory panel for `noted_for_followup[]` items across all completed gates; classify risk (QA_BLOCKER, PEER_REVIEW_RISK, QA_NOISE); apply operator decisions to `pipeline/context.md`. Apply format: `--apply AC-11=A,AC-10=B:PROJ-123,AC-12=A`. Actions: scaffold, defer, amend, nothing, known-flaky, wontfix. See [rules/advise.md](rules/advise.md). |
 | `devteam restart <stage> [--cascade] [--keep-context] [--dry-run]` | Clear a stage's gate(s) so the pipeline can re-run it. With `--cascade`, also clears every stage that comes after. Use after FAIL/ESCALATE. See [docs/runbooks/escalation.md](docs/runbooks/escalation.md). |
 | `devteam ruling --topic "..." [--context <paths>] [--target-gate <gate>] [--headless]` | Dispatch the Principal subagent for an ad-hoc ruling outside the normal stage flow. Writes a `PRINCIPAL-RULING:` line to `pipeline/context.md`; no gate is touched. |
 | `devteam merge <stage>` | Aggregate per-workstream gate files into a single merged stage gate (required after multi-role stages) |

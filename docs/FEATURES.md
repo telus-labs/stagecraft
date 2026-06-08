@@ -279,10 +279,27 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Checks the Stagecraft install, each declared host CLI is reachable, and roles/rules/skills are correctly laid down
 - Prints a green/red checklist; fix what's red before running a stage
 
-**`devteam next`** — find out what to do next.
+**`devteam next [--json] [--skip-advise]`** — find out what to do next.
 
 - Reads the last gate in `pipeline/gates/`, interprets its status, and tells you what to run or what to fix
 - The main command in the interactive loop
+- Emits a ⚠ advisory notice on stderr when unresolved `QA_BLOCKER` or `PEER_REVIEW_RISK` items exist (suppressed with `--skip-advise`)
+
+**`devteam advise [--apply <decisions>] [--json]`** — triage deferred findings.
+
+- Advisory panel for `noted_for_followup[]` items across all completed gate files
+- Classifies each item: `QA_BLOCKER` (missing AC coverage in spec.feature), `PEER_REVIEW_RISK` (high-severity, no AC ref), `QA_NOISE` (timing/flakiness keywords), `INFO`
+- Generates ranked options (scaffold, defer, amend, nothing, known-flaky, wontfix) per item
+- `--apply AC-11=A,AC-10=B:PROJ-123,AC-12=A` encodes operator decisions into `pipeline/context.md` as advisory markers
+- Downstream stages respect the markers: QA skips coverage checks for `DEFERRED:` items, retries `KNOWN-FLAKY:` tests once; peer-review notes `BRIEF-AMEND-NEEDED:` entries
+- Idempotent: re-running `--apply` replaces the advisory section without duplicating entries
+- See [`rules/advise.md`](../rules/advise.md) and [`docs/runbooks/fix-and-retry.md` § Case 11](runbooks/fix-and-retry.md#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages)
+
+**`devteam preflight`** — run pre-peer-review mechanical checks standalone.
+
+- Runs git hygiene (committed-but-ignored files), import path validation, and deferred-items risk check
+- Auto-invoked by `devteam stage peer-review`; use standalone for early feedback
+- Writes `pipeline/gates/stage-04e.json`; see [Case 10](runbooks/fix-and-retry.md#case-10-preflight-stage-4e-fail--committed-ignored-files-or-broken-import-path) for fix steps
 
 **Headless mode** — run a stage end-to-end without touching the chat.
 

@@ -297,6 +297,44 @@ The framework does **not** automatically increment `retry_number` — the model 
 
 The framework also does **not** auto-escalate after N retries. If you've retried several times without progress, write the gate with `status: ESCALATE` manually. This is a deliberate decision: auto-escalation would require the framework to define "N retries is too many," which varies by stage and context.
 
+### What are `noted_for_followup` items and how do I handle them?
+
+Some stages — red-team (Stage 4c), build QA (Stage 4), and peer-review (Stage 5) — write `noted_for_followup[]` to their gate for findings that are real but non-blocking. They're explicitly deferred by the agent. Left unaddressed, they frequently surface as peer-review CHANGES_REQUESTED or QA blockers.
+
+Use `devteam advise` to triage them:
+
+```bash
+devteam advise                               # view all unresolved items with risk classification
+devteam advise --apply AC-11=B:PROJ-99,RT-01=A   # classify each
+```
+
+Options per item:
+- **`=A` (scaffold)** on a `QA_BLOCKER` — dispatch QA to add a `@wip` test stub; prints the command to run
+- **`=B:TICKET` (defer)** — writes `DEFERRED: AC-N — ticket PROJ-99` to `pipeline/context.md`; QA skips coverage check for that AC
+- **`=C` (amend)** — writes `BRIEF-AMEND-NEEDED:` for PM to scope-down the AC before peer-review
+- **`=D` (nothing)** — records `NOTED:` and moves on; QA will block if the AC is unmet
+- **`=B` (known-flaky)** on a `QA_NOISE` item — writes `KNOWN-FLAKY:`; QA retries once before counting a failure
+
+Run `devteam advise` after red-team PASS and before QA augmentation or peer-review. See [fix-and-retry.md § Case 11](runbooks/fix-and-retry.md#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages) for the full workflow.
+
+### When should I run `devteam advise` relative to other stages?
+
+**Recommended timing:** after red-team PASS and before QA augmentation or peer-review dispatch.
+
+```
+Red-team → PASS
+  ↓
+devteam advise --apply ...    ← your call; encode decisions in context.md
+  ↓
+QA augmentation (if needed)
+  ↓
+devteam stage peer-review     ← reviewers see your decisions in context.md
+```
+
+You can also run `devteam advise` any time `devteam next` emits a ⚠ line. If you're in CI and don't want the advisory warning, pass `--skip-advise` to `devteam next`.
+
+After peer-review, you can advise again on any `noted_for_followup` items peer-review itself produced. There is no penalty for running it multiple times — the advisory section in `context.md` is replaced atomically on each `--apply` call.
+
 ### What's the rough cost of a full 18-stage pipeline run?
 
 Highly variable — depends on feature complexity, model tier, and how many retries occur. Very rough benchmarks on a medium-complexity feature (1-2 weeks of engineering work):

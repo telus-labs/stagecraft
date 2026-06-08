@@ -2,7 +2,7 @@
 
 `devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook covers what to read, how to fix, how to re-run, and how to confirm the fix took.
 
-Most `fix-and-retry` cases come from one of seven stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **preflight** (Stage 4e), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review fails in two distinct shapes: with reviewer objections (Case 4) or with no objections but insufficient approvals (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of seven stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **preflight** (Stage 4e), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review fails in two distinct shapes: with reviewer objections (Case 4) or with no objections but insufficient approvals (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** and the **advisory triage step** (`devteam advise`) that classifies deferred findings before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md).
 
@@ -19,6 +19,7 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 - [Case 8: Consistency drift](#case-8-consistency-drift--devteam-consistency-analyze-exits-non-zero)
 - [Case 9: Verification-beyond-tests FAIL](#case-9-verification-beyond-tests-stage-6d-fail--blocking_findings-non-empty)
 - [Case 10: Preflight FAIL](#case-10-preflight-stage-4e-fail--committed-ignored-files-or-broken-import-path)
+- [Case 11: Advisory triage — noted\_for\_followup before downstream stages](#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages)
 - [Common gotchas](#common-gotchas)
 - [After resolution](#after-resolution)
 
@@ -194,7 +195,21 @@ QA does in this mode and what the updated gate looks like.
 
 ### What about the `noted_for_followup` items?
 
-The red-team gate's `noted_for_followup[]` is non-blocking by design. Don't try to fix those items in the patch cycle — bundling them in defeats the scoped re-run and they're explicitly deferred by the red-team agent. Each entry has a `track_for` field describing where it should land (ticket, ADR amendment, deploy README note, brief amendment). Handle these as separate work items.
+The red-team gate's `noted_for_followup[]` is non-blocking by design. Don't try to fix those items in the patch cycle — bundling them in defeats the scoped re-run and they're explicitly deferred by the red-team agent.
+
+**Triage them with `devteam advise` before advancing to QA augmentation or peer-review:**
+
+```bash
+devteam advise
+# Shows each item with risk classification and ranked options
+
+devteam advise --apply RT-01=B:INFRA-445,RT-02=A,AC-11=C
+# RT-01: DEFERRED with ticket INFRA-445
+# RT-02: NOTED (no action)
+# AC-11: BRIEF-AMEND-NEEDED (flags PM to scope-down the AC)
+```
+
+Decisions are written to `pipeline/context.md`. QA respects `DEFERRED:` entries (skips coverage checks for those ACs); peer-review role briefs note `BRIEF-AMEND-NEEDED:` entries so reviewers know a brief amendment is pending. See [Case 11](#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages) for the full workflow and option vocabulary.
 
 ---
 
@@ -891,7 +906,7 @@ devteam preflight
 devteam stage peer-review --headless
 ```
 
-The warning about `noted_for_followup` items is informational — it means some red-team deferred items will likely come up in peer-review. Addressing them now avoids a round of CHANGES_REQUESTED; leaving them means the reviewer will flag them and you'll go through Case 4.
+The warning about `noted_for_followup` items is informational — it means some red-team deferred items will likely come up in peer-review. Run `devteam advise` to classify each item and encode your decision before dispatching reviewers (see [Case 11](#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages)). Leaving them unaddressed means reviewers will flag them as CHANGES_REQUESTED and you'll go through Case 4.
 
 ### What the preflight gate looks like on PASS
 
@@ -913,6 +928,104 @@ For the broader vocabulary (`BLOCKER:`, `## Verify`, `PRINCIPAL-RULING:`, etc.),
 For escalation-shaped halts (`ESCALATE`, vetoes, decision_needed), see [`escalation.md`](escalation.md).
 
 For deferred items that didn't block the pipeline but need tickets, see [`open-followups.md`](open-followups.md) — `jq .open_followups pipeline/gates/stage-09.json` is the starting point.
+
+---
+
+## Case 11: Advise workflow — triage follow-up items before downstream stages
+
+This is not a `fix-and-retry` case — no gate is FAIL. It is a **decision workflow** for
+`noted_for_followup[]` items from red-team, build QA, or peer-review that are non-blocking
+now but will cause churn later if left unaddressed.
+
+**When to run it:** after red-team PASS/WARN and before QA augmentation or peer-review.
+Also valid after any stage that emits a `⚠` advisory from `devteam next`.
+
+### Step 1 — View unresolved items
+
+```bash
+devteam advise
+```
+
+Output:
+
+```
+Follow-up items in completed stage gates:
+
+  AC-11 — Docker live-path testing  [stage-04.qa]
+    Risk: QA BLOCKER — no @AC-11 scenario in spec.feature
+    Options:
+      [A] scaffold   — dispatch QA to add a @wip test stub   ← recommended
+      [B] defer      — mark DEFERRED in pipeline/context.md (--apply AC-11=B:PROJ-XYZ)
+      [C] amend      — flag for PM to remove AC-11 from the brief
+      [D] nothing    — advance; QA will block
+
+  RT-01 — auth check missing on POST /estimate  [stage-04c.json]
+    Risk: PEER-REVIEW RISK — severity high, no AC ref
+    Options:
+      [A] defer      — acknowledge in pipeline/context.md  ← recommended
+      [B] nothing    — advance; red-team item may appear in CHANGES_REQUESTED
+      [C] amend      — flag for PM to scope-down the related requirement
+
+Apply: devteam advise --apply AC-11=A,RT-01=A
+```
+
+### Step 2 — Apply decisions
+
+```bash
+devteam advise --apply AC-11=B:PROJ-99,RT-01=A,AC-12=B
+#   AC-11 → DEFERRED: AC-11 — ticket PROJ-99  (written to context.md)
+#   RT-01 → NOTED: RT-01 — operator: no action
+#   AC-12 → KNOWN-FLAKY: AC-12
+```
+
+For `scaffold` (option A on a QA_BLOCKER): the command prints the dispatch command but does not run it automatically. Copy and run it:
+
+```bash
+devteam advise --apply AC-11=A
+# ✓ AC-11 — scaffold
+#   Scaffold commands to run:
+#     $ devteam stage build --workstream qa --patch --skip-preflight
+```
+
+### Step 3 — Confirm all addressed
+
+```bash
+devteam advise
+# [advise] All follow-up items addressed.
+
+devteam next
+# ▶️  run-stage  pre-review (stage-04a)   ← no ⚠ warning
+```
+
+### Option reference
+
+| Option letter | Action | Marker written | Effect downstream |
+|---|---|---|---|
+| `=A` (on QA_BLOCKER) | scaffold | `SCAFFOLD-PENDING:` | Run the printed dispatch command; QA sees the test when it re-runs |
+| `=B:TICKET` | defer | `DEFERRED: AC-N — ticket TICKET` | QA skips coverage check for this AC; retrospective records the deferral |
+| `=C` | amend | `BRIEF-AMEND-NEEDED:` | PM reads and amends brief at next stage where PM reads context.md |
+| `=D` | nothing | `NOTED: … operator: no action` | Acknowledged; no downstream adjustment |
+| `=A` (on QA_NOISE) | nothing | `NOTED: … operator: no action` | Acknowledged |
+| `=B` (on QA_NOISE) | known-flaky | `KNOWN-FLAKY:` | QA retries once before counting as FAIL |
+
+### Worked example
+
+Token-estimator build gate has three noted items after build passes:
+
+```bash
+devteam advise --apply AC-11=A,AC-10=B:PROJ-99,AC-12=B
+# ✓ AC-11 — scaffold (run: devteam stage build --workstream qa --patch --skip-preflight)
+# ✓ AC-10 — DEFERRED: AC-10 — ticket PROJ-99
+# ✓ AC-12 — KNOWN-FLAKY: AC-12
+
+devteam advise    # All follow-up items addressed.
+devteam next      # ▶️  run-stage  pre-review (stage-04a)
+```
+
+QA later runs and sees `DEFERRED: AC-10` in context.md — skips the AC-10 coverage check.
+It also sees `KNOWN-FLAKY: AC-12` — retries AC-12's test once before counting a failure.
+AC-11's test scaffold (committed by the qa workstream after the dispatch) gives QA a real
+test to pass.
 
 For Stage 8 (deploy) failures, see [`deploy-failure.md`](deploy-failure.md) — covers failure classification, adapter-specific diagnostics, and the rollback procedure.
 

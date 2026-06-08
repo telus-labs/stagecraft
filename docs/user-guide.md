@@ -134,6 +134,54 @@ devteam next            # "what's next?"
 devteam stage <name>    # "run that stage"
 ```
 
+A third command becomes relevant after any stage that produces deferred findings:
+
+```bash
+devteam advise          # "triage the noted_for_followup items"
+```
+
+### Follow-up item triage
+
+After the red-team (Stage 4c), any build workstream (Stage 4), or peer-review (Stage 5) writes `noted_for_followup[]` items to its gate, `devteam next` emits a warning:
+
+```
+⚠  2 unresolved follow-up items may block downstream stages — run `devteam advise` for options
+▶️  run-stage  pre-review (stage-04a)
+```
+
+The warning is advisory — it never blocks `next`. But unaddressed `QA_BLOCKER` items will cause QA to fail on the exact AC they reference.
+
+Run `devteam advise` for the full panel:
+
+```bash
+devteam advise
+
+# Follow-up items in completed stage gates:
+#
+#   AC-11 — Docker live-path testing  [stage-04.qa]
+#     Risk: QA BLOCKER — no @AC-11 scenario in spec.feature
+#     Options:
+#       [A] scaffold  — dispatch QA to add a @wip test stub   ← recommended
+#       [B] defer     — mark DEFERRED in pipeline/context.md (--apply AC-11=B:PROJ-XYZ)
+#       [C] amend     — flag for PM to remove AC-11 from the brief
+#       [D] nothing   — advance; QA will block
+```
+
+Apply your decisions:
+
+```bash
+devteam advise --apply AC-11=A,AC-10=B:PROJ-99,AC-12=A
+# ✓ AC-11 — scaffold (run the printed command to dispatch QA)
+# ✓ AC-10 — DEFERRED: AC-10 — ticket PROJ-99 written to context.md
+# ✓ AC-12 — NOTED: operator: no action
+```
+
+Decisions are written into the `<!-- devteam:advise -->` section of `pipeline/context.md`. Downstream stages respect them: QA skips coverage checks for `DEFERRED:` items; QA retries `KNOWN-FLAKY:` tests once before failing; peer-review notes `BRIEF-AMEND-NEEDED:` entries in reviewer briefs.
+
+**When to run it:** after red-team PASS and before QA augmentation or peer-review. You can also run it any time you notice a `⚠` line from `devteam next`.
+
+See [`rules/advise.md`](../rules/advise.md) for the full option vocabulary and [`docs/runbooks/fix-and-retry.md` § Case 11](runbooks/fix-and-retry.md#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages) for worked examples.
+
 ### What is a gate?
 
 A **gate** is a JSON file the model writes to `pipeline/gates/` at the end of each stage. It's the contract between stages: the orchestrator reads it to decide whether the pipeline can advance, and the validator checks it for correctness. Required fields on every gate:
@@ -797,7 +845,7 @@ The `/audit` slash command covers only one of four useful audit modes:
 | **Code audit** | "Is the code itself clean, secure, performant, well-documented?" | `/audit` or `/audit-quick` (claude-code) — see "How to invoke it" above. On other hosts, dispatch the `auditor` role with the `audit` skill. Output: `docs/audit/00–10`. |
 | **Process audit** | "Did the pipeline that produced this feature hold up? Any rubber-stamping, skipped reviews, normalized warnings, deferred items that never got tracked?" | Read `pipeline/` skeptically; cross-check with `devteam summary`, `devteam verify stage-04a`, `devteam verify stage-06`. No CLI verdict; this is a manual read. |
 | **Consistency audit** | "Does the implementation still match the brief / design / spec? Has anything drifted since ship?" | `devteam spec verify --strict` (brief.md ↔ spec.feature ↔ test-report.md), `devteam reproduce <stage-id>` (gate fingerprint check), `devteam replay <stage-id>` (re-run with current config + diff). |
-| **Threat audit** | "Are the threat assumptions from when this was built still valid? New endpoints, new IAM policies, new dependencies?" | `devteam stage red-team --headless` against the current code. Anything new, or anything that was `noted_for_followup` and still isn't fixed, surfaces. |
+| **Threat audit** | "Are the threat assumptions from when this was built still valid? New endpoints, new IAM policies, new dependencies?" | `devteam stage red-team --headless` against the current code. Anything new, or anything that was `noted_for_followup` and still isn't fixed, surfaces. Follow with `devteam advise` to triage any new deferred findings. |
 
 Choose based on what you need to know:
 
@@ -812,7 +860,7 @@ The process audit is unique to Stagecraft-built features and has no CLI tool. It
 
 - **Did every gate genuinely pass, or did anything get rubber-stamped?** Read each `pipeline/gates/stage-NN.json` and the corresponding artifact. A PASS with a sparse `## Verify` section in `pipeline/pr-*.md` is a yellow flag. Stage 4a and Stage 6 are orchestrator-stamped. Run `devteam verify stage-04a` and `devteam verify stage-06` to re-stamp on demand; if the current code still passes, the recorded PASS was real.
 - **Are the warnings still defensible?** `jq '.warnings[]' pipeline/gates/*.json` lists every warning that survived to PASS. SUGGESTION-flavored warnings are fine; CONCERN-flavored ones that never got resolved to a ticket are technical debt that's been quietly normalized.
-- **Did red-team's `noted_for_followup` items get tracked anywhere?** `jq '.noted_for_followup' pipeline/gates/stage-04c.json`. Each entry has a `track_for` field saying where it should land (ticket, ADR amendment, runbook note). Grep for those references. If nothing exists, the deferral was theoretical.
+- **Did red-team's `noted_for_followup` items get tracked anywhere?** `jq '.noted_for_followup' pipeline/gates/stage-04c.json`. Each entry has a `track_for` field saying where it should land (ticket, ADR amendment, runbook note). If `devteam advise` was run during the pipeline, check `pipeline/context.md` for the advisory section — each item's decision is recorded there (`DEFERRED:`, `NOTED:`, `KNOWN-FLAKY:`, etc.). If nothing exists, the deferral was theoretical.
 - **Did peer review actually exercise the matrix?** `grep -c "^## Review of " pipeline/code-review/by-*.md` should hit each non-self area at least twice (matrix) or once (scoped/nano). If a `by-<reviewer>.md` has only one section, that reviewer's coverage was thin.
 - **Did the retrospective land anything?** `pipeline/retrospective.md` should cite specific incidents from the run. A generic "tests pass and we shipped" retro means the team didn't reflect.
 
