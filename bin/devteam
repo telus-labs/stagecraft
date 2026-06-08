@@ -454,6 +454,124 @@ function cmdPreflight(argv) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// cmdAdvise — devteam advise [--apply <selections>] [--json]
+//
+// Surfaces noted_for_followup[] items from completed gate files, classifies
+// their downstream risk (QA_BLOCKER, PEER_REVIEW_RISK, QA_NOISE, INFO),
+// and optionally applies operator selections to pipeline/context.md.
+//
+// Apply format: --apply AC-11=A,AC-10=B:PROJ-123,AC-12=A
+//   <itemId>=<optionLetter>[:<ticketId>]
+// ---------------------------------------------------------------------------
+function cmdAdvise(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
+
+  // Parse --apply selections into Map<itemId, { action, ticketId }>
+  let applyMap = new Map();
+  if (flags.apply) {
+    const CLASS_TO_ACTION = {
+      QA_BLOCKER:       ["scaffold", "defer", "amend", "nothing"],
+      PEER_REVIEW_RISK: ["defer", "nothing", "amend"],
+      QA_NOISE:         ["nothing", "known-flaky", "fix-now"],
+      INFO:             ["nothing", "defer"],
+    };
+    for (const sel of String(flags.apply).split(",")) {
+      const [lhs, rhs = "A"] = sel.trim().split("=");
+      const itemId = lhs.trim();
+      const [letter, ticketId] = rhs.trim().split(":");
+      if (!itemId || !letter) continue;
+      applyMap.set(itemId, { letter: letter.toUpperCase(), ticketId });
+    }
+  }
+
+  const result = runAdvise(cwd, { checkOnly: applyMap.size === 0 && !flags.apply });
+
+  // If --apply was given, resolve option letters to actions using the item's generated options
+  if (applyMap.size > 0) {
+    const resolvedMap = new Map();
+    for (const [itemId, { letter, ticketId }] of applyMap) {
+      const match = result.items.find((r) => r.item.id === itemId);
+      if (!match) {
+        console.error(`[advise] Unknown item id "${itemId}" — skipping`);
+        continue;
+      }
+      const opt = match.options.find((o) => o.id === letter);
+      if (!opt) {
+        console.error(`[advise] Option "${letter}" not valid for "${itemId}" — skipping`);
+        continue;
+      }
+      resolvedMap.set(itemId, { action: opt.action, ticketId });
+    }
+
+    if (resolvedMap.size > 0) {
+      const applied = runAdvise(cwd, { apply: resolvedMap });
+      if (flags.json) { console.log(JSON.stringify(applied, null, 2)); return; }
+      for (const r of applied.items) {
+        if (resolvedMap.has(r.item.id)) {
+          const { action } = resolvedMap.get(r.item.id);
+          console.log(`  ✓ ${r.item.id} — ${action}${r.addressed ? "" : " (SCAFFOLD-PENDING: run command shown above)"}`);
+        }
+      }
+      if (applied.scaffoldCommands && applied.scaffoldCommands.length > 0) {
+        console.log("\n  Scaffold commands to run:");
+        for (const cmd of applied.scaffoldCommands) console.log(`    $ ${cmd}`);
+      }
+      if (applied.unresolvedBlockers === 0) {
+        console.log("\n  All follow-up items addressed.");
+        process.exit(0);
+      } else {
+        console.log(`\n  ${applied.unresolvedBlockers} unresolved BLOCKER item(s) remain.`);
+        process.exit(1);
+      }
+    }
+    return;
+  }
+
+  if (flags.json) { console.log(JSON.stringify(result, null, 2)); return; }
+
+  if (result.items.length === 0) {
+    console.log("[advise] No noted_for_followup items found in pipeline gates.");
+    return;
+  }
+
+  const allAddressed = result.items.every((r) => r.addressed);
+  if (allAddressed) {
+    console.log("[advise] All follow-up items addressed.");
+    return;
+  }
+
+  const riskLabel = { QA_BLOCKER: "QA BLOCKER", PEER_REVIEW_RISK: "PEER-REVIEW RISK", QA_NOISE: "QA NOISE", INFO: "INFO" };
+  console.log("\nFollow-up items in completed stage gates:\n");
+
+  for (const { item, classification, addressed, options } of result.items) {
+    if (addressed) {
+      console.log(`  ${item.id} — ${item.summary || "(no summary)"}  [${item._source}]`);
+      console.log(`    Status: ADDRESSED\n`);
+      continue;
+    }
+    console.log(`  ${item.id} — ${item.summary || "(no summary)"}  [${item._source}]`);
+    console.log(`    Risk: ${riskLabel[classification] || classification}`);
+    console.log("    Options:");
+    for (const opt of options) {
+      const rec = opt.recommended ? "  ← recommended" : "";
+      console.log(`      [${opt.id}] ${opt.label.padEnd(12)} — ${opt.description}${rec}`);
+    }
+    console.log();
+  }
+
+  const pending = result.items.filter((r) => !r.addressed);
+  const selExample = pending.map((r) => {
+    const rec = r.options.find((o) => o.recommended);
+    return `${r.item.id}=${rec ? rec.id : "A"}`;
+  }).join(",");
+  console.log(`Apply: devteam advise --apply ${selExample}\n`);
+
+  process.exit(result.unresolvedBlockers > 0 ? 1 : 0);
+}
+
 function cmdValidate(argv) {
   const { flags } = parseFlags(argv);
   if (flags.cwd) process.chdir(flags.cwd);
@@ -464,6 +582,27 @@ function cmdValidate(argv) {
 function cmdNext(argv) {
   const { next } = getOrchestrator();
   const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+
+  // Advisory check — non-blocking; warn when unresolved BLOCKER-risk follow-up items exist
+  if (!flags.json && !flags["skip-advise"]) {
+    try {
+      const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
+      const { items } = runAdvise(cwd, { checkOnly: true });
+      const pending = items.filter(
+        (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK")
+      );
+      if (pending.length > 0) {
+        process.stderr.write(
+          `⚠  ${pending.length} unresolved follow-up item(s) may block downstream stages` +
+          ` — run \`devteam advise\` for options\n`
+        );
+      }
+    } catch {
+      // Advisory check failure must never break `devteam next`
+    }
+  }
+
   const result = next({ cwd: flags.cwd });
   if (flags.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -2229,6 +2368,7 @@ function main() {
     case "init":   return cmdInit(rest);
     case "stage":    return cmdStage(rest);
     case "preflight": return cmdPreflight(rest);
+    case "advise":   return cmdAdvise(rest);
     case "next":     return cmdNext(rest);
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);

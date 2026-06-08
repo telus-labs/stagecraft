@@ -130,6 +130,25 @@ Items consciously deferred during escalation resolution. See [escalation runbook
 - **Format:** Bulleted list; each entry names the item, why it was deferred, and a ticket reference.
 - **Read by:** Stage 9 retrospective. Surfaced in the retro doc so the pattern of deferrals is visible across runs.
 
+## Advisory decision markers (devteam advise — managed)
+
+Written into the `<!-- devteam:advise:begin/end -->` section of `pipeline/context.md` by
+`devteam advise --apply`.  The entire section is replaced atomically on each apply — do not
+hand-edit.  See [`rules/advise.md`](../rules/advise.md) for full option semantics.
+
+| Marker | Format | Meaning |
+|---|---|---|
+| `DEFERRED:` | `DEFERRED: AC-N — <summary> — ticket <ID>` | AC intentionally deferred; ticket reference signals QA to skip coverage check |
+| `WONTFIX:` | `WONTFIX: AC-N — <summary>` | AC explicitly removed from delivery scope |
+| `NOTED:` | `NOTED: <item-id> — <summary> — operator: no action` | Acknowledged; operator chose to do nothing |
+| `KNOWN-FLAKY:` | `KNOWN-FLAKY: <item-id> — <summary>` | Test reliability issue; QA retries once before counting as FAIL |
+| `BRIEF-AMEND-NEEDED:` | `BRIEF-AMEND-NEEDED: AC-N — operator: scope-down or remove` | PM flag to amend brief before peer-review |
+| `SCAFFOLD-PENDING:` | `SCAFFOLD-PENDING: AC-N — <summary>` | Scaffold-test chosen; operator must run the printed command to dispatch the agent |
+
+**Read by:** Stage 6 (QA) respects `DEFERRED:` and `KNOWN-FLAKY:`.  Stage 5 (peer-review) role
+briefs note `BRIEF-AMEND-NEEDED:` entries as pending brief amendments.  Stage 9 (retrospective)
+harvests all advisory markers as part of the "deferrals" pattern.
+
 ## Auto-injected sections (validator-managed)
 
 These appear/disappear automatically based on gate state. Don't hand-edit.
@@ -213,7 +232,11 @@ Marks an artifact to skip persistent memory ingest.
 | Reviewer verdict | same | `REVIEW: APPROVED` or `REVIEW: CHANGES REQUESTED` |
 | Inline escalation request | review file or context | `ESCALATE: <reason>` |
 | Principal's binding ruling | `pipeline/context.md` § Principal Rulings | `PRINCIPAL-RULING: <topic> → <decision>` |
-| Conscious deferral | `pipeline/context.md` § Deferred follow-ups | bulleted list w/ ticket refs |
+| Conscious deferral (escalation) | `pipeline/context.md` § Deferred follow-ups | bulleted list w/ ticket refs |
+| Defer a follow-up AC (with ticket) | `pipeline/context.md` advisory section | `devteam advise --apply AC-N=B:PROJ-XYZ` |
+| Mark follow-up as no action | `pipeline/context.md` advisory section | `devteam advise --apply <id>=A` (nothing) |
+| Mark test as expected-flaky | `pipeline/context.md` advisory section | `devteam advise --apply <id>=B` (known-flaky) |
+| Flag AC for PM to amend | `pipeline/context.md` advisory section | `devteam advise --apply <id>=C` (amend) |
 | Dev's non-obvious choice | `pipeline/context.md` § Assumptions | bulleted list |
 | Brief amendment mid-run | `pipeline/context.md` § Brief Changes | bulleted diff-style |
 | Dev's plan before editing | `pipeline/pr-<area>.md` § Plan | numbered with `verify:` per step |
@@ -229,3 +252,4 @@ Marks an artifact to skip persistent memory ingest.
 - [`rules/coding-principles.md`](../rules/coding-principles.md) — what the dev-side markers (`QUESTION:`, `CONCERN:`, `## Plan`, `## Assumptions`) enforce
 - [`core/hooks/approval-derivation.js`](../core/hooks/approval-derivation.js) — how `REVIEW:` markers become Stage 5 gates
 - [`core/hooks/secret-scan.js`](../core/hooks/secret-scan.js) — how `devteam-allow-secret:` is honored
+- [`rules/advise.md`](../rules/advise.md) — advisory system: classifying and acting on noted_for_followup[] items
