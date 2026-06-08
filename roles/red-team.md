@@ -119,7 +119,7 @@ For each scenario you find, rate:
 - **In scope for this PR:** `must-fix` / `should-fix` / `out-of-scope-but-track`
 - **Assigned to:** which build workstream owns the file; set as `assigned_to` on the finding (see [Workstream attribution](#workstream-attribution-required-before-writing-the-gate) above)
 
-`must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `out-of-scope-but-track` items go into the gate's `noted_for_followup` array as structured objects (see `.devteam/rules/gates.md §noted_for_followup[]`).
+`must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `should-fix` and `out-of-scope-but-track` items both go into the gate's `noted_for_followup` array as structured objects (see `.devteam/rules/gates.md §noted_for_followup[]`) — this is what surfaces them in `devteam advise`.
 
 For each `noted_for_followup` item, choose a `track_for` value that routes it to the right destination:
 
@@ -135,8 +135,8 @@ Items with `track_for: "ticket"` appear in the PM sign-off gate (`open_followups
 
 ## Status logic
 
-- **PASS** — no `must-fix` items. `should-fix` items become warnings.
-- **WARN** — `should-fix` items but no `must-fix`. Pipeline advances; warnings recorded.
+- **PASS** — no `must-fix` items. `should-fix` items become warnings (and go in `noted_for_followup`).
+- **WARN** — `should-fix` items but no `must-fix`. Pipeline advances; items recorded in `noted_for_followup` for `devteam advise` to route.
 - **FAIL** — at least one `must-fix` item. Implementer must address. Re-run after fix.
 - **ESCALATE** — you don't escalate. Severity-and-blast-radius decisions are the Principal's, not yours. If you find something that you can't tell whether it's in-scope, write it in `noted_for_followup` with a question and let the Principal rule via stage-05 escalation.
 

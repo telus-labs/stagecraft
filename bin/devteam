@@ -52,7 +52,7 @@ Commands:
         [--timeout-ms N]             host CLI non-interactively (claude --print,
         [--patch [--from <stage>]]   codex exec) and reports exit codes +
         [--skip-completed]           gate paths. --timeout-ms caps each
-                                   workstream's wall-clock (default 600000,
+        [--workstream <role>]        workstream's wall-clock (default 600000,
                                    i.e. 10 min); pass 0 to disable.
                                    --patch scopes build agents to the patch
                                    items from the named stage's gate (reads
@@ -60,6 +60,10 @@ Commands:
                                    back to blockers[]); default: red-team.
                                    --skip-completed skips dispatching any
                                    workstream whose gate file already exists.
+                                   --workstream <role> dispatches only the
+                                   named role; repeat for multiple. All other
+                                   workstreams are left untouched (their
+                                   existing gate files are preserved).
   next [--json]                    Inspect pipeline/gates/ and report what
                                    to do next: run a stage, continue a
                                    partial multi-role stage, merge, fix a
@@ -236,6 +240,7 @@ function parseFlags(argv) {
     if (a === "--patch")          { flags.patch         = true;      continue; }
     if (a === "--from")           { flags.from          = argv[++i]; continue; }
     if (a === "--skip-completed") { flags.skipCompleted = true;      continue; }
+    if (a === "--workstream")    { if (!flags.workstream) flags.workstream = []; flags.workstream.push(argv[++i]); continue; }
     if (a === "--port")    { flags.port    = Number(argv[++i]); continue; }
     if (a === "--open")    { flags.open    = true;      continue; }
     if (a === "--limit")   { flags.limit   = argv[++i]; continue; }
@@ -374,6 +379,16 @@ function cmdStage(argv) {
     return;
   }
   const result = runStage(name, flags);
+  if (flags.workstream && flags.workstream.length > 0) {
+    const filter = new Set(flags.workstream);
+    const kept = result.workstreams.filter(ws => filter.has(ws.role));
+    if (kept.length === 0) {
+      console.error(`devteam: --workstream filter matched no roles. Available: ${result.roles.join(", ")}`);
+      process.exit(2);
+    }
+    result.workstreams = kept;
+    result.roles = kept.map(ws => ws.role);
+  }
   printStagePreamble(result, flags);
   for (const ws of result.workstreams) {
     console.log(`\n────────  workstream: ${ws.role}  (host: ${ws.host})  ────────\n`);

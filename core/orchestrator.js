@@ -250,7 +250,19 @@ async function runStageHeadless(stageName, opts = {}) {
     "devteam.stage.name": stageName,
     "devteam.workstream_count": plan.workstreams.length,
   }, async () => {
-    const results = await Promise.all(plan.workstreams.map(async (ws) => {
+    let workstreams = plan.workstreams;
+    if (opts.workstream && opts.workstream.length > 0) {
+      const filter = new Set(opts.workstream);
+      workstreams = workstreams.filter(ws => filter.has(ws.role));
+      if (workstreams.length === 0) {
+        throw new Error(
+          `--workstream filter matched no roles in stage "${stageName}". ` +
+          `Available: ${plan.workstreams.map(w => w.role).join(", ")}`,
+        );
+      }
+      process.stderr.write(`[devteam] --workstream: dispatching ${workstreams.map(w => w.role).join(", ")} only\n`);
+    }
+    const results = await Promise.all(workstreams.map(async (ws) => {
       if (opts.skipCompleted) {
         const gateFile = path.join(gatesDir, `${ws.descriptor.workstreamId}.json`);
         if (fs.existsSync(gateFile)) {
