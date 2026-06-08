@@ -2,7 +2,7 @@
 
 `devteam next` reports `fix-and-retry`. A gate is FAIL. This runbook covers what to read, how to fix, how to re-run, and how to confirm the fix took.
 
-Most `fix-and-retry` cases come from one of six stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review fails in two distinct shapes: with reviewer objections (Case 4) or with no objections but insufficient approvals (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
+Most `fix-and-retry` cases come from one of seven stages: **red-team** (Stage 4c), **QA-within-build** (Stage 4 QA workstream), **pre-review** (Stage 4a), **preflight** (Stage 4e), **peer-review** (Stage 5), **accessibility-audit** (Stage 6b), or **verification-beyond-tests** (Stage 6d). Peer-review fails in two distinct shapes: with reviewer objections (Case 4) or with no objections but insufficient approvals (Case 5, a quorum miss). After the red-team gate resolves, Case 1 also covers the **QA augmentation step** that adds regression tests for each red-team fix before peer-review begins. The general flow is the same across all cases; the per-stage specifics differ.
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md).
 
@@ -18,6 +18,7 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 - [Case 7: Accessibility audit FAIL](#case-7-accessibility-audit-stage-6b-fail--blockers-non-empty)
 - [Case 8: Consistency drift](#case-8-consistency-drift--devteam-consistency-analyze-exits-non-zero)
 - [Case 9: Verification-beyond-tests FAIL](#case-9-verification-beyond-tests-stage-6d-fail--blocking_findings-non-empty)
+- [Case 10: Preflight FAIL](#case-10-preflight-stage-4e-fail--committed-ignored-files-or-broken-import-path)
 - [Common gotchas](#common-gotchas)
 - [After resolution](#after-resolution)
 
@@ -295,13 +296,17 @@ devteam next   # expect: ▶️ run-stage qa (stage-06) or next track stage
 > holds the old findings. Run `devteam merge peer-review` and then `devteam next`
 > again — the blockers should be gone.
 
+> **Cross-stage flag.** The merged `stage-05.json` `warnings[]` may contain an entry like `[cross-stage] N red-team item(s) were noted_for_followup at stage-04c`. This means the peer-review blockers were pre-flagged by red-team as deferred items. Consult `stage-04c.json` `noted_for_followup[]` — each item has a `fix` field with the exact resolution. Addressing them there typically resolves the peer-review objection in the same pass.
+
 If two rounds of reviews still disagree, that's an [escalation](escalation.md) — `REVIEW-ESCALATED:` lands in context.md and Principal rules.
 
 ---
 
 ## Case 5: Peer-review (Stage 5) FAIL with no objections — quorum miss
 
-A subtler Stage 5 failure: the merged `stage-05.json` is FAIL, but no reviewer wrote `REVIEW: CHANGES REQUESTED` and no `BLOCKER:` line exists anywhere. The cause is a **missing area review** — one of the four areas didn't accumulate enough approvals to reach `required_approvals`, even though every review file that *was* written is APPROVED.
+A subtler Stage 5 failure: the merged `stage-05.json` is FAIL, `changes_requested[]` is empty, and no `BLOCKER:` line exists anywhere. The cause is a **missing area review** — one of the four areas didn't accumulate enough approvals to reach `required_approvals`, even though every review file that *was* written is APPROVED.
+
+> **Distinguish from Case 4.** The merged `stage-05.json` now carries a `changes_requested[]` array promoted from per-area gates. If that array is non-empty, a reviewer objected — go to Case 4. If `changes_requested` is empty and the status is FAIL, this is a quorum miss — continue here.
 
 ### Vocabulary you need first
 
@@ -785,6 +790,123 @@ cat pipeline/gates/stage-06d.json | jq '{status, blocking_findings, methods_atte
 - **Surviving mutants point to missing assertions, not to adding more tests.** The question is always "what assertion on existing behavior did I forget?" not "should I add a new test function?"
 
 ---
+
+## Case 10: Preflight (Stage 4e) FAIL — committed ignored files or broken import path
+
+`devteam stage peer-review` auto-runs preflight (stage-04e) before dispatching reviewers. If preflight is FAIL the command exits immediately with the blockers printed to stderr. This is the gate that caught what peer reviewers would otherwise flag as BLOCKERs in the next stage.
+
+### Diagnosis
+
+```bash
+# The stage peer-review command already printed the blockers to stderr.
+# Read the full gate for the structured form:
+cat pipeline/gates/stage-04e.json | jq '{status, blockers, git_hygiene_pass, import_path_pass, deferred_items_count}'
+```
+
+There are two blocker shapes:
+
+**A. `git_hygiene_pass: false` — committed-but-ignored files**
+
+```bash
+# Which files are committed but now gitignored?
+git ls-files --ignored --exclude-standard
+# Typical output: src/backend/__pycache__/main.cpython-312.pyc
+#                 src/backend/__pycache__/
+```
+
+**B. `import_path_pass: false` — broken test import path**
+
+```bash
+# Which conftest.py has the bad sys.path.insert?
+grep -rn 'sys\.path\.insert(0, ".")' src/tests/ tests/ conftest.py 2>/dev/null
+# Typical output: src/tests/conftest.py:9: sys.path.insert(0, ".")
+```
+
+### Fix A — remove committed ignored files
+
+```bash
+# 1. List committed-but-ignored files
+FILES=$(git ls-files --ignored --exclude-standard)
+
+# 2. Remove from git index (not from disk)
+git rm --cached $FILES
+
+# 3. Verify .gitignore covers them
+echo "$FILES" | git check-ignore --stdin --verbose
+
+# 4. Commit the removal
+git add .gitignore   # if you just added the rule
+git commit -m "chore: remove committed ignored files from git index"
+```
+
+If the files shouldn't exist at all (compiled artifacts, temp files):
+```bash
+# Also delete from disk
+git rm -rf $FILES
+git commit -m "chore: remove compiled artifacts"
+```
+
+### Fix B — correct the test import path
+
+The pattern `sys.path.insert(0, ".")` inserts the project root, where there is no `backend/` package. The real backend is at `src/backend/`, so `src/` must be on `sys.path`.
+
+```bash
+# In src/tests/conftest.py (or wherever the bad line is):
+# BEFORE: sys.path.insert(0, ".")
+# AFTER:  sys.path.insert(0, "src")
+```
+
+After the fix, verify the import resolves:
+```bash
+cd <project-root>
+python3 -c "import sys; sys.path.insert(0, 'src'); from backend.main import app; print('OK')"
+```
+
+### Re-run preflight and peer-review
+
+```bash
+# After fixing the blocker(s):
+devteam preflight          # confirm PASS
+devteam stage peer-review  # auto-skips preflight (stage-04e.json already PASS)
+```
+
+### Worked example: token-estimator demo
+
+Real run. `devteam stage peer-review` printed:
+```
+[devteam] running preflight checks (stage-04e) before peer-review…
+[devteam] preflight FAIL — 1 blocker(s) must be fixed before peer-review:
+  BLOCKER: src/tests/conftest.py:9: sys.path.insert(0, ".") inserts the project root, not src/ …
+           Fix: change to sys.path.insert(0, "src") so imports resolve to production code.
+```
+
+One-line fix in `conftest.py`. Then:
+```bash
+devteam preflight
+# [preflight] PASS — all checks clean (1 warning(s))
+# WARN: 7 red-team item(s) were noted_for_followup at stage-04c (RT-01, RT-02, …).
+#       Peer reviewers often flag these as blockers. Inspect stage-04c.json and address
+#       them before dispatching reviewers, or accept that they will appear in CHANGES REQUESTED.
+
+devteam stage peer-review --headless
+```
+
+The warning about `noted_for_followup` items is informational — it means some red-team deferred items will likely come up in peer-review. Addressing them now avoids a round of CHANGES_REQUESTED; leaving them means the reviewer will flag them and you'll go through Case 4.
+
+### What the preflight gate looks like on PASS
+
+```json
+{
+  "stage": "stage-04e",
+  "status": "PASS",
+  "orchestrator": "devteam@preflight",
+  "blockers": [],
+  "warnings": ["7 red-team item(s) were noted_for_followup at stage-04c …"],
+  "git_hygiene_pass": true,
+  "import_path_pass": true,
+  "deferred_items_count": 7
+}
+```
 
 For the broader vocabulary (`BLOCKER:`, `## Verify`, `PRINCIPAL-RULING:`, etc.), see [`docs/conventions.md`](../conventions.md).
 

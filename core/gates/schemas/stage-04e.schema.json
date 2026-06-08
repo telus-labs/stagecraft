@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:stage-04e",
+  "title": "Stage 04e — Peer-Review Preflight Gate",
+  "description": "Mechanical pre-peer-review checks: git hygiene, test import paths, deferred red-team items. Written by 'devteam preflight' or auto-run at the start of 'devteam stage peer-review'.",
+  "type": "object",
+  "allOf": [{ "$ref": "urn:stagecraft:schema:gate" }],
+  "required": [
+    "stage",
+    "status",
+    "orchestrator",
+    "track",
+    "timestamp",
+    "blockers",
+    "warnings",
+    "git_hygiene_pass",
+    "import_path_pass",
+    "deferred_items_count"
+  ],
+  "properties": {
+    "git_hygiene_pass": {
+      "type": "boolean",
+      "description": "True if no committed files are covered by .gitignore rules. False blocks peer-review dispatch."
+    },
+    "import_path_pass": {
+      "type": "boolean",
+      "description": "True if no Python conftest.py files have sys.path.insert(0, \".\") which would cause try/except ImportError to silently fall back to a reference implementation."
+    },
+    "deferred_items_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of stage-04c noted_for_followup[] items. Non-zero emits a warning (not a blocker) so operators know to expect peer-review objections."
+    }
+  },
+  "additionalProperties": true
+}

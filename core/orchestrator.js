@@ -374,6 +374,29 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       if (typeof w.gate.duration_ms === "number") { totalDuration += w.gate.duration_ms; anyDuration = true; }
     }
 
+    const mergedWarnings = wsGates.flatMap((w) => w.gate.warnings || []);
+    const mergedChangesRequested = wsGates.flatMap((w) => {
+      const cr = w.gate.changes_requested || [];
+      return cr.map((entry) => ({ ...entry, workstream: w.role }));
+    });
+
+    // Cross-stage hint: if this is stage-05 peer-review and reviewers requested changes,
+    // check whether red-team (stage-04c) already flagged related items as noted_for_followup.
+    // Surface a warning so the operator knows to consult stage-04c.json for fix hints.
+    if (stageDef.stage === "stage-05" && mergedChangesRequested.length > 0) {
+      const redTeamGatePath = path.join(gatesDir, "stage-04c.json");
+      if (fs.existsSync(redTeamGatePath)) {
+        const { gate: rtGate } = loadGateSafe(redTeamGatePath);
+        const ntu = Array.isArray(rtGate && rtGate.noted_for_followup) ? rtGate.noted_for_followup : [];
+        if (ntu.length > 0) {
+          mergedWarnings.push(
+            `[cross-stage] ${ntu.length} red-team item(s) were noted_for_followup at stage-04c ` +
+            `and may be driving peer-review objections — consult stage-04c.json for fix hints.`
+          );
+        }
+      }
+    }
+
     const merged = {
       stage: stageDef.stage,
       status: aggregate,
@@ -381,7 +404,8 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       track: wsGates[0].gate.track,
       timestamp: new Date().toISOString(),
       blockers: wsGates.flatMap((w) => w.gate.blockers || []),
-      warnings: wsGates.flatMap((w) => w.gate.warnings || []),
+      warnings: mergedWarnings,
+      changes_requested: mergedChangesRequested,
       workstreams: wsGates.map((w) => {
         const ws = {
           workstream: w.role,

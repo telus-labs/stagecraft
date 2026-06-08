@@ -69,6 +69,13 @@ Commands:
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
                                    by host hooks (e.g. Claude Code Stop).
   merge <stage>                    Merge per-workstream gates into stage gate.
+  preflight [--cwd <dir>]          Run mechanical pre-peer-review checks
+       [--skip-write]               (stage-04e): committed-but-ignored files,
+                                   broken test import paths, and deferred red-team
+                                   item count. Writes pipeline/gates/stage-04e.json.
+                                   Exits 1 on FAIL. Also runs automatically when
+                                   'devteam stage peer-review' is invoked (unless
+                                   stage-04e.json already exists and is PASS).
   derive-approvals [<file>]        Re-run the approval-derivation hook on
         [--cwd <dir>] [--json]      pipeline/code-review/by-*.md and rewrite the
                                    per-area stage-05.<area>.json gates. Use after
@@ -288,6 +295,37 @@ function cmdStage(argv) {
       process.exit(2);
     }
   }
+  // Auto-run preflight (stage-04e) when dispatching peer-review.
+  // Skipped if stage-04e.json already exists and is PASS (operator ran manually).
+  const stageDef = getStage(name);
+  const isPeerReview = stageDef ? stageDef.stage === "stage-05" : name === "peer-review";
+  if (isPeerReview && !flags["skip-preflight"]) {
+    const { runPreflight } = require(path.join(__dirname, "..", "core", "preflight"));
+    const preflightGatePath = path.join(cwd, "pipeline", "gates", "stage-04e.json");
+    let needsPreflight = true;
+    if (fs.existsSync(preflightGatePath)) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(preflightGatePath, "utf8"));
+        if (existing.status === "PASS") needsPreflight = false;
+      } catch { /* malformed — re-run */ }
+    }
+    if (needsPreflight) {
+      process.stderr.write("[devteam] running preflight checks (stage-04e) before peer-review…\n");
+      const preflightResult = runPreflight(cwd, { track });
+      if (preflightResult.status === "FAIL") {
+        console.error("[devteam] preflight FAIL — fix issues before dispatching peer-review:");
+        preflightResult.blockers.forEach((b) => console.error(`  BLOCKER: ${b}`));
+        console.error("\nSee docs/runbooks/fix-and-retry.md § Case 10 for resolution steps.");
+        process.exit(1);
+      }
+      process.stderr.write(
+        `[devteam] preflight PASS${preflightResult.warnings.length > 0 ? ` (${preflightResult.warnings.length} warning(s) — see stage-04e.json)` : ""}\n`
+      );
+    } else {
+      process.stderr.write("[devteam] preflight already PASS (stage-04e.json) — skipping\n");
+    }
+  }
+
   if (flags.patch) {
     const fromName = flags.from || "red-team";
     const fromDef  = getStage(fromName);
@@ -393,6 +431,27 @@ function printStagePostamble(result, flags) {
   console.log(`    2. The model writes the artifact + ${expected}.`);
   console.log(`    3. Run \`devteam next\` to advance the pipeline.`);
   console.log("");
+}
+
+function cmdPreflight(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const { runPreflight } = require(path.join(__dirname, "..", "core", "preflight"));
+  const track = loadConfig(cwd).pipeline.default_track;
+  const result = runPreflight(cwd, { track, skipWrite: flags["skip-write"] });
+  if (result.status === "PASS") {
+    console.log(`[preflight] PASS — all checks clean${result.warnings.length > 0 ? ` (${result.warnings.length} warning(s))` : ""}`);
+    result.warnings.forEach((w) => console.log(`  WARN: ${w}`));
+    process.exit(0);
+  } else {
+    console.error(`[preflight] FAIL — ${result.blockers.length} blocker(s) must be fixed before peer-review:`);
+    result.blockers.forEach((b) => console.error(`  BLOCKER: ${b}`));
+    if (result.warnings.length > 0) {
+      result.warnings.forEach((w) => console.warn(`  WARN: ${w}`));
+    }
+    console.error("\nSee docs/runbooks/fix-and-retry.md § Case 10 for resolution steps.");
+    process.exit(1);
+  }
 }
 
 function cmdValidate(argv) {
@@ -2168,7 +2227,8 @@ function main() {
   const [, , command, ...rest] = process.argv;
   switch (command) {
     case "init":   return cmdInit(rest);
-    case "stage":  return cmdStage(rest);
+    case "stage":    return cmdStage(rest);
+    case "preflight": return cmdPreflight(rest);
     case "next":     return cmdNext(rest);
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);
