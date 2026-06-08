@@ -365,7 +365,7 @@ grep -rn "^## Review of <area>" pipeline/code-review/by-*.md
 # Count non-area-owner matches. If fewer than required_approvals → quorum miss confirmed.
 ```
 
-### Two operator paths
+### Two stage manager paths
 
 **Legitimate: add the missing area review.** Check `rules/stage-05.md` for the
 matrix assignment table — it shows exactly which areas each reviewer is assigned to
@@ -405,7 +405,7 @@ devteam next   # expect: ▶️ run-stage qa (stage-06) or next track-stage
 
 The `approval-derivation` hook is registered as a Claude Code `PostToolUse` hook (`hosts/claude-code/adapter.js:230`). It fires when an **agent inside an active Claude Code session** uses the `Write` or `Edit` tool on a review file — that's how a peer-review subagent's `REVIEW: APPROVED` marker reaches the per-area gate during a normal stage run.
 
-A shell `cat >>`, an editor save (vim, VS Code outside Claude Code, etc.), or any write that doesn't go through the Claude Code tool-call lifecycle bypasses the hook entirely. `devteam derive-approvals` is the explicit operator path that invokes the same hook (same code, same gate shape, same lock + atomic-write semantics) with a synthetic PostToolUse payload — it's what closes the gap when the review file was edited outside a host session.
+A shell `cat >>`, an editor save (vim, VS Code outside Claude Code, etc.), or any write that doesn't go through the Claude Code tool-call lifecycle bypasses the hook entirely. `devteam derive-approvals` is the explicit stage manager path that invokes the same hook (same code, same gate shape, same lock + atomic-write semantics) with a synthetic PostToolUse payload — it's what closes the gap when the review file was edited outside a host session.
 
 It's also useful when:
 - You hand-corrected a typo in a `## Review of <area>` heading and want the gate to reflect the fix.
@@ -953,7 +953,7 @@ Apply: devteam advise --apply AC-11=A,RT-01=A
 ```bash
 devteam advise --apply AC-11=B:PROJ-99,RT-01=A,AC-12=B
 #   AC-11 → DEFERRED: AC-11 — ticket PROJ-99  (written to context.md)
-#   RT-01 → NOTED: RT-01 — operator: no action
+#   RT-01 → NOTED: RT-01 — stage manager: no action
 #   AC-12 → KNOWN-FLAKY: AC-12
 ```
 
@@ -983,8 +983,8 @@ devteam next
 | `=A` (on QA_BLOCKER) | scaffold | `SCAFFOLD-PENDING:` | Run the printed dispatch command; QA sees the test when it re-runs |
 | `=B:TICKET` | defer | `DEFERRED: AC-N — ticket TICKET` | QA skips coverage check for this AC; retrospective records the deferral |
 | `=C` | amend | `BRIEF-AMEND-NEEDED:` | PM reads and amends brief at next stage where PM reads context.md |
-| `=D` | nothing | `NOTED: … operator: no action` | Acknowledged; no downstream adjustment |
-| `=A` (on QA_NOISE) | nothing | `NOTED: … operator: no action` | Acknowledged |
+| `=D` | nothing | `NOTED: … stage manager: no action` | Acknowledged; no downstream adjustment |
+| `=A` (on QA_NOISE) | nothing | `NOTED: … stage manager: no action` | Acknowledged |
 | `=B` (on QA_NOISE) | known-flaky | `KNOWN-FLAKY:` | QA retries once before counting as FAIL |
 
 ### Worked example

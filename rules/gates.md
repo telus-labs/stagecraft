@@ -21,7 +21,7 @@ The orchestrator reads JSON, not prose. Gates are machine-readable.
 
 When `status` is `FAIL`, gates must include an `affected_workstreams` array
 naming the Stage 4 build workstreams that own the reported defects. This is
-the single field operators use to decide which gates to clear and which agents
+the single field stage managers use to decide which gates to clear and which agents
 to re-run — the answer to "who needs to fix this?" in one `jq` call:
 
 ```bash
@@ -42,7 +42,7 @@ How each gate type derives the value:
 
 `stage-05` per-area gates do not need this field — the area name *is* the
 attribution (a `stage-05-backend.json` FAIL means the backend workstream must
-fix). The merged gate's `affected_workstreams[]` covers the operator need for
+fix). The merged gate's `affected_workstreams[]` covers the stage manager need for
 that stage.
 
 Omitting `affected_workstreams` on a FAIL gate is not a validator hard-stop
@@ -255,7 +255,7 @@ orchestrator records the skip decision in `pipeline/context.md` under
 
 `surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces (input_boundaries, state_boundaries, sequence_boundaries, integration_boundaries, auth_edges, resource_exhaustion, failure_modes, abuse_cases, downstream_effects, observability_gaps). A gate where the two arrays don't cover all 10 surfaces is incomplete — the validator will emit an advisory.
 
-`surfaces_skipped` entries carry the surface name (matching the canonical snake_case names above) and a one-line reason. This makes a fast PASS trustworthy: operators can verify "I skipped auth_edges because X" rather than inferring that the agent missed it.
+`surfaces_skipped` entries carry the surface name (matching the canonical snake_case names above) and a one-line reason. This makes a fast PASS trustworthy: stage managers can verify "I skipped auth_edges because X" rather than inferring that the agent missed it.
 
 ### Stage 05 (Code review, per area)
 ```json

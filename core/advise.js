@@ -1,7 +1,7 @@
 // core/advise.js
 //
 // Advisory system for noted_for_followup[] items across pipeline gate files.
-// Classifies downstream risk, generates ranked options, and applies operator
+// Classifies downstream risk, generates ranked options, and applies stage-manager
 // decisions to pipeline/context.md.
 //
 // Public API:
@@ -246,7 +246,7 @@ function generateOptions(item, classification) {
 // ---------------------------------------------------------------------------
 // applyOption
 // ---------------------------------------------------------------------------
-// Writes the operator's decision for one item into the advisory section of
+// Writes the stage manager's decision for one item into the advisory section of
 // pipeline/context.md.  The full section is rebuilt on each apply call so
 // re-running --apply is idempotent.
 //
@@ -264,17 +264,17 @@ function applyOption(item, action, ticketId) {
     case "wontfix":
       return `WONTFIX: ${refLabel} — ${summary}`;
     case "nothing":
-      return `NOTED: ${item.id} — ${summary} — operator: no action`;
+      return `NOTED: ${item.id} — ${summary} — stage manager: no action`;
     case "known-flaky":
       return `KNOWN-FLAKY: ${item.id} — ${summary}`;
     case "amend":
-      return `BRIEF-AMEND-NEEDED: ${refLabel} — operator: scope-down or remove before peer-review`;
+      return `BRIEF-AMEND-NEEDED: ${refLabel} — stage manager: scope-down or remove before peer-review`;
     case "scaffold":
       return `SCAFFOLD-PENDING: ${refLabel} — ${summary}`;
     case "fix-now":
-      return `NOTED: ${item.id} — ${summary} — operator: fix-now (dispatch build workstream)`;
+      return `NOTED: ${item.id} — ${summary} — stage manager: fix-now (dispatch build workstream)`;
     default:
-      return `NOTED: ${item.id} — ${summary} — operator: ${action}`;
+      return `NOTED: ${item.id} — ${summary} — stage manager: ${action}`;
   }
 }
 

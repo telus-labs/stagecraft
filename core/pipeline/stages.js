@@ -149,6 +149,7 @@ const STAGES = {
       security_approved: false,
       veto: false,
       triggering_conditions: [],
+      noted_for_followup: [],
     },
   },
   "red-team": {
@@ -267,6 +268,7 @@ const STAGES = {
       scenarios_total: 0,
       scenarios_covered: 0,
       all_scenarios_have_tests: false,
+      noted_for_followup: [],
     },
   },
   "accessibility-audit": {
@@ -283,6 +285,7 @@ const STAGES = {
       violations: { critical: 0, serious: 0, moderate: 0, minor: 0 },
       components_audited: [],
       audit_skipped_reason: null,
+      noted_for_followup: [],
     },
   },
   "observability-gate": {

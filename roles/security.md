@@ -163,6 +163,26 @@ spec failed to name, rather than about specific findings in this run.
 
 Append your section under `## security` using the four-heading template.
 
+### noted_for_followup[] — non-blocking security findings
+
+Security findings that are real but don't warrant a veto — hardening improvements,
+defence-in-depth gaps, recommendations for the next sprint — belong in
+`noted_for_followup` as structured objects, not in prose only. This is what
+surfaces them in `devteam advise` for the stage manager to triage.
+
+```json
+{
+  "id": "SEC-02",
+  "text": "Add Content-Security-Policy header to prevent XSS on the UI server.",
+  "track_for": "ticket",
+  "severity": "medium",
+  "assigned_to": "platform"
+}
+```
+
+Use `track_for: "ticket"` for real hardening items, `track_for: "lessons-learned"`
+for threat-modelling patterns the team should encode as a rule.
+
 ## Gate Writing Rules
 
 - Write gate files as valid JSON only.

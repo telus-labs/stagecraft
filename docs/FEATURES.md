@@ -292,7 +292,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Advisory panel for `noted_for_followup[]` items across all completed gate files
 - Classifies each item: `QA_BLOCKER` (missing AC coverage in spec.feature), `PEER_REVIEW_RISK` (high-severity, no AC ref), `QA_NOISE` (timing/flakiness keywords), `INFO`
 - Generates ranked options (scaffold, defer, amend, nothing, known-flaky, wontfix) per item
-- `--apply AC-11=A,AC-10=B:PROJ-123,AC-12=A` encodes operator decisions into `pipeline/context.md` as advisory markers
+- `--apply AC-11=A,AC-10=B:PROJ-123,AC-12=A` encodes stage manager decisions into `pipeline/context.md` as advisory markers
 - Downstream stages respect the markers: QA skips coverage checks for `DEFERRED:` items, retries `KNOWN-FLAKY:` tests once; peer-review notes `BRIEF-AMEND-NEEDED:` entries
 - Idempotent: re-running `--apply` replaces the advisory section without duplicating entries
 - See [`rules/advise.md`](../rules/advise.md) and [`docs/runbooks/fix-and-retry.md` § Case 11](runbooks/fix-and-retry.md#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages)

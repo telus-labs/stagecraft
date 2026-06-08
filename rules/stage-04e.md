@@ -5,7 +5,7 @@ Stage 04e is a **mechanical gate** that runs before peer-review (stage-05). It e
 ## When it runs
 
 `devteam preflight` runs it explicitly. It also runs **automatically** at the start of `devteam stage peer-review` unless:
-- `pipeline/gates/stage-04e.json` already exists with `status: "PASS"` (operator ran it manually), OR
+- `pipeline/gates/stage-04e.json` already exists with `status: "PASS"` (stage manager ran it manually), OR
 - the `--skip-preflight` flag is passed to `devteam stage peer-review`
 
 ## What it checks
@@ -14,7 +14,7 @@ Stage 04e is a **mechanical gate** that runs before peer-review (stage-05). It e
 
 Finds committed files that are now covered by `.gitignore` rules.
 
-**Why**: A common pipeline failure pattern is adding `*.pyc` or `__pycache__/` to `.gitignore` after the files have already been committed. Peer reviewers flag these as BLOCKERs; the operator must then re-run the full peer-review stage after fixing a mechanical issue that could have been caught earlier.
+**Why**: A common pipeline failure pattern is adding `*.pyc` or `__pycache__/` to `.gitignore` after the files have already been committed. Peer reviewers flag these as BLOCKERs; the stage manager must then re-run the full peer-review stage after fixing a mechanical issue that could have been caught earlier.
 
 **Command**: `git ls-files --ignored --exclude-standard`
 
@@ -32,7 +32,7 @@ Scans `conftest.py` files for `sys.path.insert(0, ".")` which inserts the projec
 
 Reads `pipeline/gates/stage-04c.json` `noted_for_followup[]` and counts items. Non-zero emits a **warning** (not a blocker): these items are known to often drive peer-review CHANGES REQUESTED.
 
-**Why**: Red-team agents classify some findings as `noted_for_followup` rather than `must_address_before_peer_review`. Peer reviewers independently find the same issues and flag them as BLOCKERs, causing an avoidable round-trip. The warning gives the operator a chance to address them before dispatching reviewers.
+**Why**: Red-team agents classify some findings as `noted_for_followup` rather than `must_address_before_peer_review`. Peer reviewers independently find the same issues and flag them as BLOCKERs, causing an avoidable round-trip. The warning gives the stage manager a chance to address them before dispatching reviewers.
 
 ## Gate file
 
@@ -40,7 +40,7 @@ Reads `pipeline/gates/stage-04c.json` `noted_for_followup[]` and counts items. N
 
 Fields: `status` (PASS/FAIL), `blockers[]`, `warnings[]`, `git_hygiene_pass`, `import_path_pass`, `deferred_items_count`. Schema: `core/gates/schemas/stage-04e.schema.json`.
 
-## Operator commands
+## Stage manager commands
 
 ```bash
 # Run preflight manually

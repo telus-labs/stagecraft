@@ -301,7 +301,7 @@ function cmdStage(argv) {
     }
   }
   // Auto-run preflight (stage-04e) when dispatching peer-review.
-  // Skipped if stage-04e.json already exists and is PASS (operator ran manually).
+  // Skipped if stage-04e.json already exists and is PASS (stage manager ran manually).
   const stageDef = getStage(name);
   const isPeerReview = stageDef ? stageDef.stage === "stage-05" : name === "peer-review";
   if (isPeerReview && !flags["skip-preflight"]) {
@@ -503,7 +503,7 @@ function cmdPreflight(argv) {
 //
 // Surfaces noted_for_followup[] items from completed gate files, classifies
 // their downstream risk (QA_BLOCKER, PEER_REVIEW_RISK, QA_NOISE, INFO),
-// and optionally applies operator selections to pipeline/context.md.
+// and optionally applies stage-manager selections to pipeline/context.md.
 //
 // Apply format: --apply AC-11=A,AC-10=B:PROJ-123,AC-12=A
 //   <itemId>=<optionLetter>[:<ticketId>]
@@ -1710,7 +1710,7 @@ function cmdMerge(argv) {
 //
 // Invoke core/hooks/approval-derivation.js the same way Claude Code does —
 // stdin carries a synthetic PostToolUse payload — but from the shell, so
-// operators who hand-edit pipeline/code-review/by-*.md files outside an
+// stage managers who hand-edit pipeline/code-review/by-*.md files outside an
 // agent session can still get the per-area stage-05 gates re-derived.
 //
 // Without an argument, walks every by-*.md under pipeline/code-review/.
@@ -1736,7 +1736,7 @@ function cmdDeriveApprovals(argv) {
     }
     // Confine to pipeline/code-review/. The hook is otherwise happy to
     // ignore anything outside that directory (it returns early), but we
-    // want operators to get a clear error rather than a silent no-op.
+    // want stage managers to get a clear error rather than a silent no-op.
     const realArg = fs.realpathSync(abs);
     if (!fs.existsSync(reviewDir)) {
       console.error(`devteam: pipeline/code-review/ does not exist under ${cwd}`);

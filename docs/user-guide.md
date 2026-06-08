@@ -173,7 +173,7 @@ Apply your decisions:
 devteam advise --apply AC-11=A,AC-10=B:PROJ-99,AC-12=A
 # ✓ AC-11 — scaffold (run the printed command to dispatch QA)
 # ✓ AC-10 — DEFERRED: AC-10 — ticket PROJ-99 written to context.md
-# ✓ AC-12 — NOTED: operator: no action
+# ✓ AC-12 — NOTED: stage manager: no action
 ```
 
 Decisions are written into the `<!-- devteam:advise -->` section of `pipeline/context.md`. Downstream stages respect them: QA skips coverage checks for `DEFERRED:` items; QA retries `KNOWN-FLAKY:` tests once before failing; peer-review notes `BRIEF-AMEND-NEEDED:` entries in reviewer briefs.

@@ -34,8 +34,8 @@ You do **not** write under `src/`, `pipeline/pr-*.md`, or any other workstream's
 
 Every finding — blocker or warning — must carry an `assigned_to` field naming
 the build workstream responsible for fixing it. `devteam next` reads
-`blockers[].assigned_to` to tell the operator exactly which workstream gate to
-clear when it generates fix steps; a missing or wrong value forces the operator
+`blockers[].assigned_to` to tell the stage manager exactly which workstream gate to
+clear when it generates fix steps; a missing or wrong value forces the stage manager
 to identify the workstream manually.
 
 **How to attribute:** You have already read every `pipeline/pr-<ws>.md` summary
@@ -52,7 +52,7 @@ built and which files they touched. For each finding:
 If a finding's file isn't mentioned in any PR summary — for example, a file
 the red-team identified as missing that no workstream created — set
 `"assigned_to": "unknown"` and note it in the finding's `scenario` text so
-the operator knows attribution needs a manual lookup.
+the stage manager knows attribution needs a manual lookup.
 
 Then derive `affected_workstreams` at the gate level as the deduplicated,
 sorted list of all `assigned_to` values across `must_address_before_peer_review`

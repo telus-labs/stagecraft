@@ -1,6 +1,6 @@
 # Pipeline Conventions
 
-The pipeline uses a small vocabulary of **markers**: short prefixes and section headings that agents use to communicate across stages. Most markers are documented inside agent prompts; this page is the operator-facing catalogue for when you encounter something like `QUESTION: ... @PM` or `BLOCKER:` in a `pipeline/*.md` file.
+The pipeline uses a small vocabulary of **markers**: short prefixes and section headings that agents use to communicate across stages. Most markers are documented inside agent prompts; this page is the stage-manager-facing catalogue for when you encounter something like `QUESTION: ... @PM` or `BLOCKER:` in a `pipeline/*.md` file.
 
 Each entry covers: where the marker lives, who writes it, its format, and what reads it.
 
@@ -31,7 +31,7 @@ A question that needs a human decision. Common during requirements, design, and 
 The answer to a `QUESTION:`. Written directly below the question.
 
 - **Where:** `pipeline/context.md`, on the line right after the `QUESTION:` it answers.
-- **Written by:** **You** (the human operator), or the PM agent during Stage 3 clarification.
+- **Written by:** **You** (the human stage manager), or the PM agent during Stage 3 clarification.
 - **Format:** `PM-ANSWER: <text>`. Multi-line is fine; readers consume everything between this line and the next blank line or marker.
 - **Read by:** Devs at Stage 4 build (they trace every changed hunk to brief / design-spec / a `PM-ANSWER:`).
 
@@ -74,7 +74,7 @@ When a reviewer or agent wants the merged gate to land as `ESCALATE` regardless 
 - **Where:** `pipeline/code-review/by-<reviewer>.md` (Stage 5) or any review/report file.
 - **Written by:** The escalating agent.
 - **Format:** `ESCALATE: <one-sentence reason>` followed by `ESCALATE-TO: <role>` if a specific role should rule (typically Principal).
-- **Read by:** The operator notices the inline marker and resolves it via the [escalation runbook](runbooks/escalation.md). Note: the approval-derivation hook does not currently auto-flip the gate status based on this marker; the operator (or reviewer) sets `status: ESCALATE` directly in the gate.
+- **Read by:** The stage manager notices the inline marker and resolves it via the [escalation runbook](runbooks/escalation.md). Note: the approval-derivation hook does not currently auto-flip the gate status based on this marker; the stage manager (or reviewer) sets `status: ESCALATE` directly in the gate.
 
 ### `REVIEW-ESCALATED: <text>`
 
@@ -140,10 +140,10 @@ hand-edit.  See [`rules/advise.md`](../rules/advise.md) for full option semantic
 |---|---|---|
 | `DEFERRED:` | `DEFERRED: AC-N — <summary> — ticket <ID>` | AC intentionally deferred; ticket reference signals QA to skip coverage check |
 | `WONTFIX:` | `WONTFIX: AC-N — <summary>` | AC explicitly removed from delivery scope |
-| `NOTED:` | `NOTED: <item-id> — <summary> — operator: no action` | Acknowledged; operator chose to do nothing |
+| `NOTED:` | `NOTED: <item-id> — <summary> — stage manager: no action` | Acknowledged; stage manager chose to do nothing |
 | `KNOWN-FLAKY:` | `KNOWN-FLAKY: <item-id> — <summary>` | Test reliability issue; QA retries once before counting as FAIL |
-| `BRIEF-AMEND-NEEDED:` | `BRIEF-AMEND-NEEDED: AC-N — operator: scope-down or remove` | PM flag to amend brief before peer-review |
-| `SCAFFOLD-PENDING:` | `SCAFFOLD-PENDING: AC-N — <summary>` | Scaffold-test chosen; operator must run the printed command to dispatch the agent |
+| `BRIEF-AMEND-NEEDED:` | `BRIEF-AMEND-NEEDED: AC-N — stage manager: scope-down or remove` | PM flag to amend brief before peer-review |
+| `SCAFFOLD-PENDING:` | `SCAFFOLD-PENDING: AC-N — <summary>` | Scaffold-test chosen; stage manager must run the printed command to dispatch the agent |
 
 **Read by:** Stage 6 (QA) respects `DEFERRED:` and `KNOWN-FLAKY:`.  Stage 5 (peer-review) role
 briefs note `BRIEF-AMEND-NEEDED:` entries as pending brief amendments.  Stage 9 (retrospective)

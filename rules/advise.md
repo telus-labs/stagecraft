@@ -17,11 +17,11 @@ The warning from `devteam next` is advisory only — it never prevents advancing
 |---|---|---|
 | `scaffold` | Dispatch QA workstream to add a `@wip` test stub | `SCAFFOLD-PENDING: <ac-refs> — <summary>` + command printed |
 | `defer` | Acknowledge deferral with a ticket reference | `DEFERRED: <ac-refs> — <summary> — ticket <ID>` |
-| `amend` | Flag for PM to scope-down or remove the AC | `BRIEF-AMEND-NEEDED: <ac-refs> — operator: scope-down or remove` |
-| `nothing` | Record that no action was taken | `NOTED: <item-id> — <summary> — operator: no action` |
+| `amend` | Flag for PM to scope-down or remove the AC | `BRIEF-AMEND-NEEDED: <ac-refs> — stage manager: scope-down or remove` |
+| `nothing` | Record that no action was taken | `NOTED: <item-id> — <summary> — stage manager: no action` |
 | `known-flaky` | Mark a test as expected-flaky for QA | `KNOWN-FLAKY: <item-id> — <summary>` |
 | `wontfix` | Explicitly remove from delivery scope | `WONTFIX: <ac-refs> — <summary>` |
-| `fix-now` | Record intent to fix before advancing | `NOTED: <item-id> — <summary> — operator: fix-now` |
+| `fix-now` | Record intent to fix before advancing | `NOTED: <item-id> — <summary> — stage manager: fix-now` |
 
 ## Risk classifications
 

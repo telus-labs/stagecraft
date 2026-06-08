@@ -34,6 +34,20 @@ fix and flip the flag. Rationale: the Stage 5 reviewers are area
 specialists, not threat modellers; their "approved" on a
 security-relevant diff doesn't speak to the threat model.
 
+Security findings that are real but don't warrant a veto go in
+`noted_for_followup[]` as structured objects (not prose) so `devteam advise`
+can surface them for the stage manager:
+
+```json
+{
+  "id": "SEC-02",
+  "text": "Add Content-Security-Policy header to prevent XSS on the UI server.",
+  "track_for": "ticket",
+  "severity": "medium",
+  "assigned_to": "platform"
+}
+```
+
 Both 4.5a and 4.5b must pass (when applicable) before Stage 5 begins.
 `/hotfix` skips 4.5a when the explicit blast-radius constraint in
 `pipeline/hotfix-spec.md` already bounds the scope tightly; it does NOT

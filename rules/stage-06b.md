@@ -12,3 +12,15 @@ Gate file: `pipeline/gates/stage-06b.json`. Required keys:
 
 PASS requires `violations.critical === 0 AND violations.serious === 0`. Moderate/minor findings flow through as warnings, not blockers. See `skills/accessibility-audit/SKILL.md` for tool choice, procedure, triage, and gotchas.
 
+Moderate and minor violations that the stage manager should track belong in `noted_for_followup[]` as structured objects (not prose warnings) so `devteam advise` can surface them:
+
+```json
+{
+  "id": "A11Y-01",
+  "text": "Button lacks visible focus ring on keyboard nav (WCAG 2.4.7 AA moderate).",
+  "track_for": "ticket",
+  "severity": "medium",
+  "assigned_to": "frontend"
+}
+```
+
