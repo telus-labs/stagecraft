@@ -262,56 +262,64 @@ describe("allowedWritesCaption — post-hoc-audit wording", () => {
 describe("runHeadless — writeViolations field in result", { concurrency: false }, () => {
   // Only run when DEVTEAM_HEADLESS_COMMAND=cat (no-op spawn that doesn't write files)
   // We test that the field is present and is an array (even when empty).
-  test("result includes writeViolations array (claude-code, no audit)", async () => {
-    const { runHeadless } = require("../core/adapters/headless");
-    const { loadAdapter } = require("../core/router");
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-integration-"));
-    try {
-      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
-      const adapter = loadAdapter("claude-code");
-      const descriptor = {
-        stage: "stage-01", role: "pm", rolesInStage: ["pm"], workstreamId: "stage-01",
-        objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md"],
-        artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
-      };
-      const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
-      const r = await runHeadless(adapter, descriptor, ctx);
-      assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
-      // claude-code uses tool-call-time, so no audit runs — should be empty
-      assert.equal(r.writeViolations.length, 0);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+  test(
+    "result includes writeViolations array (claude-code, no audit)",
+    process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? {} : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat" },
+    async () => {
+      const { runHeadless } = require("../core/adapters/headless");
+      const { loadAdapter } = require("../core/router");
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-integration-"));
+      try {
+        fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+        const adapter = loadAdapter("claude-code");
+        const descriptor = {
+          stage: "stage-01", role: "pm", rolesInStage: ["pm"], workstreamId: "stage-01",
+          objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md"],
+          artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
+        };
+        const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
+        const r = await runHeadless(adapter, descriptor, ctx);
+        assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
+        // claude-code uses tool-call-time, so no audit runs — should be empty
+        assert.equal(r.writeViolations.length, 0);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
-  }, process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? undefined : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat" });
+  );
 
-  test("result includes writeViolations array (codex, post-hoc-audit)", async () => {
-    const { runHeadless } = require("../core/adapters/headless");
-    const { loadAdapter } = require("../core/router");
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-integration-codex-"));
-    try {
-      // git init so snapshotWritables works
-      execFileSync("git", ["init"], { cwd: dir });
-      execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: dir });
-      execFileSync("git", ["config", "user.name", "T"], { cwd: dir });
-      fs.writeFileSync(path.join(dir, "README.md"), "hi");
-      execFileSync("git", ["add", "README.md"], { cwd: dir });
-      execFileSync("git", ["commit", "-m", "init"], { cwd: dir });
-      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+  test(
+    "result includes writeViolations array (codex, post-hoc-audit)",
+    process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? {} : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat" },
+    async () => {
+      const { runHeadless } = require("../core/adapters/headless");
+      const { loadAdapter } = require("../core/router");
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-integration-codex-"));
+      try {
+        // git init so snapshotWritables works
+        execFileSync("git", ["init"], { cwd: dir });
+        execFileSync("git", ["config", "user.email", "t@t.com"], { cwd: dir });
+        execFileSync("git", ["config", "user.name", "T"], { cwd: dir });
+        fs.writeFileSync(path.join(dir, "README.md"), "hi");
+        execFileSync("git", ["add", "README.md"], { cwd: dir });
+        execFileSync("git", ["commit", "-m", "init"], { cwd: dir });
+        fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
 
-      const adapter = loadAdapter("codex");
-      const descriptor = {
-        stage: "stage-01", role: "pm", rolesInStage: ["pm"], workstreamId: "stage-01",
-        objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md", "pipeline/gates/stage-01.json"],
-        artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
-      };
-      const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
-      // cat doesn't write any files, so no violations expected
-      const r = await runHeadless(adapter, descriptor, ctx);
-      assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
-      // No files written by cat → no violations
-      assert.equal(r.writeViolations.length, 0, `unexpected violations: ${r.writeViolations.join(", ")}`);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
+        const adapter = loadAdapter("codex");
+        const descriptor = {
+          stage: "stage-01", role: "pm", rolesInStage: ["pm"], workstreamId: "stage-01",
+          objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md", "pipeline/gates/stage-01.json"],
+          artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
+        };
+        const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
+        // cat doesn't write any files, so no violations expected
+        const r = await runHeadless(adapter, descriptor, ctx);
+        assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
+        // No files written by cat → no violations
+        assert.equal(r.writeViolations.length, 0, `unexpected violations: ${r.writeViolations.join(", ")}`);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
     }
-  }, process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? undefined : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat" });
+  );
 });

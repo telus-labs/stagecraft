@@ -43,6 +43,8 @@ jobs:
 
       - name: Run test suite
         run: npm test
+        env:
+          DEVTEAM_HEADLESS_COMMAND: cat
 
       - name: Run consistency checks
         run: npm run consistency

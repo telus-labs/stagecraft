@@ -268,27 +268,31 @@ describe("runStageHeadless — gate path in bounded mode", { concurrency: false 
   const { runStageHeadless } = require("../core/orchestrator");
   const { clearConfigCache } = require("../core/config");
 
-  test("in bounded mode, gate checked under pipeline/changes/<id>/gates/", async () => {
-    const cwd = makeTargetProject(); // isolation: bounded
-    clearConfigCache();
-    // cat echos the prompt and exits 0; the gate file won't be written
-    // by cat, so gatePath is null — but we verify the log path and that
-    // the process completes without throwing (path construction is correct).
-    try {
-      const results = await runStageHeadless("requirements", {
-        cwd,
-        feature: "my feature",
-        stamp: false,
-        config: { routing: { default_host: "claude-code", roles: {}, stages: {}, review_fanout: [] }, pipeline: { default_track: "full", isolation: "bounded", skip_stages: [], verify: {} } },
-      });
-      // gatePath will be null (cat doesn't write a gate) — that's fine
-      assert.equal(results.results.length, 1);
-      assert.equal(results.results[0].gatePath, null);
-    } finally {
+  test(
+    "in bounded mode, gate checked under pipeline/changes/<id>/gates/",
+    process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? {} : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat to run headless tests" },
+    async () => {
+      const cwd = makeTargetProject(); // isolation: bounded
       clearConfigCache();
-      fs.rmSync(cwd, { recursive: true, force: true });
+      // cat echos the prompt and exits 0; the gate file won't be written
+      // by cat, so gatePath is null — but we verify the log path and that
+      // the process completes without throwing (path construction is correct).
+      try {
+        const results = await runStageHeadless("requirements", {
+          cwd,
+          feature: "my feature",
+          stamp: false,
+          config: { routing: { default_host: "claude-code", roles: {}, stages: {}, review_fanout: [] }, pipeline: { default_track: "full", isolation: "bounded", skip_stages: [], verify: {} } },
+        });
+        // gatePath will be null (cat doesn't write a gate) — that's fine
+        assert.equal(results.results.length, 1);
+        assert.equal(results.results[0].gatePath, null);
+      } finally {
+        clearConfigCache();
+        fs.rmSync(cwd, { recursive: true, force: true });
+      }
     }
-  }, process.env.DEVTEAM_HEADLESS_COMMAND === "cat" ? undefined : { skip: "set DEVTEAM_HEADLESS_COMMAND=cat to run headless tests" });
+  );
 });
 
 // ─── 7. appendGateFooter uses bounded path when changeId set ─────────────────
