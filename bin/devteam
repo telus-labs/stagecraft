@@ -99,13 +99,19 @@ Commands:
                                    context.md (--keep-context to preserve them).
                                    Use after an ESCALATE or FAIL to re-run from
                                    a specific point.
-  ruling --topic "..."             Dispatch the Principal subagent for an ad-hoc
-       [--context paths]           ruling outside the normal stage flow. Used to
-       [--target-gate path]        resolve escalations that need a Principal call
-       [--headless]                without re-running the originating stage. The
-                                   ruling lands in pipeline/context.md as a
-                                   PRINCIPAL-RULING line; no gate is written.
+  ruling [--topic "..."]           Dispatch the Principal subagent for an ad-hoc
+       [--context paths]           ruling. --topic is optional: when omitted the
+       [--target-gate path]        topic is auto-derived from the escalating gate's
+       [--headless]                escalation_reason + decision_needed. The ruling
+                                   lands in pipeline/context.md as a PRINCIPAL-RULING
+                                   line; no gate is written.
                                    See docs/runbooks/escalation.md.
+  fix-escalation                   Implement the Principal ruling written by
+       [--headless]                devteam ruling. Dispatches an applicator agent
+                                   that reads PRINCIPAL-RULING entries from
+                                   pipeline/context.md and fixes gates, runs stages,
+                                   and merges — so devteam next advances. No
+                                   hand-editing required.
   summary [--json]                 One-screen pipeline state report.
   log [--follow] [--json]          Chronological event timeline: every gate
                                    and every artifact write, in mtime order,
@@ -679,14 +685,20 @@ function cmdNext(argv) {
     console.log(`   → ${result.command}`);
   }
   if (result.action === "resolve-escalation") {
-    console.log(`\n   Escalation resolution steps:`);
-    console.log(`   1. Read the gate: cat ${result.gate}`);
-    console.log(`      Check escalation_reason and decision_needed fields.`);
-    console.log(`   2. Get a Principal ruling (if reviewer conflict or design question):`);
-    console.log(`        devteam ruling --topic "..." --target-gate ${result.gate} [--headless]`);
-    console.log(`   3. Encode the decision (defer → hand-edit gate; must-fix → devteam restart):`);
-    console.log(`        docs/runbooks/escalation.md §4`);
-    console.log(`   4. devteam validate && devteam next`);
+    const _cwd = flags.cwd || process.cwd();
+    const _rulings = loadPrincipalRulings(_cwd);
+    console.log(`\n   Escalation resolution:`);
+    if (_rulings.length > 0) {
+      console.log(`   Principal ruling is written (${_rulings.length} ruling(s) in pipeline/context.md).`);
+      console.log(`   → devteam fix-escalation --headless`);
+    } else {
+      console.log(`   1. Read the gate: cat ${result.gate}`);
+      console.log(`      Check escalation_reason and decision_needed.`);
+      console.log(`   2. Get a Principal ruling (topic is auto-derived from gate):`);
+      console.log(`        devteam ruling --target-gate ${result.gate} [--headless]`);
+      console.log(`   3. Apply the ruling (implements gates/stages automatically):`);
+      console.log(`        devteam fix-escalation [--headless]`);
+    }
   }
 }
 
@@ -1825,9 +1837,23 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
     "",
     "Your task is to issue a binding ruling on the topic above.",
     "**This is not a pipeline stage — there is no gate to write.** The",
-    "ruling is an artifact for the user, who decides whether to act on",
-    "it (must-fix → `devteam restart <stage>`; defer → hand-edit the",
-    "escalating gate to PASS/WARN with a `warnings[]` entry).",
+    "ruling is consumed by `devteam fix-escalation`, which dispatches",
+    "agents or corrects gates to implement it. Be specific enough that",
+    "the applicator can act without further guidance:",
+    "",
+    "- **Gate correction:** name the file, the wrong field, and the",
+    "  correct value (e.g. 'stage-05.frontend.json: change review_shape",
+    "  from scoped to matrix, required_approvals to 2, remove self-",
+    "  review from approvals[]').",
+    "- **Build fix:** name the workstream (backend / frontend / platform / qa)",
+    "  and the specific file:line to change. The applicator will dispatch",
+    "  `devteam stage build --workstream <role>`. Do NOT say",
+    "  `devteam restart qa` — that restarts the QA TESTING stage (stage-06),",
+    "  not the QA build workstream. Use 'dispatch QA build workstream' instead.",
+    "- **Stage re-run:** name the stage with its correct devteam name:",
+    "  build, pre-review, security-review, red-team, peer-review, qa",
+    "  (testing), accessibility-audit, sign-off, deploy.",
+    "- **Gate advance to WARN:** name the gate file and the warning text.",
     "",
     "## Read first",
     "",
@@ -1872,9 +1898,8 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
   lines.push("  ruling, not a re-run of the originating stage.");
   lines.push("- Do not write new source code. Read-only on `src/`.");
   lines.push("");
-  lines.push("When done, exit. The user will read `pipeline/context.md` and");
-  lines.push("decide how to encode your ruling via `devteam restart` or a");
-  lines.push("hand-edit. See `docs/runbooks/escalation.md` for the full flow.");
+  lines.push("When done, exit. The stage manager runs `devteam fix-escalation`");
+  lines.push("to implement your ruling automatically — no hand-editing required.");
   return lines.join("\n");
 }
 
@@ -1885,34 +1910,44 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
 // pipeline/context.md as a PRINCIPAL-RULING line; no gate is written.
 async function cmdRuling(argv) {
   const { flags } = parseFlags(argv);
-  if (!flags.topic) {
-    console.error("Usage: devteam ruling --topic \"...\" [--context <paths>] [--target-gate <path>] [--headless]");
-    console.error("");
-    console.error("Dispatch the Principal subagent for an ad-hoc ruling — outside the");
-    console.error("normal stage flow. Used to resolve escalations that need a Principal");
-    console.error("judgment without re-running the originating stage.");
-    console.error("");
-    console.error("Flags:");
-    console.error("  --topic        Required. Short description of what to rule on.");
-    console.error("  --context      Comma-separated list of files Principal should read");
-    console.error("                 (e.g. pipeline/red-team-report.md,pipeline/code-review/by-platform.md).");
-    console.error("  --target-gate  Path to the escalating gate file. Principal will");
-    console.error("                 read its escalation_reason and decision_needed.");
-    console.error("  --headless     Pipe the prompt through the Principal-routed host's");
-    console.error("                 headless command. Default: print the prompt for user-driven use.");
-    console.error("");
-    console.error("Output: Principal writes a `## Principal Rulings` section into pipeline/context.md.");
-    console.error("This does NOT change the escalating gate's status. After reading the ruling, use");
-    console.error("`devteam restart <stage>` (must-fix) or hand-edit the gate (defer) to act on it.");
-    console.error("");
-    console.error("See `docs/runbooks/escalation.md` for the full flow.");
-    process.exit(2);
-  }
-
   const cwd = flags.cwd || process.cwd();
-  const topic = flags.topic;
+  let topic = flags.topic;
+  let targetGate = flags.targetGate;
   const contextPaths = flags.context ? flags.context.split(",").map((s) => s.trim()).filter(Boolean) : [];
-  const targetGate = flags.targetGate;
+
+  // Auto-derive topic from the escalating gate when --topic is omitted.
+  if (!topic) {
+    if (!targetGate) {
+      // Try to locate the escalating gate via devteam next
+      try {
+        const { next } = getOrchestrator();
+        const nr = next({ cwd });
+        if (nr.action === "resolve-escalation" && nr.gate) {
+          targetGate = nr.gate;
+        }
+      } catch { /* ignore */ }
+    }
+    if (targetGate) {
+      try {
+        const gate = JSON.parse(fs.readFileSync(targetGate, "utf8"));
+        const reason = gate.escalation_reason || "";
+        const decision = gate.decision_needed || "";
+        topic = reason + (decision ? ` — ${decision}` : "");
+        if (!topic) topic = `Escalation in ${path.basename(targetGate)}`;
+        process.stderr.write(`[devteam] ruling topic (auto-derived): ${topic}\n`);
+      } catch {
+        console.error(`devteam ruling: could not read target gate at ${targetGate}`);
+        process.exit(1);
+      }
+    } else {
+      console.error("Usage: devteam ruling [--topic \"...\"] [--context <paths>] [--target-gate <path>] [--headless]");
+      console.error("");
+      console.error("--topic is optional when run from a directory with an active ESCALATE gate;");
+      console.error("the topic is auto-derived from the gate's escalation_reason and decision_needed.");
+      console.error("See `docs/runbooks/escalation.md` for the full flow.");
+      process.exit(2);
+    }
+  }
 
   const prompt = renderPrincipalRulingPrompt(topic, contextPaths, targetGate);
 
@@ -1982,10 +2017,158 @@ async function cmdRuling(argv) {
 
   if (exitCode === 0) {
     process.stderr.write(`[devteam] principal-ruling complete. Read pipeline/context.md for the ruling.\n`);
+    process.stderr.write(`[devteam] Run \`devteam fix-escalation [--headless]\` to apply it.\n`);
   } else {
     process.stderr.write(`[devteam] principal-ruling exited ${exitCode}\n`);
     process.exit(exitCode);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Escalation applicator helpers
+// ---------------------------------------------------------------------------
+
+function loadPrincipalRulings(cwd) {
+  const p = path.join(cwd, "pipeline", "context.md");
+  if (!fs.existsSync(p)) return [];
+  return fs.readFileSync(p, "utf8").split("\n")
+    .filter(l => l.startsWith("PRINCIPAL-RULING:"));
+}
+
+function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
+  const lines = [
+    "# Escalation Applicator",
+    "",
+    "The Principal has issued a ruling. Implement what it prescribes so",
+    "`devteam next` advances past the current ESCALATE.",
+    "",
+    "## Read first",
+    "",
+    "- `pipeline/context.md` — find the `## Principal Rulings` section;",
+    "  the most recent `PRINCIPAL-RULING:` line(s) are what you implement",
+  ];
+  if (escalatingGate) {
+    lines.push(`- \`${escalatingGate}\` — the escalating gate`);
+    lines.push("- Adjacent workstream gates in `pipeline/gates/`");
+  }
+  lines.push("- `pipeline/code-review/by-*.md` (if this is a peer-review escalation)");
+  lines.push("");
+  lines.push("## Principal ruling(s) to implement");
+  lines.push("");
+  for (const r of rulings) lines.push(r);
+  lines.push("");
+  lines.push("## How to implement");
+  lines.push("");
+  lines.push("**Gate corrections** (wrong shape / status / approvals):");
+  lines.push("Edit the gate file directly, then:");
+  lines.push("  `devteam derive-approvals && devteam merge peer-review`");
+  lines.push("Note: the approval-derivation hook overwrites `approvals[]` on");
+  lines.push("every `by-*.md` write. Fix gate shape in the JSON directly.");
+  lines.push("");
+  lines.push("**Build fixes** (test bug, implementation gap):");
+  lines.push("  `devteam stage build --workstream <role> --headless`");
+  lines.push("  roles: backend, frontend, platform, qa");
+  lines.push("Do NOT use `devteam restart qa` for a build fix — that clears");
+  lines.push("the QA testing stage (stage-06), not the build workstream.");
+  lines.push("");
+  lines.push("**Stage re-runs:**");
+  lines.push("  `devteam stage <name> [--workstream <role>] --headless`");
+  lines.push("  `devteam restart <name>` to clear gates before re-run");
+  lines.push("Valid stage names: build, pre-review, security-review, red-team,");
+  lines.push("  preflight, peer-review, qa, accessibility-audit,");
+  lines.push("  observability-gate, verification-beyond-tests,");
+  lines.push("  performance-budget, sign-off, retrospective, deploy");
+  lines.push("Valid workstream roles for peer-review and build:");
+  lines.push("  backend, frontend, platform, qa");
+  lines.push("");
+  lines.push("**After all fixes:** run `devteam merge <stage>` to rebuild the");
+  lines.push("merged gate, then `devteam validate` to confirm it is valid.");
+  lines.push("");
+  lines.push("## What NOT to do");
+  lines.push("");
+  lines.push("- Do not write source code under `src/` (dispatch a build");
+  lines.push("  workstream agent for that)");
+  lines.push("- Do not dispatch stages the ruling does not mention");
+  lines.push("- Do not ask for confirmation — implement directly");
+  lines.push("");
+  lines.push("## Done when");
+  lines.push("");
+  lines.push("`devteam next` reports an action other than `resolve-escalation`.");
+  lines.push("Run `devteam next` at the end and report its output.");
+  return lines.join("\n");
+}
+
+// `devteam fix-escalation [--headless] [--cwd <dir>]`
+// Reads PRINCIPAL-RULING entries from pipeline/context.md and dispatches
+// an escalation-applicator agent to implement them — fixing gate shapes,
+// running devteam stage commands, and merging — so `devteam next` advances.
+async function cmdFixEscalation(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+
+  const rulings = loadPrincipalRulings(cwd);
+  if (rulings.length === 0) {
+    console.error("devteam fix-escalation: no PRINCIPAL-RULING entries found in pipeline/context.md.");
+    console.error("Run `devteam ruling [--target-gate <path>] [--headless]` first to get a ruling.");
+    process.exit(2);
+  }
+
+  // Find the escalating gate
+  let escalatingGate = null;
+  try {
+    const { next } = getOrchestrator();
+    const nr = next({ cwd });
+    if (nr.action === "resolve-escalation" && nr.gate) escalatingGate = nr.gate;
+  } catch { /* ignore */ }
+
+  const prompt = renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate);
+
+  if (!flags.headless) {
+    const onboarding = [
+      "════════════════════════════════════════════════════════════════════",
+      "  Escalation-applicator prompt",
+      "  Paste into Claude Code (or add --headless to run automatically).",
+      "════════════════════════════════════════════════════════════════════",
+      "",
+    ].join("\n");
+    process.stderr.write(onboarding);
+    console.log(prompt);
+    return;
+  }
+
+  const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
+  const { loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
+  const config = loadConfig(cwd);
+  const host = (config.routing.roles && config.routing.roles.principal) || config.routing.default_host;
+  let adapter;
+  try { adapter = loadAdapter(host); } catch (err) {
+    console.error(`Could not load adapter "${host}": ${err.message}`); process.exit(1);
+  }
+  if (!adapter.capabilities || !adapter.capabilities.headless) {
+    console.error(`Host "${host}" does not support --headless. Run without --headless to print the prompt.`);
+    process.exit(1);
+  }
+  const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND || adapter.capabilities.headlessCommand;
+  if (!cmdString) { console.error(`Host "${host}" declares no headlessCommand.`); process.exit(1); }
+
+  const { spawn } = require("node:child_process");
+  const [bin, ...args] = cmdString.split(/\s+/);
+  process.stderr.write(`[devteam] dispatching escalation-applicator → ${host} (headless)\n`);
+
+  const exitCode = await new Promise((resolve) => {
+    const child = spawn(bin, args, { cwd, stdio: ["pipe", "inherit", "inherit"] });
+    child.on("error", (err) => { process.stderr.write(`[devteam] spawn error: ${err.message}\n`); resolve(1); });
+    child.on("close", (code) => resolve(code === null ? 1 : code));
+    child.stdin.on("error", () => {});
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
+
+  if (exitCode !== 0) {
+    process.stderr.write(`[devteam] escalation-applicator exited ${exitCode}\n`);
+    process.exit(exitCode);
+  }
+  process.stderr.write(`[devteam] escalation-applicator complete.\n`);
 }
 
 function cmdHosts() {
@@ -2429,6 +2612,7 @@ function main() {
     case "derive-approvals": return cmdDeriveApprovals(rest);
     case "restart":  return cmdRestart(rest);
     case "ruling":   return cmdRuling(rest);
+    case "fix-escalation": return cmdFixEscalation(rest);
     case "summary":  return cmdSummary(rest);
     case "log":      return cmdLog(rest);
     case "doctor":   return cmdDoctor(rest);
