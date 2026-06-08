@@ -252,7 +252,7 @@ function parseFlags(argv) {
     if (a === "--target-gate") { flags.targetGate = argv[++i]; continue; }
     if (a === "--follow")  { flags.follow  = true;      continue; }
     if (a === "--description") { flags.description = argv[++i]; continue; }
-    if (a === "--apply")   { flags.apply   = true;      continue; }
+    if (a === "--apply")   { flags.apply   = argv[++i]; continue; }
     if (a === "--no-content") { flags.noContent = true; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
@@ -548,11 +548,11 @@ function cmdAdvise(argv) {
 
   for (const { item, classification, addressed, options } of result.items) {
     if (addressed) {
-      console.log(`  ${item.id} — ${item.summary || "(no summary)"}  [${item._source}]`);
+      console.log(`  ${item.id} — ${item.text || item.summary || "(no summary)"}  [${item._source}]`);
       console.log(`    Status: ADDRESSED\n`);
       continue;
     }
-    console.log(`  ${item.id} — ${item.summary || "(no summary)"}  [${item._source}]`);
+    console.log(`  ${item.id} — ${item.text || item.summary || "(no summary)"}  [${item._source}]`);
     console.log(`    Risk: ${riskLabel[classification] || classification}`);
     console.log("    Options:");
     for (const opt of options) {

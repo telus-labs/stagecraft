@@ -92,24 +92,47 @@ function loadAddressedItems(cwd, opts = {}) {
 // ---------------------------------------------------------------------------
 // extractAcRefs
 // ---------------------------------------------------------------------------
-// Pulls AC-N references from an item's summary and id fields.
+// Pulls AC-N references from an item's text fields.
+// Gates may use either "text" (build/QA workstream format) or "summary"
+// (red-team stage-04c format) — check both.
 // ---------------------------------------------------------------------------
 function extractAcRefs(item) {
-  const text = `${item.id || ""} ${item.summary || ""}`;
-  return [...new Set((text.match(/\bAC-\d+\b/g) || []))];
+  const content = `${item.id || ""} ${item.text || ""} ${item.summary || ""}`;
+  return [...new Set((content.match(/\bAC-\d+\b/g) || []))];
+}
+
+// Normalise the human-readable description field across gate formats.
+function itemText(item) {
+  return item.text || item.summary || "";
 }
 
 // ---------------------------------------------------------------------------
 // classifyItem
 // ---------------------------------------------------------------------------
-// QA_BLOCKER   — item references an AC that is missing from spec.feature
-// PEER_REVIEW_RISK — no AC ref, severity high/critical (red-team finding)
-// QA_NOISE     — no AC ref, timing/flakiness keywords in summary
-// INFO         — everything else
+// track_for (when present) is the agent's own recommendation — use it first:
+//   "brief-amendment"  → PEER_REVIEW_RISK  (brief needs amending before peer-review)
+//   "lessons-learned"  → QA_NOISE          (informational; no gate impact)
+//   "ticket"           → PEER_REVIEW_RISK or QA_BLOCKER based on AC refs
+//
+// Fallback (no track_for or unrecognised value):
+//   QA_BLOCKER   — item references an AC that is missing from spec.feature
+//   PEER_REVIEW_RISK — no AC ref, severity high/critical (red-team finding)
+//   QA_NOISE     — no AC ref, timing/flakiness keywords in text
+//   INFO         — everything else
 // ---------------------------------------------------------------------------
 function classifyItem(item, cwd) {
-  const acRefs = extractAcRefs(item);
+  const trackFor = (item.track_for || "").toLowerCase();
 
+  // Agent-provided track_for overrides heuristics
+  if (trackFor === "brief-amendment") return "PEER_REVIEW_RISK";
+  if (trackFor === "lessons-learned") return "QA_NOISE";
+  if (trackFor === "ticket") {
+    const acRefs = extractAcRefs(item);
+    return acRefs.length > 0 ? "QA_BLOCKER" : "PEER_REVIEW_RISK";
+  }
+
+  // Heuristic fallback
+  const acRefs = extractAcRefs(item);
   if (acRefs.length > 0) {
     const specPath = path.join(cwd, "pipeline", "spec.feature");
     if (!fs.existsSync(specPath)) {
@@ -127,9 +150,9 @@ function classifyItem(item, cwd) {
   const severity = (item.severity || "").toLowerCase();
   if (severity === "critical" || severity === "high") return "PEER_REVIEW_RISK";
 
-  const summaryLower = (item.summary || "").toLowerCase();
-  const noiseKeywords = ["flak", "timing", "intermittent", "retry", "flaky", "ci timing", "timing issue"];
-  if (noiseKeywords.some((kw) => summaryLower.includes(kw))) return "QA_NOISE";
+  const textLower = itemText(item).toLowerCase();
+  const noiseKeywords = ["flak", "timing", "intermittent", "retry", "flaky", "overhead", "ci timing", "timing issue"];
+  if (noiseKeywords.some((kw) => textLower.includes(kw))) return "QA_NOISE";
 
   return "INFO";
 }
@@ -144,6 +167,7 @@ function generateOptions(item, classification) {
   const acRefs = extractAcRefs(item);
   const hasAc = acRefs.length > 0;
   const ticketHint = hasAc ? ` (ticket: --apply ${item.id}=B:PROJ-XYZ)` : " (--apply <id>=B:PROJ-XYZ)";
+  const trackFor = (item.track_for || "").toLowerCase();
 
   switch (classification) {
     case "QA_BLOCKER":
@@ -159,6 +183,18 @@ function generateOptions(item, classification) {
       ];
 
     case "PEER_REVIEW_RISK":
+      // When track_for says "brief-amendment", the agent already knows the AC can't be
+      // fully tested as written — recommend amend as the right resolution.
+      if (trackFor === "brief-amendment") {
+        return [
+          { id: "A", action: "amend",   label: "amend",   recommended: true,
+            description: `flag for PM to scope-down or remove ${acRefs.join(", ") || "this item"} from the brief` },
+          { id: "B", action: "defer",   label: "defer",   recommended: false,
+            description: `defer with ticket${ticketHint}` },
+          { id: "C", action: "nothing", label: "nothing", recommended: false,
+            description: "advance as-is; peer-review may flag the untestable AC" },
+        ];
+      }
       return [
         { id: "A", action: "defer",     label: "defer",     recommended: true,
           description: `acknowledge in pipeline/context.md${ticketHint}` },
@@ -169,6 +205,18 @@ function generateOptions(item, classification) {
       ];
 
     case "QA_NOISE":
+      // When track_for says "lessons-learned", prefer known-flaky over nothing so
+      // there is an explicit record (QA retries once before counting a failure).
+      if (trackFor === "lessons-learned") {
+        return [
+          { id: "A", action: "known-flaky", label: "known-flaky", recommended: true,
+            description: "add KNOWN-FLAKY marker so QA retries once before counting a failure" },
+          { id: "B", action: "nothing",     label: "nothing",     recommended: false,
+            description: "record as known; no marker written; QA counts first failure" },
+          { id: "C", action: "fix-now",     label: "fix-now",     recommended: false,
+            description: "dispatch build workstream to stabilize the test before advancing" },
+        ];
+      }
       return [
         { id: "A", action: "nothing",     label: "nothing",     recommended: true,
           description: "record as known; QA retries on flake; no marker written" },
@@ -201,7 +249,7 @@ function generateOptions(item, classification) {
 function applyOption(item, action, ticketId) {
   const acRefs = extractAcRefs(item);
   const refLabel = acRefs.length > 0 ? acRefs.join(",") : item.id;
-  const summary = item.summary || item.id;
+  const summary = itemText(item) || item.id;
 
   switch (action) {
     case "defer":
