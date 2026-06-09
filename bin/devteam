@@ -570,7 +570,7 @@ function cmdAdvise(argv) {
         for (const cmd of applied.scaffoldCommands) console.log(`    $ ${cmd}`);
       }
       if (applied.unresolvedBlockers === 0) {
-        console.log("\n  All follow-up items addressed.");
+        console.log("\n  All noted_for_followup items addressed.");
         process.exit(0);
       } else {
         console.log(`\n  ${applied.unresolvedBlockers} unresolved BLOCKER item(s) remain.`);
@@ -582,14 +582,30 @@ function cmdAdvise(argv) {
 
   if (flags.json) { console.log(JSON.stringify(result, null, 2)); return; }
 
+  // Surface active pipeline blockers before the follow-up items section so the
+  // stage manager sees the full picture, not just the noted_for_followup slice.
+  try {
+    const { next } = getOrchestrator();
+    const nr = next({ cwd });
+    if (nr.action === "fix-and-retry" || nr.action === "resolve-escalation") {
+      const icon = nr.action === "resolve-escalation" ? "🚨" : "❌";
+      console.log(`${icon} Active pipeline blocker: ${nr.action} — ${nr.name || ""} (${nr.stage || ""})`);
+      if (nr.reason) console.log(`   ${nr.reason}`);
+      if (nr.blockers && nr.blockers.length) {
+        for (const b of nr.blockers) console.log(`   blocker: ${typeof b === "object" ? (b.message || b.summary || JSON.stringify(b)) : b}`);
+      }
+      console.log(`   Run \`devteam next\` for the full fix steps.\n`);
+    }
+  } catch { /* advisory check must never break advise */ }
+
   if (result.items.length === 0) {
-    console.log("[advise] No noted_for_followup items found in pipeline gates.");
+    console.log("[advise] No noted_for_followup items in completed gates.");
     return;
   }
 
   const allAddressed = result.items.every((r) => r.addressed);
   if (allAddressed) {
-    console.log("[advise] All follow-up items addressed.");
+    console.log("[advise] All noted_for_followup items addressed.");
     return;
   }
 

@@ -718,8 +718,11 @@ function computeFixSteps(gate, stageDef) {
     const steps = [];
 
     if (changesRequested.length) {
+      const reviewerList = changesRequested
+        .map(c => typeof c === "string" ? c : [c.reviewer, c.workstream].filter(Boolean).join("/") || JSON.stringify(c))
+        .join(", ");
       steps.push({
-        description: `Address changes requested by: ${changesRequested.join(", ")}`,
+        description: `Address changes requested by: ${reviewerList}`,
         commands: [],
       });
       const ws = _wsFromBlockers(gate);
