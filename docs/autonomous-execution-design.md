@@ -1,0 +1,444 @@
+# Autonomous pipeline execution — design
+
+**Status:** Design (reviewed) — companion to [ADR-003](adr/003-bounded-autonomous-execution.md)
+**Date:** 2026-06-09
+**Authors:** Mumit Khan (design), reviewed with Claude
+
+This document specifies how Stagecraft moves from a **human-driven** stage manager
+(a person reads `devteam next`, types the indicated command, repeats) to a
+**bounded autonomous** driver that advances the pipeline on its own and halts only
+where a decision genuinely requires human authority.
+
+It is deliberately staged. The foundational layer (a typed failure model) has
+standalone value for the *human-driven* product and ships first. The autonomous
+driver is the capstone and ships last, gated on the layers beneath it.
+
+---
+
+## 1. Motivation and the honest boundary
+
+### 1.1 What this is
+
+`devteam next` already returns one of six actions — `run-stage`, `continue-stage`,
+`merge`, `fix-and-retry`, `resolve-escalation`, `pipeline-complete`
+(`core/orchestrator.js:1046–1099`). The pipeline is already a state machine. An
+autonomous stage manager is a driver loop around it:
+
+```
+while action != pipeline-complete:
+  r = next()
+  dispatch / merge / fix / escalate / halt   # based on r.action and r.failure_class
+```
+
+The orchestrator loop is **code** (deterministic, cheap). The dispatched workstream
+agents are **LLMs** (non-deterministic, where the real work and the real cost live).
+This separation is the whole design: the driver never needs to understand the code
+being written — it needs to know *which* workstream to fire and *what kind* of
+failure it is looking at.
+
+### 1.2 What this is not
+
+This is **not** "remove the human." Stagecraft's thesis is that the unit is the
+team, not the model (`docs/BACKLOG.md`, bet #7), and `ESCALATE` exists precisely
+because some decisions exceed an agent's authority. An autonomous loop that never
+escalates has eliminated a safety mechanism, not solved the underlying problem.
+
+The design therefore reframes the human's role rather than removing it:
+
+| | Human-driven (today) | Bounded autonomous (target) |
+|---|---|---|
+| Human reads `next`, types command | Yes, every transition | No — the driver does it |
+| Human fixes mechanical failures | Yes | No — driver re-dispatches with context |
+| Human resolves judgment escalations | Yes | Only the ones the Principal can't derive |
+| Human authorizes irreversible stages | Implicit | **Explicit grant, always required** |
+
+The human shifts from **mechanical sequencer** to **authority grantor**. That is a
+cheaper, more scalable role — and it is the only honest version of "full automation"
+that keeps Stagecraft's quality model intact.
+
+---
+
+## 2. Layer 1 — A typed failure model (foundational)
+
+### 2.1 The problem, grounded
+
+Today a gate `status` is one of `PASS | WARN | FAIL | ESCALATE`
+(`core/gates/schemas/gate.schema.json:24`). `next()` collapses everything non-passing
+into two branches: `FAIL → fix-and-retry`, `ESCALATE → resolve-escalation`
+(`core/orchestrator.js:1077–1094`). A grep for `transient | failureClass | retryable`
+across `core/` and `bin/` returns **zero hits** — there is no typed failure model.
+
+`FAIL` is doing the work of at least five distinct situations that demand opposite
+responses. The conflation is visible in the code:
+
+- An **unreadable/corrupt gate** returns `fix-and-retry` with command
+  `cat <gate> # then repair` (`core/orchestrator.js:1068`) — a human diagnostic, not
+  an executable fix.
+- A **genuinely failing test** also returns `fix-and-retry`, with executable rebuild
+  commands (`core/orchestrator.js:1085`).
+
+A driver iterating `commands[]` cannot tell these apart. It would "retry" a corrupt
+gate by re-running the stage, which cannot repair corruption.
+
+### 2.2 The infinite-loop hole (why this is correctness, not polish)
+
+The sharpest consequence: **structural-input failures never write a gate.** A context
+overflow or a host that errors out produces `gatePath: null`
+(`core/adapters/headless.js:191`). Then:
+
+1. `next()` sees no stage gate → `!fs.existsSync(stageGatePath)` → returns `run-stage`
+   ("stage not started"), `core/orchestrator.js:1029`.
+2. The driver re-dispatches. Same oversized prompt. Same overflow. No gate again.
+3. The convergence mechanism (`retry_number` / `this_attempt_differs_by`) lives
+   *inside the gate* (`gate.schema.json:72–83`). No gate is ever written, so it never
+   fires.
+4. There is no circuit breaker in `next()`.
+
+The loop runs forever, re-paying tokens each iteration, never escalating. A naive
+`devteam run` built today would do exactly this. The taxonomy is the fix.
+
+### 2.3 Classify by required response, not by cause
+
+The driver does not care *what* went wrong; it cares *what to do next*. There are
+exactly five distinct responses, so five classes:
+
+| Class | Required driver response | Counts against convergence budget? |
+|---|---|---|
+| **transient** | wait + backoff, re-dispatch *identical* | No |
+| **structural-input** | halt — retry cannot help; needs config/human repair | No (never retry) |
+| **code-defect** | re-dispatch agent with blockers as context | **Yes** |
+| **judgment-gate** | route to Principal / human ruling | No (escalates) |
+| **external-blocked** | suspend, surface human checkpoint, do not retry | No |
+
+Cause maps many-to-one onto response: context-overflow and a corrupt gate are
+different causes but the same response (halt, don't retry). That collapse is what
+makes five classes tractable.
+
+### 2.4 Every discriminating signal already exists
+
+The signals are present in the codebase today — scattered across three layers and
+never assembled into a class:
+
+| Class | Real detection signal | Where it surfaces |
+|---|---|---|
+| transient | Promise *rejects* (spawn error, `headless.js:164`); or `exitCode≠0 && gatePath===null`; or `timedOut===true` (`headless.js:189`) | `runHeadless` return |
+| structural-input | same raw signal as transient, disambiguated by log content (overflow) or by *repetition* | `runHeadless` + teed log |
+| code-defect | gate written, `status:"FAIL"`, `blockers[]` populated, `computeFixSteps`≠null | gate file |
+| judgment-gate | gate written, `status:"ESCALATE"` | gate file |
+| external-blocked | `status:"FAIL"` + a `computeFixSteps` step with empty `commands[]` + human-action description (e.g. `orchestrator.js:631–636`) | gate + `computeFixSteps` |
+| state-corruption (→ structural response) | `loadGateSafe` error (`orchestrator.js:1068`); or merge returns `"malformed"`/`"missing"` (`orchestrator.js:360,365`) | `next()` / `mergeWorkstreamGates` |
+
+Six rows, five response-classes (state-corruption shares the structural-input
+response). **No new gate fields and no schema migration are required** — the model
+assembles signals that `runHeadless`, the validator, and `computeFixSteps` already
+produce.
+
+### 2.5 The convergence mechanism already exists — in the schema, not the loop
+
+The gate schema defines `this_attempt_differs_by`, and the validator enforces: if
+`retry_number >= 1`, this field must be non-empty — *"same content twice escalates
+instead of retrying"* (`gate.schema.json:80–83`, `validator.js:343–348`).
+
+That is a **progress-based** circuit breaker (trips on lack of change: blockers
+5→3→3), strictly better than a fixed count (which would kill a run legitimately
+converging 5→3→1). It already exists. The gap is that **`next()` never reads
+`retry_number` or `this_attempt_differs_by`** — the breaker is enforced at gate-write
+time on the agent, not wired to the loop.
+
+### 2.6 Where the classifier lives
+
+Two detection points, because the signal arrives in two phases:
+
+**Phase 1 — dispatch-time** (`runHeadless` returns, before any gate is read). A
+`classifyDispatch({exitCode, gatePath, timedOut, writeViolations})`:
+
+- promise rejected / `exitCode≠0 && gatePath===null`, *first occurrence* →
+  **transient** (backoff, retry identical).
+- same signal recurring, or log matches an overflow signature → **structural-input**
+  (halt).
+- `gatePath===null && exitCode===0` ("exited clean, wrote nothing") →
+  **structural-input**. The `replay` command (E6) already has this exact mtime-based
+  "host exited 0 but did nothing" disambiguator (`bin/devteam`), reusable here.
+- `writeViolations.length > 0` → policy failure → structural (halt; the agent
+  breached its write boundary).
+
+**Phase 2 — evaluation-time** (`next()` reads the gate). A
+`classifyGate(gate, fixSteps)`:
+
+- `loadGateSafe` error → **state-corruption** (halt).
+- `status:"ESCALATE"` → **judgment-gate**.
+- `status:"FAIL"` + every `fixSteps` step has empty `commands[]` → **external-blocked**.
+- `status:"FAIL"` + executable `commands[]` → **code-defect**; then check
+  `this_attempt_differs_by` for thrash → escalate if stalled.
+
+`next()` then carries the class on the action object instead of returning a bare
+`fix-and-retry`:
+
+```jsonc
+{ "action": "fix-and-retry", "failure_class": "code-defect", "fix_steps": [...] }
+{ "action": "halt",          "failure_class": "structural-input", "diagnosis": "..." }
+{ "action": "block",         "failure_class": "external-blocked", "checkpoint": "..." }
+```
+
+This keeps `next()` a pure function of disk state for the gate-based classes, while
+the dispatch-time classes are owned by the driver (the only thing that holds the
+`runHeadless` return). That split keeps `next()` stateless and testable, and confines
+the one stateful concern (retry/backoff counting) to the driver.
+
+### 2.7 The one genuinely fuzzy cut
+
+Transient vs. structural-input cannot be reliably told apart from a bare non-zero
+exit with no gate. Three options, in order of robustness:
+
+1. **Repetition heuristic** (v1): treat the first no-gate failure as transient
+   (backoff + retry); if the *identical* dispatch fails the same way twice,
+   reclassify as structural and halt. No host cooperation; caps the cost leak at one
+   wasted retry.
+2. **Log-signature matching**: grep the teed log (`pipeline/logs/<ws>.log`) for
+   host-specific overflow/auth/rate-limit strings. Works, but brittle across CLI
+   version bumps.
+3. **Host-adapter typed exit** (mature): extend the capability contract so each host
+   maps exit codes / stderr to a typed reason. Principled; composes with G10; real
+   surface area across `hosts/*`.
+
+Ship (1) in v1; treat (3) as the maturation path.
+
+---
+
+## 3. Layer 2 — Typed escalation and authority provenance (safety)
+
+### 3.1 Typed "I cannot decide"
+
+`resolve-escalation` emits a freeform `devteam ruling --topic "..."`
+(`core/orchestrator.js:1082`). There is no typed escalation, and no definition of when
+even a Principal must stop. The design defines it precisely. An LLM Principal can
+resolve an escalation **iff the answer is derivable from artifacts it can read**
+(brief, spec, `context.md`, gates, code, history). It genuinely cannot when the
+escalation is **underdetermined**, which has exactly three sources:
+
+1. **Missing authority** — the decision commits a resource never granted (spend
+   money, accept legal/security risk, change scope, sign off on prod). Reasoning does
+   not manufacture authority. *Halt.*
+2. **Missing information** — the deciding fact lives outside every readable artifact
+   ("does the client accept this latency?"). The Principal can flag it, not know it.
+   *Halt — as a question.*
+3. **Irreducible value tradeoff** — two legitimate objectives conflict and the brief
+   does not rank them. Deriving a ranking is hallucinating a stakeholder's priority.
+   *Halt.*
+
+Consequence: a well-built Principal should **almost never halt on "I can't reason
+this out."** It halts on "I lack authority / information / a ranking." The Principal's
+"cannot decide" output is therefore **typed**:
+
+```jsonc
+{ "decidable": false, "reason_class": "authority|information|value",
+  "question": "...", "options": ["..."] }
+```
+
+which makes the human checkpoint a short, structured decision (a grant, a fact, or a
+ranking) rather than a debugging session.
+
+### 3.2 Authority provenance in the audit chain
+
+Stagecraft has strong **computation** provenance: C4 reproducibility fingerprints
+*what produced a gate* (`model`, `model_version`, `temperature`, `seed`,
+`system_prompt_hash`, `tools_hash` — `core/reproducibility.js`,
+`gate.schema.json:99–138`), C1 audits writes (`core/guards/write-audit.js`), and C6
+(tamper-evident gate chain) is top-tier on the roadmap.
+
+None of it records **authority** provenance. In a human-driven run a person typed
+`devteam ruling`, so accountability is implicit. In an autonomous run the gate would
+record "claude-opus-4-7 at temp 0" as the thing that resolved a security escalation —
+that is computation provenance, not decision accountability.
+
+The design adds authority attribution to the gate and chains it under C6: each
+advance past a judgment gate records *which authority was exercised, under whose
+grant*. A post-incident audit can then reconstruct "the Principal auto-resolved this
+under standing grant of type X, issued by human Y on date Z." This is the prerequisite
+for letting `devteam run` touch anything consequential, and it slots into the C6 work
+rather than duplicating it.
+
+---
+
+## 4. Layer 3 — The bounded autonomous driver (capstone)
+
+### 4.1 `devteam run`
+
+A new command implementing the driver loop. It is **code, not an LLM** — the only
+LLMs in the loop are the dispatched workstream agents and (at escalation) the
+Principal.
+
+```
+devteam run [--track <t>] [--until <stage>] [--max-retries N]
+            [--budget-usd X] [--auto-rule <grant-set>] [--fresh]
+```
+
+Loop, per iteration:
+
+1. Call `next()`. Switch on `action` and `failure_class` (§2.6).
+2. `run-stage` / `continue-stage` → dispatch (inheriting per-workstream routing from
+   config; `continue-stage` dispatches only the *remaining* workstreams).
+3. `merge` → `devteam merge <stage>`.
+4. `fix-and-retry` (`code-defect`) → execute `fix_steps.commands[]`, propagate the
+   blockers into `context.md` (§4.3), re-dispatch; honor the progress-based breaker
+   (§2.5).
+5. `transient` → backoff, re-dispatch identical; do not increment the convergence
+   budget.
+6. `halt` (`structural-input` / `state-corruption`) → stop with a typed diagnosis.
+7. `block` (`external-blocked`) → suspend; surface a human checkpoint.
+8. `resolve-escalation` (`judgment-gate`) → dispatch the Principal (§3.1); if
+   `decidable:false`, halt as a typed question; else write the ruling and resume.
+9. `pipeline-complete` → run a final `advise` sweep (§4.4) and exit.
+
+### 4.2 The consequence ceiling (resolves the philosophy tension)
+
+Autonomy is **scoped by consequence**, not uniform. `devteam run` may autonomously
+advance up to — **but not into** — the irreversible/outward-facing stages:
+
+- **stage-07 sign-off**, **stage-08 deploy** (`core/pipeline/stages.js:363,381`):
+  always require an explicit human grant, regardless of Principal confidence. These
+  are also the non-idempotent stages (running deploy twice deploys twice), so the
+  ceiling and the idempotency exclusion are nearly the same set.
+- Everything up to and including **stage-06e / stage-09 retro** is eligible for
+  unattended advance.
+
+This is what makes the feature on-thesis: the human is not removed, they are
+concentrated at the decisions that genuinely need them.
+
+### 4.3 Cross-stage context propagation
+
+A re-dispatched agent reads `context.md` + gate + brief but has no memory of *why* it
+is being re-run. Before any `fix-and-retry` re-dispatch, the driver writes the failing
+stage's blockers into `context.md` so the agent sees the reason (e.g. peer-review's
+"integration tests not updated" reaches the rebuilt backend workstream). The
+`--from <stage>` and `--patch` flags that `computeFixSteps` already emits
+(`orchestrator.js:645,712,739`) are the existing mechanism; the driver populates the
+context they reference.
+
+### 4.4 Budget, state, locking, observability (the MVP blockers)
+
+- **Budget:** no `--budget-usd` enforcement exists today; cost is only summed
+  retrospectively at merge (`orchestrator.js:385,441`). The driver must estimate
+  headroom *before* each dispatch and refuse to dispatch when the running total
+  (summed from `cost_usd` gate fields) would exceed the cap. Best-effort across hosts
+  that don't report cost; log "cost unknown" rather than block.
+- **Run state:** the pipeline is stateless within a run by design. The driver needs a
+  `pipeline/run-state.json` (current stage, per-stage retry counts, which workstreams
+  completed) so a crash/restart resumes instead of re-running completed stages.
+- **Locking:** no lock file exists. The driver must hold an exclusive lock on the
+  pipeline dir for the run; other `devteam` mutating commands check it.
+- **Stage timeout:** `runHeadless` has per-workstream timeouts; the driver needs a
+  stage-level wall-clock timeout so one hung workstream doesn't hang the run.
+- **Run log:** a `pipeline/run-log.jsonl` (one entry per transition: stage, action,
+  failure_class, outcome, duration, cost, authority exercised) is the audit + debug
+  artifact for unattended runs.
+
+### 4.5 Multi-host (inherited free; fanout deferred)
+
+Routing-based multi-host (different roles → different hosts) is inherited from
+`runStage`/`resolveAdapter` with zero driver work. Peer-review **fanout** (same role
+to N hosts, all must agree) works for dispatch but **targeted retry is deferred to a
+later phase**: retrying one fanout host while reusing another's older gate produces a
+merge across two code states. v1 behavior is whole-stage retry on fanout FAIL —
+wasteful but correct. Targeted fanout retry is gated on a gate-versioning scheme (each
+gate records the commit it reviewed) that makes the merge consistency check solvable.
+
+---
+
+## 5. The recipe factory (upside multiplier — separate bet)
+
+A distinct, optional layer that makes autonomy *compound* rather than sit at a fixed
+ceiling. Each resolved escalation is a triple `(failure signature, context,
+ruling+fix)`. Persisted and semantically indexed, a recurring *derivable* failure can
+be resolved deterministically next time instead of re-escalating — `computeFixSteps`
+becomes an append-only learned store seeded by hand and grown by every run.
+
+The substrate already exists: the `core/memory/` embedding store
+(`chunker`/`embed`/`index`/`store`, D7) does semantic similarity, and D4→D5 already
+prove the learning-loop pattern (for routing). The missing wire is `computeFixSteps`
+consulting the memory store on a FAIL signature before escalating.
+
+This is a strictly safer subset of the deprioritized G9 (self-modifying pipeline): it
+grows fix-recipes, not `stages.js`/`roles/`; and it learns within *one* project's
+recurring failures, dodging the "wait for multiple teams" objection that shelved G9.
+**Caveat — a learned recipe is a cached judgment.** Code drifts; a recipe correct at
+commit A can be silently wrong at commit Z. Learned recipes need recency/confidence
+decay and a re-escalation trigger when the signature matches but surrounding code has
+changed materially. Without that, the learning loop becomes a stale-judgment
+amplifier. Treat as a separate bet, after Layers 1–3.
+
+---
+
+## 6. Roadmap
+
+Staged so value is front-loaded and the uncertain bet is last. Each phase is
+independently shippable and useful on its own.
+
+### Phase 0 — Failure taxonomy core (near-term, high value, low controversy)
+
+Improves the **human-driven** product immediately and de-risks everything after.
+
+- `classifyDispatch()` + `classifyGate()` modules (§2.6); `failure_class` on `next()`
+  action objects.
+- Wire `retry_number` / `this_attempt_differs_by` into `next()` so the progress-based
+  breaker is visible to callers (§2.5).
+- Repetition heuristic for transient vs. structural (§2.7, option 1).
+- `next --json` schema with `schema_version`.
+- Tests per class. No schema migration.
+
+**Exit criteria:** `devteam next` reports a failure class for every non-pass outcome;
+the human sees correct guidance (re-run vs. fix vs. repair vs. escalate).
+
+### Phase 1 — Driver MVP (happy path + code-defect + halt)
+
+- `devteam run` with the loop (§4.1) for `run-stage`/`continue-stage`/`merge`/
+  `fix-and-retry`(code-defect)/`transient`/`halt`/`block`.
+- MVP blockers (§4.4): lock file, `run-state.json`, stage timeout, `run-log.jsonl`,
+  `--budget-usd` pre-dispatch check.
+- Consequence ceiling (§4.2): halt before stage-07/08 for a human grant.
+- Escalations halt for a human by default (no auto-rule yet).
+- Cross-stage context propagation (§4.3).
+
+**Exit criteria:** a full-track run with only machine-diagnosable failures completes
+unattended up to sign-off; escalations and structural failures halt cleanly with
+typed diagnosis; cost is capped.
+
+### Phase 2 — Typed escalation + authority provenance (safety)
+
+- Principal headless session with the typed "cannot decide" contract (§3.1).
+- `--auto-rule <grant-set>`: pre-authorized, bounded escalation types only.
+- Authority attribution on gates, chained under C6 (§3.2).
+
+**Exit criteria:** the driver resolves *derivable* escalations via the Principal and
+halts on authority/information/value with a structured question; every autonomous
+advance has an accountable authority record.
+
+### Phase 3 — Recipe factory (upside bet, conditional)
+
+Gated on Phases 0–2 landing **and** evidence of real recurring-failure volume.
+
+- `computeFixSteps` consults `core/memory/` on FAIL signatures (§5).
+- Recency/confidence decay + re-escalation on material code drift.
+
+**Exit criteria:** a previously-escalated, derivable failure resolves deterministically
+on recurrence, with drift-triggered re-escalation demonstrated.
+
+### Explicitly deferred
+
+- Targeted fanout retry (needs gate-versioning; §4.5).
+- Host-adapter typed exit codes (§2.7, option 3 — composes with G10).
+- Multi-pipeline concurrency / merge queue (the scenario where autonomy ROI is
+  highest, but a separate concurrency problem).
+
+---
+
+## 7. Open questions
+
+1. **Grant model.** How is a standing `--auto-rule` grant expressed and scoped, and
+   where is it stored so it is itself auditable? (Ties to Phase 2 + C6.)
+2. **Track inference.** Require explicit `--track`, or read from a
+   `pipeline/track.json` written at init? Wrong-track autonomy is a 10× cost error.
+3. **Heartbeat.** Unattended runs need a liveness signal (gate-mtime poll or periodic
+   stdout) so an operator can tell "progressing" from "hung."
+4. **`pipeline-complete` with pending advise.** Should the driver exit non-zero when
+   `advise` still reports BLOCKER items, even though all gates PASS?
