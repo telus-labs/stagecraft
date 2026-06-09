@@ -194,7 +194,7 @@ function generateOptions(item, classification) {
     case "A11Y_FIX":
       return [
         { id: "A", action: "fix",     label: "fix",     recommended: true,
-          description: "apply the HTML fix from the blocker description, then rm pipeline/gates/stage-06b.json && devteam stage accessibility-audit --headless" },
+          description: "dispatches the frontend agent headlessly to apply the HTML fix now, then re-runs the accessibility audit to verify" },
         { id: "B", action: "defer",   label: "defer",   recommended: false,
           description: `defer with ticket — mark DEFERRED in pipeline/context.md${ticketHint}` },
         { id: "C", action: "amend",   label: "amend",   recommended: false,
@@ -206,7 +206,7 @@ function generateOptions(item, classification) {
     case "QA_BLOCKER":
       return [
         { id: "A", action: "scaffold",  label: "scaffold",  recommended: true,
-          description: `dispatch QA workstream to add a @wip test stub covering ${acRefs.join(", ") || item.id}` },
+          description: `prints the command to run: devteam stage build --workstream qa --patch (writes SCAFFOLD-PENDING; you run the command)` },
         { id: "B", action: "defer",     label: "defer",     recommended: false,
           description: `mark as DEFERRED in pipeline/context.md${ticketHint}` },
         { id: "C", action: "amend",     label: "amend",     recommended: false,
@@ -264,7 +264,7 @@ function generateOptions(item, classification) {
         { id: "A", action: "nothing",   label: "nothing",   recommended: true,
           description: "no action needed; item is informational" },
         { id: "B", action: "defer",     label: "defer",     recommended: false,
-          description: `log in pipeline/context.md for visibility${ticketHint}` },
+          description: `attach a ticket reference to this acknowledgement — use when your team requires all findings to be tracked${ticketHint}` },
       ];
   }
 }
