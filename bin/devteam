@@ -514,7 +514,7 @@ function cmdPreflight(argv) {
 // Apply format: --apply AC-11=A,AC-10=B:PROJ-123,AC-12=A
 //   <itemId>=<optionLetter>[:<ticketId>]
 // ---------------------------------------------------------------------------
-function cmdAdvise(argv) {
+async function cmdAdvise(argv) {
   const { flags } = parseFlags(argv);
   const cwd = flags.cwd || process.cwd();
   const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
@@ -555,6 +555,37 @@ function cmdAdvise(argv) {
         continue;
       }
       resolvedMap.set(itemId, { action: opt.action, ticketId });
+    }
+
+    // A11Y_FIX "fix" actions: dispatch the frontend agent to apply the HTML
+    // fix, then re-run the accessibility audit to verify. Replace the action
+    // with the outcome so applyOption writes the right marker.
+    const fixItems = [...resolvedMap.entries()].filter(([, { action }]) => action === "fix");
+    if (fixItems.length > 0) {
+      const { fixA11yBlockers } = require(path.join(__dirname, "..", "core", "a11y-fixer"));
+      const gatesDir = path.join(cwd, "pipeline", "gates");
+      const a11yGatePath = path.join(gatesDir, "stage-06b.json");
+      let a11yBlockers = [];
+      try {
+        const gate = JSON.parse(fs.readFileSync(a11yGatePath, "utf8"));
+        a11yBlockers = gate.blockers || [];
+      } catch { /* gate absent or unreadable — fixA11yBlockers handles it */ }
+
+      const fixResult = await fixA11yBlockers(cwd, a11yBlockers, {
+        timeoutMs: typeof flags.timeoutMs === "number" ? flags.timeoutMs : 0,
+      });
+
+      // Encode outcome into the action string; applyOption's default branch writes:
+      //   NOTED: <id> — <summary> — stage manager: <action>
+      const outcomeAction = fixResult.status === "PASS"
+        ? "fix-applied-and-verified"
+        : fixResult.status === "dispatch-failed"
+          ? `fix-dispatch-failed${fixResult.reason ? ` (${fixResult.reason})` : ""}`
+          : `fix-attempted — ${fixResult.remainingBlockers.length} blocker(s) remain`;
+
+      for (const [itemId] of fixItems) {
+        resolvedMap.set(itemId, { ...resolvedMap.get(itemId), action: outcomeAction });
+      }
     }
 
     if (resolvedMap.size > 0) {
