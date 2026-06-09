@@ -613,7 +613,7 @@ function _rmBuildGates(workstreams) {
  * Returns an ordered array of { description, commands[] } fix steps for a
  * failed gate, or null when no stage-specific recipe can be derived.
  */
-function computeFixSteps(gate, stageDef) {
+function computeFixSteps(gate, stageDef, gatesDir) {
   const stage = stageDef.stage;
 
   // Pre-review (stage-04a): static-check failures
@@ -658,6 +658,9 @@ function computeFixSteps(gate, stageDef) {
       if (typeof f === "object" && f !== null) {
         if (f.workstream) wsSet.add(f.workstream);
         if (f.assigned_to) wsSet.add(f.assigned_to);
+        // Derive from file path and summary when structured fields absent
+        for (const w of _wsFromText(f.file || "")) wsSet.add(w);
+        for (const w of _wsFromText(f.summary || "")) wsSet.add(w);
       }
     }
     // blockers carry assigned_to (current schema) or workstream (older gates)
@@ -665,6 +668,9 @@ function computeFixSteps(gate, stageDef) {
       if (typeof b !== "object" || b === null) continue;
       if (b.assigned_to) wsSet.add(b.assigned_to);
       else if (b.workstream) wsSet.add(b.workstream);
+      // Derive from file path and summary when structured fields absent
+      for (const w of _wsFromText(b.file || "")) wsSet.add(w);
+      for (const w of _wsFromText(b.summary || "")) wsSet.add(w);
     }
     const ws = [...wsSet];
 
@@ -681,10 +687,25 @@ function computeFixSteps(gate, stageDef) {
         commands: _rmBuildGates(ws),
       });
     } else {
-      steps.push({
-        description: "Clear the affected build workstream gate (ls pipeline/gates/stage-04.*.json to identify it)",
-        commands: ["rm pipeline/gates/stage-04.<affected-ws>.json"],
-      });
+      // Last resort: scan for actual stage-04 workstream gate files on disk
+      let actualGateFiles = [];
+      if (gatesDir) {
+        try {
+          actualGateFiles = fs.readdirSync(gatesDir)
+            .filter((f) => /^stage-04\..+\.json$/.test(f));
+        } catch { /* gatesDir unreadable — keep empty */ }
+      }
+      if (actualGateFiles.length > 0) {
+        steps.push({
+          description: `Clear affected build workstream gate${actualGateFiles.length !== 1 ? "s" : ""}`,
+          commands: actualGateFiles.map((f) => `rm pipeline/gates/${f}`),
+        });
+      } else {
+        steps.push({
+          description: "Clear the affected build workstream gate",
+          commands: ["rm pipeline/gates/stage-04.<affected-ws>.json"],
+        });
+      }
     }
     steps.push({
       description: "Re-run build with red-team findings as context",
@@ -959,7 +980,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
       };
     }
     if (gate.status === "FAIL") {
-      const fix_steps = computeFixSteps(gate, stageDef);
+      const fix_steps = computeFixSteps(gate, stageDef, gatesDir);
       return {
         action: "fix-and-retry", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
