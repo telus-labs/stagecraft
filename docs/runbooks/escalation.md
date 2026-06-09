@@ -99,10 +99,12 @@ If the escalation needs Principal judgment specifically — common for cross-cut
 
 ```bash
 devteam ruling \
-  --topic "F-12 must-fix vs defer (TypeError mis-classification at server.js:46)" \
-  --context pipeline/red-team-report.md,pipeline/code-review/by-platform.md \
   --target-gate pipeline/gates/stage-05.json \
   --headless
+# --topic is optional: auto-derived from the gate's escalation_reason + decision_needed.
+# Supply it explicitly only when you want to override or narrow the auto-derived topic.
+# --context is optional: comma-separated paths the Principal should read in addition
+# to the gate (e.g. --context pipeline/red-team-report.md,pipeline/code-review/by-platform.md).
 ```
 
 Routes via `routing.roles.principal` (or `routing.default_host` if not set), dispatches the Principal subagent against the cited context, and waits for the ruling to land in `pipeline/context.md`. Refuses cleanly if the routed host doesn't support `--headless`.
@@ -122,30 +124,42 @@ parser layer is hard to instrument from middleware without
 bypassing Express's request lifecycle. Tracked as TICKET-1234.
 ```
 
-The `PRINCIPAL-RULING:` prefix is the convention. Nothing parses it programmatically today, but reviewers and future readers can grep for it.
+The `PRINCIPAL-RULING:` prefix is the machine-readable convention. `devteam fix-escalation` reads these lines via `loadPrincipalRulings()` and dispatches an applicator agent that implements what each ruling prescribes — clearing the right gate files and re-running the indicated stages. Reviewers and future readers can also grep for it directly.
 
 ## 4. Encode the decision
 
 ### 4a. Must-fix path
 
-```bash
-# Clear the escalation-time gates so the stage can re-run cleanly.
-devteam restart <stage>            # e.g. devteam restart peer-review
-# If the fix is in an EARLIER stage (e.g. peer-review escalated
-# because of a build defect), restart the earlier stage with cascade:
-devteam restart build --cascade
+After the Principal ruling is written to `pipeline/context.md`:
 
-# Or for build specifically, use the scoped --patch flow that targets
-# only the cited blockers without rebuilding everything:
-devteam stage build --patch --from peer-review --headless
+```bash
+# Primary path — automated implementation:
+devteam fix-escalation --headless
+# Reads PRINCIPAL-RULING: lines, dispatches an applicator agent that clears the
+# right gate files and re-runs the indicated stages automatically.
+
+devteam next   # confirm the escalation is resolved
 ```
 
-After the fix lands and the originating stage re-PASSes:
+**Manual path** (when you want direct control of the sequence, or the applicator can't infer the right steps from the ruling text):
 
 ```bash
-devteam stage pre-review --headless    # if you went all the way back
-devteam stage peer-review --headless   # re-run the stage that escalated
-devteam next                           # confirms the new state
+# For a build defect surfaced at peer-review:
+devteam stage build --patch --from peer-review --workstream <owning-area> --headless
+devteam merge build
+devteam stage pre-review --headless
+devteam stage peer-review --headless
+devteam merge peer-review
+devteam next
+
+# For a defect that requires clearing the whole build stage:
+devteam restart build --cascade
+devteam stage build --patch --from peer-review --headless
+devteam merge build
+devteam stage pre-review --headless
+devteam stage peer-review --headless
+devteam merge peer-review
+devteam next
 ```
 
 ### 4b. Defer path

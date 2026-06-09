@@ -28,14 +28,18 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 ## The general pattern
 
 ```bash
-# 1. See what failed — and who needs to fix it
-devteam next --json   # action: "fix-and-retry", reason: "...", blockers: [...]
-cat pipeline/gates/<stage-id>.json | jq .affected_workstreams
-# → ["backend"]          clear only the backend gate; skip frontend/platform
-# → ["backend", "platform"]  clear both
+# 1. See what failed — devteam next shows the fix steps automatically
+devteam next
+# Prints action, reason, and numbered fix steps with exact commands.
+# The fix steps identify which build workstream to re-run and emit the
+# right --workstream command — no manual gate file inspection needed.
 
-# 2. Fix it — usually via a scoped build re-run
-devteam stage build --patch --from <failing-stage> [--skip-completed] --headless
+# 2. Fix it — targeted re-run of the affected workstream(s)
+devteam stage build --workstream <role> --headless
+# --workstream dispatches only the named role; all other gates are left untouched.
+# Repeat the flag for multiple roles: --workstream backend --workstream platform
+# For a full re-run of all workstreams (when you're unsure which are affected):
+devteam stage build --patch --from <failing-stage> --headless
 
 # 3. Merge if multi-role
 devteam merge build
@@ -256,19 +260,23 @@ Stage 5 is different — the `approval-derivation` hook writes the gate based on
 
 ```bash
 # 1. Which workstreams need to fix something?
-cat pipeline/gates/stage-05.json | jq .affected_workstreams
+#    devteam next shows the fix steps and the exact --workstream command:
+devteam next
+#    To read the gate directly, workstreams with changes requested are in:
+cat pipeline/gates/stage-05.json | jq '[.changes_requested[].workstream] | unique | sort'
+# → ["backend"]
+#    Or look at per-workstream gate status:
+cat pipeline/gates/stage-05.json | jq '[.workstreams[] | select(.status == "FAIL") | .workstream]'
 # → ["backend"]
 
-# 2. Read the extracted BLOCKERs from the per-area gate (no grepping review files).
-cat pipeline/gates/stage-05.backend.json | jq '.blockers[]'
-# → { "reviewer": "dev-platform", "text": "Missing pagination on ListUsersCommand" }
-# → { "reviewer": "dev-platform", "text": "iam_admin_users stub always emits PASS" }
-
-# For gates written before blockers[] was added, fall back to the review file:
+# 2. Read the BLOCKER: lines from the reviewer's file (blockers are in the review
+#    markdown, not in the gate JSON):
 grep -A 2 "BLOCKER:" pipeline/code-review/by-*.md
+# → pipeline/code-review/by-platform.md:BLOCKER: Missing pagination on ListUsersCommand
+# → pipeline/code-review/by-platform.md:BLOCKER: iam_admin_users stub always emits PASS
 
-# 3. Address each BLOCKER. Scoped build re-run using the merged peer-review gate
-#    as the --from source (reads blockers[] from stage-05.json):
+# 3. Address each BLOCKER. Scoped build re-run — --workstream targets only the
+#    affected area (the merger identifies it via changes_requested[].workstream):
 devteam stage build --patch --from peer-review --workstream <owning-area> --headless
 devteam merge build
 

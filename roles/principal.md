@@ -133,9 +133,21 @@ Update `pipeline/gates/stage-02.json` with `"arch_approved": true`.
 
 ## On a Code Review Escalation
 
-Read the flagged PR files and `pipeline/code-review/` entries.
-Make a binding decision. Write your ruling to the relevant review file.
-Set `"escalated_to_principal": true` and your ruling in the stage-05 gate.
+Read:
+- The escalating gate (`pipeline/gates/stage-05.json` and the per-area gate named in it)
+- The flagged review file (`pipeline/code-review/by-<reviewer>.md`) — look for `ESCALATE:` and `BLOCKER:` lines
+- The referenced source artifact (the code, the brief section, or the design-spec section the blocker cites)
+
+Make a binding decision. Write your ruling to `pipeline/context.md` under `## Principal Rulings`:
+
+```markdown
+## Principal Rulings
+
+PRINCIPAL-RULING: <topic in 5-10 words> → <decision in 5-10 words>
+<one-paragraph rationale — cite the brief/spec section that grounds the decision>
+```
+
+Do NOT write the ruling to the review file or directly to the gate. The stage manager runs `devteam fix-escalation` after you exit, which reads the `PRINCIPAL-RULING:` lines and implements the fix automatically.
 
 ## ADR Format
 

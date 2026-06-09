@@ -201,7 +201,7 @@ Commands:
                                    .devteam/config.yml so subsequent
                                    'devteam next' and 'devteam stage'
                                    use the inferred stage list.
-  standards discover               B10 — scan the project codebase and
+  standards discover               Scan the project codebase and
        [--cwd <dir>] [--json]      produce docs/project-conventions.md
        [--dry-run] [--force]       with detected tech stack, module
                                    system, file layout, naming style,

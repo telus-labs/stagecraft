@@ -27,12 +27,15 @@ In the gate file:
 
 ## Orchestrator Behaviour on ESCALATE
 
-1. Stop the pipeline immediately
-2. Print the `escalation_reason` and `decision_needed` to the user
-3. Show `options` as choices
-4. Wait for explicit user response
-5. Record the user's decision in `pipeline/context.md` under `## User Decisions`
-6. Resume the pipeline at `pipeline_halted_at`
+1. Stop the pipeline immediately.
+2. `devteam next` returns `resolve-escalation` with the gate path, `escalation_reason`, and `decision_needed`.
+3. The stage manager invokes `devteam ruling [--target-gate <path>] [--headless]`.
+   `--topic` is optional — when omitted, it is auto-derived from `escalation_reason` + `decision_needed` in the gate.
+4. The Principal subagent writes a `PRINCIPAL-RULING: <topic> → <decision>` line into `pipeline/context.md § Principal Rulings`.
+5. The stage manager runs `devteam fix-escalation [--headless]`, which reads the `PRINCIPAL-RULING:` entries and dispatches an applicator agent that clears the right gates and re-runs the indicated stages automatically.
+6. The pipeline resumes at `pipeline_halted_at` once the escalating gate no longer reports `ESCALATE`.
+
+For the full resolution procedure — including the defer path (no fix needed, just a ticket) and the two-round peer-review exhaustion shape — see `docs/runbooks/escalation.md`.
 
 ## What is NOT an Escalation
 
