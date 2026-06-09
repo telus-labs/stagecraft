@@ -30,6 +30,15 @@ const DEFAULTS = {
     // default_track.
     custom_stages: null,
   },
+  autonomy: {
+    // ADR-003 / H1: retry budget before `next()` escalates a still-FAIL stage
+    // (failure_class "convergence-exhausted") instead of returning
+    // fix-and-retry again. Count-based ceiling on the gate's retry_number.
+    // Progress-based detection (blocker count decreasing across attempts) is a
+    // follow-up — it requires gate archiving, which this layer does not add.
+    // 0 = escalate on the first FAIL.
+    max_retries: 2,
+  },
 };
 
 function configPath(cwd) {
@@ -62,6 +71,11 @@ function loadConfig(cwd = process.cwd()) {
         skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
         verify: (parsed.pipeline && typeof parsed.pipeline.verify === "object" && parsed.pipeline.verify !== null) ? parsed.pipeline.verify : {},
         custom_stages: Array.isArray(parsed.pipeline?.custom_stages) ? parsed.pipeline.custom_stages : null,
+      },
+      autonomy: {
+        max_retries: Number.isInteger(parsed.autonomy?.max_retries) && parsed.autonomy.max_retries >= 0
+          ? parsed.autonomy.max_retries
+          : DEFAULTS.autonomy.max_retries,
       },
       _source: "file",
       _path: p,

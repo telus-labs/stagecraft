@@ -236,8 +236,20 @@ After every stage's gate is written, `devteam next` inspects `pipeline/gates/` a
 | `continue-stage` | Multi-role stage partly done — some workstreams still pending | Run the remaining role's workstream |
 | `merge` | All workstreams of a multi-role stage done, no merged gate yet | `devteam merge <stage>` |
 | `fix-and-retry` | Merged gate (or single-role gate) has `status: FAIL` | Address the blockers, re-run the stage |
-| `resolve-escalation` | Gate has `status: ESCALATE` | Read `escalation_reason`, make the call, rewrite the gate |
+| `resolve-escalation` | Gate has `status: ESCALATE`, or a stage exhausted its retry budget | Read `escalation_reason`, make the call, rewrite the gate |
 | `pipeline-complete` | All stages in the track have PASS or WARN | Done |
+
+Non-pass actions also carry a **`failure_class`** (shown as a `[tag]` in the output, and a field under `--json`) that tells you *how* to respond:
+
+| `failure_class` | Action | What it means |
+|---|---|---|
+| `code-defect` | `fix-and-retry` | Change code, re-run the stage (the common case). |
+| `state-corruption` | `fix-and-retry` | The gate file is unreadable — **repair the JSON, don't re-run**. |
+| `external-blocked` | `fix-and-retry` | A human/external action is required (e.g. a sign-off). |
+| `judgment-gate` | `resolve-escalation` | A gate wrote `status: ESCALATE`; make a ruling. |
+| `convergence-exhausted` | `resolve-escalation` | Retry budget (`autonomy.max_retries`, default 2) spent — escalated automatically. |
+
+`devteam next --json` also includes a `schema_version` for programmatic callers. See [`rules/gates.md` § Failure classification](../rules/gates.md#failure-classification-next-failure_class).
 
 For a snapshot of where the pipeline is right now:
 

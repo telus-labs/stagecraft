@@ -416,6 +416,35 @@ fix is to state the delta explicitly before re-writing the gate.
 
 ---
 
+## Failure classification (`next()` `failure_class`)
+
+`devteam next` tags every non-pass action with a `failure_class` so the reader
+(a human stage manager, or an autonomous driver later) reacts correctly instead
+of treating every failure as a generic "retry." The class is derived from gate
+state, not written into the gate. Classes (ADR-003):
+
+| `failure_class` | When | What it means for you |
+|---|---|---|
+| `state-corruption` | gate file unreadable / malformed JSON | Re-running the stage **won't** help — repair or rewrite the gate file. |
+| `judgment-gate` | gate `status: ESCALATE` | Needs a ruling (`devteam ruling`), not a retry. |
+| `external-blocked` | `status: FAIL` and every computed fix step is human/external action with no command | A person must act (e.g. obtain sign-off); the pipeline can't self-advance. |
+| `code-defect` | `status: FAIL` with executable fix steps (or no recipe) | The implementing agent must change code; re-dispatch the workstream. |
+| `convergence-exhausted` | `status: FAIL` and `retry_number >= autonomy.max_retries` | Retry budget spent; `next()` returns `resolve-escalation` instead of another fix-and-retry. |
+
+`convergence-exhausted` is the orchestrator-side backstop for the Retry Protocol
+above: agents are expected to self-escalate when the same failure repeats, and
+`next()` independently escalates once the count-based ceiling
+(`autonomy.max_retries` in `.devteam/config.yml`, default **2**) is reached.
+Progress-based detection (escalating when blocker counts stop decreasing) is a
+follow-up — it requires archiving prior attempts, which this layer does not add.
+
+`failure_class` is additive metadata on the existing `fix-and-retry` /
+`resolve-escalation` actions; the action vocabulary is unchanged. It appears in
+`devteam next --json` (alongside a `schema_version` field) and as a `[tag]` in
+the human-readable output.
+
+---
+
 ## Track field
 
 Every gate should carry a `"track"` field identifying which pipeline

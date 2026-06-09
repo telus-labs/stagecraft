@@ -133,17 +133,29 @@ response). **No new gate fields and no schema migration are required** — the m
 assembles signals that `runHeadless`, the validator, and `computeFixSteps` already
 produce.
 
-### 2.5 The convergence mechanism already exists — in the schema, not the loop
+### 2.5 The convergence mechanism: schema intent vs. what `next()` can enforce today
 
-The gate schema defines `this_attempt_differs_by`, and the validator enforces: if
-`retry_number >= 1`, this field must be non-empty — *"same content twice escalates
-instead of retrying"* (`gate.schema.json:80–83`, `validator.js:343–348`).
+The gate schema defines `this_attempt_differs_by` with the stated intent *"same
+content twice escalates instead of retrying"* (`gate.schema.json:80–83`). The
+aspiration is a **progress-based** breaker (trip on lack of change: blockers
+5→3→3, not on a fixed count that would kill a run converging 5→3→1).
 
-That is a **progress-based** circuit breaker (trips on lack of change: blockers
-5→3→3), strictly better than a fixed count (which would kill a run legitimately
-converging 5→3→1). It already exists. The gap is that **`next()` never reads
-`retry_number` or `this_attempt_differs_by`** — the breaker is enforced at gate-write
-time on the agent, not wired to the loop.
+**Grounding correction (verified against the code):** that progress-based breaker
+is *not* actually implemented. The validator only enforces that
+`this_attempt_differs_by` is *non-empty* when `retry_number >= 1`
+(`validator.js:342–351`) — it does not compare attempt content. And `next()` reads
+only the *current* gate; retries overwrite the file, so no blocker-count history
+survives on disk to compare against.
+
+So what `next()` can honor today is a **count-based ceiling** on `retry_number`
+(`autonomy.max_retries`, default 2): a still-FAIL gate at or above the ceiling
+returns `resolve-escalation` (`failure_class: convergence-exhausted`) instead of
+another `fix-and-retry`. This is the orchestrator-side backstop for the agent-side
+self-escalation rule in `rules/gates.md` § Retry Protocol. True progress-based
+detection is a **follow-up that requires gate archiving** (preserve each attempt's
+blocker set so counts can be compared) — see §4.4 and Deferred.
+
+**Landed in H1 PR-1:** the count-based ceiling, wired into `next()`.
 
 ### 2.6 Where the classifier lives
 
@@ -171,19 +183,34 @@ Two detection points, because the signal arrives in two phases:
 - `status:"FAIL"` + executable `commands[]` → **code-defect**; then check
   `this_attempt_differs_by` for thrash → escalate if stalled.
 
-`next()` then carries the class on the action object instead of returning a bare
-`fix-and-retry`:
+`next()` then carries the class on the action object.
+
+**Scoping decision (H1 vs H2):** the design originally sketched *new* actions
+(`halt`, `block`). Landing those in H1 would change the action vocabulary that the
+icon map (`bin/devteam`), the web UI (`core/ui/static/app.js`), and the runbooks
+consume — for no benefit, since nothing *acts* on `halt`/`block` until the driver
+exists. So **H1 adds `failure_class` as additive metadata on the existing actions**
+(`fix-and-retry`, `resolve-escalation`); the new actions are deferred to **H2**,
+where the driver can act on them. What `next()` emits today:
 
 ```jsonc
-{ "action": "fix-and-retry", "failure_class": "code-defect", "fix_steps": [...] }
-{ "action": "halt",          "failure_class": "structural-input", "diagnosis": "..." }
-{ "action": "block",         "failure_class": "external-blocked", "checkpoint": "..." }
+{ "action": "fix-and-retry",      "failure_class": "code-defect",      "fix_steps": [...] }
+{ "action": "fix-and-retry",      "failure_class": "state-corruption", "blockers": [...] }
+{ "action": "resolve-escalation", "failure_class": "judgment-gate" }
+{ "action": "resolve-escalation", "failure_class": "convergence-exhausted" }
+// external-blocked: classifier supports it, but no current computeFixSteps recipe
+// emits an all-human-action step set, so it activates when such a recipe is added.
 ```
 
 This keeps `next()` a pure function of disk state for the gate-based classes, while
-the dispatch-time classes are owned by the driver (the only thing that holds the
-`runHeadless` return). That split keeps `next()` stateless and testable, and confines
-the one stateful concern (retry/backoff counting) to the driver.
+the dispatch-time classes (`classifyDispatch` — transient vs structural-input) are
+owned by the driver (the only thing that holds the `runHeadless` return) and land
+with H2. That split keeps `next()` stateless and testable, and confines the
+stateful concerns (retry/backoff/budget) to the driver.
+
+**Landed in H1 PR-1:** `core/gates/classify.js` (`classifyGate`), the four
+gate-time classes + `convergence-exhausted` on `next()` actions, `next --json`
+`schema_version`, and the `failure_class` tag in human output.
 
 ### 2.7 The one genuinely fuzzy cut
 
@@ -378,13 +405,16 @@ independently shippable and useful on its own.
 
 Improves the **human-driven** product immediately and de-risks everything after.
 
-- `classifyDispatch()` + `classifyGate()` modules (§2.6); `failure_class` on `next()`
-  action objects.
-- Wire `retry_number` / `this_attempt_differs_by` into `next()` so the progress-based
-  breaker is visible to callers (§2.5).
-- Repetition heuristic for transient vs. structural (§2.7, option 1).
-- `next --json` schema with `schema_version`.
-- Tests per class. No schema migration.
+- ✅ **PR-1 (landed):** `core/gates/classify.js` (`classifyGate`); the four
+  gate-time classes (`state-corruption`, `judgment-gate`, `external-blocked`,
+  `code-defect`) plus `convergence-exhausted` carried as `failure_class` on
+  `next()` action objects (additive — action vocabulary unchanged); count-based
+  retry ceiling wired into `next()` via `autonomy.max_retries` (§2.5);
+  `next --json` `schema_version`; `failure_class` tag in human output. Tests:
+  `tests/classify.test.js` + new cases in `tests/next.test.js`. No schema migration.
+- ⬜ `classifyDispatch()` (transient vs. structural-input) + the repetition
+  heuristic (§2.7, option 1). **Deferred to H2** — it has no caller until the
+  driver holds the `runHeadless` return.
 
 **Exit criteria:** `devteam next` reports a failure class for every non-pass outcome;
 the human sees correct guidance (re-run vs. fix vs. repair vs. escalate).
