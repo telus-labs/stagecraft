@@ -153,3 +153,152 @@ describe("next: track filtering", () => {
     assert.equal(r.workstreams[0].role, "backend", "scoped reviewer is the backend slot");
   });
 });
+
+describe("next: stage-05 per-area fix steps", () => {
+  function seedPreReviewStages(cwd) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
+                     "stage-04b", "stage-04c", "stage-04d", "stage-04e"]) {
+      seedGate(cwd, s, { status: "PASS" });
+    }
+  }
+
+  it("INSUFFICIENT_APPROVALS area → rm + re-run reviewer commands in fix_steps", () => {
+    const cwd = track(makeTargetProject());
+    seedPreReviewStages(cwd);
+    // platform area: reviewer wrote wrong areas, quorum not reached
+    seedGate(cwd, "stage-05.platform", {
+      stage: "stage-05", workstream: "platform", status: "FAIL",
+      failure_reason: "INSUFFICIENT_APPROVALS",
+      approvals: [], required_approvals: 2, changes_requested: [], blockers: [],
+    });
+    // qa area: same problem
+    seedGate(cwd, "stage-05.qa", {
+      stage: "stage-05", workstream: "qa", status: "FAIL",
+      failure_reason: "INSUFFICIENT_APPROVALS",
+      approvals: ["dev-platform"], required_approvals: 2, changes_requested: [], blockers: [],
+    });
+    // backend area: approved (should be left alone)
+    seedGate(cwd, "stage-05.backend", {
+      stage: "stage-05", workstream: "backend", status: "PASS",
+      approvals: ["dev-backend", "dev-platform"], required_approvals: 2,
+    });
+    // merged gate: FAIL
+    seedGate(cwd, "stage-05", {
+      status: "FAIL", changes_requested: [], approvals: [],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "peer-review");
+    assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
+
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    // Must include rm commands for the incomplete areas
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.platform.json")),
+      "rm platform gate");
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.qa.json")),
+      "rm qa gate");
+    // Must include targeted peer-review re-run commands
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream platform")),
+      "re-run platform reviewer");
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream qa")),
+      "re-run qa reviewer");
+    // Must include merge step
+    assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "merge step");
+    // Must NOT include generic peer-review command
+    assert.ok(!allCmds.some(c => c === "devteam stage peer-review --headless"),
+      "no generic peer-review command");
+    // Must NOT include rm for backend (it passed)
+    assert.ok(!allCmds.some(c => c.includes("stage-05.backend.json")),
+      "backend gate untouched");
+  });
+
+  it("CHANGES_REQUESTED area → build + rm + re-review commands in fix_steps", () => {
+    const cwd = track(makeTargetProject());
+    seedPreReviewStages(cwd);
+    // frontend area: reviewer requested code changes
+    seedGate(cwd, "stage-05.frontend", {
+      stage: "stage-05", workstream: "frontend", status: "FAIL",
+      failure_reason: "CHANGES_REQUESTED",
+      approvals: [], required_approvals: 2,
+      changes_requested: [{ reviewer: "dev-frontend", timestamp: "2026-06-09T10:00:00Z" }],
+      blockers: [{ reviewer: "dev-frontend", text: "missing input validation" }],
+    });
+    // backend area: passed
+    seedGate(cwd, "stage-05.backend", {
+      stage: "stage-05", workstream: "backend", status: "PASS",
+      approvals: ["dev-backend", "dev-platform"], required_approvals: 2,
+    });
+    // merged gate
+    seedGate(cwd, "stage-05", { status: "FAIL" });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+
+    // Must include build re-run for the affected area
+    assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream frontend")),
+      "rebuild frontend");
+    assert.ok(allCmds.some(c => c.includes("devteam merge build")), "merge build");
+    // Must include rm + re-review for the area with changes requested
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.frontend.json")),
+      "rm frontend gate");
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream frontend")),
+      "re-run frontend reviewer");
+    assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "merge peer-review");
+    // Description should mention the blocker text
+    const descs = r.fix_steps.map(s => s.description).join(" ");
+    assert.ok(descs.includes("missing input validation"), "blocker text in description");
+  });
+
+  it("mixed areas (CHANGES_REQUESTED + INSUFFICIENT_APPROVALS) → both sets of commands", () => {
+    const cwd = track(makeTargetProject());
+    seedPreReviewStages(cwd);
+    seedGate(cwd, "stage-05.backend", {
+      stage: "stage-05", workstream: "backend", status: "FAIL",
+      failure_reason: "CHANGES_REQUESTED",
+      approvals: [], required_approvals: 2,
+      changes_requested: [{ reviewer: "dev-backend", timestamp: "2026-06-09T10:00:00Z" }],
+      blockers: [{ reviewer: "dev-backend", text: "add regression test" }],
+    });
+    seedGate(cwd, "stage-05.platform", {
+      stage: "stage-05", workstream: "platform", status: "FAIL",
+      failure_reason: "INSUFFICIENT_APPROVALS",
+      approvals: [], required_approvals: 2, changes_requested: [], blockers: [],
+    });
+    seedGate(cwd, "stage-05", { status: "FAIL" });
+
+    const r = next({ cwd });
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+
+    assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream backend")),
+      "rebuild backend");
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.platform.json")),
+      "rm platform (incomplete matrix)");
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream platform")),
+      "re-run platform reviewer");
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.backend.json")),
+      "rm backend (changes requested)");
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream backend")),
+      "re-run backend reviewer");
+    assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "merge peer-review");
+  });
+
+  it("no per-area gates on disk → falls back to merged-gate logic", () => {
+    const cwd = track(makeTargetProject());
+    seedPreReviewStages(cwd);
+    // Only the merged gate exists — no stage-05.*.json files
+    seedGate(cwd, "stage-05", {
+      status: "FAIL",
+      changes_requested: [{ reviewer: "dev-backend", workstream: "backend" }],
+      approvals: [], required_approvals: 2,
+      blockers: ["missing test coverage"],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    // Falls through to the merged-gate fallback path
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review")), "generic fallback present");
+  });
+});

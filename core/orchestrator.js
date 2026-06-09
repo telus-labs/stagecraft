@@ -742,19 +742,122 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     return steps;
   }
 
-  // Peer review (stage-05): changes requested or quorum miss
+  // Peer review (stage-05): changes requested or quorum miss.
+  //
+  // We read the per-area gate files (stage-05.<area>.json) directly so we
+  // can tell the operator *which* reviewers need to redo their area and
+  // whether the problem is code changes or an incomplete review matrix.
   if (stage === "stage-05") {
+    const steps = [];
+
+    // --- Read per-area gates from disk ---
+    // Pattern: stage-05.<area>.json (not stage-05.json itself, not fanout .<host>.json).
+    let perAreaFail = [];   // { area, gate } for FAIL per-area gates
+    let perAreaPass = [];   // { area } for PASS/WARN per-area gates (informational)
+    if (gatesDir) {
+      try {
+        const perAreaRe = /^stage-05\.([a-z]+)\.json$/;
+        const files = fs.readdirSync(gatesDir).filter(f => perAreaRe.test(f));
+        for (const f of files) {
+          const area = f.match(perAreaRe)[1];
+          const { gate: aGate, error } = loadGateSafe(path.join(gatesDir, f));
+          if (error || !aGate) continue;
+          if (aGate.status === "FAIL") perAreaFail.push({ area, gate: aGate });
+          else perAreaPass.push({ area });
+        }
+      } catch { /* gatesDir unreadable — fall through to merged-gate path */ }
+    }
+
+    // Split failing areas by root cause.
+    // failure_reason is written by approval-derivation.js:
+    //   "CHANGES_REQUESTED" — reviewer explicitly requested code changes
+    //   "INSUFFICIENT_APPROVALS" — reviewer covered wrong areas / didn't reach quorum
+    const codeChangesAreas = perAreaFail.filter(a => a.gate.failure_reason === "CHANGES_REQUESTED");
+    const incompleteAreas  = perAreaFail.filter(a => a.gate.failure_reason === "INSUFFICIENT_APPROVALS"
+                                                   || !a.gate.failure_reason);
+
+    if (perAreaFail.length > 0) {
+      // ── Code changes requested ──────────────────────────────────────────────
+      if (codeChangesAreas.length > 0) {
+        // Collect all blocker texts from FAIL areas so the operator sees them.
+        const allBlockers = codeChangesAreas.flatMap(({ area, gate: aGate }) =>
+          (aGate.blockers || []).map(b => {
+            const text = typeof b === "string" ? b : b.text;
+            return text ? `[${area}] ${text}` : null;
+          }).filter(Boolean)
+        );
+        steps.push({
+          description: allBlockers.length
+            ? `Address reviewer changes for area${codeChangesAreas.length !== 1 ? "s" : ""} `
+              + `${codeChangesAreas.map(a => a.area).join(", ")}: ${allBlockers.join("; ")}`
+            : `Address changes requested in area${codeChangesAreas.length !== 1 ? "s" : ""}: `
+              + codeChangesAreas.map(a => a.area).join(", "),
+          commands: [],
+        });
+
+        // Derive build workstreams to rebuild from the areas that have blockers.
+        const wsSet = new Set();
+        for (const { area, gate: aGate } of codeChangesAreas) {
+          wsSet.add(area);
+          for (const b of (aGate.blockers || [])) {
+            const text = typeof b === "string" ? b : b.text;
+            if (text) _wsFromText(text).forEach(w => wsSet.add(w));
+          }
+          for (const cr of (aGate.changes_requested || [])) {
+            if (cr.workstream) wsSet.add(cr.workstream);
+          }
+        }
+        const ws = [...wsSet];
+        if (ws.length) {
+          steps.push({
+            description: `Re-run build workstream${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
+            commands: ws.map(w => `devteam stage build --workstream ${w} --headless`),
+          });
+          steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
+        }
+      }
+
+      // ── Incomplete matrix (reviewer covered wrong areas or didn't reach quorum) ──
+      if (incompleteAreas.length > 0) {
+        const areaNames = incompleteAreas.map(a => a.area);
+        const needed = incompleteAreas.map(({ area, gate: aGate }) => {
+          const have = (aGate.approvals || []).length;
+          const req  = aGate.required_approvals || 2;
+          return `${area} (${have}/${req})`;
+        }).join(", ");
+        steps.push({
+          description: `Review matrix incomplete for area${incompleteAreas.length !== 1 ? "s" : ""}: ${needed}`
+            + ` — reviewer(s) must add '## Review of <area>' + 'REVIEW: APPROVED/CHANGES REQUESTED' for each area`,
+          commands: areaNames.map(area => `rm pipeline/gates/stage-05.${area}.json`),
+        });
+        steps.push({
+          description: `Re-run reviewer${incompleteAreas.length !== 1 ? "s" : ""} for failing area${incompleteAreas.length !== 1 ? "s" : ""}`,
+          commands: areaNames.map(area => `devteam stage peer-review --workstream ${area} --headless`),
+        });
+      }
+
+      // Final step: rebuild merged gate and re-run review for code-change areas.
+      if (codeChangesAreas.length > 0) {
+        const areasToReview = codeChangesAreas.map(a => a.area);
+        steps.push({
+          description: `Re-run peer review for area${areasToReview.length !== 1 ? "s" : ""}: ${areasToReview.join(", ")}`,
+          commands: [
+            ...areasToReview.map(area => `rm pipeline/gates/stage-05.${area}.json`),
+            ...areasToReview.map(area => `devteam stage peer-review --workstream ${area} --headless`),
+          ],
+        });
+      }
+      steps.push({ description: "Rebuild merged peer-review gate", commands: ["devteam merge peer-review"] });
+      return steps;
+    }
+
+    // --- Fallback: merged gate only (no per-area files readable) ---
     const changesRequested = gate.changes_requested || [];
     const approvals = gate.approvals || [];
     const required = gate.required_approvals || 0;
-    const steps = [];
 
     if (changesRequested.length) {
-      // The merger adds workstream: w.role to every changes_requested entry —
-      // use that directly instead of guessing from blocker text.
       const wsSet = new Set(changesRequested.map(c => c.workstream).filter(Boolean));
-      // Fallback: parse blocker strings for file-path heuristics when workstream
-      // is absent (e.g., legacy gates or hand-written review files).
       if (!wsSet.size) {
         for (const b of (gate.blockers || [])) {
           if (typeof b === "string") _wsFromText(b).forEach(w => wsSet.add(w));
