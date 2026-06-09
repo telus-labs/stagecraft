@@ -20,9 +20,7 @@ const fs   = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
-const FRAMEWORK_ROOT = path.resolve(__dirname, "..");
-
-function loadDeps(cwd) {
+function loadDeps() {
   const { loadConfig }   = require("./config");
   const { loadAdapter }  = require("./router");
   const { runStageHeadless } = require("./orchestrator");
@@ -31,7 +29,7 @@ function loadDeps(cwd) {
 
 // Resolve the configured host for the frontend role (or default).
 function resolveFrontendHost(cwd) {
-  const { loadConfig, loadAdapter } = loadDeps(cwd);
+  const { loadConfig, loadAdapter } = loadDeps();
   const config   = loadConfig(cwd);
   const hostName = (config.routing.roles && config.routing.roles.frontend)
     || config.routing.default_host;
@@ -114,7 +112,7 @@ async function rerunAccessibilityAudit(cwd, timeoutMs) {
   const gatePath = path.join(cwd, "pipeline", "gates", "stage-06b.json");
   try { fs.unlinkSync(gatePath); } catch { /* may already be gone */ }
 
-  const { runStageHeadless } = loadDeps(cwd);
+  const { runStageHeadless } = loadDeps();
   try {
     await runStageHeadless("accessibility-audit", {
       cwd,
