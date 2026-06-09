@@ -979,21 +979,18 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     const ws = [...wsSet];
 
     const steps = [];
-    const fileDesc = fileHints.length
-      ? `Fix the issue${fileHints.length !== 1 ? "s" : ""} in: ${fileHints.join(", ")}`
-      : "Apply the fix described in each blocker above";
-    steps.push({ description: fileDesc, commands: [] });
-
     if (ws.length) {
+      const fileClause = fileHints.length ? ` (${fileHints.join(", ")})` : "";
       steps.push({
-        description: `Rebuild workstream${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
-        commands: _rmBuildGates(ws),
-      });
-      steps.push({
-        description: `Re-run build`,
-        commands: ws.map(w => `devteam stage build --workstream ${w} --headless`),
+        description: `Rebuild workstream${ws.length !== 1 ? "s" : ""} ${ws.join(", ")}${fileClause} — build agent applies the fix`,
+        commands: [..._rmBuildGates(ws), ...ws.map(w => `devteam stage build --workstream ${w} --headless`)],
       });
       steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
+    } else {
+      steps.push({
+        description: "Apply the fix described in each blocker above",
+        commands: [],
+      });
     }
     steps.push({
       description: "Re-run verification",
