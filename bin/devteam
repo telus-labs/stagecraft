@@ -68,6 +68,14 @@ Commands:
                                    to do next: run a stage, continue a
                                    partial multi-role stage, merge, fix a
                                    FAIL, resolve an ESCALATE, or done.
+  run [--track <t>] [--until <s>]  Bounded autonomous driver: loop next →
+      [--max-iterations N]          dispatch → merge until pipeline-complete.
+      [--budget-usd X]              Halts for a human on any FAIL/escalation,
+      [--timeout-ms N]              at the consequence ceiling (sign-off /
+      [--allow-stage <s>]           deploy — needs --allow-stage), on a budget
+      [--resume] [--force] [--json] cap, or a no-gate dispatch. Does NOT
+                                   auto-fix yet (H2 PR-B). Writes pipeline/
+                                   run.lock, run-state.json, run-log.jsonl.
   validate                         Validate the most recent gate in
                                    pipeline/gates/. Exit codes: 0 PASS/WARN,
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
@@ -243,6 +251,11 @@ function parseFlags(argv) {
     if (a === "--json")    { flags.json    = true;      continue; }
     if (a === "--headless"){ flags.headless = true;     continue; }
     if (a === "--timeout-ms"){ flags.timeoutMs = Number(argv[++i]); continue; }
+    if (a === "--budget-usd"){ flags.budgetUsd = Number(argv[++i]); continue; }
+    if (a === "--max-iterations"){ flags.maxIterations = Number(argv[++i]); continue; }
+    if (a === "--until")   { flags.until   = argv[++i]; continue; }
+    if (a === "--allow-stage") { if (!flags.allowStage) flags.allowStage = []; flags.allowStage.push(argv[++i]); continue; }
+    if (a === "--resume")  { flags.resume  = true;      continue; }
     if (a === "--patch")          { flags.patch         = true;      continue; }
     if (a === "--from")           { flags.from          = argv[++i]; continue; }
     if (a === "--skip-completed") { flags.skipCompleted = true;      continue; }
@@ -766,6 +779,76 @@ function cmdNext(argv) {
       console.log(`        devteam fix-escalation [--headless]`);
     }
   }
+}
+
+// Version of the `devteam run --json` summary schema. Bump on breaking changes.
+const RUN_SCHEMA_VERSION = "1.0";
+
+// `devteam run` — bounded autonomous driver (ADR-003 / H2 Phase 1 PR-A).
+// Advances the pipeline unattended on the happy path; halts cleanly at the
+// first thing needing a human (a FAIL, an escalation, the consequence ceiling,
+// a budget cap, or a dispatch that wrote no gate). It does NOT auto-fix or
+// auto-rule yet — that is PR-B / Phase 2.
+function cmdRun(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const { run } = require(path.join(__dirname, "..", "core", "driver"));
+  const jsonMode = Boolean(flags.json);
+
+  const onEvent = (ev) => {
+    if (jsonMode) return; // keep stdout clean for the JSON summary
+    const tag = ev.failure_class ? `  [${ev.failure_class}]` : "";
+    switch (ev.type) {
+      case "dispatch":     process.stderr.write(`▶️  ${ev.name} (${ev.stage}) — dispatching…\n`); break;
+      case "dispatched":   process.stderr.write(`   ✓ ${ev.name} dispatched (${ev.duration_ms} ms${ev.timed_out ? ", TIMED OUT" : ""})\n`); break;
+      case "merge":        process.stderr.write(`🔀 merge ${ev.name}\n`); break;
+      case "complete":     process.stderr.write(`🎉 pipeline-complete\n`); break;
+      case "halt":         process.stderr.write(`⏸  halt — ${ev.action}${tag}: ${ev.reason}\n`); break;
+      case "ceiling":      process.stderr.write(`🛑 consequence ceiling — "${ev.name}" needs a human grant (re-run with --allow-stage ${ev.name})\n`); break;
+      case "budget":       process.stderr.write(`💰 budget cap reached — halting before "${ev.name}"\n`); break;
+      case "until":        process.stderr.write(`⏹  reached --until boundary\n`); break;
+      case "no-progress":  process.stderr.write(`⚠  no progress — "${ev.name}" dispatched but wrote no gate; halting\n`); break;
+      case "merge-failed": process.stderr.write(`❌ merge failed for "${ev.name}": ${ev.reason}\n`); break;
+      default: break;
+    }
+  };
+
+  run({
+    cwd,
+    track: flags.track,
+    until: flags.until,
+    maxIterations: Number.isFinite(flags.maxIterations) ? flags.maxIterations : undefined,
+    budgetUsd: Number.isFinite(flags.budgetUsd) ? flags.budgetUsd : undefined,
+    timeoutMs: Number.isFinite(flags.timeoutMs) ? flags.timeoutMs : undefined,
+    allowStages: flags.allowStage || [],
+    resume: Boolean(flags.resume),
+    force: Boolean(flags.force),
+    onEvent,
+  }).then((summary) => {
+    if (jsonMode) {
+      console.log(JSON.stringify({ schema_version: RUN_SCHEMA_VERSION, ...summary }, null, 2));
+    } else {
+      const status = summary.completed ? "complete" : `halted (${summary.halt_action})`;
+      process.stderr.write(
+        `\n[devteam run] ${status} — ${summary.iterations} iteration(s), ` +
+        `$${summary.cost_usd.toFixed(2)} spent, ${summary.stages_advanced.length} stage(s) advanced\n`,
+      );
+      if (summary.halted && summary.halt_reason) process.stderr.write(`  reason: ${summary.halt_reason}\n`);
+      if (summary.halt_action === "fix-and-retry" || summary.halt_action === "resolve-escalation") {
+        process.stderr.write(`  → run \`devteam next\` for the fix steps / escalation details\n`);
+      }
+    }
+    // Exit 0 when the pipeline finished or stopped at a boundary the operator
+    // configured (--until) or a gate they must approve (consequence ceiling).
+    // Exit 1 for halts that signal something needs fixing. Exit 2 = lock error.
+    const cleanStop = summary.completed
+      || summary.halt_action === "until"
+      || summary.halt_action === "ceiling";
+    process.exit(cleanStop ? 0 : 1);
+  }).catch((err) => {
+    console.error(`devteam run: ${err.message}`);
+    process.exit(err.code === "ELOCKED" ? 2 : 1);
+  });
 }
 
 function cmdMemory(argv) {
@@ -2673,6 +2756,7 @@ function main() {
     case "preflight": return cmdPreflight(rest);
     case "advise":   return cmdAdvise(rest);
     case "next":     return cmdNext(rest);
+    case "run":      return cmdRun(rest);
     case "validate": return cmdValidate(rest);
     case "merge":    return cmdMerge(rest);
     case "derive-approvals": return cmdDeriveApprovals(rest);

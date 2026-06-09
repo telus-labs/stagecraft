@@ -419,19 +419,33 @@ Improves the **human-driven** product immediately and de-risks everything after.
 **Exit criteria:** `devteam next` reports a failure class for every non-pass outcome;
 the human sees correct guidance (re-run vs. fix vs. repair vs. escalate).
 
-### Phase 1 — Driver MVP (happy path + code-defect + halt)
+### Phase 1 — Driver MVP
 
-- `devteam run` with the loop (§4.1) for `run-stage`/`continue-stage`/`merge`/
-  `fix-and-retry`(code-defect)/`transient`/`halt`/`block`.
-- MVP blockers (§4.4): lock file, `run-state.json`, stage timeout, `run-log.jsonl`,
-  `--budget-usd` pre-dispatch check.
-- Consequence ceiling (§4.2): halt before stage-07/08 for a human grant.
-- Escalations halt for a human by default (no auto-rule yet).
-- Cross-stage context propagation (§4.3).
+Split into two PRs so the safe skeleton ships before auto-execution.
 
-**Exit criteria:** a full-track run with only machine-diagnosable failures completes
-unattended up to sign-off; escalations and structural failures halt cleanly with
-typed diagnosis; cost is capped.
+**PR-A — skeleton + happy path + safety rails (✅ landed):** `core/driver.js`
+(`run()`) + `devteam run`. Loop over `run-stage`/`continue-stage`/`merge`/
+`pipeline-complete`; **halts** on any `fix-and-retry`/`resolve-escalation`
+(surfacing `failure_class`), at the consequence ceiling (§4.2 — `sign-off`/
+`deploy`, grant via `--allow-stage`), on `--budget-usd` (pre-dispatch, summed
+from merged stage gates), at the `--until` boundary, or on a no-gate dispatch
+(no-progress guard — the interim stand-in for `classifyDispatch`). Run-scoped
+state: `pipeline/run.lock` (advisory), `run-state.json` (resumable via
+`--resume`), `run-log.jsonl` (audit). Per-stage `--timeout-ms`, `--max-iterations`
+guard. In-process dispatch (calls `runStageHeadless`/`mergeWorkstreamGates`
+directly). `--json` summary carries `schema_version`. Tests: `tests/run.test.js`
+(13). **Dispatch is injectable** in `run()` for deterministic loop tests.
+
+**PR-B — autonomous fix-and-retry (⬜ next):** act on `code-defect` (execute fix
+steps + re-dispatch with cross-stage context, §4.3); add `classifyDispatch`
+(transient → backoff, structural → halt — the H1-deferred dispatch-time
+classifier) replacing the no-progress guard; honor the convergence ceiling
+(already in `next()`). Escalations still halt for a human (Phase 2 adds the
+Principal).
+
+**Exit criteria:** a full-track run with only machine-diagnosable failures
+completes unattended up to sign-off; escalations and structural failures halt
+cleanly with typed diagnosis; cost is capped.
 
 ### Phase 2 — Typed escalation + authority provenance (safety)
 
