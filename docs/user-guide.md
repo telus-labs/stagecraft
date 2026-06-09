@@ -149,31 +149,41 @@ After the red-team (Stage 4c), any build workstream (Stage 4), or peer-review (S
 ▶️  run-stage  pre-review (stage-04a)
 ```
 
-The warning is advisory — it never blocks `next`. But unaddressed `QA_BLOCKER` items will cause QA to fail on the exact AC they reference.
+The warning is advisory — it never blocks `next`. But unaddressed `QA_BLOCKER` items will cause QA to fail on the exact AC they reference, and unaddressed `A11Y_FIX` items mean the accessibility gate is still FAIL.
 
 Run `devteam advise` for the full panel:
 
 ```bash
 devteam advise
 
+# If a stage gate is currently FAIL, advise shows that first:
+#   ❌ Active pipeline blocker: fix-and-retry — red-team (stage-04c)
+#      Run `devteam next` for the full fix steps.
+#
 # Follow-up items in completed stage gates:
 #
 #   AC-11 — Docker live-path testing  [stage-04.qa]
 #     Risk: QA BLOCKER — no @AC-11 scenario in spec.feature
 #     Options:
-#       [A] scaffold  — dispatch QA to add a @wip test stub   ← recommended
+#       [A] scaffold  — prints the command to run; writes SCAFFOLD-PENDING (you run it)  ← recommended
 #       [B] defer     — mark DEFERRED in pipeline/context.md (--apply AC-11=B:PROJ-XYZ)
 #       [C] amend     — flag for PM to remove AC-11 from the brief
 #       [D] nothing   — advance; QA will block
 ```
 
+Option letters (A/B/C/D) are **per-item** — the same letter means different actions for different
+risk classifications. Always read the panel to confirm what each letter does before running `--apply`.
+
 Apply your decisions:
 
 ```bash
 devteam advise --apply AC-11=A,AC-10=B:PROJ-99,AC-12=A
-# ✓ AC-11 — scaffold (run the printed command to dispatch QA)
+# ✓ AC-11 — SCAFFOLD-PENDING written; run the printed command to add the test stub
 # ✓ AC-10 — DEFERRED: AC-10 — ticket PROJ-99 written to context.md
 # ✓ AC-12 — NOTED: stage manager: no action
+
+# When everything is resolved:
+#   All noted_for_followup items addressed.
 ```
 
 Decisions are written into the `<!-- devteam:advise -->` section of `pipeline/context.md`. Downstream stages respect them: QA skips coverage checks for `DEFERRED:` items; QA retries `KNOWN-FLAKY:` tests once before failing; peer-review notes `BRIEF-AMEND-NEEDED:` entries in reviewer briefs.
