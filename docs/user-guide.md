@@ -174,6 +174,12 @@ devteam advise
 Option letters (A/B/C/D) are **per-item** — the same letter means different actions for different
 risk classifications. Always read the panel to confirm what each letter does before running `--apply`.
 
+**`--apply` syntax:** `<id>=<letter>[:<ticket>]`, comma-separated for multiple items.
+
+- **`<id>`** — the item identifier shown at the start of each panel block (e.g. `AC-11`, `R-01`, `F-04`). It comes from `noted_for_followup[].id` in the stage gate.
+- **`<letter>`** — the option letter (A/B/C/D) as shown in the panel for that item.
+- **`:<ticket>`** — optional ticket reference, only meaningful for `defer`. Becomes `DEFERRED: … — ticket PROJ-XYZ` in `pipeline/context.md`. Omit it and `PLACEHOLDER` is written instead.
+
 Apply your decisions:
 
 ```bash
