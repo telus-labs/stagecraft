@@ -259,36 +259,19 @@ async function renderNextAction() {
   $("[data-next-command]").textContent = cmd;
 
   const copyBtn = $("[data-next-copy]");
-  copyBtn.hidden = !cmd || (action.fix_steps && action.fix_steps.length > 0);
+  copyBtn.hidden = !cmd;
   copyBtn.onclick = () => copyToClipboard(cmd, copyBtn);
 
-  // Fix steps — rendered below the summary line
-  let stepsEl = banner.querySelector(".fix-steps");
-  if (action.fix_steps && action.fix_steps.length) {
-    if (!stepsEl) {
-      stepsEl = document.createElement("ol");
-      stepsEl.className = "fix-steps";
-      banner.appendChild(stepsEl);
-    }
-    stepsEl.innerHTML = action.fix_steps.map((step) => {
-      const cmdsHtml = step.commands.length
-        ? step.commands.map(c => {
-            return `<span class="fix-step-cmd-row">
-              <code class="fix-step-cmd">${escHtml(c)}</code>
-              <button class="fix-step-copy" data-cmd="${escHtml(c)}" title="Copy">Copy</button>
-            </span>`;
-          }).join("")
-        : "";
-      return `<li class="fix-step">
-        <span class="fix-step-desc">${escHtml(step.description)}</span>
-        ${cmdsHtml}
-      </li>`;
-    }).join("");
-    stepsEl.querySelectorAll(".fix-step-copy").forEach(btn => {
-      btn.onclick = (e) => { e.stopPropagation(); copyToClipboard(btn.dataset.cmd, btn); };
-    });
-  } else if (stepsEl) {
-    stepsEl.remove();
+  // Fix steps belong in the detail panel (renderDetailFixSteps), not the banner.
+  // Remove any stale fix-steps element left from a previous render cycle.
+  const stepsEl = banner.querySelector(".fix-steps");
+  if (stepsEl) stepsEl.remove();
+
+  // Auto-select the failing stage when fix-and-retry fires and the user hasn't
+  // manually chosen a stage yet. This surfaces blockers + fix steps immediately
+  // in the detail panel without requiring a click.
+  if (action.action === "fix-and-retry" && !_selectedStage) {
+    selectStage(action.stage);
   }
 }
 
