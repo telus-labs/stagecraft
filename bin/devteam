@@ -591,8 +591,16 @@ async function cmdAdvise(argv) {
     if (resolvedMap.size > 0) {
       const applied = runAdvise(cwd, { apply: resolvedMap });
       if (flags.json) { console.log(JSON.stringify(applied, null, 2)); return; }
+      // Fix items may disappear from gates after the re-run replaces the gate;
+      // print their ✓ lines directly from the fixItems list rather than relying
+      // on applied.items (which won't contain them).
+      const fixItemIds = new Set(fixItems.map(([id]) => id));
+      for (const [itemId] of fixItems) {
+        const { action } = resolvedMap.get(itemId);
+        console.log(`  ✓ ${itemId} — ${action}`);
+      }
       for (const r of applied.items) {
-        if (resolvedMap.has(r.item.id)) {
+        if (resolvedMap.has(r.item.id) && !fixItemIds.has(r.item.id)) {
           const { action } = resolvedMap.get(r.item.id);
           console.log(`  ✓ ${r.item.id} — ${action}${r.addressed ? "" : " (SCAFFOLD-PENDING: run command shown above)"}`);
         }

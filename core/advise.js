@@ -127,11 +127,22 @@ function itemText(item) {
 //   QA_NOISE     — no AC ref, timing/flakiness keywords in text
 //   INFO         — everything else
 // ---------------------------------------------------------------------------
-function classifyItem(item, cwd) {
+function classifyItem(item, cwd, opts = {}) {
   const trackFor = (item.track_for || "").toLowerCase();
 
-  // Items sourced from the accessibility gate have concrete HTML remediations
-  if ((item._source || "").includes("stage-06b")) return "A11Y_FIX";
+  // Items sourced from the accessibility gate are A11Y_FIX only when the gate
+  // is FAIL — meaning they are actively blocking the pipeline. When the gate is
+  // PASS (e.g. after a successful fix re-run), the items are moderate/minor
+  // noted_for_followup entries; classify as INFO so they don't count as blockers.
+  if ((item._source || "").includes("stage-06b")) {
+    const gatesPath = opts.gatesDir || path.join(cwd, "pipeline", "gates");
+    const gatePath = path.join(gatesPath, "stage-06b.json");
+    try {
+      const gate = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+      if (gate.status === "FAIL") return "A11Y_FIX";
+    } catch { /* gate missing or unreadable — treat as not-FAIL */ }
+    return "INFO";
+  }
 
   // Agent-provided track_for overrides heuristics
   if (trackFor === "brief-amendment") return "PEER_REVIEW_RISK";
@@ -345,7 +356,7 @@ function runAdvise(cwd, opts = {}) {
     const acRefs = extractAcRefs(item);
     // An item is addressed if its raw id OR any of its AC refs appear in the addressed set
     const isAddressed = addressed.has(item.id) || acRefs.some((ac) => addressed.has(ac));
-    const classification = classifyItem(item, cwd);
+    const classification = classifyItem(item, cwd, opts);
     const options = generateOptions(item, classification);
     return { item, classification, addressed: isAddressed, options };
   });
