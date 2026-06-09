@@ -592,6 +592,17 @@ function _wsFromBlockers(gate) {
   return [...set];
 }
 
+// Heuristic: map free-text blocker strings to build workstream roles by
+// file-path patterns. Used as a fallback when structured assigned_to is absent.
+function _wsFromText(text) {
+  const ws = new Set();
+  if (/\.test\.[jt]sx?|\.spec\.[jt]sx?|spec\.feature|__tests__|\/tests?\//i.test(text)) ws.add("qa");
+  if (/src[/\\]backend[/\\]|\/api\/|\/routes\/|\/controller/i.test(text)) ws.add("backend");
+  if (/src[/\\]frontend[/\\]|\/components?\//i.test(text)) ws.add("frontend");
+  if (/src[/\\]infra[/\\]|Dockerfile|docker-compose/i.test(text)) ws.add("platform");
+  return [...ws];
+}
+
 function _rmBuildGates(workstreams) {
   const cmds = workstreams.map(w => `rm pipeline/gates/stage-04.${w}.json`);
   cmds.push("rm pipeline/gates/stage-04.json");
@@ -718,22 +729,39 @@ function computeFixSteps(gate, stageDef) {
     const steps = [];
 
     if (changesRequested.length) {
+      // The merger adds workstream: w.role to every changes_requested entry —
+      // use that directly instead of guessing from blocker text.
+      const wsSet = new Set(changesRequested.map(c => c.workstream).filter(Boolean));
+      // Fallback: parse blocker strings for file-path heuristics when workstream
+      // is absent (e.g., legacy gates or hand-written review files).
+      if (!wsSet.size) {
+        for (const b of (gate.blockers || [])) {
+          if (typeof b === "string") _wsFromText(b).forEach(w => wsSet.add(w));
+        }
+      }
+      const ws = [...wsSet];
+
       const reviewerList = changesRequested
-        .map(c => typeof c === "string" ? c : [c.reviewer, c.workstream].filter(Boolean).join("/") || JSON.stringify(c))
+        .map(c => {
+          if (typeof c === "string") return c;
+          const r = c.reviewer, w = c.workstream;
+          if (r && w && r !== w) return `${r} (${w} area)`;
+          return r || w || JSON.stringify(c);
+        })
         .join(", ");
+
+      const blockerLines = (gate.blockers || []).filter(b => typeof b === "string");
       steps.push({
-        description: `Address changes requested by: ${reviewerList}`,
+        description: blockerLines.length
+          ? `Address changes requested by ${reviewerList} — ${blockerLines.join("; ")}`
+          : `Address changes requested by: ${reviewerList}`,
         commands: [],
       });
-      const ws = _wsFromBlockers(gate);
+
       if (ws.length) {
         steps.push({
-          description: `Clear build workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
-          commands: _rmBuildGates(ws),
-        });
-        steps.push({
-          description: "Re-run build with peer-review feedback as context",
-          commands: ["devteam stage build --patch --from peer-review --skip-completed --headless"],
+          description: `Re-run build workstream${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
+          commands: ws.map(w => `devteam stage build --workstream ${w} --headless`),
         });
         steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
       }
