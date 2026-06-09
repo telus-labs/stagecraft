@@ -1,7 +1,7 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
+const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
 
 let _dirs = [];
@@ -119,6 +119,91 @@ describe("next: malformed gate handling", () => {
     assert.equal(r.name, "requirements");
     assert.ok(Array.isArray(r.blockers) && r.blockers.length > 0, "blockers populated");
     assert.match(r.blockers[0], /unreadable|malformed/i);
+  });
+});
+
+describe("next: failure classification (H1)", () => {
+  it("FAIL gate → failure_class code-defect", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["bad criterion"] });
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.failure_class, "code-defect");
+  });
+
+  it("ESCALATE gate → failure_class judgment-gate", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "ESCALATE", escalation_reason: "ambiguous spec" });
+    const r = next({ cwd });
+    assert.equal(r.action, "resolve-escalation");
+    assert.equal(r.failure_class, "judgment-gate");
+  });
+
+  it("malformed gate → failure_class state-corruption", () => {
+    const cwd = track(makeTargetProject());
+    const fs = require("node:fs");
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "gates", "stage-01.json"),
+      '{"stage":"stage-01","status":"FA', "utf8",
+    );
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.failure_class, "state-corruption");
+  });
+
+  it("PASS/WARN actions carry no failure_class", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    const r = next({ cwd }); // → run-stage design
+    assert.equal(r.action, "run-stage");
+    assert.equal(r.failure_class, undefined);
+  });
+});
+
+describe("next: convergence ceiling (H1)", () => {
+  it("FAIL below the retry ceiling → still fix-and-retry", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", {
+      status: "FAIL", blockers: ["x"], retry_number: 1, this_attempt_differs_by: "tried Y",
+    });
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.failure_class, "code-defect");
+  });
+
+  it("FAIL at the retry ceiling (default 2) → resolve-escalation, convergence-exhausted", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", {
+      status: "FAIL", blockers: ["x"], retry_number: 2, this_attempt_differs_by: "tried Z",
+    });
+    const r = next({ cwd });
+    assert.equal(r.action, "resolve-escalation");
+    assert.equal(r.failure_class, "convergence-exhausted");
+    assert.match(r.reason, /retry budget exhausted/i);
+  });
+
+  it("respects autonomy.max_retries override from config", () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  max_retries: 0\n",
+    }));
+    // retry_number 0 already meets a ceiling of 0 → escalate on first FAIL.
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["x"] });
+    const r = next({ cwd });
+    assert.equal(r.action, "resolve-escalation");
+    assert.equal(r.failure_class, "convergence-exhausted");
+  });
+});
+
+describe("next --json (H1)", () => {
+  it("emits schema_version and carries failure_class through to JSON", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["bad criterion"] });
+    const { status, stdout } = runCLI(["next", "--json"], { cwd });
+    assert.equal(status, 0);
+    const obj = JSON.parse(stdout);
+    assert.equal(obj.schema_version, "1.0");
+    assert.equal(obj.action, "fix-and-retry");
+    assert.equal(obj.failure_class, "code-defect");
   });
 });
 

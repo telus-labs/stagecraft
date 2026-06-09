@@ -23,6 +23,8 @@ For the mechanism's design rationale, see `rules/escalation.md`. For specific sc
 
 ESCALATE signals that a decision requires human judgment. It is not a model bug. The agent that wrote ESCALATE has a specific question it cannot resolve autonomously. The pipeline halts until you act. `devteam next` will continue to report `resolve-escalation` until the escalation is encoded.
 
+The action carries a `failure_class` distinguishing *why* you're being asked to rule: **`judgment-gate`** (a gate wrote `status: ESCALATE` — the usual case, §1–4) versus **`convergence-exhausted`** (no gate escalated; the stage hit its retry budget and `next` escalated on its own — see [§4b](#4b-retry-loop-exhaustion--a-distinct-escalation-shape)).
+
 ## 1. Read the three places that hold the disagreement
 
 Order matters — read in this order so you build the picture from outside in.

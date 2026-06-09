@@ -17,6 +17,7 @@ const { gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
+const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -474,11 +475,14 @@ function next(opts = {}) {
     || "full";
   const skipStages = config.pipeline.skip_stages || [];
   const stageList = orderedStageNamesForTrack(track);
+  const maxRetries = (config.autonomy && Number.isInteger(config.autonomy.max_retries))
+    ? config.autonomy.max_retries
+    : MAX_RETRIES_DEFAULT;
 
   return withSpan("pipeline.next", {
     "devteam.track": trackLabel(track),
   }, () => {
-    const result = _nextImpl(stageList, gatesDir, track, skipStages);
+    const result = _nextImpl(stageList, gatesDir, track, skipStages, maxRetries);
     setSpanAttributes({
       "devteam.next.action": result.action,
       "devteam.next.stage": result.stage || undefined,
@@ -1012,7 +1016,7 @@ function computeFixSteps(gate, stageDef, gatesDir) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _nextImpl(stageList, gatesDir, track, skipStages = []) {
+function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX_RETRIES_DEFAULT) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
@@ -1058,6 +1062,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
           return {
             action: "fix-and-retry", stage: stageDef.stage, name: stageName,
             gate: prereqGatePath,
+            failure_class: "state-corruption",
             blockers: [`prereq gate is unreadable: ${error}`],
             reason: "cannot evaluate conditional stage — fix the prereq gate file",
             command: `cat ${prereqGatePath}  # then repair or rewrite`,
@@ -1112,6 +1117,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
       return {
         action: "fix-and-retry", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
+        failure_class: "state-corruption",
         blockers: [`gate file is unreadable: ${gateError}`],
         reason: "cannot determine stage status — fix or rewrite the gate file",
         command: `cat ${stageGatePath}  # then repair or rewrite`,
@@ -1121,15 +1127,36 @@ function _nextImpl(stageList, gatesDir, track, skipStages = []) {
       return {
         action: "resolve-escalation", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
+        failure_class: "judgment-gate",
         reason: gate.escalation_reason || "escalation required; pipeline halted",
         command: `devteam ruling --topic "..." --target-gate ${stageGatePath} [--headless]`,
       };
     }
     if (gate.status === "FAIL") {
       const fix_steps = computeFixSteps(gate, stageDef, gatesDir);
+
+      // Convergence ceiling (ADR-003 / H1). When the gate has already been
+      // retried up to the budget and is still FAIL, stop returning
+      // fix-and-retry and escalate for a ruling instead — re-running the same
+      // stage that hasn't converged just burns work. This is a count-based
+      // ceiling on retry_number; progress-based detection is a follow-up
+      // (needs gate archiving to compare blocker counts across attempts).
+      const retryNumber = typeof gate.retry_number === "number" ? gate.retry_number : 0;
+      if (retryNumber >= maxRetries) {
+        return {
+          action: "resolve-escalation", stage: stageDef.stage, name: stageName,
+          gate: stageGatePath,
+          failure_class: "convergence-exhausted",
+          blockers: gate.blockers || [],
+          reason: `retry budget exhausted (${retryNumber}/${maxRetries} attempts); escalating for a ruling`,
+          command: `devteam ruling --topic "..." --target-gate ${stageGatePath} [--headless]`,
+        };
+      }
+
       return {
         action: "fix-and-retry", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
+        failure_class: classifyGate(gate, fix_steps),
         blockers: gate.blockers || [],
         reason: "stage failed; address blockers and rewrite the gate",
         command: `devteam stage ${stageName}`,

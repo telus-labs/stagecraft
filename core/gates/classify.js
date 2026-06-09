@@ -1,0 +1,67 @@
+// Gate-time failure classification (ADR-003 / BACKLOG H1, Phase 0).
+//
+// `next()` historically collapsed every non-pass, non-escalate gate into a
+// single `fix-and-retry` action — a corrupt gate file and a failing test got
+// the same response. This module assigns a `failure_class` to a non-pass gate
+// so callers (the human stage manager today; the autonomous driver later) can
+// react correctly instead of blindly retrying.
+//
+// Classes are defined by the RESPONSE they require, not by their cause:
+//
+//   state-corruption — the gate can't be read/parsed. Re-running the stage
+//                       cannot fix corruption; the file must be repaired.
+//   judgment-gate    — status ESCALATE. Needs a ruling, not a retry.
+//   external-blocked — status FAIL whose only computed remedy is human/
+//                       external action (we HAVE a fix recipe but every step
+//                       has no executable command — e.g. "obtain PM sign-off").
+//   code-defect      — status FAIL with executable fix steps, OR no recipe at
+//                       all. The implementing agent must change code; re-dispatch.
+//
+// A fifth class, `convergence-exhausted`, is NOT decided here — it depends on
+// the gate's retry_number and the configured ceiling, which only next() holds.
+// next() applies it before classifyGate when the retry budget is spent.
+//
+// Note on `code-defect` vs `external-blocked`: a FAIL with NO recipe
+// (computeFixSteps returned null) is treated as code-defect, not
+// external-blocked. A missing recipe means "we can't auto-generate steps,"
+// which is usually an un-recipe'd code fix (e.g. security-review findings the
+// agent must address in code) — not a human-only action. external-blocked is
+// reserved for the case where we DO have a recipe and it is entirely
+// human/external steps.
+//
+// This module is a pure function: no I/O, no config. It is the gate-time half
+// of the failure model; the dispatch-time half (classifyDispatch — transient
+// vs structural-input) lands with the driver (H2), which is the only caller
+// that holds runHeadless's return.
+
+// Default retry budget before next() escalates a still-FAIL stage instead of
+// returning fix-and-retry again. Overridable via config (autonomy.max_retries).
+const MAX_RETRIES_DEFAULT = 2;
+
+/**
+ * Classify a non-pass gate by required response.
+ *
+ * @param {object|null} gate     Parsed gate object, or null when unreadable.
+ * @param {Array|null}  fixSteps computeFixSteps() output: array of
+ *                               { description, commands[] }, or null.
+ * @param {object}      [opts]
+ * @param {boolean}     [opts.corrupt=false] Set when the gate could not be
+ *                               read/parsed (no status available).
+ * @returns {string|null} one of "state-corruption" | "judgment-gate" |
+ *                        "external-blocked" | "code-defect", or null for a
+ *                        PASS/WARN (non-failure) gate.
+ */
+function classifyGate(gate, fixSteps, { corrupt = false } = {}) {
+  if (corrupt || !gate) return "state-corruption";
+  if (gate.status === "ESCALATE") return "judgment-gate";
+  if (gate.status === "FAIL") {
+    const hasRecipe = Array.isArray(fixSteps) && fixSteps.length > 0;
+    const allHumanAction = hasRecipe
+      && fixSteps.every((s) => !Array.isArray(s.commands) || s.commands.length === 0);
+    if (allHumanAction) return "external-blocked";
+    return "code-defect";
+  }
+  return null; // PASS / WARN — not a failure
+}
+
+module.exports = { classifyGate, MAX_RETRIES_DEFAULT };

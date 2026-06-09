@@ -685,6 +685,11 @@ function cmdValidate(argv) {
   runMain();
 }
 
+// Version of the `devteam next --json` action-object schema. Additive changes
+// (new optional fields like failure_class) keep the major version; bump on any
+// breaking change a programmatic consumer must handle.
+const NEXT_SCHEMA_VERSION = "1.0";
+
 function cmdNext(argv) {
   const { next } = getOrchestrator();
   const { flags } = parseFlags(argv);
@@ -711,7 +716,11 @@ function cmdNext(argv) {
 
   const result = next({ cwd: flags.cwd });
   if (flags.json) {
-    console.log(JSON.stringify(result, null, 2));
+    // schema_version lets a programmatic caller (e.g. an autonomous driver)
+    // validate the action shape it parses. Bump on any breaking change to the
+    // action object: new required field, renamed/removed field, or a new
+    // action value a consumer must handle. failure_class was additive (1.0).
+    console.log(JSON.stringify({ schema_version: NEXT_SCHEMA_VERSION, ...result }, null, 2));
     return;
   }
   const icon = {
@@ -722,7 +731,8 @@ function cmdNext(argv) {
     "resolve-escalation": "🚨",
     "pipeline-complete": "🎉",
   }[result.action] || "•";
-  console.log(`${icon} ${result.action}${result.name ? ` — ${result.name} (${result.stage})` : ""}`);
+  const fcTag = result.failure_class ? `  [${result.failure_class}]` : "";
+  console.log(`${icon} ${result.action}${result.name ? ` — ${result.name} (${result.stage})` : ""}${fcTag}`);
   console.log(`   ${result.reason}`);
   if (result.completed) console.log(`   completed: ${result.completed.join(", ")}`);
   if (result.remaining) console.log(`   remaining: ${result.remaining.join(", ")}`);

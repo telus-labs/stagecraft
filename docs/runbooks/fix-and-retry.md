@@ -6,6 +6,13 @@ Most `fix-and-retry` cases come from one of seven stages: **red-team** (Stage 4c
 
 For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](escalation.md).
 
+**Read the `failure_class` tag first.** `devteam next` now tags the action, e.g. `❌ fix-and-retry — qa (stage-06)  [code-defect]` (and a `failure_class` field under `--json`). It tells you *how* to respond before you read the blockers:
+
+- **`code-defect`** — the normal case this runbook covers: change code, re-run the stage.
+- **`state-corruption`** — the gate file is unreadable/malformed. **Do not re-run the stage** — that won't fix a corrupt file. Repair or rewrite the gate JSON (the blocker text names the parse error), then re-run `devteam next`.
+- **`external-blocked`** — every fix step is a human/external action with no command (e.g. obtain a sign-off). Do that thing; the pipeline can't self-advance.
+- **`convergence-exhausted`** — the retry budget (`autonomy.max_retries`, default 2) is spent, so `next` returns `resolve-escalation` instead. See [`escalation.md` § 4b](escalation.md#4b-retry-loop-exhaustion--a-distinct-escalation-shape).
+
 ---
 
 - [The general pattern](#the-general-pattern)
