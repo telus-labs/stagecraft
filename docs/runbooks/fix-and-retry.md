@@ -269,11 +269,14 @@ cat pipeline/gates/stage-05.json | jq '[.changes_requested[].workstream] | uniqu
 cat pipeline/gates/stage-05.json | jq '[.workstreams[] | select(.status == "FAIL") | .workstream]'
 # → ["backend"]
 
-# 2. Read the BLOCKER: lines from the reviewer's file (blockers are in the review
-#    markdown, not in the gate JSON):
-grep -A 2 "BLOCKER:" pipeline/code-review/by-*.md
-# → pipeline/code-review/by-platform.md:BLOCKER: Missing pagination on ListUsersCommand
-# → pipeline/code-review/by-platform.md:BLOCKER: iam_admin_users stub always emits PASS
+# 2. Read the BLOCKER items — the per-area gate carries them:
+cat pipeline/gates/stage-05.<area>.json | jq '.blockers[]'
+# → {"reviewer":"dev-platform","text":"Missing pagination on ListUsersCommand"}
+# → {"reviewer":"dev-platform","text":"iam_admin_users stub always emits PASS"}
+#
+# For gates written before approval-derivation populated blockers[],
+# grep the review files as fallback:
+# grep -A 2 "BLOCKER:" pipeline/code-review/by-*.md
 
 # 3. Address each BLOCKER. Scoped build re-run — --workstream targets only the
 #    affected area (the merger identifies it via changes_requested[].workstream):

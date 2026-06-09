@@ -81,6 +81,7 @@ const KNOWN_HOSTS = new Set(["claude-code", "codex", "gemini-cli", "generic"]);
 
 const SECTION_HEADER_RE = /^##\s+Review\s+of\s+(\w[\w-]*)\s*$/i;
 const REVIEW_MARKER_RE = /^\s*REVIEW:\s*(APPROVED|CHANGES\s+REQUESTED)\s*$/i;
+const BLOCKER_RE = /^\s*BLOCKER:\s*(.+)$/i;
 
 // ---------------------------------------------------------------------------
 // Stdin context — Claude Code PostToolUse provides tool_input.file_path
@@ -159,14 +160,21 @@ function parseReviewFile(filePath) {
 
   const verdicts = [];
   let currentArea = null;
+  let currentBlockers = [];
   for (const line of content.split(/\r?\n/)) {
     const h = line.match(SECTION_HEADER_RE);
-    if (h) { currentArea = h[1].toLowerCase(); continue; }
+    if (h) { currentArea = h[1].toLowerCase(); currentBlockers = []; continue; }
+    const b = line.match(BLOCKER_RE);
+    if (b && currentArea && KNOWN_AREAS.has(currentArea)) {
+      currentBlockers.push(b[1].trim());
+      continue;
+    }
     const m = line.match(REVIEW_MARKER_RE);
     if (m && currentArea && KNOWN_AREAS.has(currentArea)) {
       const verdict = m[1].toUpperCase().replace(/\s+/g, "_");
-      verdicts.push({ area: currentArea, verdict });
+      verdicts.push({ area: currentArea, verdict, blockers: currentBlockers });
       currentArea = null;
+      currentBlockers = [];
     }
   }
   return verdicts;
@@ -201,7 +209,7 @@ function hostFromPath(filePath) {
 // Gate upsert (locked, atomic write)
 // ---------------------------------------------------------------------------
 
-function applyVerdict({ area, verdict, reviewer, host }) {
+function applyVerdict({ area, verdict, blockers, reviewer, host }) {
   if (!fs.existsSync(GATES_DIR)) fs.mkdirSync(GATES_DIR, { recursive: true });
 
   // Fanout mode: host-suffixed gate name (stage-05.<area>.<host>.json).
@@ -261,6 +269,10 @@ function applyVerdict({ area, verdict, reviewer, host }) {
 
     gate.approvals = Array.isArray(gate.approvals) ? gate.approvals : [];
     gate.changes_requested = Array.isArray(gate.changes_requested) ? gate.changes_requested : [];
+    gate.blockers = Array.isArray(gate.blockers) ? gate.blockers : [];
+
+    // Remove any prior blocker entries from this reviewer before rewriting.
+    gate.blockers = gate.blockers.filter((b) => b.reviewer !== reviewer);
 
     if (verdict === "APPROVED") {
       if (!gate.approvals.includes(reviewer)) gate.approvals.push(reviewer);
@@ -269,6 +281,11 @@ function applyVerdict({ area, verdict, reviewer, host }) {
       gate.approvals = gate.approvals.filter((n) => n !== reviewer);
       if (!gate.changes_requested.some((e) => e.reviewer === reviewer)) {
         gate.changes_requested.push({ reviewer, timestamp: new Date().toISOString() });
+      }
+      if (Array.isArray(blockers) && blockers.length > 0) {
+        for (const text of blockers) {
+          gate.blockers.push({ reviewer, text });
+        }
       }
     }
 
@@ -357,7 +374,7 @@ function main() {
         console.error(`[approval-derivation] WARN: self-review skipped — ${file} contains "## Review of ${v.area}" but that is the reviewer's own workstream`);
         continue;
       }
-      applyVerdict({ area: v.area, verdict: v.verdict, reviewer, host });
+      applyVerdict({ area: v.area, verdict: v.verdict, blockers: v.blockers, reviewer, host });
     }
   }
   process.exit(0);
