@@ -408,7 +408,7 @@ function runAdvise(cwd, opts = {}) {
   });
 
   const updatedUnresolvedBlockers = updatedItems.filter(
-    (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK")
+    (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK" || r.classification === "A11Y_FIX")
   ).length;
 
   return {
