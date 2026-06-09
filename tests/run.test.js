@@ -11,7 +11,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { run } = require(path.join(REPO_ROOT, "core", "driver"));
+const { run, extractGateClears } = require(path.join(REPO_ROOT, "core", "driver"));
 const { orderedStageNamesForTrack } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 
 let _dirs = [];
@@ -28,14 +28,15 @@ function seedAllPass(cwd, { exclude = [] } = {}) {
 }
 
 describe("driver: halt paths (real next)", () => {
-  it("halts on a FAIL gate and surfaces failure_class", async () => {
+  it("auto-retries a code-defect FAIL, then escalates when the budget is spent", async () => {
     const cwd = track(makeTargetProject());
     seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["bad criterion"] });
+    // stage-01 (requirements) has no fix recipe, so nothing is cleared and the
+    // gate stays FAIL; the driver retries to the ceiling, then escalates.
     const s = await run({ cwd });
     assert.equal(s.completed, false);
-    assert.equal(s.halted, true);
-    assert.equal(s.halt_action, "fix-and-retry");
-    assert.equal(s.halt_failure_class, "code-defect");
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
   });
 
   it("halts on an ESCALATE gate (judgment-gate)", async () => {
@@ -122,15 +123,40 @@ describe("driver: dispatch loop (injected deps)", () => {
     assert.deepEqual(s.stages_advanced, ["build"]);
   });
 
-  it("halts on no-progress when a dispatch writes no gate", async () => {
+  it("halts structural-input when a dispatch keeps writing no gate", async () => {
     const cwd = track(makeTargetProject());
     const s = await run({
       cwd,
-      // next() keeps asking to run the same stage (gate never appears).
+      retryDelayMs: 0,
+      sleep: () => Promise.resolve(),
+      // next() keeps asking to run the same stage; dispatch never writes a gate
+      // and exits non-zero → transient once, then structural-input → halt.
       next: () => ({ action: "run-stage", stage: "stage-01", name: "requirements" }),
-      runStageHeadless: async () => [{ role: "pm", gatePath: null, durationMs: 1 }],
+      runStageHeadless: async () => [{ role: "pm", gatePath: null, exitCode: 1, durationMs: 1 }],
     });
-    assert.equal(s.halt_action, "no-progress");
+    assert.equal(s.halt_action, "structural-input");
+  });
+
+  it("retries a transient dispatch failure, then succeeds", async () => {
+    const cwd = track(makeTargetProject());
+    const dispatches = [
+      [{ role: "pm", gatePath: null, exitCode: 1, durationMs: 1 }], // transient miss
+      [{ role: "pm", gatePath: "x", exitCode: 0, durationMs: 1 }],  // recovers
+    ];
+    const nextSeq = [
+      { action: "run-stage", stage: "stage-01", name: "requirements" },
+      { action: "run-stage", stage: "stage-01", name: "requirements" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let d = 0, n = 0;
+    const s = await run({
+      cwd,
+      retryDelayMs: 0,
+      sleep: () => Promise.resolve(),
+      next: () => nextSeq[n++],
+      runStageHeadless: async () => dispatches[d++],
+    });
+    assert.equal(s.completed, true);
   });
 
   it("--allow-stage lets the driver dispatch a ceiling stage", async () => {
@@ -173,5 +199,68 @@ describe("driver: dispatch loop (injected deps)", () => {
     });
     assert.equal(s.halt_action, "max-iterations");
     assert.equal(s.iterations, 5);
+  });
+});
+
+describe("driver: autonomous fix-and-retry (PR-B)", () => {
+  it("clears the failing gate, writes context, re-dispatches, completes", async () => {
+    const cwd = track(makeTargetProject());
+    // Seed a workstream gate the fix recipe will clear.
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.backend.json");
+    fs.writeFileSync(victim, "{}");
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: ["backend test failing"],
+        fix_steps: [{ description: "rebuild backend", commands: ["rm pipeline/gates/stage-04.backend.json", "devteam stage build --headless"] }],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async () => [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }],
+    });
+    assert.equal(s.completed, true);
+    assert.ok(!fs.existsSync(victim), "failing workstream gate was cleared in-process");
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.match(ctx, /devteam:run-blockers:begin/);
+    assert.match(ctx, /backend test failing/);
+  });
+
+  it("halts (convergence-exhausted) after the driver retry ceiling", async () => {
+    const cwd = track(makeTargetProject());
+    const s = await run({
+      cwd,
+      // config default max_retries = 2; next() always reports the same code-defect.
+      next: () => ({
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: ["still failing"], fix_steps: [],
+      }),
+    });
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+  });
+
+  it("still halts on non-code-defect fix-and-retry (state-corruption)", async () => {
+    const cwd = track(makeTargetProject());
+    const s = await run({
+      cwd,
+      next: () => ({ action: "fix-and-retry", stage: "stage-01", name: "requirements", failure_class: "state-corruption", blockers: ["unreadable"] }),
+    });
+    assert.equal(s.halt_action, "fix-and-retry");
+    assert.equal(s.halt_failure_class, "state-corruption");
+  });
+
+  it("extractGateClears pulls only pipeline/gates rm targets", () => {
+    const steps = [
+      { description: "x", commands: ["rm pipeline/gates/stage-04.backend.json", "devteam stage build --headless"] },
+      { description: "y", commands: ["rm -f pipeline/gates/stage-04.json"] },
+      { description: "z", commands: ["rm /etc/passwd"] }, // must NOT be picked up
+    ];
+    const got = extractGateClears(steps, "/proj");
+    assert.deepEqual(got, ["/proj/pipeline/gates/stage-04.backend.json", "/proj/pipeline/gates/stage-04.json"]);
   });
 });

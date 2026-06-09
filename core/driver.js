@@ -28,6 +28,7 @@ const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
 const { loadConfig } = require("./config");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
+const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 
 // Irreversible / outward-facing stages. The driver never advances INTO these
 // without an explicit human grant (--allow-stage), regardless of confidence.
@@ -112,6 +113,68 @@ function resolveTrack(opts, config) {
     || "full";
 }
 
+const RUN_BLOCKERS_BEGIN = "<!-- devteam:run-blockers:begin -->";
+const RUN_BLOCKERS_END = "<!-- devteam:run-blockers:end -->";
+
+// Extract the gate files a fix recipe wants cleared. The driver applies these
+// in-process (rather than shelling out the recipe's `rm ...` strings) so it
+// stays the single owner of dispatch/merge. Only paths under pipeline/gates/
+// are honored. The recipe's `devteam stage/merge` strings are intentionally
+// ignored — the driver's own loop re-dispatches and re-merges via next().
+function extractGateClears(fixSteps, cwd) {
+  const targets = [];
+  for (const step of (fixSteps || [])) {
+    for (const cmd of (step.commands || [])) {
+      const m = typeof cmd === "string" && cmd.match(/^rm\s+(?:-\S+\s+)*(pipeline\/gates\/\S+\.json)\s*$/);
+      if (m) targets.push(path.join(cwd, m[1]));
+    }
+  }
+  return targets;
+}
+
+function clearGates(targets) {
+  const cleared = [];
+  for (const t of targets) {
+    try { fs.unlinkSync(t); cleared.push(t); }
+    catch { /* not present, or a placeholder like stage-04.<affected-ws>.json */ }
+  }
+  return cleared;
+}
+
+// Replace (or append) a marker-delimited section in a file's text.
+function upsertSection(existing, begin, end, section) {
+  const b = existing.indexOf(begin);
+  const e = existing.indexOf(end);
+  if (b !== -1 && e !== -1 && e > b) {
+    return existing.slice(0, b) + section + existing.slice(e + end.length);
+  }
+  return (existing ? existing.replace(/\s*$/, "") + "\n\n" : "") + section + "\n";
+}
+
+// Cross-stage context propagation (ADR-003 §4.3): record WHY a stage is being
+// re-dispatched so the agent's fresh session sees it. Upserted (one section,
+// rewritten each retry) so it doesn't accumulate across attempts.
+function writeRunBlockers(cwd, stageName, blockers) {
+  const p = path.join(cwd, "pipeline", "context.md");
+  const items = (blockers || []).map((b) =>
+    `- ${typeof b === "string" ? b : (b.text || b.summary || b.message || JSON.stringify(b))}`);
+  const section = [
+    RUN_BLOCKERS_BEGIN,
+    `<!-- written by \`devteam run\` before re-dispatching "${stageName}" -->`,
+    `## Address before re-running ${stageName} (autonomous retry)`,
+    ...(items.length ? items : ["- (no structured blockers reported)"]),
+    RUN_BLOCKERS_END,
+  ].join("\n");
+  let existing = "";
+  try { existing = fs.readFileSync(p, "utf8"); } catch { /* none yet */ }
+  try {
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, upsertSection(existing, RUN_BLOCKERS_BEGIN, RUN_BLOCKERS_END, section));
+  } catch { /* best-effort */ }
+}
+
+function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
 /**
  * Drive the pipeline autonomously until completion or a halt condition.
  *
@@ -125,7 +188,10 @@ function resolveTrack(opts, config) {
  * @param {string[]} [opts.allowStages]  consequence-ceiling grants (sign-off/deploy)
  * @param {boolean} [opts.resume]        continue from existing run-state
  * @param {boolean} [opts.force]         override a stale lock
+ * @param {number} [opts.retryDelayMs]   backoff before a transient re-dispatch (default 30000)
+ * @param {number} [opts.maxTransientRetries] no-gate retries before structural halt (default 1)
  * @param {function} [opts.onEvent]      progress callback (type + fields)
+ * @param {function} [opts.sleep]        injectable delay (for tests)
  * @returns {Promise<object>} run summary
  */
 async function run(opts = {}) {
@@ -143,6 +209,15 @@ async function run(opts = {}) {
   const timeoutMs = typeof opts.timeoutMs === "number" ? opts.timeoutMs : undefined;
   const allowStages = new Set(opts.allowStages || []);
   const onEvent = typeof opts.onEvent === "function" ? opts.onEvent : () => {};
+  // PR-B: autonomous fix-and-retry knobs.
+  const maxRetries = (config.autonomy && Number.isInteger(config.autonomy.max_retries))
+    ? config.autonomy.max_retries
+    : MAX_RETRIES_DEFAULT;
+  const retryDelayMs = typeof opts.retryDelayMs === "number" ? opts.retryDelayMs : 30000;
+  const maxTransientRetries = Number.isInteger(opts.maxTransientRetries)
+    ? opts.maxTransientRetries
+    : MAX_TRANSIENT_RETRIES_DEFAULT;
+  const _sleep = typeof opts.sleep === "function" ? opts.sleep : defaultSleep;
 
   const order = orderedStageNamesForTrack(track);
   const untilIndex = opts.until ? order.indexOf(opts.until) : -1;
@@ -155,6 +230,9 @@ async function run(opts = {}) {
     retries: {},
     started_at: nowIso(),
   };
+  // PR-B counters (resilient to a resumed state that predates them).
+  state.fixRetries = state.fixRetries || {}; // code-defect re-dispatches per stage
+  state.transient = state.transient || {};   // no-gate transient retries per stage
 
   const summary = {
     completed: false,
@@ -166,7 +244,6 @@ async function run(opts = {}) {
     iterations: 0,
     cost_usd: 0,
   };
-  let lastKey = null;
 
   try {
     for (let i = 0; i < maxIterations; i++) {
@@ -192,9 +269,36 @@ async function run(opts = {}) {
         break;
       }
 
-      // PR-A: the driver does not auto-fix (code-defect) or auto-rule
-      // (judgment-gate / convergence-exhausted). Halt and surface the class so
-      // the human knows exactly how to respond. PR-B/Phase 2 act on these.
+      // PR-B: the driver auto-fixes code-defect FAILs — clear the failing
+      // gate(s) the recipe names, propagate the blockers as context, and loop
+      // (next() will re-dispatch). Bounded by a driver-side retry ceiling, the
+      // authoritative backstop (next()'s convergence-exhausted relies on the
+      // agent bumping retry_number, which the driver does not control).
+      if (r.action === "fix-and-retry" && r.failure_class === "code-defect") {
+        const attempts = state.fixRetries[r.name] || 0;
+        if (attempts >= maxRetries) {
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = "convergence-exhausted";
+          summary.halt_reason = `driver retry budget exhausted for "${r.name}" (${attempts}/${maxRetries}); escalating`;
+          summary.blockers = r.blockers || [];
+          logEvent(cwd, { ...base, outcome: "convergence-halt" });
+          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
+          break;
+        }
+        const cleared = clearGates(extractGateClears(r.fix_steps, cwd));
+        writeRunBlockers(cwd, r.name, r.blockers);
+        state.fixRetries[r.name] = attempts + 1;
+        saveRunState(cwd, state);
+        logEvent(cwd, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length });
+        onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length });
+        continue;
+      }
+
+      // Everything else that isn't machine-fixable in PR-B halts for a human:
+      // state-corruption / external-blocked (fix-and-retry classes the driver
+      // must not auto-retry), and all escalations (resolve-escalation —
+      // judgment-gate / convergence-exhausted). Phase 2 adds the Principal.
       if (r.action === "fix-and-retry" || r.action === "resolve-escalation") {
         summary.halted = true;
         summary.halt_action = r.action;
@@ -245,23 +349,6 @@ async function run(opts = {}) {
           }
         }
 
-        // No-progress guard: identical (action, stage) twice in a row means the
-        // last dispatch wrote no gate (a dispatch failure). Without this the
-        // loop would re-dispatch forever (the infinite-loop hole). PR-B replaces
-        // this with classifyDispatch (transient → backoff, structural → halt).
-        const key = `${r.action}:${r.name}`;
-        if (key === lastKey) {
-          summary.halted = true;
-          summary.halt_action = "no-progress";
-          summary.halt_reason =
-            `no progress after dispatching "${r.name}" — the host exited without writing a gate ` +
-            `(dispatch failure; transient/structural classification lands in PR-B)`;
-          logEvent(cwd, { ...base, outcome: "no-progress-halt" });
-          onEvent({ type: "no-progress", ...base });
-          break;
-        }
-        lastKey = key;
-
         onEvent({ type: "dispatch", ...base });
         const t0 = Date.now();
         const results = await _runStageHeadless(r.name, {
@@ -271,22 +358,55 @@ async function run(opts = {}) {
           skipCompleted: r.action === "continue-stage",
         });
         const durationMs = Date.now() - t0;
+        const nonSkipped = results.filter((x) => !x.skipped);
         const anyTimedOut = results.some((x) => x.timedOut);
-        const anyNoGate = results.some((x) => !x.gatePath && !x.skipped);
+        const wroteGate = nonSkipped.every((x) => x.gatePath);
+        // exitCode is 0 only when every dispatched workstream cleanly exited 0;
+        // any non-zero/null (timeout) collapses to 1 for classification.
+        const exitCode = nonSkipped.length > 0 && nonSkipped.every((x) => x.exitCode === 0) ? 0 : 1;
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
         saveRunState(cwd, state);
         if (!summary.stages_advanced.includes(r.name)) summary.stages_advanced.push(r.name);
         logEvent(cwd, {
           ...base, outcome: "dispatched",
           duration_ms: durationMs, workstreams: results.length,
-          timed_out: anyTimedOut, no_gate: anyNoGate,
+          timed_out: anyTimedOut, no_gate: !wroteGate,
         });
         onEvent({ type: "dispatched", ...base, duration_ms: durationMs, timed_out: anyTimedOut });
-        continue;
+
+        // Dispatch-time classification (PR-B) — replaces PR-A's no-progress
+        // guard. A dispatch that wrote no gate is transient (backoff + retry)
+        // until the transient budget is spent, then structural (halt).
+        const dispatchClass = classifyDispatch(
+          { wroteGate, exitCode, timedOut: anyTimedOut },
+          { transientRetries: state.transient[r.name] || 0, maxTransientRetries },
+        );
+        if (dispatchClass === "ok") {
+          state.transient[r.name] = 0;
+          saveRunState(cwd, state);
+          continue;
+        }
+        if (dispatchClass === "transient") {
+          state.transient[r.name] = (state.transient[r.name] || 0) + 1;
+          saveRunState(cwd, state);
+          logEvent(cwd, { ...base, outcome: "transient-retry", attempt: state.transient[r.name] });
+          onEvent({ type: "transient-retry", ...base, attempt: state.transient[r.name], delay_ms: retryDelayMs });
+          await _sleep(retryDelayMs);
+          continue;
+        }
+        // structural-input — retrying the same dispatch cannot help.
+        summary.halted = true;
+        summary.halt_action = "structural-input";
+        summary.halt_failure_class = "structural-input";
+        summary.halt_reason =
+          `dispatch of "${r.name}" produced no gate and is not transient ` +
+          `(clean exit with no output, or repeated failure) — input is structurally unworkable`;
+        logEvent(cwd, { ...base, outcome: "structural-halt" });
+        onEvent({ type: "structural", ...base });
+        break;
       }
 
       if (r.action === "merge") {
-        lastKey = null; // merging is forward progress
         onEvent({ type: "merge", ...base });
         const m = _merge(r.name, { cwd, track: opts.track });
         logEvent(cwd, { ...base, outcome: m.merged ? "merged" : "merge-failed", reason: m.reason || null });
@@ -325,4 +445,4 @@ async function run(opts = {}) {
   return summary;
 }
 
-module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd };
+module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, extractGateClears };

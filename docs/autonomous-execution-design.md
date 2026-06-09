@@ -436,12 +436,22 @@ guard. In-process dispatch (calls `runStageHeadless`/`mergeWorkstreamGates`
 directly). `--json` summary carries `schema_version`. Tests: `tests/run.test.js`
 (13). **Dispatch is injectable** in `run()` for deterministic loop tests.
 
-**PR-B — autonomous fix-and-retry (⬜ next):** act on `code-defect` (execute fix
-steps + re-dispatch with cross-stage context, §4.3); add `classifyDispatch`
-(transient → backoff, structural → halt — the H1-deferred dispatch-time
-classifier) replacing the no-progress guard; honor the convergence ceiling
-(already in `next()`). Escalations still halt for a human (Phase 2 adds the
-Principal).
+**PR-B — autonomous fix-and-retry (✅ landed):** acts on `code-defect` — clears
+the `pipeline/gates/*` paths the recipe names (in-process, extracted from
+`computeFixSteps`' `rm` steps; the `devteam stage`/`merge` strings are ignored
+since the loop re-dispatches itself), propagates blockers into `context.md` via
+an upserted `<!-- devteam:run-blockers -->` section (§4.3), and loops — bounded
+by a **driver-side** retry ceiling (`autonomy.max_retries`, the authoritative
+backstop since `next()`'s `convergence-exhausted` relies on the agent bumping
+`retry_number`). Adds `classifyDispatch` (the H1-deferred dispatch-time
+classifier) replacing PR-A's no-progress guard: a no-gate dispatch is
+`transient` (backoff `--retry-delay-ms`, default 30s, then re-dispatch) up to
+`maxTransientRetries` (default 1), then `structural-input` → halt; a clean exit
+with no gate is structural immediately. Escalations still halt for a human
+(Phase 2 adds the Principal). Tests: `classifyDispatch` units + fix-retry /
+transient-recovery / convergence-ceiling / structural cases in `tests/run.test.js`.
+Follow-ups: a structured `clear_gates` field on the fix recipe (retire `rm`
+string-parsing) and gate archiving for progress-based convergence.
 
 **Exit criteria:** a full-track run with only machine-diagnosable failures
 completes unattended up to sign-off; escalations and structural failures halt
