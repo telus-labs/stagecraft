@@ -302,3 +302,62 @@ describe("next: stage-05 per-area fix steps", () => {
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review")), "generic fallback present");
   });
 });
+
+describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
+  function seedThroughQa(cwd) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
+                     "stage-04b", "stage-04c", "stage-04d", "stage-05", "stage-06",
+                     "stage-06b", "stage-06c"]) {
+      seedGate(cwd, s, { status: "PASS" });
+    }
+  }
+
+  it("blocker with Fix: file path → targeted build + rm gate + re-run commands", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughQa(cwd);
+    seedGate(cwd, "stage-06d", {
+      status: "FAIL",
+      blockers: [
+        "P11: Infinity exchange rate produces cost_cad=Infinity. Fix: src/backend/server.js:10 — change isNaN guard to (isNaN(_rawRate) || !isFinite(_rawRate))",
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "verification-beyond-tests");
+    assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
+
+    const descs = r.fix_steps.map(s => s.description).join(" ");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+
+    // File path surfaces in description
+    assert.ok(descs.includes("src/backend/server.js:10"), "file path in description");
+    // Workstream derived from src/backend/ path
+    assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream backend")),
+      "backend build command");
+    assert.ok(allCmds.some(c => c.includes("devteam merge build")), "merge build");
+    // Gate cleared before re-run
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),
+      "rm stage-06d gate");
+    assert.ok(allCmds.some(c => c.includes("devteam stage verification-beyond-tests")),
+      "re-run verification command");
+  });
+
+  it("blocker without Fix: clause → generic description, still re-runs verification", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughQa(cwd);
+    seedGate(cwd, "stage-06d", {
+      status: "FAIL",
+      blockers: ["Surviving mutant on critical path — manual investigation required"],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(allCmds.some(c => c.includes("devteam stage verification-beyond-tests")),
+      "re-run verification always present");
+    // No build steps without a parseable file path
+    assert.ok(!allCmds.some(c => c.includes("devteam stage build")),
+      "no build step when no file path");
+  });
+});
