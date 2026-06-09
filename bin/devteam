@@ -70,11 +70,13 @@ Commands:
                                    FAIL, resolve an ESCALATE, or done.
   run [--track <t>] [--until <s>]  Bounded autonomous driver: loop next →
       [--max-iterations N]          dispatch → merge until pipeline-complete.
-      [--budget-usd X]              Halts for a human on any FAIL/escalation,
-      [--timeout-ms N]              at the consequence ceiling (sign-off /
-      [--allow-stage <s>]           deploy — needs --allow-stage), on a budget
-      [--resume] [--force] [--json] cap, or a no-gate dispatch. Does NOT
-                                   auto-fix yet (H2 PR-B). Writes pipeline/
+      [--budget-usd X]              Auto-fixes code-defect FAILs (clear gate,
+      [--timeout-ms N]              propagate blockers, re-dispatch) and retries
+      [--retry-delay-ms N]          transient dispatch failures with backoff.
+      [--allow-stage <s>]           Halts for a human on escalations, the
+      [--resume] [--force] [--json] consequence ceiling (sign-off / deploy —
+                                   needs --allow-stage), a budget cap, or a
+                                   structural dispatch failure. Writes pipeline/
                                    run.lock, run-state.json, run-log.jsonl.
   validate                         Validate the most recent gate in
                                    pipeline/gates/. Exit codes: 0 PASS/WARN,
@@ -252,6 +254,7 @@ function parseFlags(argv) {
     if (a === "--headless"){ flags.headless = true;     continue; }
     if (a === "--timeout-ms"){ flags.timeoutMs = Number(argv[++i]); continue; }
     if (a === "--budget-usd"){ flags.budgetUsd = Number(argv[++i]); continue; }
+    if (a === "--retry-delay-ms"){ flags.retryDelayMs = Number(argv[++i]); continue; }
     if (a === "--max-iterations"){ flags.maxIterations = Number(argv[++i]); continue; }
     if (a === "--until")   { flags.until   = argv[++i]; continue; }
     if (a === "--allow-stage") { if (!flags.allowStage) flags.allowStage = []; flags.allowStage.push(argv[++i]); continue; }
@@ -807,7 +810,9 @@ function cmdRun(argv) {
       case "ceiling":      process.stderr.write(`🛑 consequence ceiling — "${ev.name}" needs a human grant (re-run with --allow-stage ${ev.name})\n`); break;
       case "budget":       process.stderr.write(`💰 budget cap reached — halting before "${ev.name}"\n`); break;
       case "until":        process.stderr.write(`⏹  reached --until boundary\n`); break;
-      case "no-progress":  process.stderr.write(`⚠  no progress — "${ev.name}" dispatched but wrote no gate; halting\n`); break;
+      case "fix-retry":    process.stderr.write(`🔧 ${ev.name} — auto-fix attempt ${ev.attempt} (cleared ${ev.cleared_gates} gate(s), blockers → context.md)\n`); break;
+      case "transient-retry": process.stderr.write(`↻  ${ev.name} — transient dispatch failure; retrying after ${ev.delay_ms} ms (attempt ${ev.attempt})\n`); break;
+      case "structural":   process.stderr.write(`⚠  "${ev.name}" dispatched but wrote no gate and isn't transient — halting (structural-input)\n`); break;
       case "merge-failed": process.stderr.write(`❌ merge failed for "${ev.name}": ${ev.reason}\n`); break;
       default: break;
     }
@@ -820,6 +825,7 @@ function cmdRun(argv) {
     maxIterations: Number.isFinite(flags.maxIterations) ? flags.maxIterations : undefined,
     budgetUsd: Number.isFinite(flags.budgetUsd) ? flags.budgetUsd : undefined,
     timeoutMs: Number.isFinite(flags.timeoutMs) ? flags.timeoutMs : undefined,
+    retryDelayMs: Number.isFinite(flags.retryDelayMs) ? flags.retryDelayMs : undefined,
     allowStages: flags.allowStage || [],
     resume: Boolean(flags.resume),
     force: Boolean(flags.force),

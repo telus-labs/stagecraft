@@ -6,7 +6,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { REPO_ROOT } = require("./_helpers");
-const { classifyGate, MAX_RETRIES_DEFAULT } = require(path.join(REPO_ROOT, "core", "gates", "classify"));
+const { classifyGate, classifyDispatch, MAX_RETRIES_DEFAULT } = require(path.join(REPO_ROOT, "core", "gates", "classify"));
 
 describe("classifyGate", () => {
   it("corrupt flag → state-corruption (no status to read)", () => {
@@ -55,5 +55,27 @@ describe("classifyGate", () => {
 
   it("exposes a default retry ceiling", () => {
     assert.equal(MAX_RETRIES_DEFAULT, 2);
+  });
+});
+
+describe("classifyDispatch", () => {
+  it("wrote a gate → ok", () => {
+    assert.equal(classifyDispatch({ wroteGate: true, exitCode: 0, timedOut: false }), "ok");
+  });
+
+  it("non-zero exit, no gate, first time → transient", () => {
+    assert.equal(classifyDispatch({ wroteGate: false, exitCode: 1, timedOut: false }, { transientRetries: 0 }), "transient");
+  });
+
+  it("timed out, no gate, first time → transient", () => {
+    assert.equal(classifyDispatch({ wroteGate: false, exitCode: null, timedOut: true }, { transientRetries: 0 }), "transient");
+  });
+
+  it("clean exit (0) but no gate → structural-input immediately", () => {
+    assert.equal(classifyDispatch({ wroteGate: false, exitCode: 0, timedOut: false }, { transientRetries: 0 }), "structural-input");
+  });
+
+  it("no gate after the transient budget is spent → structural-input", () => {
+    assert.equal(classifyDispatch({ wroteGate: false, exitCode: 1, timedOut: false }, { transientRetries: 1, maxTransientRetries: 1 }), "structural-input");
   });
 });

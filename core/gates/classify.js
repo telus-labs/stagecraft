@@ -64,4 +64,38 @@ function classifyGate(gate, fixSteps, { corrupt = false } = {}) {
   return null; // PASS / WARN — not a failure
 }
 
-module.exports = { classifyGate, MAX_RETRIES_DEFAULT };
+// Default number of transient (no-gate) dispatch retries before a no-gate
+// outcome is reclassified as structural-input and the run halts.
+const MAX_TRANSIENT_RETRIES_DEFAULT = 1;
+
+/**
+ * Classify the OUTCOME of a headless dispatch (the dispatch-time half of the
+ * failure model — ADR-003 §2.6/§2.7). Only the driver can call this: it is the
+ * one holder of the runHeadless return.
+ *
+ * A dispatch that wrote no gate is ambiguous from a bare exit code — a rate
+ * limit (retry helps) looks like a context overflow (retry can't help). The
+ * repetition heuristic resolves it safely: the first no-gate failure is treated
+ * as transient (backoff + retry identical); an identical repeat is structural.
+ * A clean exit (code 0) with no gate is structural immediately — the host ran
+ * and chose to write nothing; retrying will reproduce that.
+ *
+ * @param {object} result
+ * @param {boolean} result.wroteGate  every non-skipped workstream wrote a gate
+ * @param {number|null} result.exitCode  aggregate exit (null when timed out)
+ * @param {boolean} result.timedOut
+ * @param {object} [opts]
+ * @param {number} [opts.transientRetries=0]      retries already spent this stage
+ * @param {number} [opts.maxTransientRetries=1]
+ * @returns {string} "ok" | "transient" | "structural-input"
+ */
+function classifyDispatch(result, { transientRetries = 0, maxTransientRetries = MAX_TRANSIENT_RETRIES_DEFAULT } = {}) {
+  if (result.wroteGate) return "ok";
+  // Clean exit but nothing written → the host did nothing; retry won't help.
+  if (result.exitCode === 0 && !result.timedOut) return "structural-input";
+  // Crash / timeout / non-zero exit: transient until we've retried enough.
+  if (transientRetries >= maxTransientRetries) return "structural-input";
+  return "transient";
+}
+
+module.exports = { classifyGate, classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT };
