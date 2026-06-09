@@ -800,6 +800,38 @@ function computeFixSteps(gate, stageDef) {
     return steps.length > 1 ? steps : null;
   }
 
+  // Accessibility audit (stage-06b): blockers carry element + remediation text
+  if (stage === "stage-06b") {
+    const blockers = gate.blockers || [];
+    const remediations = blockers.map((b) => {
+      if (typeof b === "string") {
+        try { b = JSON.parse(b); } catch { return b; }
+      }
+      if (typeof b === "object" && b !== null) {
+        const id = b.id || "";
+        const desc = b.description || "";
+        // description ends with "Remediation: <fix>" — extract just that part
+        const remMatch = desc.match(/Remediation:\s*(.+)/i);
+        const remText = remMatch ? remMatch[1].trim() : desc;
+        return id ? `${id}: ${remText}` : remText;
+      }
+      return String(b);
+    }).filter(Boolean);
+
+    return [
+      {
+        description: remediations.length
+          ? `Fix HTML in src/frontend/: ${remediations.join("; ")}`
+          : "Apply the remediation steps in each blocker above to src/frontend/index.html",
+        commands: [],
+      },
+      {
+        description: "Clear the gate and re-run the accessibility audit",
+        commands: ["rm pipeline/gates/stage-06b.json", "devteam stage accessibility-audit --headless"],
+      },
+    ];
+  }
+
   // Sign-off (stage-07)
   if (stage === "stage-07") {
     return [

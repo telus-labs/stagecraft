@@ -130,6 +130,9 @@ function itemText(item) {
 function classifyItem(item, cwd) {
   const trackFor = (item.track_for || "").toLowerCase();
 
+  // Items sourced from the accessibility gate have concrete HTML remediations
+  if ((item._source || "").includes("stage-06b")) return "A11Y_FIX";
+
   // Agent-provided track_for overrides heuristics
   if (trackFor === "brief-amendment") return "PEER_REVIEW_RISK";
   if (trackFor === "lessons-learned") return "QA_NOISE";
@@ -177,6 +180,18 @@ function generateOptions(item, classification) {
   const trackFor = (item.track_for || "").toLowerCase();
 
   switch (classification) {
+    case "A11Y_FIX":
+      return [
+        { id: "A", action: "fix",     label: "fix",     recommended: true,
+          description: "apply the HTML fix from the blocker description, then rm pipeline/gates/stage-06b.json && devteam stage accessibility-audit --headless" },
+        { id: "B", action: "defer",   label: "defer",   recommended: false,
+          description: `defer with ticket — mark DEFERRED in pipeline/context.md${ticketHint}` },
+        { id: "C", action: "amend",   label: "amend",   recommended: false,
+          description: "flag for PM to remove the accessibility requirement from scope" },
+        { id: "D", action: "nothing", label: "nothing", recommended: false,
+          description: "advance as-is; accessibility gate remains FAIL" },
+      ];
+
     case "QA_BLOCKER":
       return [
         { id: "A", action: "scaffold",  label: "scaffold",  recommended: true,
@@ -271,6 +286,8 @@ function applyOption(item, action, ticketId) {
       return `BRIEF-AMEND-NEEDED: ${refLabel} — stage manager: scope-down or remove before peer-review`;
     case "scaffold":
       return `SCAFFOLD-PENDING: ${refLabel} — ${summary}`;
+    case "fix":
+      return `NOTED: ${item.id} — ${summary} — stage manager: fix-accepted (edit HTML then re-run accessibility-audit)`;
     case "fix-now":
       return `NOTED: ${item.id} — ${summary} — stage manager: fix-now (dispatch build workstream)`;
     default:
@@ -334,7 +351,7 @@ function runAdvise(cwd, opts = {}) {
   });
 
   const unresolvedBlockers = items.filter(
-    (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK")
+    (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK" || r.classification === "A11Y_FIX")
   ).length;
 
   if (opts.checkOnly || !opts.apply || opts.apply.size === 0) {

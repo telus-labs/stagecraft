@@ -523,6 +523,7 @@ function cmdAdvise(argv) {
   let applyMap = new Map();
   if (flags.apply) {
     const CLASS_TO_ACTION = {
+      A11Y_FIX:         ["fix", "defer", "amend", "nothing"],
       QA_BLOCKER:       ["scaffold", "defer", "amend", "nothing"],
       PEER_REVIEW_RISK: ["defer", "nothing", "amend"],
       QA_NOISE:         ["nothing", "known-flaky", "fix-now"],
@@ -609,7 +610,7 @@ function cmdAdvise(argv) {
     return;
   }
 
-  const riskLabel = { QA_BLOCKER: "QA BLOCKER", PEER_REVIEW_RISK: "PEER-REVIEW RISK", QA_NOISE: "QA NOISE", INFO: "INFO" };
+  const riskLabel = { A11Y_FIX: "A11Y FIX", QA_BLOCKER: "QA BLOCKER", PEER_REVIEW_RISK: "PEER-REVIEW RISK", QA_NOISE: "QA NOISE", INFO: "INFO" };
   console.log("\nFollow-up items in completed stage gates:\n");
 
   for (const { item, classification, addressed, options } of result.items) {
@@ -656,7 +657,7 @@ function cmdNext(argv) {
       const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
       const { items } = runAdvise(cwd, { checkOnly: true });
       const pending = items.filter(
-        (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK")
+        (r) => !r.addressed && (r.classification === "QA_BLOCKER" || r.classification === "PEER_REVIEW_RISK" || r.classification === "A11Y_FIX")
       );
       if (pending.length > 0) {
         process.stderr.write(
