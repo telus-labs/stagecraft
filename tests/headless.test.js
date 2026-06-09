@@ -20,7 +20,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { runHeadless } = require("../core/adapters/headless");
+const { runHeadless, rotateLog } = require("../core/adapters/headless");
 
 function makeAdapter({ headlessCommand = "true", name = "test-host" } = {}) {
   return {
@@ -285,6 +285,113 @@ test("log file is closed cleanly even when the spawn fails (no async write-after
     assert.ok(fs.existsSync(logPath));
     const content = fs.readFileSync(logPath, "utf8");
     assert.match(content, /Exit: spawn error:/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Log rotation tests
+// ---------------------------------------------------------------------------
+
+test("rotateLog: on second run the previous log is moved to .1.log", async () => {
+  const ctx = makeCtx();
+  try {
+    const logsPath = path.join(ctx.cwd, "pipeline", "logs");
+    fs.mkdirSync(logsPath, { recursive: true });
+    // Simulate a first run by pre-seeding the log file.
+    const logFile = path.join(logsPath, "stage-01.log");
+    fs.writeFileSync(logFile, "first run content");
+
+    await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", () =>
+      withEnv("DEVTEAM_LOG_HISTORY", "3", () =>
+        runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+      ),
+    );
+
+    // The previous log must have been rotated to .1.log.
+    const slot1 = path.join(logsPath, "stage-01.1.log");
+    assert.ok(fs.existsSync(slot1), ".1.log should exist after rotation");
+    assert.equal(fs.readFileSync(slot1, "utf8"), "first run content");
+
+    // The new current log is written by this run.
+    assert.ok(fs.existsSync(logFile), "new stage-01.log must exist");
+    assert.match(fs.readFileSync(logFile, "utf8"), /# Stage transcript: stage-01/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("rotateLog: history shifts correctly across three runs", async () => {
+  const ctx = makeCtx();
+  try {
+    const logsPath = path.join(ctx.cwd, "pipeline", "logs");
+    fs.mkdirSync(logsPath, { recursive: true });
+    const logFile = path.join(logsPath, "stage-01.log");
+
+    // Run 1: seed a log
+    fs.writeFileSync(logFile, "run-1");
+    // Run 2: rotate; run-1 → .1.log
+    fs.writeFileSync(path.join(logsPath, "stage-01.1.log"), "will-be-shifted");
+    rotateLog(logFile, 3);
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.1.log"), "utf8"), "run-1");
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.2.log"), "utf8"), "will-be-shifted");
+    assert.ok(!fs.existsSync(logFile), "current log consumed by rotation");
+
+    // Run 3: rotate again
+    fs.writeFileSync(logFile, "run-3");
+    rotateLog(logFile, 3);
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.1.log"), "utf8"), "run-3");
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.2.log"), "utf8"), "run-1");
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.3.log"), "utf8"), "will-be-shifted");
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("rotateLog: oldest slot is pruned when maxHistory is exceeded", async () => {
+  const ctx = makeCtx();
+  try {
+    const logsPath = path.join(ctx.cwd, "pipeline", "logs");
+    fs.mkdirSync(logsPath, { recursive: true });
+    const logFile = path.join(logsPath, "stage-01.log");
+
+    // Fill all history slots (maxHistory=2): .1.log and .2.log exist.
+    fs.writeFileSync(logFile, "current");
+    fs.writeFileSync(path.join(logsPath, "stage-01.1.log"), "prior-1");
+    fs.writeFileSync(path.join(logsPath, "stage-01.2.log"), "prior-2");
+
+    rotateLog(logFile, 2);
+
+    // .2.log (the oldest allowed slot) now holds what was in .1.log.
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.1.log"), "utf8"), "current");
+    assert.equal(fs.readFileSync(path.join(logsPath, "stage-01.2.log"), "utf8"), "prior-1");
+    // prior-2 must have been pruned.
+    assert.ok(!fs.existsSync(path.join(logsPath, "stage-01.3.log")), "pruned slot must not exist");
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("DEVTEAM_LOG_HISTORY=0 disables rotation; current log is overwritten", async () => {
+  const ctx = makeCtx();
+  try {
+    const logsPath = path.join(ctx.cwd, "pipeline", "logs");
+    fs.mkdirSync(logsPath, { recursive: true });
+    const logFile = path.join(logsPath, "stage-01.log");
+    fs.writeFileSync(logFile, "old content");
+
+    await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", () =>
+      withEnv("DEVTEAM_LOG_HISTORY", "0", () =>
+        runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+      ),
+    );
+
+    // No rotation files should exist.
+    assert.ok(!fs.existsSync(path.join(logsPath, "stage-01.1.log")), ".1.log must not exist");
+    // Current log overwritten with the new run.
+    assert.ok(fs.existsSync(logFile));
+    assert.match(fs.readFileSync(logFile, "utf8"), /# Stage transcript: stage-01/);
   } finally {
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }

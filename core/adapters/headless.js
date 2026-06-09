@@ -19,6 +19,11 @@
 // and reverts to inherit-style stdio. Tests that don't want log files
 // scattered in tempdirs should set this.
 //
+// Log rotation: before each run, the existing <workstreamId>.log is rotated
+// to <workstreamId>.1.log, .1.log → .2.log, and so on. The oldest slot
+// (index DEVTEAM_LOG_HISTORY, default 3) is pruned. Set DEVTEAM_LOG_HISTORY=0
+// to disable rotation and revert to the overwrite-on-each-run behaviour.
+//
 // Timeout: ctx.timeoutMs caps the child's wall-clock. Default 10 min
 // (600_000 ms). Pass 0 (or any non-positive number) for no timeout.
 // On timeout, the child is SIGTERM'd and the returned exitCode is
@@ -31,6 +36,20 @@ const { gatesDir, logsDir } = require("../paths");
 const { snapshotWritables, auditWrites } = require("../guards/write-audit");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
+// Rotate <logPath> before writing a new run.
+// <ws>.log → <ws>.1.log, <ws>.1.log → <ws>.2.log, …, <ws>.<N>.log pruned.
+// All filesystem errors are swallowed — rotation is best-effort and must
+// never prevent the new log from being written.
+function rotateLog(logPath, maxHistory) {
+  if (maxHistory <= 0) return;
+  const slot = (n) => logPath.replace(/\.log$/, `.${n}.log`);
+  try { fs.unlinkSync(slot(maxHistory)); } catch { /* already gone */ }
+  for (let i = maxHistory - 1; i >= 1; i--) {
+    try { fs.renameSync(slot(i), slot(i + 1)); } catch { /* didn't exist */ }
+  }
+  try { fs.renameSync(logPath, slot(1)); } catch { /* no current log yet */ }
+}
 
 function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   const declared = adapter.capabilities && adapter.capabilities.headlessCommand;
@@ -72,6 +91,11 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
       const logsDirPath = logsDir(ctx.cwd, ctx.changeId);
       fs.mkdirSync(logsDirPath, { recursive: true });
       logPath = path.join(logsDirPath, `${descriptor.workstreamId}.log`);
+      const rawHistory = process.env.DEVTEAM_LOG_HISTORY;
+      const maxHistory = (rawHistory !== undefined && Number.isFinite(parseInt(rawHistory, 10)) && parseInt(rawHistory, 10) >= 0)
+        ? parseInt(rawHistory, 10)
+        : 3;
+      rotateLog(logPath, maxHistory);
       logBuffer = [
         `# Stage transcript: ${descriptor.workstreamId}`,
         `# Host: ${adapter.capabilities && adapter.capabilities.name}`,
@@ -174,4 +198,4 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   });
 }
 
-module.exports = { runHeadless, DEFAULT_TIMEOUT_MS };
+module.exports = { runHeadless, rotateLog, DEFAULT_TIMEOUT_MS };
