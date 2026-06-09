@@ -111,8 +111,7 @@ Supported conditions:
 - `all_criteria_passed` — auto-pass if `stage-06.json` has
   `all_acceptance_criteria_met: true` (Checkpoint C only)
 
-Auto-pass writes a record to `pipeline/context.md` under `## User
-Decisions` as:
+Auto-pass writes a record to `pipeline/context.md` under `## Brief Changes` as:
 
 ```
 <ISO> — Checkpoint <X> auto-passed via config (<condition>)

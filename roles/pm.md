@@ -137,7 +137,7 @@ Delta items must be specific and scoped — not a full rewrite request.
 When the Stage 6 test report maps each acceptance criterion 1:1 to a passing
 test and has `"all_acceptance_criteria_met": true`, sign-off auto-passes
 without a full PM invocation. The orchestrator writes the gate with
-`"pm_signoff": true, "auto_from_stage_07": true`. You are only invoked when:
+`"pm_signoff": true, "auto_from_stage_06": true`. You are only invoked when:
 - Any acceptance criterion failed in Stage 6, OR
 - The mapping from criteria to tests is not 1:1, OR
 - The user explicitly requested a manual sign-off.

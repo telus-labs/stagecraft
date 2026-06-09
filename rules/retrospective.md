@@ -21,7 +21,7 @@ per-run retro is the raw material; lessons-learned is the refined output.
 - `pipeline/brief.md` — what we set out to build
 - `pipeline/design-spec.md` + `pipeline/adr/` — how we decided to build it
 - `pipeline/context.md` — including every `QUESTION:`, `PM-ANSWER:`,
-  `CONCERN:`, `ESCALATE:`, `## Assumptions`, `## User Decisions`
+  `CONCERN:`, `ESCALATE:`, `## Assumptions`, `## Principal Rulings`, `## Deferred follow-ups`
 - `pipeline/pr-{area}.md` for each area — what was built
 - `pipeline/code-review/by-{area}.md` — what review caught
 - `pipeline/test-report.md` — what tests caught
@@ -92,7 +92,7 @@ corrective one. The 2-per-retro promotion cap still applies.
 
 ### Step 9a-followup — Followup triage (Principal, after contribution pass)
 
-> Operator guide for reading the resulting `open_followups[]`: [`docs/runbooks/open-followups.md`](../docs/runbooks/open-followups.md)
+> Stage manager guide for reading the resulting `open_followups[]`: [`docs/runbooks/open-followups.md`](../docs/runbooks/open-followups.md)
 
 Before synthesis begins, the Principal reads `noted_for_followup[]` from every
 gate that emits it — primarily `pipeline/gates/stage-04c.json` (red-team) and
@@ -183,7 +183,7 @@ Output:
    ```
 
    This array is the machine-readable handoff to external ticket systems. An
-   operator or CI step can read `pipeline/gates/stage-09.json | jq
+   A stage manager or CI step can read `pipeline/gates/stage-09.json | jq
    .open_followups` to generate tickets without re-reading every gate.
 
 ### Severity rubric

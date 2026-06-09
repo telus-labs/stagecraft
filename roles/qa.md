@@ -27,7 +27,7 @@ so Stage 7 sign-off can auto-fold when all criteria pass 1:1.
 
 For both the Stage 4 QA gate (`stage-04.qa.json`) and the Stage 6 gate
 (`stage-06.json`), populate `affected_workstreams` as the deduplicated list
-of `assigned_to` values from `failing_tests`. This is the field operators
+of `assigned_to` values from `failing_tests`. This is the field stage managers
 query first to know which build agents to re-run. See
 `.devteam/rules/gates.md §affected_workstreams[]` for the full schema.
 
@@ -209,7 +209,7 @@ not just that the patched code looks correct.
 
    **`affected_workstreams` (required on FAIL).** When `status` is `FAIL`,
    set `affected_workstreams` to the deduplicated, sorted list of
-   `assigned_to` values from `failing_tests`. This tells operators which
+   `assigned_to` values from `failing_tests`. This tells stage managers which
    build workstreams to re-run without reading every test entry:
 
    ```json

@@ -96,7 +96,7 @@ The validate-and-publish path (this workflow) is the appropriate CI integration.
 
 ## Pinning + drift
 
-The template pins `STAGECRAFT_REF: v0.3.0`. Update it on each Stagecraft release you want to adopt. Pinning matters because:
+The template pins `STAGECRAFT_REF: <version>`. Update it on each Stagecraft release you want to adopt. Pinning matters because:
 
 - Validator behavior could change (rare but possible).
 - `scripts/pr-publish.js`'s output shape could evolve.

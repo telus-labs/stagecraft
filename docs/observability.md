@@ -86,10 +86,7 @@ Exceptions are captured automatically. If anything throws, the span gets `status
 - **The approval-derivation hook** — same situation; spawned by Claude Code's PostToolUse hook, exits immediately.
 - **LLM calls themselves** — Stagecraft does not make these. The host (Claude Code, Codex) does, and their tracing surface is their own. Stagecraft observes what they wrote to gate files.
 
-Roadmap entries (`docs/BACKLOG.md`):
-- **D2 — gate-pass-rate dashboards** consumes these spans.
-- **D4 — per-role per-model performance scores** also consumes them (derive metrics from the duration + status attributes).
-- **D5 — adaptive routing** uses D4's metrics to choose hosts automatically.
+These spans are consumed by the shipped analytics tools — see `scripts/dashboard.js` (`--view cost`, `--view performance`) and `scripts/routing-suggest.js`.
 
 ## Backend-specific cookbooks
 

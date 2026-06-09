@@ -76,7 +76,7 @@ When in doubt, `full`. The cost of a falsely-skipped stage is usually higher tha
 
 ### Can I run multiple features through the pipeline simultaneously?
 
-Partially. Each feature lives in its own `pipeline/` directory — you can run the pipeline in parallel across different directories (`--pipeline-dir pipeline-feature-a/`, `--pipeline-dir pipeline-feature-b/`). What you can't do is run two features through the *same* pipeline directory simultaneously; gate files would overwrite each other.
+Partially. Each feature lives in its own `pipeline/` directory — you can run the pipeline in parallel across different directories by running `devteam` commands from separate project directories (use `--cwd <dir>` or `cd` into the target). What you can't do is run two features through the *same* pipeline directory simultaneously; gate files would overwrite each other.
 
 In practice: one target project, one feature at a time, one `pipeline/` directory. If your team is running multiple features, either use separate clone directories per feature or wait until one pipeline is complete before starting the next.
 
@@ -411,14 +411,7 @@ Both read fields that gates already record (the C4 reproducibility set). Host-le
 
 ### What's planned next?
 
-See [`docs/BACKLOG.md`](BACKLOG.md). Top items by impact/effort:
-
-1. OpenTelemetry per-stage tracing (debuggability win).
-2. Secret-scanning hook on Write/Edit.
-3. Gemini CLI host adapter (third real host).
-4. Accessibility audit stage.
-5. Persistent project memory (embeddings-indexed).
-6. Multi-model peer review.
+See [`docs/BACKLOG.md`](BACKLOG.md) for the full list. Items currently in progress or near the top of the queue include autonomous pipeline loop (`devteam run`), per-invocation model-pin overrides for reproducibility, and broader host adapter coverage. The BACKLOG is the authoritative source — this answer goes stale faster than the file does.
 
 ### When will this hit 1.0?
 
@@ -530,7 +523,7 @@ Yes. Two ways:
 - **Re-run an earlier stage.** Writing a new gate file for an earlier stage doesn't roll back the later ones — they still exist on disk. But `devteam next` only cares about the most recent gate per stage, so re-running a stage with `--feature "..."` and producing a new gate effectively "rewinds" that stage.
 - **Delete later gates manually.** If you want to truly start over from stage-04, `rm pipeline/gates/stage-04*.json pipeline/gates/stage-05*.json …`. The orchestrator will then see those stages as pending.
 
-There's no `devteam rewind <stage>` command today (BACKLOG E6 — `devteam replay <run-id>` is the closest planned feature). Manual file ops work fine for now.
+`devteam replay <stage-id>` re-runs a recorded stage with the current config and diffs the new gate against the original — useful for verifying that a fix actually changed the outcome. `devteam restart <stage>` clears a stage's gate files so it can be re-run fresh. Manual gate deletion (`rm pipeline/gates/stage-04*.json`) is also always an option.
 
 ## Running offline / in CI
 
@@ -563,7 +556,7 @@ context:
   scope: packages/payments-service   # relative to repo root
 ```
 
-The agents are prompted to limit their analysis to that sub-tree. Gate files still land in `pipeline/gates/` at the root (or wherever `--pipeline-dir` points) — so you can run separate pipelines for separate packages by using separate `--pipeline-dir` arguments.
+The agents are prompted to limit their analysis to that sub-tree. Gate files land in `pipeline/gates/` relative to whichever directory you run `devteam` from (use `--cwd` to target a different root). Run separate `devteam` invocations from separate directories to isolate pipelines per package.
 
 There's no automatic file-restriction enforcement at the framework level — the `allowedWrites` field in stage descriptors controls where agents are *allowed* to write, but the scope hint is advisory. If your agents need stricter isolation, add explicit paths to `allowedWrites` in the relevant stage descriptors. See `STAGES.js` for the structure.
 

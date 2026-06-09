@@ -136,6 +136,7 @@ Don't read the JSON. Point at three regions:
   06b. accessibility       QA audits WCAG (axe-core / pa11y / lighthouse)
   06c. observability       Platform verifies brief signals are emitted
   06d. verification        Property-based / mutation / formal verification
+  06e. performance-budget  Lighthouse / k6 budget gate (conditional on UI/load changes)
   07.  sign-off            PM + Platform; auto-fold from stage-06 if criteria met
   08.  deploy              Platform follows core/deploy/<adapter>.md
   09.  retrospective       Principal harvests lessons; promotes to lessons-learned.md

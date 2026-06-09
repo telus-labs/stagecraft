@@ -115,7 +115,7 @@ Then read `pipeline/brief.md`. Produce `pipeline/design-spec.md` covering:
 End the file with `STATUS: DRAFT`.
 
 Before finalising: check `pipeline/context.md` for any prior rulings or
-`## User Decisions` entries that should inform this design.
+`## Principal Rulings` and `## Deferred follow-ups` entries that should inform this design.
 
 ## On Chairing a Design Review
 

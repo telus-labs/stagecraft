@@ -111,5 +111,5 @@ npm run routing:suggest -- --apply --yes
 
 - [`core/pricing.js`](../core/pricing.js) — the pricing table.
 - [`scripts/dashboard.js`](../scripts/dashboard.js) — `--view cost` aggregation.
-- [`docs/BACKLOG.md`](BACKLOG.md) — D4 (next: performance scores) and D5 (after: adaptive routing).
+- [`docs/BACKLOG.md`](BACKLOG.md) — D4 (performance scores) and D5 (adaptive routing).
 - [`docs/observability.md`](observability.md) — OTel tracing (separate observability layer).

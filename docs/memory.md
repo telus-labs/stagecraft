@@ -75,7 +75,7 @@ Default is **local**: `Xenova/bge-small-en-v1.5` via `@huggingface/transformers`
 
 The model is downloaded lazily on first use and cached. ~33MB on disk.
 
-### Switching embedders (future, not yet implemented)
+### Switching embedders
 
 ```bash
 export DEVTEAM_EMBEDDING_PROVIDER=openai
@@ -83,7 +83,7 @@ export OPENAI_API_KEY=sk-...
 devteam memory reindex
 ```
 
-Planned for v0.3. Today only `local` (default) and `stub` (deterministic vectors for tests) work.
+Today only `local` (default) and `stub` (deterministic vectors for tests) are supported.
 
 ### Switching models
 
@@ -108,7 +108,7 @@ Chunks under 32 chars are dropped (typically just empty sections). Documents wit
 
 For the realistic scale of a single project (10–100 artifacts, 100–1000 chunks), the in-memory cosine search runs in single-digit milliseconds. Local embedding adds 50–200ms per chunk on a modern CPU. A 12-chunk brief ingests in 1–3 seconds.
 
-The JSON backend's ceiling is roughly 1k chunks per project before query latency becomes noticeable. Beyond that, switch to the planned sqlite-vec backend (interface ready in `core/memory/store.js`; implementation planned for v0.3).
+The JSON backend's ceiling is roughly 1k chunks per project before query latency becomes noticeable.
 
 ## When to ingest
 
@@ -117,7 +117,7 @@ Two trigger points:
 1. **Manual** — `devteam memory ingest` after any artifact-producing stage finishes. Safe to run repeatedly: re-ingesting an artifact replaces its old chunks (no duplicates).
 2. **End of pipeline** — typically after Stage 9 (retrospective). The retrospective is when the team's view of "what we built and learned" crystallizes; ingesting then captures the most-complete picture.
 
-Automatic ingest on retro-gate write (via a hook) is planned but not in v1. The explicit interface for now is manual `devteam memory ingest`.
+The explicit interface is manual `devteam memory ingest`.
 
 ## What's NOT in memory
 
@@ -136,7 +136,7 @@ Deliberately excluded:
 
 **"store was indexed with X but the current embedder is Y."** Your embedder changed. Run `devteam memory reindex` to re-embed with the new model. Vectors from different models aren't comparable.
 
-**Memory takes too much disk.** Each chunk's embedding is ~1.5KB (384 floats × 4 bytes + JSON overhead). A project with 1000 chunks is ~1.5MB. If that's too much, switch to the sqlite-vec backend (when available) or `devteam memory clear` after particularly large runs.
+**Memory takes too much disk.** Each chunk's embedding is ~1.5KB (384 floats × 4 bytes + JSON overhead). A project with 1000 chunks is ~1.5MB. Run `devteam memory clear` after particularly large runs to reclaim space.
 
 ## Org-shared memory (D3 + G8)
 
@@ -195,7 +195,7 @@ Cross-project sharing changes the trust model. Some notes:
 
 - The org store is per-machine by default. Sharing across team members requires syncing `~/.stagecraft/memory/` via a shared network mount, git, or similar mechanism. A first-class team-sync feature is a BACKLOG candidate.
 - No automatic promotion. Each promote is a deliberate human action.
-- No deletion of org records per-project. `devteam memory clear --org` wipes everything; selective per-project removal needs the (planned) sqlite-vec backend's better delete semantics.
+- No deletion of org records per-project. `devteam memory clear --org` wipes everything; there is no selective per-project removal.
 
 ## Reference
 

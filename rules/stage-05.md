@@ -59,7 +59,7 @@ skips and warns on self-reviews; the gate will not count them.
 Each area's stage-05 gate accumulates two approvals from reviewers
 whose own area is different.
 
-**Operator guidance — FAIL with no `changes_requested`.** When a gate shows
+**Stage manager guidance — FAIL with no `changes_requested`.** When a gate shows
 `status: "FAIL"` and `changes_requested` is empty, it means quorum has not
 been reached — no one has blocked the change. Steps:
 
@@ -104,7 +104,7 @@ writer.
 **`blockers[]` extraction (hook-written).** When parsing a section that
 ends with `REVIEW: CHANGES REQUESTED`, the hook also extracts every
 `BLOCKER: <text>` line from that section and writes them into the
-per-area gate as a `blockers` array. This lets operators read blocker
+per-area gate as a `blockers` array. This lets stage managers read blocker
 text directly from the gate without grepping review files:
 
 ```json
@@ -165,7 +165,7 @@ peer-review` writes `pipeline/gates/stage-05.json`, it derives
 `affected_workstreams` from the per-area gates: any area whose gate has
 `changes_requested` non-empty contributes its area name. Since area names
 map 1:1 to build workstreams (`backend` → `dev-backend`, etc.), this tells
-operators exactly which agents to re-run:
+stage managers exactly which agents to re-run:
 
 ```json
 {
@@ -180,7 +180,7 @@ operators exactly which agents to re-run:
 ```
 
 Per-area gates do not carry `affected_workstreams` — the area name itself
-is the attribution. Use the merged gate for the operator-facing query.
+is the attribution. Use the merged gate for the stage-manager-facing query.
 
 Pre-read requirement (pass to each reviewer agent):
   - `pipeline/brief.md`

@@ -21,7 +21,7 @@ belongs to `platform`.
 
 **`affected_workstreams[]` on the gate.** Derive this as the deduplicated,
 sorted list of all `assigned_to` values across all `gap[]` arrays (metrics,
-logs, traces). This is the field operators query to know which build agents to
+logs, traces). This is the field stage managers query to know which build agents to
 re-run:
 
 ```json

@@ -330,7 +330,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 **Codebase audit** — a full read-only analysis of any project.
 
-- `devteam audit` (or `/audit` in Claude Code) runs four phases: Bootstrap → Health Assessment → Deep Analysis → Roadmap
+- `/audit` in Claude Code runs four phases: Bootstrap → Health Assessment → Deep Analysis → Roadmap
 - Produces 11 output files in `docs/audit/`; resume-aware via `docs/audit/status.json`
 - `/audit-quick` runs phases 1–2 only for a faster assessment
 

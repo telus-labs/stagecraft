@@ -38,7 +38,7 @@ The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator n
 
 ### Stage-5 vocabulary callout
 
-At Stage 5 (peer-review), the merged `stage-05.json` gate's `workstreams[]` array means something different from every other multi-role stage. The distinction is a common source of confusion for new operators.
+At Stage 5 (peer-review), the merged `stage-05.json` gate's `workstreams[]` array means something different from every other multi-role stage. The distinction is a common source of confusion for new stage managers.
 
 At **Stage 4 (build)**, `workstreams[]` are the four **implementers**. Each entry's `status` is the verdict that implementer wrote about *their own* gate (PASS = they finished their slice cleanly, FAIL = they ran into a problem).
 
