@@ -897,6 +897,27 @@ function computeFixSteps(gate, stageDef, gatesDir) {
       return steps;
     }
 
+    // --- Missing per-area gates: workstream dispatched but wrote no gate file ---
+    // Compare expected roles (stageDef.roles) against gates actually found on disk.
+    // A missing gate means the workstream timed out or crashed without writing output.
+    if (gatesDir) {
+      const expectedRoles = (stageDef.roles || []).filter(r => typeof r === "string");
+      const foundAreas = new Set([...perAreaFail.map(a => a.area), ...perAreaPass.map(a => a.area)]);
+      const missingAreas = expectedRoles.filter(r => !foundAreas.has(r));
+      if (missingAreas.length > 0) {
+        steps.push({
+          description: `Peer-review workstream${missingAreas.length !== 1 ? "s" : ""} wrote no gate: `
+            + `${missingAreas.join(", ")} — re-run to complete the review matrix`,
+          commands: [
+            "rm pipeline/gates/stage-05.json",
+            ...missingAreas.map(area => `devteam stage peer-review --workstream ${area} --headless`),
+          ],
+        });
+        steps.push({ description: "Rebuild merged peer-review gate", commands: ["devteam merge peer-review"] });
+        return steps;
+      }
+    }
+
     // --- Fallback: merged gate only (no per-area files readable) ---
     const changesRequested = gate.changes_requested || [];
     const approvals = gate.approvals || [];
@@ -941,7 +962,15 @@ function computeFixSteps(gate, stageDef, gatesDir) {
         commands: [],
       });
     } else {
-      return null;
+      // Merged gate is FAIL but has no changes_requested and no approval deficit.
+      // Surface whatever the gate contains so the operator has something to act on.
+      const reason = gate.failure_reason
+        ? `failure_reason: "${gate.failure_reason}"`
+        : "inspect pipeline/gates/stage-05.json for the specific failure";
+      steps.push({
+        description: `Merged peer-review gate FAIL with no specific blockers — ${reason}`,
+        commands: ["rm pipeline/gates/stage-05.json", "devteam merge peer-review"],
+      });
     }
     steps.push({ description: "Re-run peer review", commands: ["devteam stage peer-review --headless"] });
     return steps;

@@ -312,6 +312,23 @@ async function run(opts = {}) {
           ? r.clear_gates.map((rel) => path.join(cwd, rel))
           : extractGateClears(r.fix_steps, cwd);
         const cleared = clearGates(toClear);
+        // If a recipe exists but cleared nothing, next() will return the same
+        // fix-and-retry unchanged. Halt immediately rather than burning retries.
+        // Stages with no recipe (toClear empty) still reach convergence-exhausted —
+        // they may recover if the agent self-corrects on retry.
+        if (cleared.length === 0 && toClear.length > 0) {
+          summary.halted = true;
+          summary.halt_action = "fix-and-retry";
+          summary.halt_failure_class = "structural-input";
+          summary.halt_reason =
+            `fix steps for "${r.name}" contain no gate clears — cannot make automated progress; `
+            + `run \`devteam next\` for manual fix steps`;
+          summary.blockers = r.blockers || [];
+          summary.fix_steps = r.fix_steps || [];
+          logEvent(cwd, { ...base, outcome: "no-progress-halt", archived: archived || null });
+          onEvent({ type: "halt", ...base, failure_class: "structural-input", reason: summary.halt_reason, blockers: r.blockers, fix_steps: r.fix_steps });
+          break;
+        }
         writeRunBlockers(cwd, r.name, r.blockers);
         state.fixRetries[r.name] = attempts + 1;
         saveRunState(cwd, state);
