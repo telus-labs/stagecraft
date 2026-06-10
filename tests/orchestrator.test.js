@@ -1,8 +1,9 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { runStage, mergeWorkstreamGates, buildDescriptor } =
+const { runStage, mergeWorkstreamGates, buildDescriptor, summary } =
   require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 
@@ -196,5 +197,54 @@ describe("orchestrator: runStageHeadless --skip-completed", () => {
     // None skipped — all four present in plan
     const roles = plan.workstreams.map((w) => w.role).sort();
     assert.deepEqual(roles, ["backend", "frontend", "platform", "qa"]);
+  });
+});
+
+// ─── Fix 1.7.1: summary() must not crash on a status-less gate ────────────
+// Regression for: gate.status.toLowerCase() throws TypeError when status is
+// absent. Fixed by (gate.status || "unknown").toLowerCase() in orchestrator.js.
+// (plans/phase-1-trust-consolidation.md item 1.7 fix 1)
+describe("orchestrator: summary() — status-less gate", () => {
+  it("summary() returns unknown state when merged gate file contains {} (no status field)", () => {
+    const cwd = track(makeTargetProject());
+    // Write a gate file that is valid JSON but has no `status` field.
+    const gatesDir = path.join(cwd, "pipeline", "gates");
+    fs.mkdirSync(gatesDir, { recursive: true });
+    fs.writeFileSync(path.join(gatesDir, "stage-01.json"), JSON.stringify({}));
+
+    // Must not throw — before the fix, gate.status.toLowerCase() would throw TypeError.
+    let result;
+    assert.doesNotThrow(() => { result = summary({ cwd }); });
+
+    const row = result.rows.find((r) => r.stage === "stage-01");
+    assert.ok(row, "stage-01 row should be present");
+    assert.equal(row.state, "unknown", "status-less gate should render as 'unknown'");
+  });
+
+  it("summary() returns unknown state for a workstream entry missing status in the workstreams[] array", () => {
+    const cwd = track(makeTargetProject());
+    // A merged gate with a workstreams array containing an entry with no status field.
+    const gatesDir = path.join(cwd, "pipeline", "gates");
+    fs.mkdirSync(gatesDir, { recursive: true });
+    const gate = {
+      stage: "stage-04",
+      status: "PASS",
+      workstreams: [
+        { workstream: "backend", host: "claude-code" },   // no status — crash before fix
+        { workstream: "frontend", host: "claude-code", status: "PASS" },
+      ],
+    };
+    fs.writeFileSync(path.join(gatesDir, "stage-04.json"), JSON.stringify(gate));
+
+    let result;
+    assert.doesNotThrow(() => { result = summary({ cwd }); });
+
+    const row = result.rows.find((r) => r.stage === "stage-04");
+    assert.ok(row, "stage-04 row should be present");
+    assert.ok(Array.isArray(row.workstreams), "workstreams array should be present");
+    const backendWs = row.workstreams.find((w) => w.role === "backend");
+    assert.equal(backendWs.state, "unknown", "workstream without status should render as 'unknown'");
+    const frontendWs = row.workstreams.find((w) => w.role === "frontend");
+    assert.equal(frontendWs.state, "pass", "workstream with PASS status should render as 'pass'");
   });
 });
