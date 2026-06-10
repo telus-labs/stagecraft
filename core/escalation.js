@@ -89,6 +89,24 @@ function loadCannotDecide(cwd) {
   return readContextLines(cwd).map(parseCannotDecideLine).filter(Boolean);
 }
 
+/**
+ * All Principal outputs (rulings AND cannot-decide), in file order, each tagged
+ * with its type. Lets a caller (the driver) tell whether the *newest* output
+ * since a known count was a ruling or a cannot-decide — context.md is
+ * append-only, so the last entry is the latest decision.
+ * @returns {Array<{type:"ruling"|"cannot-decide", [k:string]:any}>}
+ */
+function loadPrincipalOutputs(cwd) {
+  const out = [];
+  for (const line of readContextLines(cwd)) {
+    const ruling = parseRulingLine(line);
+    if (ruling) { out.push({ type: "ruling", ...ruling }); continue; }
+    const cd = parseCannotDecideLine(line);
+    if (cd) out.push({ type: "cannot-decide", ...cd });
+  }
+  return out;
+}
+
 module.exports = {
   RULING_PREFIX,
   CANNOT_DECIDE_PREFIX,
@@ -97,4 +115,5 @@ module.exports = {
   parseCannotDecideLine,
   loadRulings,
   loadCannotDecide,
+  loadPrincipalOutputs,
 };

@@ -29,6 +29,31 @@ const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator
 const { loadConfig } = require("./config");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
+const { loadPrincipalOutputs } = require("./escalation");
+
+// Default escalation runners (PR-C2). The driver invokes the existing, tested
+// `devteam ruling` / `devteam fix-escalation` commands as subprocesses — both
+// already dispatch the principal-routed host, and the child does not touch the
+// run lock. Both are injectable via run() opts for deterministic tests.
+// (Extracting their internals into core/escalation.js for a true in-process
+// call is a clean follow-up; the CLI is a stable, tested interface.)
+const BIN_DEVTEAM = path.join(__dirname, "..", "bin", "devteam");
+function spawnDevteam(subArgs) {
+  const { spawn } = require("node:child_process");
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [BIN_DEVTEAM, ...subArgs], { stdio: ["ignore", "inherit", "inherit"] });
+    child.on("error", () => resolve({ exitCode: 1 }));
+    child.on("close", (code) => resolve({ exitCode: code === null ? 1 : code }));
+  });
+}
+function defaultRunRuling(cwd, { targetGate } = {}) {
+  const a = ["ruling", "--headless", "--cwd", cwd];
+  if (targetGate) a.push("--target-gate", targetGate);
+  return spawnDevteam(a);
+}
+function defaultRunFixEscalation(cwd) {
+  return spawnDevteam(["fix-escalation", "--headless", "--cwd", cwd]);
+}
 
 // Irreversible / outward-facing stages. The driver never advances INTO these
 // without an explicit human grant (--allow-stage), regardless of confidence.
@@ -190,6 +215,9 @@ function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
  * @param {boolean} [opts.force]         override a stale lock
  * @param {number} [opts.retryDelayMs]   backoff before a transient re-dispatch (default 30000)
  * @param {number} [opts.maxTransientRetries] no-gate retries before structural halt (default 1)
+ * @param {string[]} [opts.autoRule]     pre-authorized ruling classes the driver may auto-apply (default none → halt on every escalation)
+ * @param {function} [opts.runRuling]    injectable Principal-ruling runner (for tests)
+ * @param {function} [opts.runFixEscalation] injectable applicator runner (for tests)
  * @param {function} [opts.onEvent]      progress callback (type + fields)
  * @param {function} [opts.sleep]        injectable delay (for tests)
  * @returns {Promise<object>} run summary
@@ -218,6 +246,11 @@ async function run(opts = {}) {
     ? opts.maxTransientRetries
     : MAX_TRANSIENT_RETRIES_DEFAULT;
   const _sleep = typeof opts.sleep === "function" ? opts.sleep : defaultSleep;
+  // PR-C2: bounded autonomous escalation resolution. Default grant is empty →
+  // every escalation halts for a human (the safe default). Class-allowlist only.
+  const grantSet = new Set(opts.autoRule || []);
+  const _runRuling = typeof opts.runRuling === "function" ? opts.runRuling : defaultRunRuling;
+  const _runFixEscalation = typeof opts.runFixEscalation === "function" ? opts.runFixEscalation : defaultRunFixEscalation;
 
   const order = orderedStageNamesForTrack(track);
   const untilIndex = opts.until ? order.indexOf(opts.until) : -1;
@@ -232,6 +265,7 @@ async function run(opts = {}) {
   };
   // PR-B counters (resilient to a resumed state that predates them).
   state.fixRetries = state.fixRetries || {}; // code-defect re-dispatches per stage
+  state.autoRule = state.autoRule || {};     // auto-rule attempts per stage
   state.transient = state.transient || {};   // no-gate transient retries per stage
 
   const summary = {
@@ -295,11 +329,84 @@ async function run(opts = {}) {
         continue;
       }
 
-      // Everything else that isn't machine-fixable in PR-B halts for a human:
-      // state-corruption / external-blocked (fix-and-retry classes the driver
-      // must not auto-retry), and all escalations (resolve-escalation —
-      // judgment-gate / convergence-exhausted). Phase 2 adds the Principal.
-      if (r.action === "fix-and-retry" || r.action === "resolve-escalation") {
+      // PR-C2: bounded autonomous escalation resolution. With no --auto-rule
+      // grant the driver halts (the safe default). With a grant, it dispatches
+      // the Principal and auto-applies a ruling whose class is granted — but
+      // NEVER crosses the hard stops (cannot-decide, the consequence ceiling,
+      // convergence-exhausted), and at most once per stage.
+      if (r.action === "resolve-escalation") {
+        const hardStop = r.failure_class === "convergence-exhausted" || CONSEQUENCE_CEILING.has(r.name);
+        const alreadyTried = (state.autoRule[r.name] || 0) >= 1;
+        if (grantSet.size === 0 || hardStop || alreadyTried) {
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = r.failure_class || "judgment-gate";
+          summary.halt_reason = hardStop
+            ? `escalation requires a human (auto-rule never crosses ${r.failure_class === "convergence-exhausted" ? "convergence-exhausted" : "the consequence ceiling"})`
+            : alreadyTried
+              ? `auto-rule already attempted once for "${r.name}" and it re-escalated; halting for a human`
+              : r.reason;
+          logEvent(cwd, { ...base, outcome: "halt" });
+          onEvent({ type: "halt", ...base });
+          break;
+        }
+
+        // Dispatch the Principal; inspect only the output it appends this turn.
+        const before = loadPrincipalOutputs(cwd).length;
+        onEvent({ type: "auto-rule-dispatch", ...base });
+        const rr = await _runRuling(cwd, { targetGate: r.gate });
+        state.autoRule[r.name] = (state.autoRule[r.name] || 0) + 1;
+        saveRunState(cwd, state);
+        const fresh = loadPrincipalOutputs(cwd).slice(before);
+        const latest = fresh.length ? fresh[fresh.length - 1] : null;
+
+        if (!latest || (rr && rr.exitCode !== 0)) {
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = "judgment-gate";
+          summary.halt_reason = "Principal produced no ruling; halting for a human";
+          logEvent(cwd, { ...base, outcome: "auto-rule-no-output" });
+          onEvent({ type: "halt", ...base });
+          break;
+        }
+        if (latest.type === "cannot-decide") {
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = "cannot-decide";
+          summary.cannot_decide = { reason_class: latest.reason_class, question: latest.question };
+          summary.halt_reason = `Principal cannot decide (${latest.reason_class}): ${latest.question}`;
+          logEvent(cwd, { ...base, outcome: "cannot-decide", reason_class: latest.reason_class });
+          onEvent({ type: "cannot-decide", ...base, reason_class: latest.reason_class, question: latest.question });
+          break;
+        }
+        if (!grantSet.has(latest.class)) {
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = "judgment-gate";
+          summary.halt_reason = `ruling class "${latest.class}" is not in the --auto-rule grant; halting for a human`;
+          logEvent(cwd, { ...base, outcome: "auto-rule-ungranted", ruling_class: latest.class });
+          onEvent({ type: "halt", ...base, ruling_class: latest.class });
+          break;
+        }
+        // Granted class → apply the ruling and resume.
+        const fr = await _runFixEscalation(cwd, { escalatingGate: r.gate });
+        if (fr && fr.exitCode !== 0) {
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_reason = `escalation applicator failed (exit ${fr.exitCode}); halting`;
+          logEvent(cwd, { ...base, outcome: "auto-rule-apply-failed" });
+          onEvent({ type: "halt", ...base });
+          break;
+        }
+        const authority = `auto-rule:${latest.class}`;
+        logEvent(cwd, { ...base, outcome: "auto-ruled", grant_class: latest.class, ruling: latest.decision, authority });
+        onEvent({ type: "auto-ruled", ...base, grant_class: latest.class, ruling: latest.decision, authority });
+        continue;
+      }
+
+      // Non-auto-fixable fix-and-retry classes (state-corruption /
+      // external-blocked) halt for a human.
+      if (r.action === "fix-and-retry") {
         summary.halted = true;
         summary.halt_action = r.action;
         summary.halt_failure_class = r.failure_class || null;

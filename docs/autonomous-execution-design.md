@@ -473,14 +473,21 @@ question directly. Improves the human-driven flow and is the prerequisite for
 auto-rule. Backward-compatible: legacy untyped rulings parse as `unclassified`.
 Tests: `tests/escalation.test.js`.
 
-**PR-C2 — Driver auto-rule (⬜ next):** `--auto-rule <class,…>` (+
-`autonomy.auto_rule`, default empty = halt on every escalation, today's
-behavior). On escalation the driver dispatches the Principal in-process; a ruling
-whose `class` ∈ the grant set is applied (`fix-escalation`) and the run resumes;
-a cannot-decide, an ungranted class, the consequence ceiling, or
-`convergence-exhausted` all halt for a human (DD-C4 hard stops). Authority
-provenance recorded in `run-log.jsonl` + a gate field; chained under C6 when it
-lands.
+**PR-C2 — Driver auto-rule (✅ landed):** `--auto-rule <class,…>` — a **CLI-only,
+per-run, allowlist-only** grant (no config persistence, no wildcard); default
+empty = halt on every escalation (today's behavior, Principal not even
+dispatched). On a granted run the driver dispatches the Principal (it invokes the
+existing, tested `devteam ruling` / `devteam fix-escalation` commands as
+subprocesses — injectable for tests; extracting their internals into
+`core/escalation.js` for a true in-process call is a noted follow-up), reads the
+Principal's newest output via `loadPrincipalOutputs`, and: applies a ruling whose
+`class` ∈ the grant (`fix-escalation`) then resumes; halts on a cannot-decide
+(surfacing `cannot_decide.{reason_class, question}` in the summary), an ungranted/
+`unclassified` class, or no output. **Hard stops it never crosses** (DD-C4): the
+consequence ceiling and `convergence-exhausted`; and it auto-rules a given
+escalation **at most once**. Authority provenance (`grant_class`, `ruling`,
+`authority: auto-rule:<class>`) is recorded to `run-log.jsonl`; chaining under C6
+is a follow-up. Tests in `tests/run.test.js` (injected runners).
 
 **Exit criteria:** the driver resolves *derivable*, pre-authorized escalations via
 the Principal and halts on authority/information/value (or any ungranted class)
