@@ -1361,10 +1361,15 @@ function summary(opts = {}) {
 
     if (fs.existsSync(stageGatePath)) {
       const gate = readJSONSafe(stageGatePath);
-      const state = gate ? gate.status.toLowerCase() : "pending";
+      // Fix 1.7.1: guard against a valid-JSON gate missing the `status` field.
+      // gate.status.toLowerCase() would throw TypeError — use the
+      // (gate.status || "unknown").toLowerCase() pattern so summary() survives
+      // incomplete or partially-written gates.
+      // (plans/phase-1-trust-consolidation.md item 1.7 fix 1)
+      const state = gate ? (gate.status || "unknown").toLowerCase() : "pending";
       const row = { stage: stageDef.stage, name: stageName, state, timestamp: gate && gate.timestamp };
       if (gate && Array.isArray(gate.workstreams) && gate.workstreams.length > 0) {
-        row.workstreams = gate.workstreams.map((w) => ({ role: w.workstream, host: w.host, state: w.status.toLowerCase() }));
+        row.workstreams = gate.workstreams.map((w) => ({ role: w.workstream, host: w.host, state: (w.status || "unknown").toLowerCase() }));
       }
       if (gate && Array.isArray(gate.warnings) && gate.warnings.length > 0) row.warnings = gate.warnings;
       if (gate && Array.isArray(gate.blockers) && gate.blockers.length > 0) row.blockers = gate.blockers;

@@ -14,10 +14,14 @@
  *     authoritative downstream safety net.
  *   - Unknown tool name → exit 0.
  *
- * Magic-comment override: any content line containing
- * `devteam-allow-secret: <reason>` (case-insensitive, anywhere in the
- * content) bypasses the scan. Use sparingly and only for verified
- * false positives (test fixtures, .env.example files, doc snippets).
+ * Magic-comment override (per-line scoping, fix 1.7.2):
+ *   A line containing `devteam-allow-secret: <reason>` (case-insensitive)
+ *   suppresses findings on that line AND the immediately following line only
+ *   — NOT the entire file. This prevents LLM-written content from embedding
+ *   a single bypass comment to disable the whole scan. Every suppressed
+ *   finding is appended as a JSON record to pipeline/secret-allowlist.log
+ *   so suppressions are auditable.
+ *   (plans/phase-1-trust-consolidation.md item 1.7 fix 2)
  *
  * Path allowlist: certain filenames are skipped by default
  * (.env.example, .env.sample, *.template, *.dist). Edit ALLOWLIST_PATH_PATTERNS
@@ -111,18 +115,41 @@ const MAX_SCAN_BYTES = 1_000_000;
 // Scan logic
 // ---------------------------------------------------------------------------
 
+// Magic-comment regex — matches `devteam-allow-secret: <reason>` anywhere
+// on a line, case-insensitive. Requires the colon to prevent accidental matches.
+const ALLOW_COMMENT_RE = /devteam-allow-secret\s*:/i;
+
+/**
+ * Return a Set of 1-based line numbers that are suppressed by a
+ * `devteam-allow-secret:` comment.  The comment on line N suppresses
+ * findings on line N and line N+1 (comment-above-code style).
+ * This is per-line scoping — NOT a whole-file bypass.
+ * (plans/phase-1-trust-consolidation.md item 1.7 fix 2)
+ */
+function suppressedLines(text) {
+  const suppressed = new Set();
+  const lines = text.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (ALLOW_COMMENT_RE.test(lines[i])) {
+      const lineNo = i + 1; // 1-based
+      suppressed.add(lineNo);       // own line
+      suppressed.add(lineNo + 1);   // immediately following line
+    }
+  }
+  return suppressed;
+}
+
 /**
  * Scan a text blob. Returns an array of findings:
  *   { name, severity, line, snippet }
+ *
+ * Findings on lines covered by a `devteam-allow-secret:` comment are
+ * omitted (per-line scoping — see suppressedLines above).
  */
 function scanContent(text) {
   if (typeof text !== "string" || text.length === 0) return [];
 
-  // Magic-comment override: any line with `devteam-allow-secret: <reason>`
-  // disables the entire scan for this content.
-  if (/devteam-allow-secret\s*:/i.test(text)) {
-    return [];
-  }
+  const suppressed = suppressedLines(text);
 
   const findings = [];
   // Per-match line numbers are computed inline below by re-splitting the
@@ -134,6 +161,7 @@ function scanContent(text) {
     while ((m = pattern.re.exec(text)) !== null) {
       const upTo = text.slice(0, m.index);
       const line = upTo.split(/\r?\n/).length;
+      if (suppressed.has(line)) continue; // per-line suppression window
       const matched = m[0];
       const snippet = matched.length > 60 ? matched.slice(0, 40) + "…" + matched.slice(-15) : matched;
       findings.push({
@@ -212,9 +240,59 @@ function reportFindings(findings, filePath) {
   }
   console.error("");
   console.error("If this is a verified false positive:");
-  console.error("  - Add `devteam-allow-secret: <reason>` somewhere in the file content, OR");
+  console.error("  - Add `devteam-allow-secret: <reason>` on the line containing the pattern (or the");
+  console.error("    immediately preceding line). The comment suppresses that line and the next one only.");
+  console.error("    Every suppression is appended to pipeline/secret-allowlist.log for audit.");
   console.error("  - Add the file's path pattern to DEVTEAM_SECRET_SCAN_ALLOW env var (comma-separated regex list).");
   console.error("Patterns: core/hooks/secret-scan.js  -  reasons here are recorded in PR / retro for audit.");
+}
+
+/**
+ * Append one JSON record per suppressed finding to pipeline/secret-allowlist.log.
+ * Best-effort: if the directory doesn't exist or write fails, log a warning and
+ * continue — suppression audit must never block a legitimate session.
+ * (plans/phase-1-trust-consolidation.md item 1.7 fix 2)
+ */
+function appendAllowlistLog(filePath, content) {
+  const suppressed = suppressedLines(content);
+  if (suppressed.size === 0) return;
+
+  // Re-scan but emit only the suppressed findings so we can log them.
+  const suppressedFindings = [];
+  for (const pattern of SECRET_PATTERNS) {
+    pattern.re.lastIndex = 0;
+    let m;
+    while ((m = pattern.re.exec(content)) !== null) {
+      const upTo = content.slice(0, m.index);
+      const line = upTo.split(/\r?\n/).length;
+      if (!suppressed.has(line)) continue;
+      // Only log the line's allow reason (extract from the covering comment line).
+      const lines = content.split(/\r?\n/);
+      // Find which allow-comment line covers this finding.
+      let reason = "";
+      for (let i = 0; i < lines.length; i++) {
+        const commentLine = i + 1;
+        if ((commentLine === line || commentLine === line - 1) && ALLOW_COMMENT_RE.test(lines[i])) {
+          const match = lines[i].match(/devteam-allow-secret\s*:\s*(.+)/i);
+          reason = match ? match[1].trim() : "";
+          break;
+        }
+      }
+      suppressedFindings.push({ file: filePath || "", line, reason, ts: new Date().toISOString() });
+    }
+  }
+  if (suppressedFindings.length === 0) return;
+
+  try {
+    const logDir = "pipeline";
+    const logPath = require("node:path").join(logDir, "secret-allowlist.log");
+    require("node:fs").mkdirSync(logDir, { recursive: true });
+    for (const entry of suppressedFindings) {
+      require("node:fs").appendFileSync(logPath, JSON.stringify(entry) + "\n");
+    }
+  } catch (err) {
+    console.error(`[secret-scan] ⚠️  could not write allowlist log: ${err && err.message}`);
+  }
 }
 
 function main() {
@@ -239,6 +317,9 @@ function main() {
   }
 
   const findings = scanContent(ctx.content);
+  // Append audit log for any findings that were suppressed by a per-line
+  // magic comment — this is best-effort and must not block the tool call.
+  appendAllowlistLog(ctx.file_path, ctx.content);
   if (findings.length === 0) process.exit(0);
 
   reportFindings(findings, ctx.file_path);
@@ -257,6 +338,8 @@ if (require.main === module) {
 
 module.exports = {
   scanContent,
+  suppressedLines,
+  appendAllowlistLog,
   extractContext,
   isAllowlistedPath,
   SECRET_PATTERNS,
