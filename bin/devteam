@@ -737,7 +737,8 @@ function cmdValidate(argv) {
 // Version of the `devteam next --json` action-object schema. Additive changes
 // (new optional fields like failure_class) keep the major version; bump on any
 // breaking change a programmatic consumer must handle.
-const NEXT_SCHEMA_VERSION = "1.0";
+// 1.1: added "fold-sign-off" action (item 1.2, phase-1-trust-consolidation).
+const NEXT_SCHEMA_VERSION = "1.1";
 
 function cmdNext(argv) {
   const { next } = getOrchestrator();
@@ -763,12 +764,34 @@ function cmdNext(argv) {
     }
   }
 
-  const result = next({ cwd: flags.cwd });
+  let result = next({ cwd: flags.cwd });
+
+  // fold-sign-off: orchestrator detected a clean AC→test mapping; write the
+  // gate here (caller's responsibility) then re-run next() so the user sees
+  // the real next step in one command. (item 1.2, phase-1-trust-consolidation)
+  if (result.action === "fold-sign-off") {
+    const fs = require("node:fs");
+    fs.mkdirSync(require("node:path").dirname(result.gate_path), { recursive: true });
+    fs.writeFileSync(result.gate_path, JSON.stringify(result.gate_content, null, 2) + "\n", "utf8");
+    if (!flags.json) {
+      process.stderr.write(
+        `[devteam] stage 7 auto-folded: stage 6 satisfied the AC→test contract (${result.acCount} criteria mapped)\n`,
+      );
+    }
+    if (flags.json) {
+      console.log(JSON.stringify({ schema_version: NEXT_SCHEMA_VERSION, ...result }, null, 2));
+      return;
+    }
+    // Re-run next() so the user sees what comes after sign-off in one command.
+    result = next({ cwd: flags.cwd });
+  }
+
   if (flags.json) {
     // schema_version lets a programmatic caller (e.g. an autonomous driver)
     // validate the action shape it parses. Bump on any breaking change to the
     // action object: new required field, renamed/removed field, or a new
-    // action value a consumer must handle. failure_class was additive (1.0).
+    // action value a consumer must handle. failure_class was additive (1.0);
+    // fold-sign-off action added in 1.1.
     console.log(JSON.stringify({ schema_version: NEXT_SCHEMA_VERSION, ...result }, null, 2));
     return;
   }

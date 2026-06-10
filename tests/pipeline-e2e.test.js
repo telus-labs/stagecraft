@@ -121,6 +121,13 @@ function walkPipeline(cwd, opts = {}) {
       assert.equal(m.merged, true, `merge of ${r.name} failed: ${m.reason}`);
       continue;
     }
+    // fold-sign-off: orchestrator verified clean AC→test mapping; we write the
+    // gate and loop (mirrors driver behavior). (item 1.2, phase-1-trust)
+    if (r.action === "fold-sign-off") {
+      fs.mkdirSync(path.dirname(r.gate_path), { recursive: true });
+      fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
+      continue;
+    }
     throw new Error(`unknown action ${r.action} at ${r.name}`);
   }
   throw new Error(`pipeline did not complete in ${MAX_ITERS} iterations`);

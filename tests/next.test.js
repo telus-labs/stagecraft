@@ -201,7 +201,7 @@ describe("next --json (H1)", () => {
     const { status, stdout } = runCLI(["next", "--json"], { cwd });
     assert.equal(status, 0);
     const obj = JSON.parse(stdout);
-    assert.equal(obj.schema_version, "1.0");
+    assert.equal(obj.schema_version, "1.1"); // bumped when fold-sign-off action added (item 1.2)
     assert.equal(obj.action, "fix-and-retry");
     assert.equal(obj.failure_class, "code-defect");
   });
