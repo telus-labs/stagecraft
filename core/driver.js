@@ -461,12 +461,13 @@ async function run(opts = {}) {
 
         onEvent({ type: "dispatch", ...base });
         const t0 = Date.now();
-        const results = await _runStageHeadless(r.name, {
+        const runResult = await _runStageHeadless(r.name, {
           cwd,
           track: opts.track,
           timeoutMs,
           skipCompleted: r.action === "continue-stage",
         });
+        const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
         const durationMs = Date.now() - t0;
         const nonSkipped = results.filter((x) => !x.skipped);
         const anyTimedOut = results.some((x) => x.timedOut);
