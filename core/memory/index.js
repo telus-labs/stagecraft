@@ -66,6 +66,8 @@ function discoverArtifacts(cwd) {
       found.push({ rel, abs, kind });
     }
   }
+  // B9 exemption: ADR files in pipeline/adr/ are global project-level decisions,
+  // not per-change artifacts. They live in the root pipeline/ regardless of isolation mode.
   const adrDir = path.join(cwd, "pipeline", "adr");
   if (fs.existsSync(adrDir) && fs.statSync(adrDir).isDirectory()) {
     for (const f of fs.readdirSync(adrDir)) {

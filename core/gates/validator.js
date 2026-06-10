@@ -185,6 +185,8 @@ function injectRedTeamBlockers(gate, cwd) {
   const items = gate.must_address_before_peer_review;
   if (!Array.isArray(items) || items.length === 0) return;
 
+  // B9 exemption: validator.js always runs in in-place mode (it is invoked by CI
+  // and hooks against the global pipeline/ directory; no changeId propagation today).
   const contextPath = path.join(cwd, "pipeline", "context.md");
   if (!fs.existsSync(contextPath)) return;
 
@@ -240,6 +242,7 @@ function injectQABuildBlockers(gate, cwd) {
   const items = gate.blockers;
   if (!Array.isArray(items) || items.length === 0) return;
 
+  // B9 exemption: validator.js always runs in in-place mode (see above).
   const contextPath = path.join(cwd, "pipeline", "context.md");
   if (!fs.existsSync(contextPath)) return;
 
@@ -312,6 +315,7 @@ function stripMarkedSection(contextPath, beginMarker, endMarker) {
 function stripRedTeamBlockers(gate, cwd) {
   if (gate.stage !== "stage-04c") return;
   if (gate.status !== "PASS" && gate.status !== "WARN") return;
+  // B9 exemption: validator.js always runs in in-place mode (see above).
   const contextPath = path.join(cwd, "pipeline", "context.md");
   const stripped = stripMarkedSection(
     contextPath,
@@ -331,6 +335,7 @@ function stripRedTeamBlockers(gate, cwd) {
 function stripQABuildBlockers(gate, cwd) {
   if (gate.stage !== "stage-04" || gate.workstream !== "qa") return;
   if (gate.status !== "PASS" && gate.status !== "WARN") return;
+  // B9 exemption: validator.js always runs in in-place mode (see above).
   const contextPath = path.join(cwd, "pipeline", "context.md");
   const stripped = stripMarkedSection(
     contextPath,

@@ -320,3 +320,198 @@ describe("appendGateFooter — bounded gate path in prompt", () => {
       `expected bounded path in: ${joined}`);
   });
 });
+
+// ─── 8. B9 read-side wiring: next(), summary(), driver (item 1.6) ─────────────
+//
+// End-to-end: bounded config + gates seeded under pipeline/changes/<id>/gates/
+// → next() advances, summary() reports, driver reads/writes under the change root.
+
+describe("B9 read-side: next() reads bounded gates", () => {
+  const { next } = require("../core/orchestrator");
+  const { clearConfigCache } = require("../core/config");
+
+  test("next() sees a PASS gate seeded under pipeline/changes/<id>/gates/", () => {
+    const cwd = makeTargetProject(); // isolation: bounded, default_track: full
+    const changeId = "my-feature";
+    const gatesPath = path.join(cwd, "pipeline", "changes", changeId, "gates");
+    fs.mkdirSync(gatesPath, { recursive: true });
+    // Seed stage-01 (requirements) as PASS so next() advances past it.
+    const gate = {
+      stage: "stage-01", status: "PASS",
+      orchestrator: "devteam@test", track: "full",
+      timestamp: "2026-06-10T00:00:00Z", blockers: [], warnings: [],
+    };
+    fs.writeFileSync(path.join(gatesPath, "stage-01.json"), JSON.stringify(gate, null, 2));
+    clearConfigCache();
+    try {
+      const r = next({ cwd, changeId });
+      // Pipeline advanced past stage-01 — should now point at stage-02 (design)
+      assert.notEqual(r.action, "pipeline-complete", "should not be complete after one gate");
+      assert.notEqual(r.stage, "stage-01", "should have advanced past stage-01");
+      // The action should be a forward step (run-stage or similar)
+      assert.ok(["run-stage", "continue-stage", "merge", "fold-sign-off"].includes(r.action),
+        `unexpected action: ${r.action}`);
+    } finally {
+      clearConfigCache();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("next() in-place mode is unaffected by bounded gate files", () => {
+    // Seeding gates under pipeline/changes/<id>/gates/ must NOT be visible
+    // to next() when isolation is in-place.
+    const cwd = makeTargetProject({
+      config: "routing:\n  default_host: claude-code\npipeline:\n  isolation: in-place\n  default_track: full\n",
+    });
+    const changeId = "some-feature";
+    const boundedGates = path.join(cwd, "pipeline", "changes", changeId, "gates");
+    fs.mkdirSync(boundedGates, { recursive: true });
+    fs.writeFileSync(path.join(boundedGates, "stage-01.json"), JSON.stringify({
+      stage: "stage-01", status: "PASS",
+      orchestrator: "devteam@test", track: "full",
+      timestamp: "2026-06-10T00:00:00Z", blockers: [], warnings: [],
+    }, null, 2));
+    clearConfigCache();
+    try {
+      // In-place mode: pipeline/gates/ is empty → still stuck at stage-01
+      const r = next({ cwd });
+      assert.equal(r.stage, "stage-01", "in-place next() must not see bounded gates");
+    } finally {
+      clearConfigCache();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("B9 read-side: summary() reads bounded gates", () => {
+  const { summary } = require("../core/orchestrator");
+  const { clearConfigCache } = require("../core/config");
+
+  test("summary() reports PASS for a gate seeded under pipeline/changes/<id>/gates/", () => {
+    const cwd = makeTargetProject(); // isolation: bounded
+    const changeId = "my-feature";
+    const gatesPath = path.join(cwd, "pipeline", "changes", changeId, "gates");
+    fs.mkdirSync(gatesPath, { recursive: true });
+    fs.writeFileSync(path.join(gatesPath, "stage-01.json"), JSON.stringify({
+      stage: "stage-01", status: "PASS",
+      orchestrator: "devteam@test", track: "full",
+      timestamp: "2026-06-10T00:00:00Z", blockers: [], warnings: [],
+    }, null, 2));
+    clearConfigCache();
+    try {
+      const result = summary({ cwd, changeId });
+      const req = result.rows.find((r) => r.name === "requirements");
+      assert.ok(req, "requirements row present");
+      assert.equal(req.state, "pass", `expected requirements to be PASS, got ${req.state}`);
+    } finally {
+      clearConfigCache();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("summary() in-place mode stays pending when only bounded gates exist", () => {
+    const cwd = makeTargetProject({
+      config: "routing:\n  default_host: claude-code\npipeline:\n  isolation: in-place\n  default_track: full\n",
+    });
+    const boundedGates = path.join(cwd, "pipeline", "changes", "feat", "gates");
+    fs.mkdirSync(boundedGates, { recursive: true });
+    fs.writeFileSync(path.join(boundedGates, "stage-01.json"), JSON.stringify({
+      stage: "stage-01", status: "PASS",
+      orchestrator: "devteam@test", track: "full",
+      timestamp: "2026-06-10T00:00:00Z", blockers: [], warnings: [],
+    }, null, 2));
+    clearConfigCache();
+    try {
+      const result = summary({ cwd });
+      const req = result.rows.find((r) => r.name === "requirements");
+      assert.equal(req.state, "pending", "in-place summary must not see bounded gates");
+    } finally {
+      clearConfigCache();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("B9 read-side: driver run() uses bounded paths", () => {
+  const { run } = require("../core/driver");
+  const { clearConfigCache } = require("../core/config");
+
+  test("driver writes run-log, run-state, and lock under pipeline/changes/<id>/ in bounded mode", async () => {
+    const cwd = makeTargetProject(); // isolation: bounded
+    const changeId = "my-feature";
+    clearConfigCache();
+    try {
+      const actions = [
+        { action: "pipeline-complete", reason: "done" },
+      ];
+      let i = 0;
+      const s = await run({
+        cwd,
+        feature: "my feature",  // changeId = "my-feature"
+        // Inject next() to avoid real pipeline reads; it returns pipeline-complete immediately
+        next: () => actions[i++],
+      });
+      assert.equal(s.completed, true);
+      // All run-scoped files must live under pipeline/changes/<id>/
+      const changeRoot = path.join(cwd, "pipeline", "changes", changeId);
+      assert.ok(
+        fs.existsSync(path.join(changeRoot, "run-log.jsonl")),
+        `run-log.jsonl must be under pipeline/changes/${changeId}/`,
+      );
+      assert.ok(
+        fs.existsSync(path.join(changeRoot, "run-state.json")),
+        `run-state.json must be under pipeline/changes/${changeId}/`,
+      );
+      // Lock should be released
+      assert.ok(
+        !fs.existsSync(path.join(changeRoot, "run.lock")),
+        "lock must be released after run",
+      );
+      // Global pipeline/ root must NOT have been created by the driver
+      assert.ok(
+        !fs.existsSync(path.join(cwd, "pipeline", "run-log.jsonl")),
+        "run-log.jsonl must NOT appear under the global pipeline/ in bounded mode",
+      );
+    } finally {
+      clearConfigCache();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("driver in bounded mode uses real next() and reads gates from bounded path", async () => {
+    // Seed a gate under the bounded path, then run the driver with real next().
+    // The driver should call next({ cwd, changeId }) which reads from the bounded
+    // gates dir and advances past the seeded stage.
+    const cwd = makeTargetProject(); // isolation: bounded
+    const changeId = "my-feature";
+    const gatesPath = path.join(cwd, "pipeline", "changes", changeId, "gates");
+    fs.mkdirSync(gatesPath, { recursive: true });
+    // Seed everything up to and including stage-07 (sign-off) as PASS so the
+    // run completes. Use a full-track seed covering all required stages.
+    const { orderedStageNamesForTrack, getStage } = require("../core/pipeline/stages");
+    for (const name of orderedStageNamesForTrack("full")) {
+      const def = getStage(name);
+      fs.writeFileSync(path.join(gatesPath, `${def.stage}.json`), JSON.stringify({
+        stage: def.stage, status: "PASS",
+        orchestrator: "devteam@test", track: "full",
+        timestamp: "2026-06-10T00:00:00Z", blockers: [], warnings: [],
+        // sign-off needs these for completeness checks
+        pm_signoff: true, deploy_requested: true,
+      }, null, 2));
+    }
+    clearConfigCache();
+    try {
+      const s = await run({ cwd, feature: "my feature" });
+      assert.equal(s.completed, true, `expected complete, got: ${JSON.stringify(s)}`);
+      // Run-log must be under the change root
+      const changeRoot = path.join(cwd, "pipeline", "changes", changeId);
+      assert.ok(
+        fs.existsSync(path.join(changeRoot, "run-log.jsonl")),
+        "run-log.jsonl must be under the bounded change root",
+      );
+    } finally {
+      clearConfigCache();
+      fs.rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+});

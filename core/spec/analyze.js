@@ -77,6 +77,8 @@ function extractVerifyAcs(prText) {
 
 // Discover pipeline/pr-*.md files (one per area: backend, frontend,
 // platform, qa). Returns [{ area, path, text }] for files that exist.
+// B9 exemption: pr-*.md files in pipeline/ are project-level artifacts, not
+// per-change artifacts; they are not scoped by changeId.
 function discoverPrFiles(cwd) {
   const dir = path.join(cwd, "pipeline");
   if (!fs.existsSync(dir)) return [];
@@ -304,6 +306,8 @@ function analyzeTexts(inputs) {
 // gracefully — each check that needs an absent artifact reports
 // "not yet computed."
 function analyze(cwd, opts = {}) {
+  // B9 exemption: analyze() reads global pipeline/ artifacts; it is a read-only
+  // analysis command that does not need per-change scoping today.
   const pipeline = path.join(cwd, "pipeline");
   const briefText = readIfExists(path.join(pipeline, "brief.md"));
   const specText  = readIfExists(path.join(pipeline, "spec.feature"));

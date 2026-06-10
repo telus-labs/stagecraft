@@ -163,6 +163,9 @@ async function stampStage06(cwd, gatePath) {
 // no test mapped. Conservative: when the test report or brief is missing
 // we skip rather than fail (the model didn't run; can't blame the gate).
 function checkAcceptanceCriteria(cwd) {
+  // B9 exemption: stamp.js is called from mergeWorkstreamGates which already
+  // knows the gatesDir; brief.md/test-report.md use the global pipeline/ path
+  // here. Bounded support for stamps would require passing changeId; deferred.
   const briefPath = path.join(cwd, "pipeline", "brief.md");
   const reportPath = path.join(cwd, "pipeline", "test-report.md");
   if (!fs.existsSync(briefPath)) {
@@ -242,6 +245,8 @@ async function stamp(cwd, stageId) {
   if (!STAMPABLE_STAGES.has(stageId)) {
     return { ok: false, error: `no orchestrator stamping defined for ${stageId}` };
   }
+  // B9 exemption: stamp() reads gates from in-place pipeline/gates/; callers
+  // that need bounded paths should pass an explicit gatePath (future enhancement).
   const gatesDir = path.join(cwd, "pipeline", "gates");
   const gatePath = path.join(gatesDir, `${stageId}.json`);
   if (!fs.existsSync(gatePath)) {

@@ -30,6 +30,9 @@ const RULING_PREFIX = "PRINCIPAL-RULING:";
 const CANNOT_DECIDE_PREFIX = "PRINCIPAL-CANNOT-DECIDE:";
 const REASON_CLASSES = ["authority", "information", "value"];
 
+// B9 exemption: escalation.js reads/writes the global pipeline/context.md because
+// the Principal agent always runs in in-place mode today. Wiring changeId through
+// the escalation path is a follow-up item.
 function contextPath(cwd) { return path.join(cwd, "pipeline", "context.md"); }
 
 // Split a "<left> → <decision>" body on the first arrow (→ or ->).

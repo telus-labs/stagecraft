@@ -889,6 +889,7 @@ function cmdRun(argv) {
 
   run({
     cwd,
+    feature: flags.feature || "",
     track: flags.track,
     until: flags.until,
     maxIterations: Number.isFinite(flags.maxIterations) ? flags.maxIterations : undefined,

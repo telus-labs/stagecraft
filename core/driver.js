@@ -27,7 +27,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates, clearGatesFromFixSteps } = require("./orchestrator");
-const { loadConfig } = require("./config");
+const { loadConfig, changeIdFromFeature } = require("./config");
+const { pipelineRoot, gatesDir: getGatesDir } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
@@ -53,10 +54,13 @@ const CONSEQUENCE_CEILING = new Set(["sign-off", "deploy"]);
 const DEFAULT_MAX_ITERATIONS = 100;
 
 function nowIso() { return new Date().toISOString(); }
-function lockPath(cwd) { return path.join(cwd, "pipeline", "run.lock"); }
-function runStatePath(cwd) { return path.join(cwd, "pipeline", "run-state.json"); }
-function runLogPath(cwd) { return path.join(cwd, "pipeline", "run-log.jsonl"); }
-function gatesDir(cwd) { return path.join(cwd, "pipeline", "gates"); }
+// B9 (item 1.6): path helpers accept changeId so bounded runs keep all
+// run-scoped artifacts under pipeline/changes/<id>/ alongside the gates
+// they read. changeId===null gives the historical in-place paths.
+function lockPath(cwd, changeId) { return path.join(pipelineRoot(cwd, changeId), "run.lock"); }
+function runStatePath(cwd, changeId) { return path.join(pipelineRoot(cwd, changeId), "run-state.json"); }
+function runLogPath(cwd, changeId) { return path.join(pipelineRoot(cwd, changeId), "run-log.jsonl"); }
+function gatesDir(cwd, changeId) { return getGatesDir(cwd, changeId); }
 
 // A pid is "alive" if signal 0 succeeds, or fails with EPERM (exists, not ours).
 function isPidAlive(pid) {
@@ -64,8 +68,8 @@ function isPidAlive(pid) {
   catch (e) { return e.code === "EPERM"; }
 }
 
-function acquireLock(cwd, { force = false } = {}) {
-  const p = lockPath(cwd);
+function acquireLock(cwd, { force = false } = {}, changeId) {
+  const p = lockPath(cwd, changeId);
   if (fs.existsSync(p) && !force) {
     let info = {};
     try { info = JSON.parse(fs.readFileSync(p, "utf8")); } catch { /* unreadable lock */ }
@@ -83,22 +87,22 @@ function acquireLock(cwd, { force = false } = {}) {
   fs.writeFileSync(p, JSON.stringify({ pid: process.pid, host: os.hostname(), started_at: nowIso() }, null, 2));
 }
 
-function releaseLock(cwd) { try { fs.unlinkSync(lockPath(cwd)); } catch { /* already gone */ } }
+function releaseLock(cwd, changeId) { try { fs.unlinkSync(lockPath(cwd, changeId)); } catch { /* already gone */ } }
 
-function loadRunState(cwd) {
-  try { return JSON.parse(fs.readFileSync(runStatePath(cwd), "utf8")); } catch { return null; }
+function loadRunState(cwd, changeId) {
+  try { return JSON.parse(fs.readFileSync(runStatePath(cwd, changeId), "utf8")); } catch { return null; }
 }
-function saveRunState(cwd, state) {
+function saveRunState(cwd, changeId, state) {
   try {
-    fs.mkdirSync(path.dirname(runStatePath(cwd)), { recursive: true });
-    fs.writeFileSync(runStatePath(cwd), JSON.stringify(state, null, 2));
+    fs.mkdirSync(path.dirname(runStatePath(cwd, changeId)), { recursive: true });
+    fs.writeFileSync(runStatePath(cwd, changeId), JSON.stringify(state, null, 2));
   } catch { /* best-effort */ }
 }
 
-function logEvent(cwd, entry) {
+function logEvent(cwd, changeId, entry) {
   try {
-    fs.mkdirSync(path.dirname(runLogPath(cwd)), { recursive: true });
-    fs.appendFileSync(runLogPath(cwd), JSON.stringify({ ts: nowIso(), ...entry }) + "\n");
+    fs.mkdirSync(path.dirname(runLogPath(cwd, changeId)), { recursive: true });
+    fs.appendFileSync(runLogPath(cwd, changeId), JSON.stringify({ ts: nowIso(), ...entry }) + "\n");
   } catch { /* logging must never break the run */ }
 }
 
@@ -106,14 +110,14 @@ function logEvent(cwd, entry) {
 // per-workstream gates (stage-NN.<role>.json), whose cost is already rolled up
 // into the merged gate. Summing every *.json would double-count multi-role
 // stages. Best-effort: unreadable or cost-less gates contribute 0.
-function totalCostUsd(cwd) {
+function totalCostUsd(cwd, changeId) {
   const stageGate = /^stage-\d{2}[a-z]?\.json$/;
   let total = 0;
   let files = [];
-  try { files = fs.readdirSync(gatesDir(cwd)).filter((f) => stageGate.test(f)); } catch { return 0; }
+  try { files = fs.readdirSync(gatesDir(cwd, changeId)).filter((f) => stageGate.test(f)); } catch { return 0; }
   for (const f of files) {
     try {
-      const g = JSON.parse(fs.readFileSync(path.join(gatesDir(cwd), f), "utf8"));
+      const g = JSON.parse(fs.readFileSync(path.join(gatesDir(cwd, changeId), f), "utf8"));
       if (typeof g.cost_usd === "number") total += g.cost_usd;
     } catch { /* skip */ }
   }
@@ -163,8 +167,11 @@ function upsertSection(existing, begin, end, section) {
 // Cross-stage context propagation (ADR-003 §4.3): record WHY a stage is being
 // re-dispatched so the agent's fresh session sees it. Upserted (one section,
 // rewritten each retry) so it doesn't accumulate across attempts.
-function writeRunBlockers(cwd, stageName, blockers) {
-  const p = path.join(cwd, "pipeline", "context.md");
+//
+// B9 (item 1.6): context.md lives under pipelineRoot() so bounded runs
+// write it alongside the other change-scoped artifacts.
+function writeRunBlockers(cwd, stageName, blockers, changeId) {
+  const p = path.join(pipelineRoot(cwd, changeId), "context.md");
   const items = (blockers || []).map((b) =>
     `- ${typeof b === "string" ? b : (b.text || b.summary || b.message || JSON.stringify(b))}`);
   const section = [
@@ -210,6 +217,14 @@ async function run(opts = {}) {
   const cwd = opts.cwd || process.cwd();
   const config = opts.config || loadConfig(cwd);
   const track = resolveTrack(opts, config);
+  // B9 (item 1.6): derive changeId from feature + isolation config so the
+  // driver reads/writes lock, run-state, run-log, gates, and context.md in
+  // the same bounded subtree that runStageHeadless writes gates into.
+  // Accept an explicit opts.changeId for tests; otherwise derive from feature.
+  const isolation = config.pipeline.isolation;
+  const changeId = opts.changeId !== undefined
+    ? opts.changeId
+    : (isolation === "bounded" ? changeIdFromFeature(opts.feature || "") : null);
 
   // Dependencies are injectable for deterministic testing of the loop without
   // spawning host CLIs; production passes none and gets the real orchestrator.
@@ -239,9 +254,9 @@ async function run(opts = {}) {
   const order = orderedStageNamesForTrack(track);
   const untilIndex = opts.until ? order.indexOf(opts.until) : -1;
 
-  acquireLock(cwd, { force: opts.force });
+  acquireLock(cwd, { force: opts.force }, changeId);
 
-  const state = (opts.resume && loadRunState(cwd)) || {
+  const state = (opts.resume && loadRunState(cwd, changeId)) || {
     track: Array.isArray(track) ? track.join(",") : track,
     iterations: 0,
     retries: {},
@@ -277,7 +292,7 @@ async function run(opts = {}) {
     summary.halted = true;
     summary.halt_action = "stoplist";
     summary.halt_reason = reason;
-    logEvent(cwd, { outcome: "stoplist-halt", label, track, matches: matches.map((m) => m.name) });
+    logEvent(cwd, changeId, { outcome: "stoplist-halt", label, track, matches: matches.map((m) => m.name) });
     onEvent({ type: "halt", action: "stoplist", reason, label, track, matches: matches.map((m) => m.name) });
     return true; // halted
   }
@@ -288,11 +303,11 @@ async function run(opts = {}) {
       // halt recorded above; skip the loop entirely.
     } else
     for (let i = 0; i < maxIterations; i++) {
-      const r = _next({ cwd, track: opts.track });
+      const r = _next({ cwd, track: opts.track, changeId });
       state.iterations = (state.iterations || 0) + 1;
       state.last_action = r.action;
       state.current_stage = r.name || null;
-      saveRunState(cwd, state);
+      saveRunState(cwd, changeId, state);
 
       const base = {
         iteration: state.iterations,
@@ -305,7 +320,7 @@ async function run(opts = {}) {
 
       if (r.action === "pipeline-complete") {
         summary.completed = true;
-        logEvent(cwd, { ...base, outcome: "complete" });
+        logEvent(cwd, changeId, { ...base, outcome: "complete" });
         onEvent({ type: "complete", ...base });
         break;
       }
@@ -318,7 +333,7 @@ async function run(opts = {}) {
       if (r.action === "fold-sign-off") {
         fs.mkdirSync(path.dirname(r.gate_path), { recursive: true });
         fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
-        logEvent(cwd, {
+        logEvent(cwd, changeId, {
           ...base,
           outcome: "auto-fold-sign-off",
           event: "auto-fold-sign-off",
@@ -343,14 +358,14 @@ async function run(opts = {}) {
           summary.halt_failure_class = "convergence-exhausted";
           summary.halt_reason = `driver retry budget exhausted for "${r.name}" (${attempts}/${maxRetries}); escalating`;
           summary.blockers = r.blockers || [];
-          logEvent(cwd, { ...base, outcome: "convergence-halt" });
+          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt" });
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
           break;
         }
         // Archive the failed attempt's stage gate before it's cleared/overwritten,
         // so the progression of attempts survives for post-mortem (and for a
         // future progress-based convergence check). Best-effort.
-        const archived = archiveGate(gatesDir(cwd), r.stage, attempts + 1);
+        const archived = archiveGate(gatesDir(cwd, changeId), r.stage, attempts + 1);
         // Prefer the structured clear_gates next() attaches (repo-relative);
         // fall back to deriving them from fix_steps for older action shapes.
         const toClear = Array.isArray(r.clear_gates) && r.clear_gates.length
@@ -370,14 +385,14 @@ async function run(opts = {}) {
             + `run \`devteam next\` for manual fix steps`;
           summary.blockers = r.blockers || [];
           summary.fix_steps = r.fix_steps || [];
-          logEvent(cwd, { ...base, outcome: "no-progress-halt", archived: archived || null });
+          logEvent(cwd, changeId, { ...base, outcome: "no-progress-halt", archived: archived || null });
           onEvent({ type: "halt", ...base, failure_class: "structural-input", reason: summary.halt_reason, blockers: r.blockers, fix_steps: r.fix_steps });
           break;
         }
-        writeRunBlockers(cwd, r.name, r.blockers);
+        writeRunBlockers(cwd, r.name, r.blockers, changeId);
         state.fixRetries[r.name] = attempts + 1;
-        saveRunState(cwd, state);
-        logEvent(cwd, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null });
+        saveRunState(cwd, changeId, state);
+        logEvent(cwd, changeId, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null });
         onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length });
         continue;
       }
@@ -399,7 +414,7 @@ async function run(opts = {}) {
             : alreadyTried
               ? `auto-rule already attempted once for "${r.name}" and it re-escalated; halting for a human`
               : r.reason;
-          logEvent(cwd, { ...base, outcome: "halt" });
+          logEvent(cwd, changeId, { ...base, outcome: "halt" });
           onEvent({ type: "halt", ...base });
           break;
         }
@@ -409,7 +424,7 @@ async function run(opts = {}) {
         onEvent({ type: "auto-rule-dispatch", ...base });
         const rr = await _runRuling(cwd, { targetGate: r.gate });
         state.autoRule[r.name] = (state.autoRule[r.name] || 0) + 1;
-        saveRunState(cwd, state);
+        saveRunState(cwd, changeId, state);
         const fresh = loadPrincipalOutputs(cwd).slice(before);
         const latest = fresh.length ? fresh[fresh.length - 1] : null;
 
@@ -418,7 +433,7 @@ async function run(opts = {}) {
           summary.halt_action = "resolve-escalation";
           summary.halt_failure_class = "judgment-gate";
           summary.halt_reason = "Principal produced no ruling; halting for a human";
-          logEvent(cwd, { ...base, outcome: "auto-rule-no-output" });
+          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-no-output" });
           onEvent({ type: "halt", ...base });
           break;
         }
@@ -428,7 +443,7 @@ async function run(opts = {}) {
           summary.halt_failure_class = "cannot-decide";
           summary.cannot_decide = { reason_class: latest.reason_class, question: latest.question };
           summary.halt_reason = `Principal cannot decide (${latest.reason_class}): ${latest.question}`;
-          logEvent(cwd, { ...base, outcome: "cannot-decide", reason_class: latest.reason_class });
+          logEvent(cwd, changeId, { ...base, outcome: "cannot-decide", reason_class: latest.reason_class });
           onEvent({ type: "cannot-decide", ...base, reason_class: latest.reason_class, question: latest.question });
           break;
         }
@@ -437,7 +452,7 @@ async function run(opts = {}) {
           summary.halt_action = "resolve-escalation";
           summary.halt_failure_class = "judgment-gate";
           summary.halt_reason = `ruling class "${latest.class}" is not in the --auto-rule grant; halting for a human`;
-          logEvent(cwd, { ...base, outcome: "auto-rule-ungranted", ruling_class: latest.class });
+          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-ungranted", ruling_class: latest.class });
           onEvent({ type: "halt", ...base, ruling_class: latest.class });
           break;
         }
@@ -447,7 +462,7 @@ async function run(opts = {}) {
           summary.halted = true;
           summary.halt_action = "resolve-escalation";
           summary.halt_reason = `escalation applicator failed (exit ${fr.exitCode}); halting`;
-          logEvent(cwd, { ...base, outcome: "auto-rule-apply-failed" });
+          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-apply-failed" });
           onEvent({ type: "halt", ...base });
           break;
         }
@@ -464,7 +479,7 @@ async function run(opts = {}) {
             fs.writeFileSync(r.gate, JSON.stringify(g, null, 2) + "\n");
           }
         } catch { /* run-log retains the record */ }
-        logEvent(cwd, { ...base, outcome: "auto-ruled", grant_class: latest.class, ruling: latest.decision, authority });
+        logEvent(cwd, changeId, { ...base, outcome: "auto-ruled", grant_class: latest.class, ruling: latest.decision, authority });
         onEvent({ type: "auto-ruled", ...base, grant_class: latest.class, ruling: latest.decision, authority });
         continue;
       }
@@ -478,7 +493,7 @@ async function run(opts = {}) {
         summary.halt_reason = r.reason;
         summary.blockers = r.blockers || [];
         summary.fix_steps = r.fix_steps || [];
-        logEvent(cwd, { ...base, outcome: "halt" });
+        logEvent(cwd, changeId, { ...base, outcome: "halt" });
         onEvent({ type: "halt", ...base, blockers: r.blockers, fix_steps: r.fix_steps });
         break;
       }
@@ -489,7 +504,7 @@ async function run(opts = {}) {
           summary.halted = true;
           summary.halt_action = "ceiling";
           summary.halt_reason = `consequence ceiling: "${r.name}" requires an explicit human grant (--allow-stage ${r.name})`;
-          logEvent(cwd, { ...base, outcome: "ceiling-halt" });
+          logEvent(cwd, changeId, { ...base, outcome: "ceiling-halt" });
           onEvent({ type: "ceiling", ...base });
           break;
         }
@@ -501,7 +516,7 @@ async function run(opts = {}) {
             summary.halted = true;
             summary.halt_action = "until";
             summary.halt_reason = `reached --until boundary "${opts.until}"`;
-            logEvent(cwd, { ...base, outcome: "until-halt" });
+            logEvent(cwd, changeId, { ...base, outcome: "until-halt" });
             onEvent({ type: "until", ...base });
             break;
           }
@@ -510,12 +525,12 @@ async function run(opts = {}) {
         // Budget — pre-dispatch check. Cost is only known AFTER a dispatch, so
         // this prevents the NEXT stage, not an overrun of the current one.
         if (budgetUsd != null) {
-          const spent = totalCostUsd(cwd);
+          const spent = totalCostUsd(cwd, changeId);
           if (spent >= budgetUsd) {
             summary.halted = true;
             summary.halt_action = "budget";
             summary.halt_reason = `budget cap reached: $${spent.toFixed(2)} ≥ $${budgetUsd.toFixed(2)}`;
-            logEvent(cwd, { ...base, outcome: "budget-halt", cost_usd: spent });
+            logEvent(cwd, changeId, { ...base, outcome: "budget-halt", cost_usd: spent });
             onEvent({ type: "budget", ...base, cost_usd: spent });
             break;
           }
@@ -532,6 +547,7 @@ async function run(opts = {}) {
         const runResult = await _runStageHeadless(r.name, {
           cwd,
           track: opts.track,
+          feature: opts.feature || "",
           timeoutMs,
           skipCompleted: r.action === "continue-stage",
         });
@@ -544,9 +560,9 @@ async function run(opts = {}) {
         // any non-zero/null (timeout) collapses to 1 for classification.
         const exitCode = nonSkipped.length > 0 && nonSkipped.every((x) => x.exitCode === 0) ? 0 : 1;
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
-        saveRunState(cwd, state);
+        saveRunState(cwd, changeId, state);
         if (!summary.stages_advanced.includes(r.name)) summary.stages_advanced.push(r.name);
-        logEvent(cwd, {
+        logEvent(cwd, changeId, {
           ...base, outcome: "dispatched",
           duration_ms: durationMs, workstreams: results.length,
           timed_out: anyTimedOut, no_gate: !wroteGate,
@@ -562,13 +578,13 @@ async function run(opts = {}) {
         );
         if (dispatchClass === "ok") {
           state.transient[r.name] = 0;
-          saveRunState(cwd, state);
+          saveRunState(cwd, changeId, state);
           continue;
         }
         if (dispatchClass === "transient") {
           state.transient[r.name] = (state.transient[r.name] || 0) + 1;
-          saveRunState(cwd, state);
-          logEvent(cwd, { ...base, outcome: "transient-retry", attempt: state.transient[r.name] });
+          saveRunState(cwd, changeId, state);
+          logEvent(cwd, changeId, { ...base, outcome: "transient-retry", attempt: state.transient[r.name] });
           onEvent({ type: "transient-retry", ...base, attempt: state.transient[r.name], delay_ms: retryDelayMs });
           await _sleep(retryDelayMs);
           continue;
@@ -580,15 +596,15 @@ async function run(opts = {}) {
         summary.halt_reason =
           `dispatch of "${r.name}" produced no gate and is not transient ` +
           `(clean exit with no output, or repeated failure) — input is structurally unworkable`;
-        logEvent(cwd, { ...base, outcome: "structural-halt" });
+        logEvent(cwd, changeId, { ...base, outcome: "structural-halt" });
         onEvent({ type: "structural", ...base });
         break;
       }
 
       if (r.action === "merge") {
         onEvent({ type: "merge", ...base });
-        const m = _merge(r.name, { cwd, track: opts.track });
-        logEvent(cwd, { ...base, outcome: m.merged ? "merged" : "merge-failed", reason: m.reason || null });
+        const m = _merge(r.name, { cwd, track: opts.track, changeId });
+        logEvent(cwd, changeId, { ...base, outcome: m.merged ? "merged" : "merge-failed", reason: m.reason || null });
         if (!m.merged) {
           summary.halted = true;
           summary.halt_action = "merge-failed";
@@ -603,7 +619,7 @@ async function run(opts = {}) {
       summary.halted = true;
       summary.halt_action = r.action;
       summary.halt_reason = `unhandled action "${r.action}"`;
-      logEvent(cwd, { ...base, outcome: "unhandled" });
+      logEvent(cwd, changeId, { ...base, outcome: "unhandled" });
       onEvent({ type: "unhandled", ...base });
       break;
     }
@@ -612,13 +628,13 @@ async function run(opts = {}) {
       summary.halted = true;
       summary.halt_action = "max-iterations";
       summary.halt_reason = `reached max iterations (${maxIterations})`;
-      logEvent(cwd, { iteration: state.iterations, outcome: "max-iterations-halt" });
+      logEvent(cwd, changeId, { iteration: state.iterations, outcome: "max-iterations-halt" });
     }
   } finally {
     summary.iterations = state.iterations || 0;
-    summary.cost_usd = totalCostUsd(cwd);
-    saveRunState(cwd, state);
-    releaseLock(cwd);
+    summary.cost_usd = totalCostUsd(cwd, changeId);
+    saveRunState(cwd, changeId, state);
+    releaseLock(cwd, changeId);
   }
 
   return summary;

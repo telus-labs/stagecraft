@@ -219,6 +219,9 @@ function verifyTexts({ briefText, specText, testText, opts = {} }) {
 // report shape, with file-not-found promoted to "this artifact is
 // missing" markers in the report.
 function verify(cwd, opts = {}) {
+  // B9 exemption: spec/verify.js is a standalone drift-check command; it reads
+  // global pipeline/ artifacts. spec.feature is a project-level artifact regardless
+  // of isolation mode.
   const briefPath = path.join(cwd, "pipeline", "brief.md");
   const specPath  = path.join(cwd, "pipeline", "spec.feature");
   const testPath  = path.join(cwd, "pipeline", "test-report.md");

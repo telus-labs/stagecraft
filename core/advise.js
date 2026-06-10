@@ -75,6 +75,8 @@ function gatherFollowups(cwd, opts = {}) {
 // addressed tokens: AC refs ("AC-10") and raw item IDs ("RT-3").
 // ---------------------------------------------------------------------------
 function loadAddressedItems(cwd, opts = {}) {
+  // B9 exemption: advise.js is an interactive advisory command; it always reads
+  // from the in-place pipeline/. Callers may pass opts.contextFile to override.
   const contextFile = opts.contextFile || path.join(cwd, "pipeline", "context.md");
   const addressed = new Set();
   if (!fs.existsSync(contextFile)) return addressed;
@@ -135,6 +137,7 @@ function classifyItem(item, cwd, opts = {}) {
   // PASS (e.g. after a successful fix re-run), the items are moderate/minor
   // noted_for_followup entries; classify as INFO so they don't count as blockers.
   if ((item._source || "").includes("stage-06b")) {
+    // B9 exemption: advise reads in-place gates; callers may pass opts.gatesDir.
     const gatesPath = opts.gatesDir || path.join(cwd, "pipeline", "gates");
     const gatePath = path.join(gatesPath, "stage-06b.json");
     try {
@@ -155,6 +158,7 @@ function classifyItem(item, cwd, opts = {}) {
   // Heuristic fallback
   const acRefs = extractAcRefs(item);
   if (acRefs.length > 0) {
+    // B9 exemption: advise reads in-place spec (spec.feature is global project artifact).
     const specPath = path.join(cwd, "pipeline", "spec.feature");
     if (!fs.existsSync(specPath)) {
       // No spec yet (pre-stage-03b) — can't confirm coverage; be conservative
@@ -313,6 +317,7 @@ function applyOption(item, action, ticketId) {
 // pipeline/context.md with the given decision lines.
 // ---------------------------------------------------------------------------
 function writeAdviseSection(cwd, decisionLines, opts = {}) {
+  // B9 exemption: advise writes to in-place context.md; callers may pass opts.contextFile.
   const contextFile = opts.contextFile || path.join(cwd, "pipeline", "context.md");
   const section = [
     ADVISE_BEGIN,
@@ -370,6 +375,7 @@ function runAdvise(cwd, opts = {}) {
   }
 
   // Apply selections — build new decision lines then write the section once
+  // B9 exemption: advise writes to in-place context.md; callers may pass opts.contextFile.
   const contextFile = opts.contextFile || path.join(cwd, "pipeline", "context.md");
 
   // Collect existing decision lines (preserve previously applied decisions)

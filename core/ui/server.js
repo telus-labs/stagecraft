@@ -75,6 +75,8 @@ function buildState(cwd) {
 function loadGateFile(cwd, stageId) {
   // stageId can be "stage-04" (merged) or "stage-04.backend" (workstream)
   if (!/^stage-[a-z0-9.-]+$/i.test(stageId)) return null;
+  // B9 exemption: the UI server serves the in-place pipeline view; bounded-mode
+  // support (e.g. accepting ?changeId= query param) is a future UI enhancement.
   const file = path.join(cwd, "pipeline", "gates", `${stageId}.json`);
   if (!fs.existsSync(file)) return null;
   try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; }
@@ -115,6 +117,7 @@ function makeBroker() {
 }
 
 function watchGates(cwd, broker) {
+  // B9 exemption: watches the in-place gates dir only (see loadGateFile comment).
   const gatesDir = path.join(cwd, "pipeline", "gates");
   if (!fs.existsSync(gatesDir)) {
     fs.mkdirSync(gatesDir, { recursive: true });

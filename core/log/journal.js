@@ -71,6 +71,9 @@ const STATUS_ICONS = {
  */
 function buildEvents(cwd) {
   const events = [];
+  // B9 exemption: journal.js builds the activity log for the UI from the
+  // global pipeline/ directory. Bounded-run events live in the change subtree
+  // and are not yet aggregated by the journal (future enhancement).
   const pipelineDir = path.join(cwd, "pipeline");
   if (!fs.existsSync(pipelineDir)) return events;
 
