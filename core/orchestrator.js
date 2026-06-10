@@ -855,9 +855,18 @@ function computeFixSteps(gate, stageDef, gatesDir) {
         }
         const ws = [...wsSet];
         if (ws.length) {
+          // Include rm commands so the autonomous driver's clear_gates causes
+          // next() to re-enter the build stage for the affected workstreams.
+          // Without clearing these, next() still sees the merged stage-04.json
+          // as PASS and skips build entirely, re-running the reviewer against
+          // the same unpatched code.
           steps.push({
             description: `Re-run build workstream${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
-            commands: ws.map(w => `devteam stage build --workstream ${w} --headless`),
+            commands: [
+              ...ws.map(w => `rm pipeline/gates/stage-04.${w}.json`),
+              "rm pipeline/gates/stage-04.json",
+              ...ws.map(w => `devteam stage build --workstream ${w} --patch --from peer-review --headless`),
+            ],
           });
           steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
         }
