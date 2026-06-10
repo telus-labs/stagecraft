@@ -445,6 +445,26 @@ the human-readable output.
 
 ---
 
+## Tamper-evident chain (C6)
+
+Stage-level gates carry an optional `chain` field that commits to the predecessor stage gate:
+
+```json
+{
+  "chain": {
+    "prev_stage": "stage-04",
+    "prev_hash": "sha256:…",          // canonical-JSON SHA-256 of stage-04's full content
+    "algo": "sha256-canonical-json"
+  }
+}
+```
+
+The hash covers the predecessor's entire content **including its own `chain` field**, so the chain is transitive — mutating any earlier gate changes its hash and breaks every gate downstream of it. The genesis (first) stage has `prev_hash: null`.
+
+You do not write this field by hand. The orchestrator stamps it: `mergeWorkstreamGates` stamps multi-role stage gates, and `runStageHeadless` stamps single-role stage gates (only when the dispatch actually wrote the gate). `devteam verify-chain` recomputes the chain and reports breaks (exit non-zero for CI); `devteam stamp-chain` (re)stamps every stage gate in order — use it after a deliberate earlier-stage re-run, which legitimately invalidates the chain until re-stamped. See `core/gates/chain.js`.
+
+---
+
 ## Track field
 
 Every gate should carry a `"track"` field identifying which pipeline

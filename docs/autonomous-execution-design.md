@@ -271,7 +271,8 @@ Stagecraft has strong **computation** provenance: C4 reproducibility fingerprint
 *what produced a gate* (`model`, `model_version`, `temperature`, `seed`,
 `system_prompt_hash`, `tools_hash` — `core/reproducibility.js`,
 `gate.schema.json:99–138`), C1 audits writes (`core/guards/write-audit.js`), and C6
-(tamper-evident gate chain) is top-tier on the roadmap.
+(tamper-evident gate chain) **has landed** (PR-D1, `core/gates/chain.js`): each stage
+gate carries `chain.prev_hash` and `devteam verify-chain` detects post-hoc edits.
 
 None of it records **authority** provenance. In a human-driven run a person typed
 `devteam ruling`, so accountability is implicit. In an autonomous run the gate would
@@ -283,7 +284,10 @@ advance past a judgment gate records *which authority was exercised, under whose
 grant*. A post-incident audit can then reconstruct "the Principal auto-resolved this
 under standing grant of type X, issued by human Y on date Z." This is the prerequisite
 for letting `devteam run` touch anything consequential, and it slots into the C6 work
-rather than duplicating it.
+rather than duplicating it. **Status:** C6's tamper-evident chain landed (PR-D1);
+`--auto-rule` records authority to `run-log.jsonl` today (PR-C2). Binding that
+authority record *onto the chained gate* (`resolved_by`) so it inherits the
+tamper-evidence is **PR-D2** (the remaining slice).
 
 ---
 

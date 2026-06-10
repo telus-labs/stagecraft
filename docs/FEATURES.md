@@ -190,6 +190,15 @@ Gates optionally record the full reproducibility fingerprint for any stage: `mod
 
 See [`docs/reproducibility.md`](reproducibility.md) for the gate fields, replay readiness classification, and drift-detection details.
 
+### Tamper-evident gate chain — the audit record can't be quietly rewritten (C6)
+
+Recording *what* decided a stage is only half the audit story; the record also has to be **tamper-evident**. Each stage-level gate carries `chain.prev_hash` — a canonical-JSON SHA-256 of its predecessor stage gate — so the gates form a linear chain (`stage-01 → … → stage-09`).
+
+- Mutating any earlier gate changes its hash, so every gate downstream of it no longer matches what it recorded. `devteam verify-chain` recomputes the chain, **locates the break**, and exits non-zero (CI-usable).
+- The hash covers the predecessor's full content including its own `chain` field, so the chain is transitive — re-stamping a tampered middle gate just moves the break downstream.
+- Stamped automatically by the orchestrator (`mergeWorkstreamGates` for multi-role stages, `runStageHeadless` for single-role); `devteam stamp-chain` re-stamps after a deliberate earlier-stage re-run.
+- Makes the autonomous driver's authority records (which `--auto-rule` decision resolved which escalation) part of a tamper-evident trail — the EU AI Act / SOC 2 "who decided this, and was the record altered?" guarantee.
+
 ---
 
 ## Observability and learning

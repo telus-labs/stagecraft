@@ -85,6 +85,13 @@ Commands:
                                    pipeline/gates/. Exit codes: 0 PASS/WARN,
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
                                    by host hooks (e.g. Claude Code Stop).
+  verify-chain [--track <t>]       C6: verify the tamper-evident gate chain —
+       [--json]                     each stage gate commits to a hash of its
+                                   predecessor. Reports breaks + unstamped
+                                   gates. Exit 0 intact, 1 broken (CI-usable).
+  stamp-chain [--track <t>]        C6: (re)stamp the chain on all stage gates,
+                                   in order. Use after a deliberate earlier-
+                                   stage re-run, or to stamp interactive gates.
   merge <stage>                    Merge per-workstream gates into stage gate.
   preflight [--cwd <dir>]          Run mechanical pre-peer-review checks
        [--skip-write]               (stage-04e): committed-but-ignored files,
@@ -873,6 +880,58 @@ function cmdRun(argv) {
     console.error(`devteam run: ${err.message}`);
     process.exit(err.code === "ELOCKED" ? 2 : 1);
   });
+}
+
+// `devteam verify-chain [--track <t>] [--cwd <dir>] [--json]` (C6).
+// Walks the tamper-evident stage-gate chain and reports breaks + unstamped
+// gates. Exit 0 = intact, 1 = a break (CI-usable).
+function cmdVerifyChain(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
+  const { gatesDir: getGatesDir } = require(path.join(__dirname, "..", "core", "paths"));
+  const { verifyChain } = require(path.join(__dirname, "..", "core", "gates", "chain"));
+  const config = loadConfig(cwd);
+  const track = flags.track
+    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
+    || config.pipeline.default_track || "full";
+  const r = verifyChain(getGatesDir(cwd, null), track);
+  if (flags.json) {
+    console.log(JSON.stringify({ schema_version: "1.0", ...r }, null, 2));
+    process.exit(r.ok ? 0 : 1);
+  }
+  if (r.ok) {
+    console.log(`✅ gate chain intact — ${r.checked} stage gate(s) verified`);
+    if (r.unstamped.length) console.log(`   ⚠ unstamped: ${r.unstamped.join(", ")} — run \`devteam stamp-chain\``);
+    process.exit(0);
+  }
+  console.error(`❌ gate chain BROKEN — ${r.breaks.length} break(s):`);
+  for (const b of r.breaks) {
+    console.error(`   ${b.stage}: recorded prev_hash for ${b.prev_stage || "(genesis)"} ≠ current content`);
+    console.error(`      recorded:   ${b.recorded}`);
+    console.error(`      recomputed: ${b.recomputed}`);
+  }
+  if (r.unstamped.length) console.error(`   ⚠ unstamped: ${r.unstamped.join(", ")}`);
+  console.error(`\n   A break means an earlier gate changed after it was chained — tampering, or a`);
+  console.error(`   deliberate earlier-stage re-run (then re-stamp with \`devteam stamp-chain\`).`);
+  process.exit(1);
+}
+
+// `devteam stamp-chain [--track <t>] [--cwd <dir>]` (C6).
+// (Re)stamps the chain on every existing stage gate, in order. Use after a
+// deliberate earlier-stage re-run, or to stamp gates written interactively.
+function cmdStampChain(argv) {
+  const { flags } = parseFlags(argv);
+  const cwd = flags.cwd || process.cwd();
+  const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
+  const { gatesDir: getGatesDir } = require(path.join(__dirname, "..", "core", "paths"));
+  const { stampAll } = require(path.join(__dirname, "..", "core", "gates", "chain"));
+  const config = loadConfig(cwd);
+  const track = flags.track
+    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
+    || config.pipeline.default_track || "full";
+  const r = stampAll(getGatesDir(cwd, null), track);
+  console.log(`Stamped chain on ${r.stamped.length} stage gate(s): ${r.stamped.join(", ") || "(none)"}`);
 }
 
 function cmdMemory(argv) {
@@ -2821,6 +2880,8 @@ function main() {
     case "next":     return cmdNext(rest);
     case "run":      return cmdRun(rest);
     case "validate": return cmdValidate(rest);
+    case "verify-chain": return cmdVerifyChain(rest);
+    case "stamp-chain":  return cmdStampChain(rest);
     case "merge":    return cmdMerge(rest);
     case "derive-approvals": return cmdDeriveApprovals(rest);
     case "restart":  return cmdRestart(rest);

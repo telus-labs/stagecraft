@@ -135,6 +135,26 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$",
       "description": "Optional (C4 reproducibility). SHA-256 of the sorted, deduplicated list of tool names available to the model. Drift means the tool surface changed — relevant for replay because the same prompt with a different toolset may produce different decisions."
+    },
+    "chain": {
+      "type": "object",
+      "description": "Optional (C6 tamper-evident chain). Stamped by the orchestrator onto stage-level gates: a hash of the predecessor stage gate, so mutating an earlier gate breaks the chain. Verified by `devteam verify-chain`. Stamped automatically by mergeWorkstreamGates (multi-role) and runStageHeadless (single-role); see core/gates/chain.js.",
+      "properties": {
+        "prev_stage": {
+          "type": ["string", "null"],
+          "description": "Stage id of the predecessor gate this gate commits to (e.g. 'stage-04'), or null for the genesis (first) stage."
+        },
+        "prev_hash": {
+          "type": ["string", "null"],
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Canonical-JSON SHA-256 of the predecessor stage gate's full content (including its own `chain` field — the chain is transitive). null for the genesis stage."
+        },
+        "algo": {
+          "type": "string",
+          "description": "Hashing scheme, e.g. 'sha256-canonical-json' (sorted-key JSON serialization hashed with SHA-256)."
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

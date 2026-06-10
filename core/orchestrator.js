@@ -251,6 +251,15 @@ async function runStageHeadless(stageName, opts = {}) {
     "devteam.stage.name": stageName,
     "devteam.workstream_count": plan.workstreams.length,
   }, async () => {
+    // C6: remember the single-role stage gate's pre-dispatch mtime so we only
+    // stamp the chain when THIS dispatch actually (re)wrote it — not on a
+    // no-write run (e.g. `devteam replay` against an empty host command, which
+    // must stay distinguishable by mtime).
+    const singleRoleGate = plan.workstreams.length === 1
+      ? path.join(gatesDir, `${plan.stage}.json`) : null;
+    let preGateMtime = null;
+    if (singleRoleGate) { try { preGateMtime = fs.statSync(singleRoleGate).mtimeMs; } catch { preGateMtime = null; } }
+
     let workstreams = plan.workstreams;
     if (opts.workstream && opts.workstream.length > 0) {
       const filter = new Set(opts.workstream);
@@ -326,6 +335,19 @@ async function runStageHeadless(stageName, opts = {}) {
         } catch (err) {
           process.stderr.write(`[devteam] orchestrator stamping failed: ${err.message}\n`);
         }
+      }
+    }
+
+    // C6: single-role stages write their stage gate directly (no merge step),
+    // so stamp the tamper-evident chain here — but only if THIS dispatch
+    // actually wrote the gate (created it, or advanced its mtime). Multi-role
+    // stages are stamped by mergeWorkstreamGates. Best-effort.
+    if (singleRoleGate) {
+      let postGateMtime = null;
+      try { postGateMtime = fs.statSync(singleRoleGate).mtimeMs; } catch { postGateMtime = null; }
+      const wroteThisRun = postGateMtime !== null && (preGateMtime === null || postGateMtime > preGateMtime);
+      if (wroteThisRun) {
+        try { require("./gates/chain").stampChain(gatesDir, stageName, plan.ctx.track); } catch { /* */ }
       }
     }
 
@@ -444,6 +466,9 @@ function mergeWorkstreamGates(stageName, opts = {}) {
 
     const outFile = path.join(gatesDir, `${stageDef.stage}.json`);
     fs.writeFileSync(outFile, JSON.stringify(merged, null, 2) + "\n", "utf8");
+    // C6: stamp the tamper-evident chain hash of the predecessor stage gate.
+    // Best-effort — a chain-stamp failure must never fail a merge.
+    try { require("./gates/chain").stampChain(gatesDir, stageName, track); } catch { /* */ }
     setSpanAttributes({
       "devteam.merge.result": "merged",
       "devteam.merge.status": aggregate,
