@@ -13,7 +13,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage, trackLabel } = require("./pipeline/stages");
 const { loadConfig, changeIdFromFeature } = require("./config");
-const { gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
+const { gatesDir: getGatesDir, pipelineRoot, prefixPipelineRelative } = require("./paths");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
@@ -498,8 +498,16 @@ function mergeWorkstreamGates(stageName, opts = {}) {
 //   { action: "pipeline-complete",  reason }
 function next(opts = {}) {
   const cwd = opts.cwd || process.cwd();
-  const gatesDir = path.join(cwd, "pipeline", "gates");
   const config = opts.config || loadConfig(cwd);
+  // B9: resolve changeId for bounded isolation so the read side looks in the
+  // same tree that dispatch wrote into (pipeline/changes/<id>/gates/).
+  // Accept an explicit changeId (from the driver, which already derived it),
+  // or derive it fresh from feature + isolation config (interactive path).
+  const isolation = config.pipeline.isolation;
+  const changeId = opts.changeId !== undefined
+    ? opts.changeId
+    : (isolation === "bounded" ? changeIdFromFeature(opts.feature || "") : null);
+  const gatesDir = getGatesDir(cwd, changeId);
   // G6: custom_stages in config overrides default_track when no explicit track is passed.
   const track = opts.track
     || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
@@ -514,7 +522,7 @@ function next(opts = {}) {
   return withSpan("pipeline.next", {
     "devteam.track": trackLabel(track),
   }, () => {
-    const result = _nextImpl(stageList, gatesDir, track, skipStages, maxRetries);
+    const result = _nextImpl(stageList, gatesDir, track, skipStages, maxRetries, cwd, changeId);
     setSpanAttributes({
       "devteam.next.action": result.action,
       "devteam.next.stage": result.stage || undefined,
@@ -544,7 +552,10 @@ function workstreamGatesExistFor(stageDef, gatesDir) {
 //   2. brief.md has at least one AC-N entry
 //   3. test-report.md exists
 //   4. every AC-N in brief.md is mentioned in test-report.md
-function tryAutoFoldSignOff(cwd, gatesDir, track) {
+//
+// changeId (B9): when non-null, brief.md / test-report.md / runbook.md are
+// resolved under pipeline/changes/<changeId>/ via pipelineRoot().
+function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
   const stage06Path = path.join(gatesDir, "stage-06.json");
   if (!fs.existsSync(stage06Path)) {
     return { ok: false, reason: "stage-06 gate missing" };
@@ -557,9 +568,12 @@ function tryAutoFoldSignOff(cwd, gatesDir, track) {
 
   // Re-verify the AC→test mapping ourselves. The QA agent may have
   // claimed all_acceptance_criteria_met: true; we check.
+  // B9: use pipelineRoot() so bounded-mode runs look under
+  // pipeline/changes/<changeId>/ instead of the global pipeline/.
   const { extractAcsFromBrief, extractAcsFromReport } = require("./verify/stamp");
-  const briefPath = path.join(cwd, "pipeline", "brief.md");
-  const reportPath = path.join(cwd, "pipeline", "test-report.md");
+  const root = pipelineRoot(cwd, changeId);
+  const briefPath = path.join(root, "brief.md");
+  const reportPath = path.join(root, "test-report.md");
   if (!fs.existsSync(briefPath)) {
     return { ok: false, reason: "pipeline/brief.md missing (auto-fold needs a brief with AC-N entries)" };
   }
@@ -585,7 +599,7 @@ function tryAutoFoldSignOff(cwd, gatesDir, track) {
     return { ok: false, reason: "stage-06 criterion_to_test_mapping_is_one_to_one is not true" };
   }
 
-  const runbookPath = path.join(cwd, "pipeline", "runbook.md");
+  const runbookPath = path.join(root, "runbook.md");
   const runbookExists = fs.existsSync(runbookPath);
 
   const gate = {
@@ -1117,7 +1131,12 @@ function computeFixSteps(gate, stageDef, gatesDir) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX_RETRIES_DEFAULT) {
+// B9: cwd and changeId are threaded through so tryAutoFoldSignOff can
+// resolve brief.md / test-report.md / runbook.md under the correct
+// pipeline root (bounded: pipeline/changes/<changeId>/; in-place: pipeline/).
+// Previously cwd was derived from gatesDir via path.resolve("..", ".."), which
+// was wrong in bounded mode (gatesDir is .../pipeline/changes/<id>/gates/).
+function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX_RETRIES_DEFAULT, cwd, changeId) {
   for (const stageName of stageList) {
     const stageDef = getStage(stageName);
     const stageGatePath = path.join(gatesDir, `${stageDef.stage}.json`);
@@ -1136,8 +1155,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
     if (stageName === "sign-off"
         && !fs.existsSync(stageGatePath)
         && !workstreamGatesExistFor(stageDef, gatesDir)) {
-      const cwd = path.resolve(gatesDir, "..", "..");
-      const folded = tryAutoFoldSignOff(cwd, gatesDir, track);
+      const folded = tryAutoFoldSignOff(cwd, gatesDir, track, changeId);
       if (folded.ok) {
         // Return fold-sign-off so the caller writes the gate and re-runs
         // next(). Do NOT fall through here — stageGatePath doesn't exist
@@ -1292,8 +1310,13 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
 // For multi-role stages, includes per-workstream rows.
 function summary(opts = {}) {
   const cwd = opts.cwd || process.cwd();
-  const gatesDir = path.join(cwd, "pipeline", "gates");
   const config = opts.config || loadConfig(cwd);
+  // B9: resolve changeId for bounded isolation — same logic as next().
+  const isolation = config.pipeline.isolation;
+  const changeId = opts.changeId !== undefined
+    ? opts.changeId
+    : (isolation === "bounded" ? changeIdFromFeature(opts.feature || "") : null);
+  const gatesDir = getGatesDir(cwd, changeId);
   // G6: custom_stages in config overrides default_track when no explicit track is passed.
   const track = opts.track
     || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)

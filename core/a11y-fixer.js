@@ -109,6 +109,9 @@ function buildA11yFixPrompt(blockers) {
 
 // Delete the FAIL gate, re-run the accessibility audit, return the new gate status.
 async function rerunAccessibilityAudit(cwd, timeoutMs) {
+  // B9 exemption: a11y-fixer is called from the escalation applicator, which
+  // always runs in in-place mode today. Bounded-mode support can follow when
+  // escalation.js is wired for changeId (plans/phase-1-trust-consolidation.md §1.6).
   const gatePath = path.join(cwd, "pipeline", "gates", "stage-06b.json");
   try { fs.unlinkSync(gatePath); } catch { /* may already be gone */ }
 

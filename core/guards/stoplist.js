@@ -57,6 +57,9 @@ function gitChangedFiles(cwd) {
 }
 
 // Read pipeline/changed-files.txt if present.
+// B9 exemption: changed-files.txt is a git-diff artifact written at the global
+// pipeline/ level regardless of isolation mode — it describes the changeset, not
+// a bounded artifact.
 function pipelineChangedFiles(cwd) {
   const filePath = path.join(cwd, "pipeline", "changed-files.txt");
   if (!fs.existsSync(filePath)) return [];
@@ -65,6 +68,10 @@ function pipelineChangedFiles(cwd) {
 
 // Read pipeline/brief.md if present, so the pre-build check in the autonomous
 // driver catches sensitive topics added by the requirements agent (Phase 1 § 1.1).
+// B9 exemption: the stoplist check in the driver always uses cwd (the project root)
+// and reads the in-place brief.md. In bounded mode the brief would be at
+// pipeline/changes/<id>/brief.md; this is a known limitation — the driver's
+// runStoplistCheck can be extended to pass changeId when this matters in practice.
 function pipelineBrief(cwd) {
   const filePath = path.join(cwd, "pipeline", "brief.md");
   if (!fs.existsSync(filePath)) return "";
