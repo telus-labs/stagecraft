@@ -480,11 +480,11 @@ Tests: `tests/escalation.test.js`.
 **PR-C2 — Driver auto-rule (✅ landed):** `--auto-rule <class,…>` — a **CLI-only,
 per-run, allowlist-only** grant (no config persistence, no wildcard); default
 empty = halt on every escalation (today's behavior, Principal not even
-dispatched). On a granted run the driver dispatches the Principal (it invokes the
-existing, tested `devteam ruling` / `devteam fix-escalation` commands as
-subprocesses — injectable for tests; extracting their internals into
-`core/escalation.js` for a true in-process call is a noted follow-up), reads the
-Principal's newest output via `loadPrincipalOutputs`, and: applies a ruling whose
+dispatched). On a granted run the driver renders + dispatches the Principal
+**in-process** via `core/escalation.js` (`runRuling` / `runFixEscalation`;
+injectable for tests — the same code path `devteam ruling` / `fix-escalation`
+use), reads the Principal's newest output via `loadPrincipalOutputs`, and:
+applies a ruling whose
 `class` ∈ the grant (`fix-escalation`) then resumes; halts on a cannot-decide
 (surfacing `cannot_decide.{reason_class, question}` in the summary), an ungranted/
 `unclassified` class, or no output. **Hard stops it never crosses** (DD-C4): the

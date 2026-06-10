@@ -29,30 +29,16 @@ const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator
 const { loadConfig } = require("./config");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
-const { loadPrincipalOutputs } = require("./escalation");
+const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 
-// Default escalation runners (PR-C2). The driver invokes the existing, tested
-// `devteam ruling` / `devteam fix-escalation` commands as subprocesses — both
-// already dispatch the principal-routed host, and the child does not touch the
-// run lock. Both are injectable via run() opts for deterministic tests.
-// (Extracting their internals into core/escalation.js for a true in-process
-// call is a clean follow-up; the CLI is a stable, tested interface.)
-const BIN_DEVTEAM = path.join(__dirname, "..", "bin", "devteam");
-function spawnDevteam(subArgs) {
-  const { spawn } = require("node:child_process");
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, [BIN_DEVTEAM, ...subArgs], { stdio: ["ignore", "inherit", "inherit"] });
-    child.on("error", () => resolve({ exitCode: 1 }));
-    child.on("close", (code) => resolve({ exitCode: code === null ? 1 : code }));
-  });
-}
+// Default escalation runners: render + dispatch the Principal / applicator
+// IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
+// via run() opts for deterministic tests.
 function defaultRunRuling(cwd, { targetGate } = {}) {
-  const a = ["ruling", "--headless", "--cwd", cwd];
-  if (targetGate) a.push("--target-gate", targetGate);
-  return spawnDevteam(a);
+  return runRuling(cwd, { targetGate });
 }
-function defaultRunFixEscalation(cwd) {
-  return spawnDevteam(["fix-escalation", "--headless", "--cwd", cwd]);
+function defaultRunFixEscalation(cwd, { escalatingGate } = {}) {
+  return runFixEscalation(cwd, { escalatingGate });
 }
 
 // Irreversible / outward-facing stages. The driver never advances INTO these
