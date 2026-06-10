@@ -106,16 +106,54 @@ function logEvent(cwd, changeId, entry) {
   } catch { /* logging must never break the run */ }
 }
 
-// Sum cost_usd across MERGED stage gates only (stage-NN[a].json) — not the
-// per-workstream gates (stage-NN.<role>.json), whose cost is already rolled up
-// into the merged gate. Summing every *.json would double-count multi-role
-// stages. Best-effort: unreadable or cost-less gates contribute 0.
+// Sum cost_usd across all stage gates, avoiding double-counting for multi-role
+// stages. Strategy per gate file:
+//
+//   stage-NN.json / stage-NNa.json  — merged gate; use it and skip any
+//     workstream gates for the same stage prefix (the merged gate already
+//     rolls up per-workstream costs, see mergeWorkstreamGates in orchestrator).
+//
+//   stage-NN.<role>.json            — per-workstream gate; include it ONLY
+//     when no merged gate exists yet for that stage prefix. This closes the
+//     budget-cap blind spot where a multi-role stage's costs are invisible
+//     until merge.  (Fix 1.7.3, plans/phase-1-trust-consolidation.md item 1.7)
+//
+// Best-effort: unreadable or cost-less gates contribute 0.
 function totalCostUsd(cwd, changeId) {
-  const stageGate = /^stage-\d{2}[a-z]?\.json$/;
+  // stage-NN[a].json   — merged gate (letters a-z suffix for overflow stages)
+  const mergedGateRe = /^(stage-\d{2}[a-z]?)\.json$/;
+  // stage-NN.<role>.json — workstream gate (at least one dot-separated word)
+  const wsGateRe = /^(stage-\d{2}[a-z]?)\.[^.]+\.json$/;
+
+  let allFiles = [];
+  try { allFiles = fs.readdirSync(gatesDir(cwd, changeId)); } catch { return 0; }
+
+  // Collect merged-gate prefixes (e.g. "stage-04") so we can skip workstream
+  // gates for stages that are already merged.
+  const mergedPrefixes = new Set();
+  for (const f of allFiles) {
+    const m = f.match(mergedGateRe);
+    if (m) mergedPrefixes.add(m[1]);
+  }
+
   let total = 0;
-  let files = [];
-  try { files = fs.readdirSync(gatesDir(cwd, changeId)).filter((f) => stageGate.test(f)); } catch { return 0; }
-  for (const f of files) {
+  for (const f of allFiles) {
+    let prefix = null;
+    let isWorkstream = false;
+
+    const mm = f.match(mergedGateRe);
+    if (mm) {
+      prefix = mm[1];
+    } else {
+      const wm = f.match(wsGateRe);
+      if (wm) { prefix = wm[1]; isWorkstream = true; }
+    }
+
+    if (!prefix) continue; // not a gate file
+    // Skip workstream gates when the merged gate for this stage already exists
+    // — the merged gate's cost_usd already includes those workstream costs.
+    if (isWorkstream && mergedPrefixes.has(prefix)) continue;
+
     try {
       const g = JSON.parse(fs.readFileSync(path.join(gatesDir(cwd, changeId), f), "utf8"));
       if (typeof g.cost_usd === "number") total += g.cost_usd;

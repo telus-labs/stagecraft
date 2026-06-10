@@ -519,3 +519,71 @@ describe("driver: stoplist enforcement on autonomous path (Phase 1 § 1.1)", () 
     assert.ok(haltEvent, "run-log must contain a pre-build stoplist-halt event");
   });
 });
+
+// ─── Fix 1.7.3: budget cap must account for unmerged workstream gate costs ─
+// Regression for: totalCostUsd() sums only merged stage gates (stage-NN.json),
+// so a multi-role stage's per-workstream costs (stage-NN.<role>.json) are
+// invisible until the merge happens. After the fix, totalCostUsd() must include
+// workstream gate costs when no merged gate exists for that stage yet, and must
+// NOT double-count once the merged gate exists.
+// (plans/phase-1-trust-consolidation.md item 1.7 fix 3)
+describe("driver: budget cap accounts for unmerged workstream gate costs (fix 1.7.3)", () => {
+  it("halts on budget before next dispatch when only workstream gates exist and their sum exceeds the cap", async () => {
+    const cwd = track(makeTargetProject());
+    // stage-01 merged gate passes (cost: $1)
+    seedGate(cwd, "stage-01", { status: "PASS", cost_usd: 1 });
+    // stage-04 has workstream gates but no merged gate yet; combined cost = $5
+    const gatesDir = path.join(cwd, "pipeline", "gates");
+    fs.writeFileSync(
+      path.join(gatesDir, "stage-04.backend.json"),
+      JSON.stringify({ stage: "stage-04", status: "PASS", cost_usd: 3 }),
+    );
+    fs.writeFileSync(
+      path.join(gatesDir, "stage-04.frontend.json"),
+      JSON.stringify({ stage: "stage-04", status: "PASS", cost_usd: 2 }),
+    );
+    // Budget cap is $4; total spend visible = $1 (merged) + $5 (workstream) = $6.
+    // Before the fix, totalCostUsd only counted $1 (the merged gate), so the cap
+    // would not trigger. After the fix it must trigger.
+    //
+    // Inject both next() (always returns run-stage for design) and a
+    // runStageHeadless stub so the test never attempts a real dispatch.
+    // Without the budget fix, the budget check passes ($1 < $4) and the test
+    // would reach runStageHeadless. With the fix, it halts before dispatch.
+    const s = await run({
+      cwd,
+      budgetUsd: 4,
+      next: () => ({ action: "run-stage", stage: "stage-02", name: "design", reason: "test" }),
+      runStageHeadless: () => { throw new Error("should not dispatch — budget must halt first"); },
+    });
+    assert.equal(s.halt_action, "budget",
+      "budget halt must fire when unmerged workstream gate costs are included in total");
+    assert.ok(s.cost_usd >= 4,
+      `reported cost (${s.cost_usd}) must be >= cap (4) when workstream gates are counted`);
+  });
+
+  it("does NOT double-count workstream costs when a merged gate already exists for the same stage", async () => {
+    const cwd = track(makeTargetProject());
+    // stage-01 merged gate with cost $2 (rolled up from workstreams).
+    seedGate(cwd, "stage-01", { status: "PASS", cost_usd: 2 });
+    // Workstream gates also present (they should NOT be added again because the merged gate exists).
+    const gatesDir = path.join(cwd, "pipeline", "gates");
+    fs.writeFileSync(
+      path.join(gatesDir, "stage-01.backend.json"),
+      JSON.stringify({ stage: "stage-01", status: "PASS", cost_usd: 1 }),
+    );
+    fs.writeFileSync(
+      path.join(gatesDir, "stage-01.frontend.json"),
+      JSON.stringify({ stage: "stage-01", status: "PASS", cost_usd: 1 }),
+    );
+    // Budget cap $3; if we double-count → $4 → halt; if we don't → $2 → no halt.
+    const s = await run({
+      cwd,
+      budgetUsd: 3,
+      next: () => ({ action: "pipeline-complete", reason: "test" }),
+    });
+    // With no double-counting, total = $2 < $3 cap → should NOT halt on budget.
+    assert.equal(s.completed, true, "pipeline should complete without budget halt when no double-counting occurs");
+    assert.equal(s.halted, false, "should not be halted");
+  });
+});
