@@ -351,4 +351,25 @@ describe("driver: auto-rule escalation (Phase 2 PR-C2)", () => {
     assert.equal(s.halted, true);
     assert.equal(rulings, 1, "Principal dispatched at most once for the same escalation");
   });
+
+  it("binds authority provenance (resolved_by) onto the escalating gate (PR-D2)", async () => {
+    const cwd = track(makeTargetProject());
+    const gp = seedGate(cwd, "stage-05", { status: "ESCALATE", escalation_reason: "split" });
+    const nextSeq = [
+      { action: "resolve-escalation", stage: "stage-05", name: "peer-review", failure_class: "judgment-gate", gate: gp, reason: "split" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    await run({
+      cwd,
+      autoRule: ["formatting-only"],
+      next: () => nextSeq[n++],
+      runRuling: async () => { writeOutput(cwd, "PRINCIPAL-RULING: lint → accept defaults [class: formatting-only]"); return { exitCode: 0 }; },
+      runFixEscalation: async () => ({ exitCode: 0 }),
+    });
+    const g = JSON.parse(fs.readFileSync(gp, "utf8"));
+    assert.equal(g.resolved_by.authority, "auto-rule:formatting-only");
+    assert.equal(g.resolved_by.grant_class, "formatting-only");
+    assert.match(g.resolved_by.ruling, /accept defaults/);
+  });
 });

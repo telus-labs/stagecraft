@@ -97,12 +97,14 @@ function verifyChain(gatesDir, track) {
   const ordered = orderedStages(track);
   const breaks = [];
   const unstamped = [];
+  const resolved = []; // gates carrying autonomous-decision authority provenance
   let checked = 0;
   for (const s of ordered) {
     const gp = stageGatePath(gatesDir, s.id);
     if (!fs.existsSync(gp)) continue;
     const { gate, error } = loadGateSafe(gp);
     if (error || !gate) continue;
+    if (gate.resolved_by) resolved.push({ stage: s.id, ...gate.resolved_by });
     if (!gate.chain) { unstamped.push(s.id); continue; }
     checked++;
     const pred = predecessorGate(gatesDir, track, s.id);
@@ -112,7 +114,7 @@ function verifyChain(gatesDir, track) {
       breaks.push({ stage: s.id, prev_stage: pred ? pred.id : null, recorded, recomputed });
     }
   }
-  return { ok: breaks.length === 0, checked, breaks, unstamped };
+  return { ok: breaks.length === 0, checked, breaks, unstamped, resolved };
 }
 
 /**

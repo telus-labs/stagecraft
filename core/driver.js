@@ -399,6 +399,18 @@ async function run(opts = {}) {
           break;
         }
         const authority = `auto-rule:${latest.class}`;
+        // PR-D2: bind the authority record ONTO the escalating gate, so the
+        // autonomous-decision provenance inherits C6 tamper-evidence (vs. only
+        // living in run-log.jsonl). Best-effort: if the applicator cleared the
+        // gate to re-run, the run-log still carries the record. The gate is
+        // hashed by the next downstream stamp, so resolved_by enters the chain.
+        try {
+          if (r.gate && fs.existsSync(r.gate)) {
+            const g = JSON.parse(fs.readFileSync(r.gate, "utf8"));
+            g.resolved_by = { authority, grant_class: latest.class, ruling: latest.decision, ts: nowIso() };
+            fs.writeFileSync(r.gate, JSON.stringify(g, null, 2) + "\n");
+          }
+        } catch { /* run-log retains the record */ }
         logEvent(cwd, { ...base, outcome: "auto-ruled", grant_class: latest.class, ruling: latest.decision, authority });
         onEvent({ type: "auto-ruled", ...base, grant_class: latest.class, ruling: latest.decision, authority });
         continue;

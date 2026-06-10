@@ -73,6 +73,19 @@ describe("gate chain: verify", () => {
     assert.deepEqual(r.unstamped, ["stage-02"]);
   });
 
+  it("surfaces resolved_by authority provenance (PR-D2)", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedGate(cwd, "stage-02", {
+      status: "PASS",
+      resolved_by: { authority: "auto-rule:formatting-only", grant_class: "formatting-only", ruling: "accept defaults", ts: "2026-06-10T00:00:00Z" },
+    });
+    stampAll(gatesDirOf(cwd), "full");
+    const r = verifyChain(gatesDirOf(cwd), "full");
+    assert.equal(r.ok, true);
+    assert.ok(r.resolved.some((x) => x.stage === "stage-02" && x.authority === "auto-rule:formatting-only"));
+  });
+
   it("re-stamping after an edit restores the chain (deliberate re-run path)", () => {
     const cwd = track(makeTargetProject());
     seedAndStamp(cwd);
