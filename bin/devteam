@@ -290,8 +290,25 @@ function parseFlags(argv) {
     if (a === "--target-gate") { flags.targetGate = argv[++i]; continue; }
     if (a === "--follow")  { flags.follow  = true;      continue; }
     if (a === "--description") { flags.description = argv[++i]; continue; }
-    if (a === "--apply")   { flags.apply   = argv[++i]; continue; }
+    // --apply is boolean-or-value: if the next token is absent or another flag,
+    // treat as a bare boolean (e.g. `assess --apply --json`); otherwise consume
+    // it as the value string (e.g. `advise --apply AC-11=A,AC-12=B`).
+    if (a === "--apply") {
+      const next = argv[i + 1];
+      if (next === undefined || next.startsWith("--")) {
+        flags.apply = true;
+      } else {
+        flags.apply = argv[++i];
+      }
+      continue;
+    }
     if (a === "--no-content") { flags.noContent = true; continue; }
+    // Boolean guards checked by cmdStage (--skip-preflight), cmdPreflight
+    // (--skip-write), and cmdNext (--skip-advise).  They were missing from
+    // parseFlags so using them always exited 2 "Unknown flag".
+    if (a === "--skip-preflight") { flags["skip-preflight"] = true; continue; }
+    if (a === "--skip-write")     { flags["skip-write"]     = true; continue; }
+    if (a === "--skip-advise")    { flags["skip-advise"]    = true; continue; }
     if (a.startsWith("--")) {
       console.error(`Unknown flag: ${a}`);
       process.exit(2);
@@ -547,6 +564,12 @@ async function cmdAdvise(argv) {
   const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
 
   // Parse --apply selections into Map<itemId, { action, ticketId }>
+  // --apply requires a value string (e.g. AC-11=A); bare --apply with no
+  // value is a user error — report it rather than silently doing nothing.
+  if (flags.apply === true) {
+    console.error("Error: --apply requires a value, e.g.: devteam advise --apply AC-11=A,AC-12=B");
+    process.exit(2);
+  }
   let applyMap = new Map();
   if (flags.apply) {
     const CLASS_TO_ACTION = {

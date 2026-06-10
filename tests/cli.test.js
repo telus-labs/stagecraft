@@ -213,3 +213,73 @@ describe("cli: --patch blockers[] fallback", () => {
     assert.match(r.stderr, /no patch items in stage-04\.qa\.json — running full build/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// cli: flag-parsing fixes (Phase 1 item 1.4)
+// ---------------------------------------------------------------------------
+describe("cli: parseFlags — --apply peek-ahead and --skip-* flags", () => {
+  // --apply boolean-or-value: bare --apply followed by another flag must NOT
+  // swallow that flag as the apply value.
+  it("assess --apply --json emits JSON output (--json is not swallowed by --apply)", () => {
+    const cwd = track(makeTargetProject());
+    const r = runCLI(["assess", "--apply", "--json", "--no-content"], { cwd });
+    // Exit 0 or 1 is fine; what matters is that stdout is parseable JSON
+    // (proving --json was processed, not silently eaten by --apply).
+    assert.doesNotThrow(() => JSON.parse(r.stdout), "stdout must be valid JSON");
+    const parsed = JSON.parse(r.stdout);
+    assert.ok("recommendedTrack" in parsed, "JSON output contains recommendedTrack field");
+  });
+
+  it("assess --apply as the final argument applies (does not set flags.apply = undefined)", () => {
+    const cwd = track(makeTargetProject());
+    // Before the fix, --apply as the last arg set flags.apply = undefined (falsy)
+    // so the apply branch was silently skipped. Now it should set flags.apply = true
+    // and attempt to write .devteam/config.yml.
+    const _r = runCLI(["assess", "--apply", "--no-content"], { cwd });
+    // The config file must exist — proof that the apply branch ran.
+    assert.ok(
+      fs.existsSync(path.join(cwd, ".devteam", "config.yml")),
+      ".devteam/config.yml must be written when --apply is the last argument",
+    );
+  });
+
+  it("advise --apply AC-11=A with a value string is accepted (no regression)", () => {
+    const cwd = track(makeTargetProject());
+    // No gate files → advise has nothing to advise, but it must NOT exit 2.
+    // (It exits 0 with a "no items" message — the key is the value was consumed.)
+    const r = runCLI(["advise", "--apply", "AC-11=A"], { cwd });
+    assert.notEqual(r.status, 2, "advise --apply <value> must not exit 2");
+  });
+
+  it("advise --apply with no value exits 2 with a clear error", () => {
+    const cwd = track(makeTargetProject());
+    // Bare --apply without a value string is a user error for advise (which
+    // requires a selection like AC-11=A).  The fix surfaces a clear message
+    // instead of silently doing nothing.
+    const r = runCLI(["advise", "--apply"], { cwd });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--apply requires a value/);
+  });
+
+  it("preflight --skip-write no longer exits 2 Unknown flag", () => {
+    const cwd = track(makeTargetProject());
+    // Before the fix, --skip-write was not in parseFlags, so it triggered the
+    // "Unknown flag" branch and exited 2.  After the fix it must exit 0 or 1.
+    const r = runCLI(["preflight", "--skip-write"], { cwd });
+    assert.notEqual(r.status, 2, "preflight --skip-write must not exit 2 Unknown flag");
+  });
+
+  it("next --skip-advise no longer exits 2 Unknown flag", () => {
+    const cwd = track(makeTargetProject());
+    // --skip-advise was missing from parseFlags.
+    const r = runCLI(["next", "--skip-advise"], { cwd });
+    assert.notEqual(r.status, 2, "next --skip-advise must not exit 2 Unknown flag");
+  });
+
+  it("stage --skip-preflight no longer exits 2 Unknown flag", () => {
+    const cwd = track(makeTargetProject());
+    // --skip-preflight was missing from parseFlags.
+    const r = runCLI(["stage", "requirements", "--feature", "x", "--skip-preflight"], { cwd });
+    assert.notEqual(r.status, 2, "stage --skip-preflight must not exit 2 Unknown flag");
+  });
+});
