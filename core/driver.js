@@ -30,6 +30,7 @@ const { loadConfig } = require("./config");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
+const { archiveGate } = require("./gates/archive");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -301,7 +302,11 @@ async function run(opts = {}) {
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
           break;
         }
-        // Prefer the structured clear_gates next() now attaches (repo-relative);
+        // Archive the failed attempt's stage gate before it's cleared/overwritten,
+        // so the progression of attempts survives for post-mortem (and for a
+        // future progress-based convergence check). Best-effort.
+        const archived = archiveGate(gatesDir(cwd), r.stage, attempts + 1);
+        // Prefer the structured clear_gates next() attaches (repo-relative);
         // fall back to deriving them from fix_steps for older action shapes.
         const toClear = Array.isArray(r.clear_gates) && r.clear_gates.length
           ? r.clear_gates.map((rel) => path.join(cwd, rel))
@@ -310,7 +315,7 @@ async function run(opts = {}) {
         writeRunBlockers(cwd, r.name, r.blockers);
         state.fixRetries[r.name] = attempts + 1;
         saveRunState(cwd, state);
-        logEvent(cwd, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length });
+        logEvent(cwd, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null });
         onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length });
         continue;
       }
