@@ -108,6 +108,57 @@ describe("next: conditional dispatch", () => {
   });
 });
 
+describe("next: stage-04a (pre-review) fix steps", () => {
+  function seedThroughBuild(cwd) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04"]) {
+      seedGate(cwd, s, { status: "PASS" });
+    }
+  }
+
+  it("pre-review FAIL → fix steps include rm stage-04a.json so driver clears gate", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-04a", {
+      status: "FAIL",
+      tests_passed: false,
+      blockers: [{ id: "B1", summary: "3 failing unit tests", workstream: "backend" }],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "pre-review");
+    assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
+
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04a.json"),
+      "fix steps must include rm stage-04a.json so driver clears the failing pre-review gate"
+    );
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage pre-review")),
+      "fix steps must re-run pre-review"
+    );
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage build") && c.includes("--patch") && c.includes("--from pre-review")),
+      "fix steps must re-run build with patch context before pre-review"
+    );
+  });
+
+  it("pre-review FAIL with no blockers → fix steps still include rm stage-04a.json", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-04a", { status: "FAIL" });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04a.json"),
+      "rm stage-04a.json present even with no blockers"
+    );
+  });
+});
+
 describe("next: malformed gate handling", () => {
   it("returns fix-and-retry with a clear error when a stage gate is malformed", () => {
     const cwd = track(makeTargetProject());

@@ -691,7 +691,7 @@ function computeFixSteps(gate, stageDef, gatesDir) {
       commands: ["devteam stage build --patch --from pre-review --skip-completed --headless"],
     });
     steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
-    steps.push({ description: "Re-run pre-review", commands: ["devteam stage pre-review --headless"] });
+    steps.push({ description: "Re-run pre-review", commands: ["rm pipeline/gates/stage-04a.json", "devteam stage pre-review --headless"] });
     return steps;
   }
 
