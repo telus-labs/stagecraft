@@ -28,13 +28,12 @@ function getOrchestrator() {
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
 const { stageNames, getStage } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
-const { checkStoplist, explainMatches } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
+const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
 
-// Tracks where the stoplist applies. Full and hotfix bypass the
-// stoplist by design (full runs everything anyway; hotfix has its own
-// safety story). Lighter tracks must run clean through the stoplist
-// unless --force is passed.
-const STOPLIST_GUARDED_TRACKS = new Set(["quick", "nano", "config-only", "dep-update"]);
+// STOPLIST_TRACKS is the single source of truth (core/guards/stoplist.js).
+// Imported here so the interactive path (cmdStage) and the autonomous driver
+// (core/driver.js) enforce exactly the same set. (Phase 1 § 1.1)
+const STOPLIST_GUARDED_TRACKS = STOPLIST_TRACKS;
 
 function usage() {
   console.log(`devteam — model-agnostic AI dev team orchestrator

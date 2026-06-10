@@ -31,6 +31,7 @@ const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate } = require("./gates/archive");
+const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -261,7 +262,30 @@ async function run(opts = {}) {
     cost_usd: 0,
   };
 
+  // runStart stoplist check (Phase 1 § 1.1 check-point 1 of 2): refuse before
+  // any dispatch when the resolved track is in STOPLIST_TRACKS and the brief or
+  // description already matches.  Full/hotfix bypass by design — they are not in
+  // STOPLIST_TRACKS.  --force opts out.
+  function runStoplistCheck(label) {
+    if (!STOPLIST_TRACKS.has(track)) return false; // bypass for full/hotfix
+    if (opts.force) return false;                   // --force explicit bypass
+    const _checkStoplist = opts.checkStoplist || checkStoplist;
+    const matches = _checkStoplist({ description: opts.description || "", cwd });
+    if (matches.length === 0) return false;
+    const reason = explainMatches(matches);
+    summary.halted = true;
+    summary.halt_action = "stoplist";
+    summary.halt_reason = reason;
+    logEvent(cwd, { outcome: "stoplist-halt", label, track, matches: matches.map((m) => m.name) });
+    onEvent({ type: "halt", action: "stoplist", reason, label, track, matches: matches.map((m) => m.name) });
+    return true; // halted
+  }
+
   try {
+    // Check-point 1: run start (before the first loop iteration).
+    if (runStoplistCheck("run-start")) {
+      // halt recorded above; skip the loop entirely.
+    } else
     for (let i = 0; i < maxIterations; i++) {
       const r = _next({ cwd, track: opts.track });
       state.iterations = (state.iterations || 0) + 1;
@@ -475,6 +499,12 @@ async function run(opts = {}) {
             break;
           }
         }
+
+        // Check-point 2 (Phase 1 § 1.1): re-run the stoplist immediately before
+        // dispatching build (stage-04) because the requirements agent may have
+        // written pipeline/brief.md after run-start; the start-of-run check would
+        // have seen no brief yet.  Exactly two check-points: start + pre-build.
+        if (r.stage === "stage-04" && runStoplistCheck("pre-build")) break;
 
         onEvent({ type: "dispatch", ...base });
         const t0 = Date.now();

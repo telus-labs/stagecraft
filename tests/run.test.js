@@ -436,3 +436,86 @@ describe("driver: auto-rule escalation (Phase 2 PR-C2)", () => {
     assert.match(g.resolved_by.ruling, /accept defaults/);
   });
 });
+
+describe("driver: stoplist enforcement on autonomous path (Phase 1 § 1.1)", () => {
+  // quick track + stoplist-matching description → halts before any dispatch,
+  // run-log carries the stoplist-halt event.
+  it("halts before dispatch on a quick track with a stoplist-matching description", async () => {
+    const cwd = track(makeTargetProject());
+    let dispatched = false;
+    const s = await run({
+      cwd,
+      track: "quick",
+      description: "add password storage for user credentials",
+      next: () => { dispatched = true; return { action: "pipeline-complete", reason: "done" }; },
+    });
+    assert.equal(s.halted, true, "run must be halted");
+    assert.equal(s.halt_action, "stoplist", "halt_action must be 'stoplist'");
+    assert.equal(dispatched, false, "next() must never be called — halt before loop");
+    // run-log must contain the stoplist-halt event
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const events = log.trim().split("\n").map((l) => JSON.parse(l));
+    const haltEvent = events.find((e) => e.outcome === "stoplist-halt");
+    assert.ok(haltEvent, "run-log.jsonl must contain a stoplist-halt event");
+    assert.equal(haltEvent.track, "quick");
+  });
+
+  // Same brief with full track → no stoplist halt (full bypass is by design).
+  it("does not halt on a full track even with a stoplist-matching description", async () => {
+    const cwd = track(makeTargetProject());
+    const s = await run({
+      cwd,
+      track: "full",
+      description: "add password storage for user credentials",
+      // One iteration then done — no need for real stages.
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+    });
+    assert.equal(s.completed, true, "full track must not be stopped by the stoplist");
+    assert.notEqual(s.halt_action, "stoplist");
+  });
+
+  // Brief written mid-run (by the requirements agent) triggers pre-build halt.
+  // Inject a runStageHeadless fake that writes a stoplist-matching brief.md
+  // during the requirements stage; the driver must halt before dispatching build
+  // (stage-04) at check-point 2.
+  it("halts before build when the requirements agent writes a stoplist-matching brief", async () => {
+    const cwd = track(makeTargetProject());
+    // Sequence: requirements (stage-01) → build (stage-04).
+    // The fake runStageHeadless writes a stoplist-matching brief.md when it
+    // dispatches requirements, simulating the agent producing a brief mid-run.
+    const actions = [
+      { action: "run-stage", stage: "stage-01", name: "requirements" },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let i = 0;
+    let buildDispatched = false;
+    const s = await run({
+      cwd,
+      track: "quick",
+      // No description at run-start (so check-point 1 sees nothing).
+      description: "",
+      next: () => actions[i++],
+      runStageHeadless: async (stageName) => {
+        if (stageName === "requirements") {
+          // Simulate the requirements agent writing a sensitive brief.
+          fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+          fs.writeFileSync(
+            path.join(cwd, "pipeline", "brief.md"),
+            "# Feature brief\nImplement password storage and authentication flow.",
+          );
+        }
+        if (stageName === "build") buildDispatched = true;
+        return [{ role: "pm", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+    });
+    assert.equal(s.halted, true, "run must be halted");
+    assert.equal(s.halt_action, "stoplist", "halt_action must be 'stoplist'");
+    assert.equal(buildDispatched, false, "build must not be dispatched after stoplist match");
+    // run-log must carry the pre-build halt event
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const events = log.trim().split("\n").map((l) => JSON.parse(l));
+    const haltEvent = events.find((e) => e.outcome === "stoplist-halt" && e.label === "pre-build");
+    assert.ok(haltEvent, "run-log must contain a pre-build stoplist-halt event");
+  });
+});
