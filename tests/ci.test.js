@@ -44,6 +44,8 @@ test("the workflow template declares the expected shape (name, on, jobs, steps)"
   assert.match(text, /node \.stagecraft\/scripts\/pr-publish\.js/);
   // C4 drift check:
   assert.match(text, /node \.stagecraft\/bin\/devteam reproduce/);
+  // C6 tamper-evident chain check:
+  assert.match(text, /node \.stagecraft\/bin\/devteam verify-chain/);
 });
 
 test("the template pins specific action versions (v5 — Node 24 action runtime)", () => {
