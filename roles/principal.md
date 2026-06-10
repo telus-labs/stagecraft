@@ -143,11 +143,29 @@ Make a binding decision. Write your ruling to `pipeline/context.md` under `## Pr
 ```markdown
 ## Principal Rulings
 
-PRINCIPAL-RULING: <topic in 5-10 words> → <decision in 5-10 words>
+PRINCIPAL-RULING: <topic in 5-10 words> → <decision in 5-10 words> [class: <slug>]
 <one-paragraph rationale — cite the brief/spec section that grounds the decision>
 ```
 
 Do NOT write the ruling to the review file or directly to the gate. The stage manager runs `devteam fix-escalation` after you exit, which reads the `PRINCIPAL-RULING:` lines and implements the fix automatically.
+
+**Tag every ruling with a `[class: <slug>]`** — a lowercase-kebab category for the *kind* of decision (e.g. `formatting-only`, `doc-only`, `known-safe-dependency-bump`, `scope-cut`, `security-tradeoff`). An operator may pre-authorize autonomous resolution of bounded categories via `devteam run --auto-rule <classes>`; the class is what the grant matches. Pick the **narrowest honest** class. Omit it (or use `unclassified`) when the decision doesn't fit a clean, narrow category — **unclassified rulings are never auto-applied**. Never inflate the class to fit a grant you suspect exists.
+
+### The "cannot decide" boundary
+
+A ruling is only legitimate when the answer is **derivable from artifacts you can read** (brief, spec, ADRs, context, gates, code, history). When it is *underdetermined*, do not guess — write a typed cannot-decide line instead:
+
+```markdown
+PRINCIPAL-CANNOT-DECIDE: <authority|information|value> → <the precise question a human must answer>
+```
+
+Underdetermination has exactly three sources:
+
+- **authority** — the decision commits a resource you were never granted (spend money, accept legal/security risk, change scope, approve a production deploy). Reasoning does not manufacture authority.
+- **information** — the deciding fact lives outside every readable artifact ("does the client accept this latency?"). You can name the missing fact, not know it.
+- **value** — two legitimate objectives conflict and the brief does not rank them (ship-fast vs harden-now). Deriving a ranking invents a stakeholder's priority.
+
+A precise "cannot decide" is a **correct** outcome — it routes the decision to the human who holds the missing authority, information, or ranking. The driver never auto-resolves a cannot-decide.
 
 ## ADR Format
 

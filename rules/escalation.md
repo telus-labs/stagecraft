@@ -31,7 +31,9 @@ In the gate file:
 2. `devteam next` returns `resolve-escalation` with the gate path, `escalation_reason`, and `decision_needed`.
 3. The stage manager invokes `devteam ruling [--target-gate <path>] [--headless]`.
    `--topic` is optional — when omitted, it is auto-derived from `escalation_reason` + `decision_needed` in the gate.
-4. The Principal subagent writes a `PRINCIPAL-RULING: <topic> → <decision>` line into `pipeline/context.md § Principal Rulings`.
+4. The Principal subagent writes ONE of two typed lines into `pipeline/context.md § Principal Rulings`:
+   - `PRINCIPAL-RULING: <topic> → <decision> [class: <slug>]` — a binding ruling. The optional `[class: <slug>]` tags the *kind* of decision (e.g. `formatting-only`, `doc-only`, `known-safe-dependency-bump`); it is what an operator pre-authorizes via `devteam run --auto-rule`. Untagged ⇒ `unclassified` (never auto-applied).
+   - `PRINCIPAL-CANNOT-DECIDE: <authority|information|value> → <question>` — when the decision is underdetermined (commits an ungranted resource, needs a fact outside every artifact, or an unranked value tradeoff). Always requires a human; the driver never auto-resolves it.
 5. The stage manager runs `devteam fix-escalation [--headless]`, which reads the `PRINCIPAL-RULING:` entries and dispatches an applicator agent that clears the right gates and re-runs the indicated stages automatically.
 6. The pipeline resumes at `pipeline_halted_at` once the escalating gate no longer reports `ESCALATE`.
 

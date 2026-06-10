@@ -128,6 +128,24 @@ bypassing Express's request lifecycle. Tracked as TICKET-1234.
 
 The `PRINCIPAL-RULING:` prefix is the machine-readable convention. `devteam fix-escalation` reads these lines via `loadPrincipalRulings()` and dispatches an applicator agent that implements what each ruling prescribes — clearing the right gate files and re-running the indicated stages. Reviewers and future readers can also grep for it directly.
 
+### Typed rulings and "cannot decide" (ADR-003 Phase 2)
+
+A ruling line may carry a trailing `[class: <slug>]` naming the *kind* of decision (e.g. `formatting-only`, `doc-only`, `known-safe-dependency-bump`):
+
+```markdown
+PRINCIPAL-RULING: lint style → accept prettier defaults [class: formatting-only]
+```
+
+The class is what an operator pre-authorizes for **autonomous** resolution via `devteam run --auto-rule <classes>` (Phase 2 PR-C2). An untagged ruling parses as `unclassified` and is **never** auto-applied — it always halts for a human. Pick the narrowest honest class; never inflate it to fit a grant.
+
+When a decision is **not derivable** from the artifacts, the Principal writes a typed cannot-decide line instead of guessing:
+
+```markdown
+PRINCIPAL-CANNOT-DECIDE: authority → Who approves accepting the residual auth risk for the v1 ship?
+```
+
+The reason class is one of **authority** (commits a resource not granted), **information** (the deciding fact is outside every artifact), or **value** (two legitimate objectives the brief doesn't rank). `devteam next` surfaces this question directly, and the driver never auto-resolves it — a human supplies the missing authority, fact, or ranking, then encodes a normal `PRINCIPAL-RULING:` line.
+
 ## 4. Encode the decision
 
 ### 4a. Must-fix path
