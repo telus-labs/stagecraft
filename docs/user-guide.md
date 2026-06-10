@@ -605,22 +605,19 @@ You can mix: `devteam stage requirements` user-driven, then `devteam stage build
 
 ### Running the full pipeline unattended
 
-Loop `devteam next --json` to advance through stages automatically. The loop halts on FAIL, ESCALATE, or anything that needs a human decision:
+The supported way is **`devteam run`** — the bounded autonomous driver. It advances the pipeline to completion, **auto-fixes** machine-diagnosable failures (`code-defect`), retries transient dispatch blips, and halts cleanly the moment a human is genuinely needed:
 
 ```bash
-while true; do
-  read -r action name < <(devteam next --json | jq -r '[.action, .name // ""] | @tsv')
-  case "$action" in
-    run-stage)        devteam stage "$name" --headless ;;
-    pipeline-complete) echo "Pipeline complete"; break ;;
-    *)                echo "Needs human: $action${name:+ ($name)}"; break ;;
-  esac
-done
+devteam run                       # drive the configured track to completion
+devteam run --until peer-review   # stop after a specific stage
+devteam run --budget-usd 10       # stop before a dispatch once spend ≥ $10
+devteam run --allow-stage sign-off --allow-stage deploy   # grant the consequence ceiling
+devteam run --auto-rule formatting-only,doc-only          # auto-resolve bounded escalation classes
 ```
 
-`devteam next --json` returns `action: "fix-and-retry"` on FAIL and `action: "resolve-escalation"` on ESCALATE. Both fall through to the `*)` branch and halt the loop. MERGE stages (`action: "merge"`) also halt; run `devteam merge <stage>` and re-enter the loop.
+It never advances into `sign-off`/`deploy` without `--allow-stage`, and by default halts on every escalation (the Principal isn't dispatched unless you pass `--auto-rule`). It writes `pipeline/run.lock`, a resumable `run-state.json` (`--resume`), and an audit-trail `run-log.jsonl`. See [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md) for the full launch guide, halt reasons, and limitations.
 
-To handle merge automatically:
+**Under the hood** — `devteam run` is a code loop around `devteam next --json`. If you want to build your own (e.g. custom dispatch, a different halt policy), the primitive is the same:
 
 ```bash
 while true; do
@@ -633,6 +630,8 @@ while true; do
   esac
 done
 ```
+
+`devteam next --json` returns `action: "fix-and-retry"` on FAIL and `action: "resolve-escalation"` on ESCALATE (each with a `failure_class`); both fall through to the `*)` branch here. `devteam run` is the production version of this loop with retries, the consequence ceiling, budget caps, locking, and an audit trail built in.
 
 ### Scoped re-runs after red-team FAIL (--patch)
 
