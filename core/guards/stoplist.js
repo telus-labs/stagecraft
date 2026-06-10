@@ -63,11 +63,22 @@ function pipelineChangedFiles(cwd) {
   return fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter(Boolean);
 }
 
+// Read pipeline/brief.md if present, so the pre-build check in the autonomous
+// driver catches sensitive topics added by the requirements agent (Phase 1 § 1.1).
+function pipelineBrief(cwd) {
+  const filePath = path.join(cwd, "pipeline", "brief.md");
+  if (!fs.existsSync(filePath)) return "";
+  try { return fs.readFileSync(filePath, "utf8"); } catch { return ""; }
+}
+
 // Collect every string we want to scan for stoplist patterns: the user's
-// change description plus any paths git or the pipeline knows about.
+// change description, pipeline/brief.md (written by requirements), any paths
+// git or the pipeline knows about.
 function gatherCandidates({ description, cwd }) {
   const list = [];
   if (description) list.push(description);
+  const brief = pipelineBrief(cwd);
+  if (brief) list.push(brief);
   list.push(...gitChangedFiles(cwd));
   list.push(...pipelineChangedFiles(cwd));
   return list;
@@ -117,6 +128,14 @@ function explainMatches(matches) {
   return lines.join("\n");
 }
 
+// Tracks where the stoplist applies. Full and hotfix bypass the stoplist by
+// design: full runs the complete pipeline anyway (its own safety story); hotfix
+// has a tightly-scoped, manually-reviewed path. Lighter tracks must clear the
+// stoplist unless --force is passed.
+// Single source of truth — imported by both bin/devteam (interactive path) and
+// core/driver.js (autonomous path) so both enforce the same set. (Phase 1 § 1.1)
+const STOPLIST_TRACKS = new Set(["quick", "nano", "config-only", "dep-update"]);
+
 if (require.main === module) {
   const description = process.argv.slice(2).filter((a) => a !== "--force").join(" ");
   const matches = checkStoplist({ description, cwd: process.cwd() });
@@ -130,6 +149,7 @@ if (require.main === module) {
 
 module.exports = {
   STOPLIST_PATTERNS,
+  STOPLIST_TRACKS,
   gatherCandidates,
   findStoplistMatches,
   checkStoplist,
