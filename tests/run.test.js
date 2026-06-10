@@ -230,6 +230,29 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.match(ctx, /backend test failing/);
   });
 
+  it("honors the structured clear_gates from next() (no fix_steps needed)", async () => {
+    const cwd = track(makeTargetProject());
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.backend.json");
+    fs.writeFileSync(victim, "{}");
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: ["backend test failing"],
+        clear_gates: ["pipeline/gates/stage-04.backend.json"], // structured, no fix_steps
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async () => [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }],
+    });
+    assert.equal(s.completed, true);
+    assert.ok(!fs.existsSync(victim), "structured clear_gates cleared the gate in-process");
+  });
+
   it("halts (convergence-exhausted) after the driver retry ceiling", async () => {
     const cwd = track(makeTargetProject());
     const s = await run({

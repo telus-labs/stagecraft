@@ -2,7 +2,7 @@ const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
-const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+const { next, clearGatesFromFixSteps } = require(path.join(REPO_ROOT, "core", "orchestrator"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -503,5 +503,31 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
     // No build steps without a parseable file path
     assert.ok(!allCmds.some(c => c.includes("devteam stage build")),
       "no build step when no file path");
+  });
+});
+
+describe("next: structured clear_gates", () => {
+  it("clearGatesFromFixSteps extracts repo-relative pipeline/gates targets, deduped", () => {
+    const steps = [
+      { description: "x", commands: ["rm pipeline/gates/stage-04.backend.json", "devteam stage build --headless"] },
+      { description: "y", commands: ["rm -f pipeline/gates/stage-04.json", "rm pipeline/gates/stage-04.json"] },
+      { description: "z", commands: ["rm /etc/passwd"] }, // outside pipeline/gates — ignored
+    ];
+    assert.deepEqual(clearGatesFromFixSteps(steps), [
+      "pipeline/gates/stage-04.backend.json",
+      "pipeline/gates/stage-04.json",
+    ]);
+  });
+
+  it("next() attaches structured clear_gates on a recipe-bearing FAIL", () => {
+    const cwd = track(makeTargetProject());
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b"]) seedGate(cwd, s, { status: "PASS" });
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["build broke"] });
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "build");
+    assert.ok(Array.isArray(r.clear_gates), "clear_gates present");
+    assert.ok(r.clear_gates.includes("pipeline/gates/stage-04.json"),
+      `expected stage-04.json in clear_gates, got ${JSON.stringify(r.clear_gates)}`);
   });
 });

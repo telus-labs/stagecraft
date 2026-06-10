@@ -638,6 +638,23 @@ function _rmBuildGates(workstreams) {
   return cmds;
 }
 
+// The canonical home for "which gate files does this recipe want cleared".
+// computeFixSteps embeds gate-clears as `rm pipeline/gates/*.json` command
+// strings; this extracts them as structured, repo-relative paths so the
+// autonomous driver consumes data (action.clear_gates) instead of re-parsing
+// shell strings itself. Placeholder targets (e.g. `<affected-ws>`) are kept —
+// the driver's unlink is best-effort and skips non-existent paths.
+function clearGatesFromFixSteps(fixSteps) {
+  const out = [];
+  for (const step of (fixSteps || [])) {
+    for (const cmd of (step.commands || [])) {
+      const m = typeof cmd === "string" && cmd.match(/^rm\s+(?:-\S+\s+)*(pipeline\/gates\/\S+\.json)\s*$/);
+      if (m && !out.includes(m[1])) out.push(m[1]);
+    }
+  }
+  return out;
+}
+
 /**
  * Returns an ordered array of { description, commands[] } fix steps for a
  * failed gate, or null when no stage-specific recipe can be derived.
@@ -1191,6 +1208,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
         };
       }
 
+      const clear_gates = clearGatesFromFixSteps(fix_steps);
       return {
         action: "fix-and-retry", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
@@ -1199,6 +1217,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
         reason: "stage failed; address blockers and rewrite the gate",
         command: `devteam stage ${stageName}`,
         ...(fix_steps ? { fix_steps } : {}),
+        ...(clear_gates.length ? { clear_gates } : {}),
       };
     }
     // PASS or WARN — proceed to next stage.
@@ -1323,6 +1342,7 @@ module.exports = {
   summary,
   buildDescriptor,
   computeDispatchPlan,
+  clearGatesFromFixSteps,
   ORCHESTRATOR_ID,
   rolesPath,
   templatesPath,
