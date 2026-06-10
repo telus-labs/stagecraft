@@ -388,6 +388,65 @@ describe("next: stage-05 per-area fix steps", () => {
   });
 });
 
+describe("next: stage-06b (accessibility-audit) fix steps", () => {
+  function seedThroughBuild(cwd) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
+                     "stage-04b", "stage-04c", "stage-04d", "stage-05", "stage-06"]) {
+      seedGate(cwd, s, { status: "PASS" });
+    }
+  }
+
+  it("A11Y items in noted_for_followup → devteam advise --apply <noted-id>=A", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    // The build-QA workstream noted accessibility issues in its gate (realistic id pattern).
+    seedGate(cwd, "stage-04.qa", {
+      workstream: "qa", status: "PASS",
+      noted_for_followup: [
+        { id: "QA-A11Y-01", summary: "Missing aria-live on #results — accessibility gap", severity: "serious" },
+        { id: "QA-A11Y-02", summary: "WCAG 2.1 SC 1.3.1: label missing for= attribute", severity: "moderate" },
+      ],
+    });
+    seedGate(cwd, "stage-06b", { status: "FAIL", blockers: [
+      { id: "A11Y-01", element: "#results div", description: "Missing aria-live.", assigned_to: "frontend" },
+    ]});
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "accessibility-audit");
+    assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
+
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    // Must use the noted_for_followup IDs (QA-A11Y-*), not the blocker IDs (A11Y-*)
+    assert.ok(allCmds.some(c => c.includes("devteam advise --apply")
+      && c.includes("QA-A11Y-01=A") && c.includes("QA-A11Y-02=A")),
+      "uses noted_for_followup IDs, not blocker IDs");
+    assert.ok(!allCmds.some(c => c.includes("A11Y-01=A") && !c.includes("QA-")),
+      "does not use raw blocker ID A11Y-01");
+    // advise handles gate reset and re-run internally
+    assert.ok(!allCmds.some(c => c.includes("rm pipeline/gates/stage-06b.json")),
+      "no manual gate rm");
+    assert.ok(!allCmds.some(c => c.includes("devteam stage accessibility-audit")),
+      "no separate re-run");
+  });
+
+  it("no A11Y items in noted_for_followup → falls back to plain devteam advise", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-06b", {
+      status: "FAIL",
+      blockers: [{ id: "A11Y-01", description: "Missing aria-live.", assigned_to: "frontend" }],
+    });
+    // No noted_for_followup with A11Y keywords anywhere
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(allCmds.some(c => c === "devteam advise"), "falls back to plain devteam advise");
+    assert.ok(!allCmds.some(c => c.includes("--apply")), "no --apply without noted_for_followup ids");
+  });
+});
+
 describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
   function seedThroughQa(cwd) {
     for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
