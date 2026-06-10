@@ -285,7 +285,8 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 - Reads the last gate in `pipeline/gates/`, interprets its status, and tells you what to run or what to fix
 - The main command in the interactive loop
-- Emits a ⚠ advisory notice on stderr when unresolved `QA_BLOCKER` or `PEER_REVIEW_RISK` items exist (suppressed with `--skip-advise`)
+- Every non-pass action carries a **`failure_class`** so you know *how* to respond: `code-defect` (change code, re-run), `state-corruption` (gate unreadable — repair it, don't re-run), `external-blocked` (a human/external action is required), `judgment-gate` (escalation — make a ruling), `convergence-exhausted` (retry budget spent → escalate). Surfaces a typed `PRINCIPAL-CANNOT-DECIDE` question directly when one is written
+- `--json` adds a `schema_version` for programmatic callers (the autonomous driver)
 
 **`devteam advise [--apply <decisions>] [--json]`** — triage deferred findings.
 
@@ -307,6 +308,12 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 - `devteam stage <name> --feature "..." --headless` spawns the host CLI, pipes the rendered prompt to its stdin, waits for the gate, and exits
 - Combine with `devteam next` to chain stages in a script
+
+**`devteam run [--track <t>] [--until <s>] [--budget-usd X] [--timeout-ms N] [--retry-delay-ms N] [--auto-rule <classes>] [--allow-stage <s>] [--max-iterations N] [--resume] [--force] [--json]`** — drive the whole pipeline unattended. See the **Autonomous pipeline execution** section under Advanced AI capabilities (and [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md)) for the full behavior.
+
+- Loops `next → dispatch → merge` to completion; auto-fixes `code-defect` failures and retries transient dispatch blips
+- Halts cleanly for a human at the consequence ceiling, on un-granted escalations, a budget cap, or a structural failure
+- Writes `pipeline/run.lock`, `run-state.json`, and an audit-trail `run-log.jsonl`
 
 ### Inspection and power tools
 
@@ -363,7 +370,20 @@ See [`docs/ci.md`](ci.md) for the full workflow template and environment variabl
 
 ## Advanced AI capabilities
 
-These stages perform work that static tooling cannot replicate. They depend on the pipeline being AI-native.
+These capabilities perform work that static tooling cannot replicate. They depend on the pipeline being AI-native.
+
+### Autonomous pipeline execution (`devteam run`) — drives the pipeline to completion
+
+A deterministic code loop around `devteam next` that advances the pipeline unattended and **halts cleanly the moment a human is genuinely needed**. The loop itself is code; the only LLMs are the workstream agents it dispatches (and, at escalation, the Principal). The human shifts from *mechanical sequencer* to *authority grantor*. Built on a **typed failure model** ([ADR-003](adr/003-bounded-autonomous-execution.md)).
+
+- **Auto-fixes machine-diagnosable failures.** On a `code-defect` it clears the failing gate, writes the blockers into `pipeline/context.md` as cross-stage context, and re-dispatches — bounded by `autonomy.max_retries` (default 2). Transient dispatch failures (no gate written) back off and retry; structural ones (clean exit, no output) halt.
+- **Consequence ceiling.** Never advances *into* `sign-off` (stage-07) or `deploy` (stage-08) — irreversible/outward-facing stages — without an explicit `--allow-stage` grant.
+- **Bounded autonomous escalation resolution.** By default every escalation halts for a human (the Principal isn't even dispatched). Opt in with `--auto-rule <classes>` — a **CLI-only, allowlist-only** grant of bounded ruling categories (e.g. `formatting-only`, `doc-only`). The driver then auto-applies a Principal ruling whose `[class:]` is granted, and **never** crosses the hard stops: a typed `PRINCIPAL-CANNOT-DECIDE` (missing authority / information / value), the consequence ceiling, or `convergence-exhausted`. A given escalation is auto-ruled at most once.
+- **Safety rails.** An exclusive `pipeline/run.lock`, resumable `run-state.json` (`--resume`), a pre-dispatch `--budget-usd` cap, a per-stage `--timeout-ms`, and a `--max-iterations` guard.
+- **Audit trail.** Every transition — including each auto-fix and auto-ruling with its `grant_class` and authority — is appended to `pipeline/run-log.jsonl`.
+- Exit codes: `0` complete or a clean configured stop (`--until` / ceiling); `1` needs attention; `2` lock held.
+
+See [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md) for the launch guide, halt reasons, and honest limitations.
 
 ### `/goal` injection — convergent headless stages loop until their objective is met
 
