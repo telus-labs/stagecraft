@@ -290,6 +290,23 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.equal(s.halt_failure_class, "convergence-exhausted");
   });
 
+  it("halts (structural-input) immediately when recipe targets gates that don't exist", async () => {
+    const cwd = track(makeTargetProject());
+    // fix_steps names a gate file to rm, but the file is absent → clearGates returns []
+    // → toClear.length > 0 AND cleared.length === 0 → no progress possible → halt immediately.
+    const s = await run({
+      cwd,
+      next: () => ({
+        action: "fix-and-retry", stage: "stage-05", name: "peer-review", failure_class: "code-defect",
+        blockers: [],
+        fix_steps: [{ description: "Clear merged gate", commands: ["rm pipeline/gates/stage-05.json"] }],
+      }),
+    });
+    assert.equal(s.halt_action, "fix-and-retry");
+    assert.equal(s.halt_failure_class, "structural-input");
+    assert.match(s.halt_reason, /no gate clears/);
+  });
+
   it("still halts on non-code-defect fix-and-retry (state-corruption)", async () => {
     const cwd = track(makeTargetProject());
     const s = await run({

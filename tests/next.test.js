@@ -386,6 +386,50 @@ describe("next: stage-05 per-area fix steps", () => {
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review")), "generic fallback present");
   });
+
+  it("some per-area gates missing → fix steps name missing workstream + rm merged gate", () => {
+    const cwd = track(makeTargetProject());
+    seedPreReviewStages(cwd);
+    // backend, platform, qa wrote PASS gates; frontend produced nothing
+    seedGate(cwd, "stage-05.backend",  { stage: "stage-05", workstream: "backend",  status: "PASS", approvals: ["dev-platform", "dev-qa"] });
+    seedGate(cwd, "stage-05.platform", { stage: "stage-05", workstream: "platform", status: "PASS", approvals: ["dev-backend", "dev-frontend"] });
+    seedGate(cwd, "stage-05.qa",       { stage: "stage-05", workstream: "qa",       status: "PASS", approvals: ["dev-backend", "dev-platform"] });
+    // stage-05.frontend.json is absent — frontend workstream timed out or crashed
+    seedGate(cwd, "stage-05", { status: "FAIL", failure_reason: "INSUFFICIENT_APPROVALS", approvals: [], changes_requested: [] });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-05.json"),
+      "clears merged gate so driver triggers continue-stage for missing workstream");
+    assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream frontend")),
+      "re-run missing frontend reviewer");
+    assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "re-merge after re-run");
+  });
+
+  it("merged gate FAIL with no blockers and no missing gates → surfaces failure_reason", () => {
+    const cwd = track(makeTargetProject());
+    seedPreReviewStages(cwd);
+    // All per-area gates PASS, but merged is FAIL with an exotic failure_reason
+    seedGate(cwd, "stage-05.backend",  { stage: "stage-05", workstream: "backend",  status: "PASS", approvals: ["dev-platform"] });
+    seedGate(cwd, "stage-05.frontend", { stage: "stage-05", workstream: "frontend", status: "PASS", approvals: ["dev-backend"] });
+    seedGate(cwd, "stage-05.platform", { stage: "stage-05", workstream: "platform", status: "PASS", approvals: ["dev-frontend"] });
+    seedGate(cwd, "stage-05.qa",       { stage: "stage-05", workstream: "qa",       status: "PASS", approvals: ["dev-backend"] });
+    seedGate(cwd, "stage-05", {
+      status: "FAIL", failure_reason: "SCHEMA_INVALID",
+      changes_requested: [], approvals: [], required_approvals: 0,
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    // Must produce at least an rm + re-merge so the driver can clear and loop
+    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-05.json"), "clears merged gate");
+    assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "re-merge");
+    // Description must mention the failure_reason
+    const allDescs = r.fix_steps.map(s => s.description).join(" ");
+    assert.ok(allDescs.includes("SCHEMA_INVALID"), "surfaces failure_reason in description");
+  });
 });
 
 describe("next: stage-06b (accessibility-audit) fix steps", () => {
