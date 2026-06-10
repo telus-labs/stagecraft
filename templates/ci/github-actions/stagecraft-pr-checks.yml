@@ -90,6 +90,20 @@ jobs:
         #   2 — FAIL gate (job fails — surface the broken stage)
         #   3 — ESCALATE gate (job fails — needs human resolution)
 
+      - name: Verify the tamper-evident gate chain (C6)
+        if: steps.gates_present.outputs.present == 'true'
+        run: node .stagecraft/bin/devteam verify-chain
+        # Each stage gate commits to a hash of its predecessor; this recomputes
+        # the chain. Exit codes:
+        #   0 — chain intact (unstamped gates are reported, not fatal)
+        #   1 — a stamped gate's recorded prev_hash no longer matches its
+        #       predecessor: an earlier gate changed after it was chained —
+        #       tampering, or a deliberate earlier-stage re-run that wasn't
+        #       re-stamped (run `devteam stamp-chain` locally and re-push).
+        # Blocking by design: a tamper-evident audit trail is only meaningful
+        # if a break fails the build. If your project hasn't adopted gate
+        # chaining yet, add `continue-on-error: true` to make this advisory.
+
       - name: Post each gate as a check run on the PR head
         if: steps.gates_present.outputs.present == 'true'
         env:
