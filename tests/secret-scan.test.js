@@ -10,11 +10,16 @@ const { scanContent, isAllowlistedPath } =
 
 const HOOK = path.join(REPO_ROOT, "core", "hooks", "secret-scan.js");
 
+// Default cwd for hook spawns: a throwaway tempdir, NOT the repo root.
+// The hook writes pipeline/secret-allowlist.log relative to its cwd on a
+// suppression, so inheriting process.cwd() leaks debris into the repo.
+const DEFAULT_HOOK_CWD = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-hookcwd-"));
+
 function runHook(stdin, opts = {}) {
   const r = spawnSync("node", [HOOK], {
     input: stdin,
     encoding: "utf8",
-    ...(opts.cwd ? { cwd: opts.cwd } : {}),
+    cwd: opts.cwd || DEFAULT_HOOK_CWD,
     env: { ...(opts.inheritEnv !== false ? process.env : {}), ...(opts.env || {}), CI: "" },
   });
   return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
