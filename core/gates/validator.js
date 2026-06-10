@@ -30,6 +30,15 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { loadConfig } = require("../config.js");
 
+// --strict mode: the validator exits 1 on unknown internal errors instead of
+// treating them as PASS. Also activated when the CI=true env var is set.
+// Rationale: in CI the validator gates merges, so fail-open means a validator
+// bug silently green-lights everything. In interactive hook mode, fail-open is
+// intentional — don't kill a user's session on a validator defect — but errors
+// are now always logged to pipeline/validator-errors.log so they are
+// discoverable instead of vanishing.
+const STRICT_MODE = process.argv.includes("--strict") || process.env.CI === "true";
+
 // Resolve gates/lessons paths lazily against the current cwd. The validator
 // is normally spawned as a child process (each invocation gets a fresh cwd
 // from the orchestrator), so module-load caching was historically fine — but
@@ -407,18 +416,75 @@ function findMalformedReinforcedLines() {
   return malformed;
 }
 
-/** List gate .json files sorted most-recent first. */
+/**
+ * Stage order derived from core/pipeline/stages.js. Used as a fallback sort
+ * key when a gate has no timestamp field so that ordering is always
+ * content-derived, never filesystem-metadata-dependent.
+ *
+ * mtime was wrong: git checkout, touch, and any copy operation silently
+ * update mtime — making the "newer gate bypassed an older escalation" verdict
+ * depend on filesystem timestamps that an operator (or CI checkout step) can
+ * change without altering the gate contents at all. Using the gate's own
+ * timestamp field (written by the orchestrator at gate-write time) makes the
+ * ordering tamper-evident in the same way the gate content is.
+ */
+const STAGE_ORDER = (() => {
+  const { STAGES } = require("../pipeline/stages.js");
+  const order = {};
+  let idx = 0;
+  for (const def of Object.values(STAGES)) {
+    if (def.stage && !(def.stage in order)) order[def.stage] = idx++;
+  }
+  return order;
+})();
+
+function stageKey(name) {
+  // Extract base stage id from gate filename (e.g. "stage-04.backend.json" → "stage-04").
+  const base = path.basename(name, ".json").replace(/\.\w+$/, "");
+  return STAGE_ORDER[base] ?? 9999;
+}
+
+/** List gate .json files sorted most-recent first by content-derived order.
+ *
+ * Sort priority:
+ *   1. Gate's own `timestamp` field (ISO 8601 — lexicographic sort works).
+ *   2. Stage order from core/pipeline/stages.js (deterministic fallback).
+ *
+ * We deliberately do NOT use filesystem mtime: it changes on git checkout,
+ * `touch`, and CI workspace copies, which would let mtime manipulation flip
+ * the bypassed-escalation verdict without altering any gate content.
+ */
 function listGates() {
   const dir = gatesDir();
   return fs
     .readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
-    .map((f) => ({
-      name: f,
-      mtime: fs.statSync(path.join(dir, f)).mtimeMs,
-      full: path.join(dir, f),
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
+    .map((f) => {
+      const full = path.join(dir, f);
+      let timestamp = null;
+      try {
+        const raw = JSON.parse(fs.readFileSync(full, "utf8"));
+        timestamp = raw.timestamp || null;
+      } catch {
+        // Malformed gate — timestamp stays null; will fall back to stage order.
+      }
+      return { name: f, timestamp, full };
+    })
+    .sort((a, b) => {
+      // Most-recent first. When timestamps are present, use them. When
+      // timestamps are equal (or absent), fall back to stage order from
+      // core/pipeline/stages.js so the ordering is always deterministic
+      // and content-derived, never filesystem-metadata-dependent.
+      if (a.timestamp && b.timestamp) {
+        const cmp = b.timestamp.localeCompare(a.timestamp);
+        if (cmp !== 0) return cmp; // strict timestamp ordering
+      }
+      if (a.timestamp && !b.timestamp) return -1; // a has timestamp, b doesn't → a is "newer"
+      if (!a.timestamp && b.timestamp) return 1;
+      // Both lack timestamps, or timestamps are identical — fall back to
+      // stage order (higher stage index = later in pipeline = newer).
+      return stageKey(b.name) - stageKey(a.name);
+    });
 }
 
 function reportBypassedEscalation(entry) {
@@ -620,9 +686,31 @@ function runMain() {
       );
       process.exit(1);
     }
-    // Unknown / runtime error — likely a bug in this validator. Don't halt the
-    // user's session with an opaque stack trace.
+    // Unknown / runtime error — likely a bug in this validator.
+    //
+    // Strict mode (--strict or CI=true): exit 1 so the unknown error does not
+    // silently green-light the gate chain. CI is the authoritative check for
+    // validator correctness; a validator bug must not pass CI.
+    //
+    // Hook mode (default): keep warn-and-pass so a validator defect does not
+    // kill an interactive session. BUT always append to pipeline/validator-errors.log
+    // so the failure is discoverable instead of vanishing into thin air.
     const msg = err && err.message ? err.message : String(err);
+    const entry = `${new Date().toISOString()} [gate-validator] internal error: ${msg}\n`;
+    try {
+      const logPath = path.join(process.cwd(), "pipeline", "validator-errors.log");
+      // Best-effort: if the pipeline dir doesn't exist yet, skip the log write
+      // rather than masking the original error with a second ENOENT.
+      if (fs.existsSync(path.join(process.cwd(), "pipeline"))) {
+        fs.appendFileSync(logPath, entry, "utf8");
+      }
+    } catch {
+      // Log write failed — still honour the STRICT_MODE exit below.
+    }
+    if (STRICT_MODE) {
+      console.error(`[gate-validator] ❌ internal error (--strict / CI mode): ${msg}`);
+      process.exit(1);
+    }
     console.log(`[gate-validator] ⚠️  internal error: ${msg}; treating as PASS`);
     process.exit(0);
   }

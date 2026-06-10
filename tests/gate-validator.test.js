@@ -6,10 +6,57 @@ const { spawnSync } = require("node:child_process");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
 
 const VALIDATOR = path.join(REPO_ROOT, "core", "gates", "validator.js");
+const INJECT_ERROR_FIXTURE = path.join(REPO_ROOT, "tests", "fixtures", "validator-inject-error.js");
 
-function runValidator(cwd) {
-  const r = spawnSync("node", [VALIDATOR], { cwd, encoding: "utf8" });
+function runValidator(cwd, { strict = false, env } = {}) {
+  const args = strict ? [VALIDATOR, "--strict"] : [VALIDATOR];
+  const r = spawnSync("node", args, { cwd, encoding: "utf8", env: env || process.env });
   return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
+}
+
+/**
+ * Run the inject-error fixture, which reaches the unknown-internal-error path
+ * by making autoInjectMetadata's writeFileSync throw a plain TypeError (no .code).
+ *
+ * @param {string} cwd - a project dir with pipeline/gates/ containing a gate missing `orchestrator`
+ * @param {object} opts
+ * @param {boolean} opts.strict - pass --strict to the fixture
+ * @param {object}  opts.env    - override env (defaults to process.env minus CI)
+ */
+function runValidatorInjectError(cwd, { strict = false, env } = {}) {
+  const args = strict ? [INJECT_ERROR_FIXTURE, cwd, "--strict"] : [INJECT_ERROR_FIXTURE, cwd];
+  // Default env strips CI: the validator treats CI=true as strict mode, and
+  // these tests run under GitHub Actions (which sets CI=true). Hook-mode
+  // assertions must control that input, not inherit it from the runner.
+  let childEnv = env;
+  if (!childEnv) {
+    childEnv = { ...process.env };
+    delete childEnv.CI;
+  }
+  const r = spawnSync("node", args, { cwd, encoding: "utf8", env: childEnv });
+  return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
+}
+
+/**
+ * Seed a gate that is missing the `orchestrator` field so autoInjectMetadata
+ * will attempt to write it back (and the inject-error fixture intercepts that write).
+ */
+function seedGateNoOrchestrator(cwd, name) {
+  const dir = path.join(cwd, "pipeline", "gates");
+  fs.mkdirSync(dir, { recursive: true });
+  const gate = {
+    stage: name.replace(/\.json$/, ""),
+    status: "PASS",
+    host: "generic",
+    track: "full",
+    timestamp: "2026-05-26T20:00:00Z",
+    blockers: [],
+    warnings: [],
+    // intentionally missing: orchestrator
+  };
+  const file = path.join(dir, name.endsWith(".json") ? name : `${name}.json`);
+  fs.writeFileSync(file, JSON.stringify(gate, null, 2));
+  return file;
 }
 
 let _dirs = [];
@@ -312,5 +359,89 @@ describe("gate-validator: bypassed escalation halts", () => {
     const r = runValidator(cwd);
     assert.equal(r.status, 3);
     assert.match(r.stdout, /BYPASSED ESCALATION/);
+  });
+
+  it("mtime manipulation does not change the bypassed-escalation verdict", () => {
+    // Ordering is now based on gate timestamps, not filesystem mtime.
+    // Touching / git-checking-out a gate file cannot move it in the sort order.
+    const cwd = track(makeTargetProject());
+    // Write an ESCALATE gate with an earlier timestamp → it happened first.
+    const escalateFile = seedGate(cwd, "stage-02", {
+      stage: "stage-02", status: "ESCALATE", escalation_reason: "bypass test",
+      timestamp: "2026-01-01T10:00:00Z",
+    });
+    // Write a PASS gate with a later timestamp → it was written after the escalation.
+    seedGate(cwd, "stage-03", {
+      status: "PASS",
+      timestamp: "2026-01-01T11:00:00Z",
+    });
+    // Manipulate mtime: pretend the ESCALATE file is brand-new (future timestamp).
+    // With mtime-based ordering, this would make stage-02 appear "newest" → not
+    // detected as bypassed. With content-derived ordering, the gate's own
+    // timestamp field is used and mtime is irrelevant.
+    const future = new Date(Date.now() + 3_600_000);
+    fs.utimesSync(escalateFile, future, future);
+    const r = runValidator(cwd);
+    // Verdict must still be "bypassed escalation", not "live escalation"
+    assert.equal(r.status, 3);
+    assert.match(r.stdout, /BYPASSED ESCALATION/);
+  });
+});
+
+describe("gate-validator: --strict mode and validator-errors.log", () => {
+  // These tests use the inject-error fixture which patches fs.writeFileSync
+  // to throw a plain TypeError inside autoInjectMetadata — the cleanest
+  // injection point that reaches runMain()'s unknown-error catch without
+  // triggering the ENOENT or HALT_FS_CODES branches.
+
+  it("hook mode (default) → exits 0 when internal error occurs (fail-open for interactive sessions)", () => {
+    const cwd = track(makeTargetProject());
+    seedGateNoOrchestrator(cwd, "stage-01.json");
+    const r = runValidatorInjectError(cwd);
+    assert.equal(r.status, 0, `expected exit 0 in hook mode, got ${r.status}. stderr: ${r.stderr}`);
+    assert.match(r.stdout, /internal error.*treating as PASS/);
+  });
+
+  it("hook mode → appends error to pipeline/validator-errors.log so failures are discoverable", () => {
+    const cwd = track(makeTargetProject());
+    seedGateNoOrchestrator(cwd, "stage-01.json");
+    runValidatorInjectError(cwd);
+    const logPath = path.join(cwd, "pipeline", "validator-errors.log");
+    assert.ok(fs.existsSync(logPath), "validator-errors.log must be created");
+    const content = fs.readFileSync(logPath, "utf8");
+    // Must contain a timestamp and the error message.
+    assert.match(content, /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+    assert.match(content, /injected-internal-error/);
+  });
+
+  it("--strict → exits 1 when internal error occurs (fail-closed for CI)", () => {
+    const cwd = track(makeTargetProject());
+    seedGateNoOrchestrator(cwd, "stage-01.json");
+    const r = runValidatorInjectError(cwd, { strict: true });
+    assert.equal(r.status, 1, `expected exit 1 in --strict mode, got ${r.status}`);
+    assert.match(r.stderr, /internal error.*--strict.*CI mode/);
+  });
+
+  it("CI=true → exits 1 when internal error occurs (equivalent to --strict)", () => {
+    const cwd = track(makeTargetProject());
+    seedGateNoOrchestrator(cwd, "stage-01.json");
+    const r = runValidatorInjectError(cwd, { env: { ...process.env, CI: "true" } });
+    assert.equal(r.status, 1, `expected exit 1 with CI=true, got ${r.status}`);
+    assert.match(r.stderr, /internal error.*--strict.*CI mode/);
+  });
+
+  it("--strict does not affect normal PASS (strict mode only changes the unknown-error path)", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    const r = runValidator(cwd, { strict: true });
+    assert.equal(r.status, 0, `expected exit 0 for PASS gate in --strict mode`);
+    assert.match(r.stdout, /GATE PASS/);
+  });
+
+  it("--strict does not affect FAIL gate (still exits 2)", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["something failed"] });
+    const r = runValidator(cwd, { strict: true });
+    assert.equal(r.status, 2, `expected exit 2 for FAIL gate in --strict mode`);
   });
 });

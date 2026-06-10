@@ -83,10 +83,14 @@ jobs:
 
       - name: Validate gates (Stagecraft's own validator)
         if: steps.gates_present.outputs.present == 'true'
-        run: node .stagecraft/core/gates/validator.js
+        run: node .stagecraft/core/gates/validator.js --strict
+        # --strict: any unknown internal validator error exits 1 instead of
+        # silently treating it as PASS. Required in CI — a validator bug must
+        # not green-light the gate chain. Interactive (hook) mode keeps
+        # warn-and-pass; CI is the authoritative correctness check.
         # Exit codes:
         #   0 — PASS / WARN (job stays green)
-        #   1 — gate is malformed (job fails)
+        #   1 — gate is malformed, or internal error in --strict mode (job fails)
         #   2 — FAIL gate (job fails — surface the broken stage)
         #   3 — ESCALATE gate (job fails — needs human resolution)
 
