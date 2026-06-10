@@ -865,7 +865,7 @@ function computeFixSteps(gate, stageDef, gatesDir) {
             commands: [
               ...ws.map(w => `rm pipeline/gates/stage-04.${w}.json`),
               "rm pipeline/gates/stage-04.json",
-              ...ws.map(w => `devteam stage build --workstream ${w} --headless`),
+              ...ws.map(w => `devteam stage build --workstream ${w} --patch --from peer-review --headless`),
             ],
           });
           steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });

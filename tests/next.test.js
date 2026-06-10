@@ -326,9 +326,10 @@ describe("next: stage-05 per-area fix steps", () => {
       "rm build workstream gate — driver must re-enter build to fix the code");
     assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
       "rm merged build gate — without this next() still sees build PASS and skips it");
-    // Must include build re-run for the affected area
-    assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream frontend")),
-      "rebuild frontend");
+    // Must include build re-run with --patch --from peer-review so the agent implements
+    // the required changes rather than just verifying existing code
+    assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream frontend") && c.includes("--patch --from peer-review")),
+      "rebuild frontend with --patch --from peer-review");
     assert.ok(allCmds.some(c => c.includes("devteam merge build")), "merge build");
     // Must include rm + re-review for the area with changes requested
     assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.frontend.json")),
