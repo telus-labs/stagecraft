@@ -928,34 +928,30 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     return steps.length > 1 ? steps : null;
   }
 
-  // Accessibility audit (stage-06b): blockers carry element + remediation text
+  // Accessibility audit (stage-06b): dispatch the automated fixer via devteam advise.
+  // Option A for A11Y_FIX items is the "fix" action — it runs fixA11yBlockers headlessly
+  // (frontend agent applies the ARIA/HTML change) then re-runs the audit in one go.
   if (stage === "stage-06b") {
     const blockers = gate.blockers || [];
-    const remediations = blockers.map((b) => {
-      if (typeof b === "string") {
-        try { b = JSON.parse(b); } catch { return b; }
-      }
-      if (typeof b === "object" && b !== null) {
-        const id = b.id || "";
-        const desc = b.description || "";
-        // description ends with "Remediation: <fix>" — extract just that part
-        const remMatch = desc.match(/Remediation:\s*(.+)/i);
-        const remText = remMatch ? remMatch[1].trim() : desc;
-        return id ? `${id}: ${remText}` : remText;
-      }
-      return String(b);
+    const ids = blockers.map((b) => {
+      if (typeof b === "string") { try { b = JSON.parse(b); } catch { return null; } }
+      return (b && typeof b === "object" && b.id) ? b.id : null;
     }).filter(Boolean);
 
+    if (ids.length) {
+      const applyArg = ids.map(id => `${id}=A`).join(",");
+      return [
+        {
+          description: `Dispatch accessibility fixer — stagecraft applies the ARIA/HTML fix and re-runs the audit`,
+          commands: [`devteam advise --apply ${applyArg}`],
+        },
+      ];
+    }
+    // No structured IDs: show the advise panel so the operator can apply manually.
     return [
       {
-        description: remediations.length
-          ? `Fix HTML in src/frontend/: ${remediations.join("; ")}`
-          : "Apply the remediation steps in each blocker above to src/frontend/index.html",
-        commands: [],
-      },
-      {
-        description: "Clear the gate and re-run the accessibility audit",
-        commands: ["rm pipeline/gates/stage-06b.json", "devteam stage accessibility-audit --headless"],
+        description: "Run devteam advise to triage and dispatch the accessibility fix",
+        commands: ["devteam advise"],
       },
     ];
   }

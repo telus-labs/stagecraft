@@ -388,6 +388,61 @@ describe("next: stage-05 per-area fix steps", () => {
   });
 });
 
+describe("next: stage-06b (accessibility-audit) fix steps", () => {
+  function seedThroughBuild(cwd) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
+                     "stage-04b", "stage-04c", "stage-04d", "stage-05", "stage-06"]) {
+      seedGate(cwd, s, { status: "PASS" });
+    }
+  }
+
+  it("structured blockers with ids → devteam advise --apply <id>=A command", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-06b", {
+      status: "FAIL",
+      blockers: [
+        { id: "A11Y-01", criterion: "WCAG 2.1 SC 4.1.3", severity: "serious",
+          element: "#results div", description: "Missing aria-live. Fix: add aria-live='polite'.",
+          file: "src/frontend/index.html", assigned_to: "frontend" },
+        { id: "A11Y-02", criterion: "WCAG 2.1 SC 1.3.1", severity: "moderate",
+          element: "label", description: "Missing for attribute.",
+          file: "src/frontend/index.html", assigned_to: "frontend" },
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "accessibility-audit");
+    assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
+
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    // Must include devteam advise --apply with both IDs at letter A
+    assert.ok(allCmds.some(c => c.includes("devteam advise --apply") && c.includes("A11Y-01=A") && c.includes("A11Y-02=A")),
+      "advise --apply with all IDs at A");
+    // Must NOT include manual rm or devteam stage accessibility-audit (advise handles it)
+    assert.ok(!allCmds.some(c => c.includes("rm pipeline/gates/stage-06b.json")),
+      "no manual gate rm — advise handles it");
+    assert.ok(!allCmds.some(c => c.includes("devteam stage accessibility-audit")),
+      "no separate re-run — advise handles it");
+  });
+
+  it("unstructured (string) blockers → devteam advise without --apply", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-06b", {
+      status: "FAIL",
+      blockers: ["Missing aria-label on search button"],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(allCmds.some(c => c === "devteam advise"), "falls back to plain devteam advise");
+    assert.ok(!allCmds.some(c => c.includes("--apply")), "no --apply without IDs");
+  });
+});
+
 describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
   function seedThroughQa(cwd) {
     for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a",
