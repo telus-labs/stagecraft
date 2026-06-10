@@ -321,6 +321,11 @@ describe("next: stage-05 per-area fix steps", () => {
     assert.equal(r.action, "fix-and-retry");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
 
+    // Must include build stage gate clears so the driver backtracks to build
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-04.frontend.json")),
+      "rm build workstream gate — driver must re-enter build to fix the code");
+    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
+      "rm merged build gate — without this next() still sees build PASS and skips it");
     // Must include build re-run for the affected area
     assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream frontend")),
       "rebuild frontend");
