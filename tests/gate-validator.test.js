@@ -21,11 +21,19 @@ function runValidator(cwd, { strict = false, env } = {}) {
  * @param {string} cwd - a project dir with pipeline/gates/ containing a gate missing `orchestrator`
  * @param {object} opts
  * @param {boolean} opts.strict - pass --strict to the fixture
- * @param {object}  opts.env    - override env (defaults to process.env)
+ * @param {object}  opts.env    - override env (defaults to process.env minus CI)
  */
 function runValidatorInjectError(cwd, { strict = false, env } = {}) {
   const args = strict ? [INJECT_ERROR_FIXTURE, cwd, "--strict"] : [INJECT_ERROR_FIXTURE, cwd];
-  const r = spawnSync("node", args, { cwd, encoding: "utf8", env: env || process.env });
+  // Default env strips CI: the validator treats CI=true as strict mode, and
+  // these tests run under GitHub Actions (which sets CI=true). Hook-mode
+  // assertions must control that input, not inherit it from the runner.
+  let childEnv = env;
+  if (!childEnv) {
+    childEnv = { ...process.env };
+    delete childEnv.CI;
+  }
+  const r = spawnSync("node", args, { cwd, encoding: "utf8", env: childEnv });
   return { status: r.status, stdout: r.stdout || "", stderr: r.stderr || "" };
 }
 
