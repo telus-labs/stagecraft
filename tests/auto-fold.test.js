@@ -1,15 +1,16 @@
 // Stage 7 auto-fold: when Stage 6 cleanly satisfies the AC→test
-// contract, the orchestrator writes stage-07.json itself with
-// auto_from_stage_06: true, skipping the PM+Platform sign-off
-// workstreams. The auto-fold cross-checks the QA agent's claims
-// against brief.md and test-report.md — it does not rubber-stamp.
+// contract, the orchestrator surfaces a "fold-sign-off" action carrying the
+// gate content — the CALLER writes the gate. The auto-fold cross-checks the
+// QA agent's claims against brief.md and test-report.md; it does not rubber-stamp.
+// (next() is a pure read — item 1.2, plans/phase-1-trust-consolidation.md)
 
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
+const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+const { run } = require(path.join(REPO_ROOT, "core", "driver"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -51,29 +52,48 @@ function seedAll(cwd, _untilSignOff = true) {
 }
 
 describe("auto-fold: stage-07 auto-authored when stage-06 satisfies contract", () => {
-  it("writes stage-07.json with auto_from_stage_06: true and advances past sign-off", () => {
+  // Updated for item 1.2 (phase-1-trust-consolidation): next() is now a pure
+  // read; it returns a "fold-sign-off" action instead of writing the gate.
+  // The caller is responsible for writing gate_content to gate_path.
+
+  it("next() returns fold-sign-off action with gate content in payload (does NOT write)", () => {
     const cwd = track(makeTargetProject());
     seedAll(cwd);
+    // Snapshot gates dir before calling next()
+    const gatesDir = path.join(cwd, "pipeline", "gates");
+    const before = fs.readdirSync(gatesDir).sort().join(",");
     const r = next({ cwd });
-    // Should NOT return run-stage for sign-off; the auto-fold should
-    // have written stage-07 and `next` walks on to deploy (or
-    // pipeline-complete if deploy already exists).
-    assert.notEqual(r.name, "sign-off", "auto-fold should have skipped sign-off as a user-action");
-    const stage07 = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-07.json"), "utf8"));
-    assert.equal(stage07.auto_from_stage_06, true);
-    assert.equal(stage07.pm_signoff, true);
-    assert.equal(stage07.deploy_requested, true);
-    assert.equal(stage07.status, "PASS");
-    assert.equal(stage07.auto_fold.ac_count, 2);
-    assert.deepEqual(stage07.auto_fold.criteria, ["AC-1", "AC-2"]);
+    // next() must return fold-sign-off, not write the gate or advance past it
+    assert.equal(r.action, "fold-sign-off", "next() should return fold-sign-off, not advance past sign-off");
+    assert.equal(r.stage, "stage-07");
+    assert.equal(r.name, "sign-off");
+    // gates dir must be byte-identical — next() did NOT write anything
+    const after = fs.readdirSync(gatesDir).sort().join(",");
+    assert.equal(before, after, "next() must leave pipeline/gates/ byte-identical (no writes)");
+    assert.ok(!fs.existsSync(r.gate_path), "stage-07.json must NOT exist after calling next()");
+    // payload must carry the fully-formed gate object
+    assert.equal(r.gate_content.auto_from_stage_06, true);
+    assert.equal(r.gate_content.pm_signoff, true);
+    assert.equal(r.gate_content.deploy_requested, true);
+    assert.equal(r.gate_content.status, "PASS");
+    assert.equal(r.gate_content.auto_fold.ac_count, 2);
+    assert.deepEqual(r.gate_content.auto_fold.criteria, ["AC-1", "AC-2"]);
+    assert.equal(r.acCount, 2);
+    // After the caller writes the gate, next() advances past sign-off
+    fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
+    const r2 = next({ cwd });
+    assert.notEqual(r2.name, "sign-off", "after writing the gate, next() should advance past sign-off");
   });
 
   it("populates runbook_referenced based on actual file existence", () => {
     const cwd = track(makeTargetProject());
     seedAll(cwd);
     fs.writeFileSync(path.join(cwd, "pipeline", "runbook.md"), "# Runbook\n## Rollback\n## Health signals\n");
-    next({ cwd });
-    const stage07 = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-07.json"), "utf8"));
+    // next() returns fold-sign-off; caller writes the gate
+    const r = next({ cwd });
+    assert.equal(r.action, "fold-sign-off");
+    fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
+    const stage07 = JSON.parse(fs.readFileSync(r.gate_path, "utf8"));
     assert.equal(stage07.runbook_referenced, true);
     assert.deepEqual(stage07.warnings, []);
   });
@@ -82,8 +102,10 @@ describe("auto-fold: stage-07 auto-authored when stage-06 satisfies contract", (
     const cwd = track(makeTargetProject());
     seedAll(cwd);
     // No runbook.md
-    next({ cwd });
-    const stage07 = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-07.json"), "utf8"));
+    const r = next({ cwd });
+    assert.equal(r.action, "fold-sign-off");
+    fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
+    const stage07 = JSON.parse(fs.readFileSync(r.gate_path, "utf8"));
     assert.equal(stage07.runbook_referenced, false);
     assert.ok(stage07.warnings.some((w) => /runbook/i.test(w)));
   });
@@ -168,5 +190,127 @@ describe("auto-fold: refuses when contract not satisfied", () => {
     const r = next({ cwd });
     assert.equal(r.name, "sign-off");
     assert.ok(!fs.existsSync(path.join(cwd, "pipeline", "gates", "stage-07.json")));
+  });
+});
+
+// ── Required new tests (item 1.2, phase-1-trust-consolidation) ───────────────
+
+describe("auto-fold: fold-sign-off payload validates as stage-07 gate", () => {
+  it("gate_content carries all stage-07 schema required fields", () => {
+    // stage-07.schema.json requires: pm_signoff, deploy_requested, runbook_referenced
+    // (plus base fields: stage, status, orchestrator, track, timestamp, blockers, warnings)
+    const cwd = track(makeTargetProject());
+    seedAll(cwd);
+    const r = next({ cwd });
+    assert.equal(r.action, "fold-sign-off");
+    const g = r.gate_content;
+    // Base contract F fields
+    assert.equal(typeof g.stage, "string");
+    assert.equal(typeof g.status, "string");
+    assert.ok(["PASS", "WARN", "FAIL", "ESCALATE"].includes(g.status));
+    assert.equal(typeof g.orchestrator, "string");
+    assert.equal(typeof g.track, "string");
+    assert.equal(typeof g.timestamp, "string");
+    assert.ok(Array.isArray(g.blockers));
+    assert.ok(Array.isArray(g.warnings));
+    // Stage-07 specific required fields
+    assert.equal(typeof g.pm_signoff, "boolean");
+    assert.equal(typeof g.deploy_requested, "boolean");
+    assert.equal(typeof g.runbook_referenced, "boolean");
+  });
+});
+
+describe("auto-fold: driver writes gate and run-log event, run proceeds", () => {
+  it("driver writes stage-07.json and appends auto-fold-sign-off run-log event", async () => {
+    const cwd = track(makeTargetProject());
+    // Inject a next() sequence: fold-sign-off → pipeline-complete.
+    // The gate content is a minimal valid stage-07 gate for testing the write path.
+    const stage07Path = path.join(cwd, "pipeline", "gates", "stage-07.json");
+    const gateContent = {
+      stage: "stage-07", status: "PASS",
+      orchestrator: "devteam@test", track: "full",
+      timestamp: new Date().toISOString(),
+      blockers: [], warnings: [],
+      pm_signoff: true, deploy_requested: true, runbook_referenced: false,
+      auto_from_stage_06: true,
+      auto_fold: { ac_count: 2, criteria: ["AC-1", "AC-2"], stamped_at: new Date().toISOString(), stamper: "devteam@test" },
+    };
+    const actions = [
+      {
+        action: "fold-sign-off", stage: "stage-07", name: "sign-off",
+        gate_path: stage07Path, gate_content: gateContent, acCount: 2,
+        reason: "stage 6 satisfied the AC→test contract (2 criteria mapped)",
+      },
+      { action: "pipeline-complete", reason: "all stages complete" },
+    ];
+    let i = 0;
+    const events = [];
+    const s = await run({
+      cwd,
+      next: () => actions[i++],
+      onEvent: (ev) => events.push(ev),
+    });
+    // Run should complete (not halt)
+    assert.equal(s.completed, true);
+    assert.equal(s.halted, false);
+    // The driver must have written the gate
+    assert.ok(fs.existsSync(stage07Path), "driver must write stage-07.json for fold-sign-off");
+    const written = JSON.parse(fs.readFileSync(stage07Path, "utf8"));
+    assert.equal(written.auto_from_stage_06, true);
+    // The driver must have appended an auto-fold-sign-off event to run-log.jsonl
+    const runLog = path.join(cwd, "pipeline", "run-log.jsonl");
+    assert.ok(fs.existsSync(runLog), "run-log.jsonl must exist");
+    const lines = fs.readFileSync(runLog, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const foldEvent = lines.find((l) => l.event === "auto-fold-sign-off");
+    assert.ok(foldEvent, "run-log must contain an auto-fold-sign-off event");
+    assert.equal(foldEvent.derived_from, "brief AC mapping");
+    // onEvent callback must have fired for the fold
+    assert.ok(events.some((e) => e.type === "auto-fold-sign-off"), "onEvent must fire for fold-sign-off");
+  });
+});
+
+describe("auto-fold: cmdNext e2e reaches pipeline-complete on a nano run", () => {
+  // cmdNext handles fold-sign-off by writing the gate and re-running next().
+  // On the nano track, sign-off is not in the stage list, so the auto-fold
+  // path is only triggered on the full track. Use a full-track project seeded
+  // up to (but not including) sign-off with the brief/test-report present.
+  it("cmdNext writes stage-07 and shows the subsequent action (not fold-sign-off)", () => {
+    const cwd = track(makeTargetProject());
+    seedAll(cwd);
+    // Also seed sign-off so next() would return deploy or later, but we need to
+    // test that cmdNext handles fold-sign-off cleanly. Seed all stages AFTER sign-off
+    // (deploy, retrospective) so that after the fold cmdNext can reach complete.
+    seedGate(cwd, "stage-07", {
+      stage: "stage-07", status: "PASS",
+      pm_signoff: true, deploy_requested: true, runbook_referenced: false,
+      auto_from_stage_06: true,
+    });
+    seedGate(cwd, "stage-08", { stage: "stage-08", status: "PASS" });
+    seedGate(cwd, "stage-09", { stage: "stage-09", status: "PASS" });
+    // With all stages done, next() should return pipeline-complete
+    const r = runCLI(["next", "--json"], { cwd });
+    assert.equal(r.status, 0, `next --json failed: ${r.stderr}`);
+    const obj = JSON.parse(r.stdout);
+    assert.equal(obj.schema_version, "1.1");
+    assert.equal(obj.action, "pipeline-complete");
+  });
+
+  it("cmdNext handles fold-sign-off: writes gate and shows next action", () => {
+    const cwd = track(makeTargetProject());
+    seedAll(cwd);
+    // Seed post-sign-off stages so there is a known next action after the fold
+    seedGate(cwd, "stage-08", { stage: "stage-08", status: "PASS",
+      deploy_log: "ok", smoke_test_passed: true });
+    seedGate(cwd, "stage-09", { stage: "stage-09", status: "PASS",
+      lessons_learned: "none", action_items: [] });
+    // next() should return fold-sign-off; cmdNext should write it and re-run
+    const r = runCLI(["next", "--json"], { cwd });
+    assert.equal(r.status, 0, `cmdNext failed: ${r.stderr}`);
+    // Verify the gate was written (JSON output shape tested separately)
+    const stage07Path = path.join(cwd, "pipeline", "gates", "stage-07.json");
+    assert.ok(fs.existsSync(stage07Path), "cmdNext must write stage-07.json on fold-sign-off");
+    const g = JSON.parse(fs.readFileSync(stage07Path, "utf8"));
+    assert.equal(g.auto_from_stage_06, true);
+    assert.equal(g.pm_signoff, true);
   });
 });

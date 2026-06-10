@@ -480,7 +480,13 @@ function mergeWorkstreamGates(stageName, opts = {}) {
 }
 
 // Walk stages in order, inspect gate files in pipeline/gates/, decide
-// what the user should do next. Pure read; never mutates state.
+// what the caller should do next. Pure read; never mutates state.
+//
+// When Stage 7's auto-fold preconditions are met, next() returns the
+// "fold-sign-off" action instead of writing the gate itself — it is the
+// CALLER's responsibility to persist the gate payload and then call
+// next() again. This keeps next() a pure function of disk state.
+// (See item 1.2 in plans/phase-1-trust-consolidation.md.)
 //
 // Returns one of:
 //   { action: "run-stage",          stage, name, roles, reason }
@@ -488,6 +494,7 @@ function mergeWorkstreamGates(stageName, opts = {}) {
 //   { action: "merge",              stage, name, reason }
 //   { action: "fix-and-retry",      stage, name, gate, blockers[], reason }
 //   { action: "resolve-escalation", stage, name, gate, reason }
+//   { action: "fold-sign-off",      stage, name, gate_path, gate_content, acCount, reason }
 //   { action: "pipeline-complete",  reason }
 function next(opts = {}) {
   const cwd = opts.cwd || process.cwd();
@@ -527,14 +534,16 @@ function workstreamGatesExistFor(stageDef, gatesDir) {
   );
 }
 
-// Stage 7 auto-fold. Returns { ok: boolean, reason?, acCount? }.
+// Stage 7 auto-fold. Pure function — returns { ok: false, reason } on
+// any precondition failure, or { ok: true, gate, acCount } on success.
+// Does NOT write any file; the caller is responsible for persisting the
+// returned gate object (see _nextImpl → "fold-sign-off" action).
+//
 // Preconditions verified by the orchestrator itself (no model trust):
 //   1. stage-06.json exists and PASSed
 //   2. brief.md has at least one AC-N entry
 //   3. test-report.md exists
 //   4. every AC-N in brief.md is mentioned in test-report.md
-// On success, writes pipeline/gates/stage-07.json with
-// auto_from_stage_06: true and the required gate fields.
 function tryAutoFoldSignOff(cwd, gatesDir, track) {
   const stage06Path = path.join(gatesDir, "stage-06.json");
   if (!fs.existsSync(stage06Path)) {
@@ -579,7 +588,6 @@ function tryAutoFoldSignOff(cwd, gatesDir, track) {
   const runbookPath = path.join(cwd, "pipeline", "runbook.md");
   const runbookExists = fs.existsSync(runbookPath);
 
-  const stage07Path = path.join(gatesDir, "stage-07.json");
   const gate = {
     stage: "stage-07",
     status: "PASS",
@@ -599,8 +607,8 @@ function tryAutoFoldSignOff(cwd, gatesDir, track) {
       stamper: `devteam@${require("../package.json").version}`,
     },
   };
-  fs.writeFileSync(stage07Path, JSON.stringify(gate, null, 2) + "\n", "utf8");
-  return { ok: true, acCount: briefAcs.length };
+  // No fs.writeFileSync here — caller writes via the "fold-sign-off" action.
+  return { ok: true, gate, acCount: briefAcs.length };
 }
 
 // ── Fix-step computation ──────────────────────────────────────────────────────
@@ -1118,11 +1126,12 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
     if (skipStages.includes(stageName)) continue;
 
     // Stage 7 auto-fold. When Stage 6 cleanly satisfies the AC→test
-    // contract, the orchestrator writes stage-07.json itself with
-    // auto_from_stage_06: true, skipping the PM+Platform sign-off
-    // workstreams. Verified — not trusted: we re-derive the AC list
-    // from brief.md and the AC→test mapping from test-report.md
-    // ourselves, rather than rubber-stamping the QA agent's claim.
+    // contract, return a "fold-sign-off" action carrying the gate content.
+    // The CALLER writes the gate and calls next() again — keeping _nextImpl
+    // a pure function of disk state. (item 1.2, phase-1-trust-consolidation)
+    // Verified — not trusted: we re-derive the AC list from brief.md and
+    // the AC→test mapping from test-report.md ourselves, rather than
+    // rubber-stamping the QA agent's claim.
     // See docs/concepts.md → "Auto-fold (Stage 7)" for the rationale.
     if (stageName === "sign-off"
         && !fs.existsSync(stageGatePath)
@@ -1130,11 +1139,18 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
       const cwd = path.resolve(gatesDir, "..", "..");
       const folded = tryAutoFoldSignOff(cwd, gatesDir, track);
       if (folded.ok) {
-        process.stderr.write(
-          `[devteam] stage 7 auto-folded: stage 6 satisfied the AC→test contract (${folded.acCount} criteria mapped)\n`,
-        );
-        // Fall through — stageGatePath now exists; the status check
-        // below will see PASS and advance to deploy.
+        // Return fold-sign-off so the caller writes the gate and re-runs
+        // next(). Do NOT fall through here — stageGatePath doesn't exist
+        // yet; the caller must persist the gate before calling next().
+        return {
+          action: "fold-sign-off",
+          stage: stageDef.stage,
+          name: stageName,
+          gate_path: stageGatePath,
+          gate_content: folded.gate,
+          acCount: folded.acCount,
+          reason: `stage 6 satisfied the AC→test contract (${folded.acCount} criteria mapped)`,
+        };
       }
     }
 

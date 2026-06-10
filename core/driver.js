@@ -9,13 +9,14 @@
 // The loop is a thin switch over next()'s action + failure_class:
 //   run-stage / continue-stage → dispatch (in-process via runStageHeadless)
 //   merge                       → mergeWorkstreamGates
+//   fold-sign-off               → write stage-07.json, log the event, loop
 //   fix-and-retry               → HALT and surface failure_class (PR-B acts)
 //   resolve-escalation          → HALT for a human ruling/grant
 //   pipeline-complete           → done
 //
-// next() is unchanged: the new actions the design sketched (halt/block) are
-// driver OUTCOMES, not orchestrator actions — the driver derives them from the
-// action + failure_class. That keeps next() a pure function of disk state.
+// next() never writes files; fold-sign-off is the mechanism by which the
+// driver persists the auto-fold gate and makes it visible in the audit log.
+// (item 1.2, plans/phase-1-trust-consolidation.md)
 //
 // Run-scoped state this layer introduces (the pipeline is otherwise stateless
 // within a run): an exclusive lock (pipeline/run.lock), resumable run-state
@@ -283,6 +284,26 @@ async function run(opts = {}) {
         logEvent(cwd, { ...base, outcome: "complete" });
         onEvent({ type: "complete", ...base });
         break;
+      }
+
+      // fold-sign-off: orchestrator verified a clean AC→test mapping and
+      // returned the gate content for us to persist. Write the gate here so
+      // the act is visible in the audit log (today it was a silent side effect
+      // of next()). No --allow-stage required — the fold is orchestrator-derived
+      // from verified AC mapping, not model-asserted. (item 1.2, phase-1-trust)
+      if (r.action === "fold-sign-off") {
+        fs.mkdirSync(path.dirname(r.gate_path), { recursive: true });
+        fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
+        logEvent(cwd, {
+          ...base,
+          outcome: "auto-fold-sign-off",
+          event: "auto-fold-sign-off",
+          derived_from: "brief AC mapping",
+          gate_path: r.gate_path,
+          ac_count: r.acCount,
+        });
+        onEvent({ type: "auto-fold-sign-off", ...base, ac_count: r.acCount });
+        continue;
       }
 
       // PR-B: the driver auto-fixes code-defect FAILs — clear the failing
