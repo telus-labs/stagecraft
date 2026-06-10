@@ -284,10 +284,10 @@ advance past a judgment gate records *which authority was exercised, under whose
 grant*. A post-incident audit can then reconstruct "the Principal auto-resolved this
 under standing grant of type X, issued by human Y on date Z." This is the prerequisite
 for letting `devteam run` touch anything consequential, and it slots into the C6 work
-rather than duplicating it. **Status:** C6's tamper-evident chain landed (PR-D1);
-`--auto-rule` records authority to `run-log.jsonl` today (PR-C2). Binding that
-authority record *onto the chained gate* (`resolved_by`) so it inherits the
-tamper-evidence is **PR-D2** (the remaining slice).
+rather than duplicating it. **Status:** ✅ fully landed. C6's tamper-evident chain
+landed (PR-D1); `--auto-rule` records authority to `run-log.jsonl` (PR-C2); and
+PR-D2 binds that authority record *onto the chained gate* (`resolved_by`) so it
+inherits the tamper-evidence — `devteam verify-chain` surfaces it per stage.
 
 ---
 

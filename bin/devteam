@@ -903,6 +903,9 @@ function cmdVerifyChain(argv) {
   if (r.ok) {
     console.log(`✅ gate chain intact — ${r.checked} stage gate(s) verified`);
     if (r.unstamped.length) console.log(`   ⚠ unstamped: ${r.unstamped.join(", ")} — run \`devteam stamp-chain\``);
+    for (const x of (r.resolved || [])) {
+      console.log(`   ⚖ ${x.stage}: autonomously resolved under ${x.authority} — "${x.ruling}"`);
+    }
     process.exit(0);
   }
   console.error(`❌ gate chain BROKEN — ${r.breaks.length} break(s):`);

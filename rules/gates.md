@@ -463,6 +463,8 @@ The hash covers the predecessor's entire content **including its own `chain` fie
 
 You do not write this field by hand. The orchestrator stamps it: `mergeWorkstreamGates` stamps multi-role stage gates, and `runStageHeadless` stamps single-role stage gates (only when the dispatch actually wrote the gate). `devteam verify-chain` recomputes the chain and reports breaks (exit non-zero for CI); `devteam stamp-chain` (re)stamps every stage gate in order — use it after a deliberate earlier-stage re-run, which legitimately invalidates the chain until re-stamped. See `core/gates/chain.js`.
 
+When `devteam run --auto-rule` autonomously resolves an escalation, it also writes a `resolved_by` object onto the gate — `{ authority: "auto-rule:<class>", grant_class, ruling, ts }` — so the "who authorized this autonomous decision" record is part of the chained (tamper-evident) content. `devteam verify-chain` surfaces it per stage.
+
 ---
 
 ## Track field
