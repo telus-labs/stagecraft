@@ -125,6 +125,12 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push(`Workstream: ${descriptor.workstreamId} (role: ${descriptor.role}, host: gemini-cli)`);
   lines.push(`Track: ${ctx.track}`);
   if (ctx.feature) lines.push(`Feature: ${ctx.feature}`);
+  // Phase 1 item 1.5: scoped re-run constraint. Shared with claude-code,
+  // generic, and codex via renderPatchBlock in render-helpers.js.
+  // NOTE: gemini-cli and codex adapters are ~95% identical (~158 LOC each);
+  // a shared base-class refactor is deferred to plans/phase-3-structural-debt.md.
+  const { renderPatchBlock, allowedWritesCaption, appendGateFooter } = require("../../core/adapters/render-helpers");
+  renderPatchBlock(ctx, lines);
   lines.push("");
   lines.push(`Read the role prompt at \`${rolePromptPath}\` before acting on this stage.`);
   lines.push("");
@@ -134,7 +140,6 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push(`## Read first`);
   for (const f of descriptor.readFirst) lines.push(`- ${f}`);
   lines.push("");
-  const { allowedWritesCaption, appendGateFooter } = require("../../core/adapters/render-helpers");
   lines.push(allowedWritesCaption(capabilities.enforces.allowed_writes, capabilities.displayName || "gemini-cli"));
   for (const f of descriptor.allowedWrites) lines.push(`- ${f}`);
   lines.push("");

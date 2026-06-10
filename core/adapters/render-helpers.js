@@ -9,6 +9,40 @@
 // readFirst / allowedWrites lines (those vary per host because of
 // enforcement-level wording), then calls appendGateFooter() to
 // append the parts that are genuinely shared.
+//
+// Phase 1 item 1.5: renderPatchBlock(ctx) centralises the PATCH MODE
+// rendering that was previously duplicated in claude-code and generic.
+// All four adapters (claude-code, generic, codex, gemini-cli) call it.
+
+// Render the PATCH MODE block into `lines` when ctx.patchItems is
+// present and non-empty. Call this after the track/feature header lines
+// and before the host-specific objective/readFirst body.
+//
+// Wording is canonical from the claude-code adapter (phase-1-trust-
+// consolidation.md §1.5 designates it as the source of truth).
+//
+// Returns nothing; mutates `lines` in place (same contract as
+// appendGateFooter). The caller pushes nothing if patchItems is absent
+// — absence is the normal case and must not alter any other output.
+function renderPatchBlock(ctx, lines) {
+  if (!ctx.patchItems || ctx.patchItems.length === 0) return;
+  lines.push("");
+  lines.push("## ⚠️  PATCH MODE — targeted fix only");
+  lines.push("");
+  lines.push("This is a scoped re-run. Fix ONLY the items listed below.");
+  lines.push("Do not regenerate, refactor, or touch any file not named in these items.");
+  lines.push("Update test files only if an item explicitly requires it.");
+  lines.push("");
+  for (const item of ctx.patchItems) {
+    if (typeof item === "string") {
+      lines.push(`- ${item}`);
+    } else {
+      const id  = item.id       ? `**${item.id}**` : "";
+      const sev = item.severity ? ` [${item.severity}]` : "";
+      lines.push(`- ${id}${sev}: ${item.summary || JSON.stringify(item)}`);
+    }
+  }
+}
 
 // Caption for the "Allowed writes" section. The wording reflects
 // how the host *actually* enforces the list at runtime — tool-call-
@@ -68,4 +102,4 @@ function appendGateFooter(lines, descriptor, ctx, hostName) {
   lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
 }
 
-module.exports = { allowedWritesCaption, appendGateFooter };
+module.exports = { allowedWritesCaption, appendGateFooter, renderPatchBlock };

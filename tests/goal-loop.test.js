@@ -29,9 +29,12 @@ describe("goalLoop capability declarations", () => {
     assert.strictEqual(caps.goalLoop, true);
   });
 
-  it("gemini-cli does not declare goalLoop (not yet validated)", () => {
+  it("gemini-cli declares goalLoop: false (no /goal directive support in gemini CLI)", () => {
+    // The /goal directive is a Claude Code session-level feature; Gemini CLI
+    // has no equivalent convergence directive. goalLoop is explicitly false
+    // (phase-1-trust-consolidation.md §1.5) so absence is never ambiguous.
     const caps = require(path.join(REPO_ROOT, "hosts", "gemini-cli", "capabilities.json"));
-    assert.ok(!caps.goalLoop, "gemini-cli should not have goalLoop: true");
+    assert.strictEqual(caps.goalLoop, false, "gemini-cli.goalLoop must be explicitly false");
   });
 
   it("generic does not declare goalLoop", () => {
