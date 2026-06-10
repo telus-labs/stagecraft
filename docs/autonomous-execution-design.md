@@ -311,8 +311,8 @@ Loop, per iteration:
    config; `continue-stage` dispatches only the *remaining* workstreams).
 3. `merge` → `devteam merge <stage>`.
 4. `fix-and-retry` (`code-defect`) → execute `fix_steps.commands[]`, propagate the
-   blockers into `context.md` (§4.3), re-dispatch; honor the progress-based breaker
-   (§2.5).
+   blockers into `context.md` (§4.3), re-dispatch; honor the **count-based** retry
+   ceiling (§2.5 — progress-based detection is deferred, pending gate archiving).
 5. `transient` → backoff, re-dispatch identical; do not increment the convergence
    budget.
 6. `halt` (`structural-input` / `state-corruption`) → stop with a typed diagnosis.
