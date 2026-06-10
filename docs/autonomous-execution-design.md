@@ -459,13 +459,33 @@ cleanly with typed diagnosis; cost is capped.
 
 ### Phase 2 — Typed escalation + authority provenance (safety)
 
-- Principal headless session with the typed "cannot decide" contract (§3.1).
-- `--auto-rule <grant-set>`: pre-authorized, bounded escalation types only.
-- Authority attribution on gates, chained under C6 (§3.2).
+Split into two PRs (contract first, then gated autonomy — mirrors H1→H2).
 
-**Exit criteria:** the driver resolves *derivable* escalations via the Principal and
-halts on authority/information/value with a structured question; every autonomous
-advance has an accountable authority record.
+**PR-C1 — Typed escalation contract (✅ landed, no autonomy change):** the
+Principal now writes ONE of two typed lines — `PRINCIPAL-RULING: <topic> →
+<decision> [class: <slug>]` (the optional bounded class is what `--auto-rule`
+will match; untagged ⇒ `unclassified`, never auto-applied) or
+`PRINCIPAL-CANNOT-DECIDE: <authority|information|value> → <question>` (the §3.1
+boundary — these always require a human). New `core/escalation.js` parses both;
+the ruling prompt (`renderPrincipalRulingPrompt`), `roles/principal.md`, and
+`rules/escalation.md` carry the contract; `devteam next` surfaces a cannot-decide
+question directly. Improves the human-driven flow and is the prerequisite for
+auto-rule. Backward-compatible: legacy untyped rulings parse as `unclassified`.
+Tests: `tests/escalation.test.js`.
+
+**PR-C2 — Driver auto-rule (⬜ next):** `--auto-rule <class,…>` (+
+`autonomy.auto_rule`, default empty = halt on every escalation, today's
+behavior). On escalation the driver dispatches the Principal in-process; a ruling
+whose `class` ∈ the grant set is applied (`fix-escalation`) and the run resumes;
+a cannot-decide, an ungranted class, the consequence ceiling, or
+`convergence-exhausted` all halt for a human (DD-C4 hard stops). Authority
+provenance recorded in `run-log.jsonl` + a gate field; chained under C6 when it
+lands.
+
+**Exit criteria:** the driver resolves *derivable*, pre-authorized escalations via
+the Principal and halts on authority/information/value (or any ungranted class)
+with a structured question; every autonomous advance has an accountable authority
+record.
 
 ### Phase 3 — Recipe factory (upside bet, conditional)
 

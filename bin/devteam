@@ -769,8 +769,18 @@ function cmdNext(argv) {
   if (result.action === "resolve-escalation") {
     const _cwd = flags.cwd || process.cwd();
     const _rulings = loadPrincipalRulings(_cwd);
+    const { loadCannotDecide: _loadCannotDecide } = require(path.join(__dirname, "..", "core", "escalation"));
+    const _cannotDecide = _loadCannotDecide(_cwd);
     console.log(`\n   Escalation resolution:`);
-    if (_rulings.length > 0) {
+    if (_cannotDecide.length > 0) {
+      // The Principal declined to rule — a human must answer. Surface the typed
+      // question so the operator knows exactly what (and why) is needed.
+      const cd = _cannotDecide[_cannotDecide.length - 1];
+      console.log(`   ⚖  Principal cannot decide (${cd.reason_class}) — a human decision is required:`);
+      console.log(`      ${cd.question}`);
+      console.log(`   After deciding, encode it as a PRINCIPAL-RULING line in pipeline/context.md, then:`);
+      console.log(`        devteam fix-escalation [--headless]`);
+    } else if (_rulings.length > 0) {
       console.log(`   Principal ruling is written (${_rulings.length} ruling(s) in pipeline/context.md).`);
       console.log(`   → devteam fix-escalation --headless`);
     } else {
@@ -2033,7 +2043,7 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
   lines.push("```markdown");
   lines.push("## Principal Rulings");
   lines.push("");
-  lines.push(`PRINCIPAL-RULING: ${topic} → <your decision in 5-10 words>`);
+  lines.push(`PRINCIPAL-RULING: ${topic} → <your decision in 5-10 words> [class: <slug>]`);
   lines.push("");
   lines.push("<one-paragraph rationale — name the specific finding(s), the");
   lines.push("tradeoff you weighed, and the recommended next action. If");
@@ -2045,6 +2055,40 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
   lines.push("error class ships a lie to ops dashboards\" beats \"this seems");
   lines.push("important.\" Cite the file:line or finding ID where applicable.");
   lines.push("");
+  lines.push("### Tag the ruling with a class");
+  lines.push("");
+  lines.push("End the `PRINCIPAL-RULING:` line with `[class: <slug>]` naming the");
+  lines.push("KIND of decision in lowercase-kebab (e.g. `formatting-only`,");
+  lines.push("`doc-only`, `known-safe-dependency-bump`, `scope-cut`,");
+  lines.push("`security-tradeoff`). The class lets an operator pre-authorize");
+  lines.push("autonomous resolution of bounded, low-stakes categories; omit it");
+  lines.push("(or use `unclassified`) when the decision doesn't fit a clean,");
+  lines.push("narrow category — unclassified rulings are never auto-applied.");
+  lines.push("Pick the NARROWEST honest class; never inflate to fit a grant.");
+  lines.push("");
+  lines.push("### When you cannot decide");
+  lines.push("");
+  lines.push("If the answer is NOT derivable from the artifacts you can read,");
+  lines.push("do not guess. Write this line instead of a ruling:");
+  lines.push("");
+  lines.push("```markdown");
+  lines.push("PRINCIPAL-CANNOT-DECIDE: <authority|information|value> → <the precise question a human must answer>");
+  lines.push("```");
+  lines.push("");
+  lines.push("Choose the reason class:");
+  lines.push("- **authority** — the decision commits a resource you were never");
+  lines.push("  granted (spend money, accept legal/security risk, change scope,");
+  lines.push("  approve a production deploy). Reasoning cannot manufacture authority.");
+  lines.push("- **information** — the deciding fact lives outside every readable");
+  lines.push("  artifact (e.g. \"does the client accept this latency?\"). You can");
+  lines.push("  name the missing fact but not know it.");
+  lines.push("- **value** — two legitimate objectives conflict and the brief does");
+  lines.push("  not rank them (ship-fast vs harden-now). Deriving a ranking would");
+  lines.push("  be inventing a stakeholder's priority.");
+  lines.push("");
+  lines.push("Phrase the question so a human can answer it in one sentence or a");
+  lines.push("choice. A precise \"cannot decide\" is a correct outcome, not a failure.");
+  lines.push("");
   lines.push("## What NOT to do");
   lines.push("");
   lines.push("- Do not edit the escalating gate's status. That's the user's");
@@ -2052,6 +2096,11 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
   lines.push("- Do not invoke any other subagent. This is a single Principal");
   lines.push("  ruling, not a re-run of the originating stage.");
   lines.push("- Do not write new source code. Read-only on `src/`.");
+  lines.push("- Do not guess to avoid escalating. If the decision isn't");
+  lines.push("  derivable from the artifacts, write `PRINCIPAL-CANNOT-DECIDE:`");
+  lines.push("  rather than a low-confidence ruling.");
+  lines.push("- Do not inflate a ruling's `[class:]` to match a grant you suspect");
+  lines.push("  exists. Tag the narrowest honest category, or `unclassified`.");
   lines.push("");
   lines.push("When done, exit. The stage manager runs `devteam fix-escalation`");
   lines.push("to implement your ruling automatically — no hand-editing required.");
