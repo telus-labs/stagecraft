@@ -264,3 +264,91 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.deepEqual(got, ["/proj/pipeline/gates/stage-04.backend.json", "/proj/pipeline/gates/stage-04.json"]);
   });
 });
+
+describe("driver: auto-rule escalation (Phase 2 PR-C2)", () => {
+  // Helper: write a Principal output line into context.md (what runRuling does).
+  function writeOutput(cwd, line) {
+    const p = path.join(cwd, "pipeline", "context.md");
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.appendFileSync(p, (fs.existsSync(p) ? "" : "## Principal Rulings\n\n") + line + "\n");
+  }
+  const escalation = { action: "resolve-escalation", stage: "stage-05", name: "peer-review", failure_class: "judgment-gate", gate: "x", reason: "reviewers split" };
+
+  it("halts by default (no grant) without dispatching the Principal", async () => {
+    const cwd = track(makeTargetProject());
+    let dispatched = false;
+    const s = await run({
+      cwd,
+      next: () => escalation,
+      runRuling: async () => { dispatched = true; return { exitCode: 0 }; },
+    });
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(dispatched, false, "Principal must not be dispatched without a grant");
+  });
+
+  it("auto-applies a granted ruling and resumes", async () => {
+    const cwd = track(makeTargetProject());
+    const nextSeq = [escalation, { action: "pipeline-complete", reason: "done" }];
+    let n = 0, applied = false;
+    const s = await run({
+      cwd,
+      autoRule: ["formatting-only"],
+      next: () => nextSeq[n++],
+      runRuling: async () => { writeOutput(cwd, "PRINCIPAL-RULING: lint → accept defaults [class: formatting-only]"); return { exitCode: 0 }; },
+      runFixEscalation: async () => { applied = true; return { exitCode: 0 }; },
+    });
+    assert.equal(s.completed, true);
+    assert.equal(applied, true);
+  });
+
+  it("halts on a cannot-decide even with a grant", async () => {
+    const cwd = track(makeTargetProject());
+    const s = await run({
+      cwd,
+      autoRule: ["formatting-only"],
+      next: () => escalation,
+      runRuling: async () => { writeOutput(cwd, "PRINCIPAL-CANNOT-DECIDE: authority → who approves the scope cut?"); return { exitCode: 0 }; },
+    });
+    assert.equal(s.halt_failure_class, "cannot-decide");
+    assert.equal(s.cannot_decide.reason_class, "authority");
+  });
+
+  it("halts when the ruling class is not granted", async () => {
+    const cwd = track(makeTargetProject());
+    const s = await run({
+      cwd,
+      autoRule: ["doc-only"],
+      next: () => escalation,
+      runRuling: async () => { writeOutput(cwd, "PRINCIPAL-RULING: auth → use JWT [class: security-tradeoff]"); return { exitCode: 0 }; },
+    });
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.match(s.halt_reason, /not in the --auto-rule grant/);
+  });
+
+  it("never auto-rules at the consequence ceiling, even when granted", async () => {
+    const cwd = track(makeTargetProject());
+    let dispatched = false;
+    const s = await run({
+      cwd,
+      autoRule: ["deploy-ok"],
+      next: () => ({ action: "resolve-escalation", stage: "stage-08", name: "deploy", failure_class: "judgment-gate", gate: "x", reason: "deploy escalation" }),
+      runRuling: async () => { dispatched = true; return { exitCode: 0 }; },
+    });
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(dispatched, false);
+  });
+
+  it("halts after one auto-rule attempt if the escalation persists", async () => {
+    const cwd = track(makeTargetProject());
+    let rulings = 0;
+    const s = await run({
+      cwd,
+      autoRule: ["formatting-only"],
+      next: () => escalation, // never clears
+      runRuling: async () => { rulings++; writeOutput(cwd, "PRINCIPAL-RULING: x → y [class: formatting-only]"); return { exitCode: 0 }; },
+      runFixEscalation: async () => ({ exitCode: 0 }),
+    });
+    assert.equal(s.halted, true);
+    assert.equal(rulings, 1, "Principal dispatched at most once for the same escalation");
+  });
+});
