@@ -253,6 +253,29 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.ok(!fs.existsSync(victim), "structured clear_gates cleared the gate in-process");
   });
 
+  it("archives the failed attempt's gate before clearing it", async () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["build broke"] });
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: ["build broke"],
+        fix_steps: [{ description: "rebuild", commands: ["rm pipeline/gates/stage-04.json"] }],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async () => [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }],
+    });
+    const archived = path.join(cwd, "pipeline", "gates", "archive", "stage-04.attempt-1.json");
+    assert.ok(fs.existsSync(archived), "the failed attempt's gate was archived before clearing");
+    assert.deepEqual(JSON.parse(fs.readFileSync(archived, "utf8")).blockers, ["build broke"]);
+  });
+
   it("halts (convergence-exhausted) after the driver retry ceiling", async () => {
     const cwd = track(makeTargetProject());
     const s = await run({

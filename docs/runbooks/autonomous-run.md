@@ -62,6 +62,7 @@ Progress prints to **stderr**; the `--json` summary prints to **stdout**.
 | `pipeline/run.lock` | Exclusive lock for the run (pid + host + start time). Removed on exit. |
 | `pipeline/run-state.json` | Resumable state: current stage, iteration count, per-stage retry counts. |
 | `pipeline/run-log.jsonl` | One line per transition (stage, action, `failure_class`, outcome, duration, cost) — the audit + debug trail. |
+| `pipeline/gates/archive/<stage>.attempt-N.json` | A snapshot of each failed attempt's stage gate, taken before the auto-fix retry clears/overwrites it. Diff `attempt-1` vs `attempt-2` to see whether blockers were shrinking or stuck — the post-mortem record of a `code-defect` retry sequence. |
 
 ## Exit codes
 
