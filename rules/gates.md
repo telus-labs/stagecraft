@@ -443,6 +443,12 @@ follow-up — it requires archiving prior attempts, which this layer does not ad
 `devteam next --json` (alongside a `schema_version` field) and as a `[tag]` in
 the human-readable output.
 
+A `fix-and-retry` action also carries **`clear_gates`** — the repo-relative gate
+files (e.g. `pipeline/gates/stage-04.backend.json`) the recipe wants cleared
+before re-running, derived structurally from the fix steps. The autonomous
+driver (`devteam run`) consumes this directly (clearing them in-process) rather
+than parsing the recipe's `rm …` command strings.
+
 ---
 
 ## Tamper-evident chain (C6)

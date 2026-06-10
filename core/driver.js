@@ -25,7 +25,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
+const { next, runStageHeadless, mergeWorkstreamGates, clearGatesFromFixSteps } = require("./orchestrator");
 const { loadConfig } = require("./config");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
@@ -127,20 +127,15 @@ function resolveTrack(opts, config) {
 const RUN_BLOCKERS_BEGIN = "<!-- devteam:run-blockers:begin -->";
 const RUN_BLOCKERS_END = "<!-- devteam:run-blockers:end -->";
 
-// Extract the gate files a fix recipe wants cleared. The driver applies these
-// in-process (rather than shelling out the recipe's `rm ...` strings) so it
-// stays the single owner of dispatch/merge. Only paths under pipeline/gates/
-// are honored. The recipe's `devteam stage/merge` strings are intentionally
-// ignored — the driver's own loop re-dispatches and re-merges via next().
+// Resolve the gate files a fix recipe wants cleared, as absolute paths.
+// next() now attaches a structured `clear_gates` (repo-relative) to the
+// fix-and-retry action; this fallback derives the same set from fix_steps via
+// the shared orchestrator helper (single source of truth — no driver-local
+// shell-string parsing). The driver applies these in-process so it stays the
+// sole owner of dispatch/merge; the recipe's `devteam stage/merge` strings are
+// ignored (the driver's loop re-dispatches and re-merges via next()).
 function extractGateClears(fixSteps, cwd) {
-  const targets = [];
-  for (const step of (fixSteps || [])) {
-    for (const cmd of (step.commands || [])) {
-      const m = typeof cmd === "string" && cmd.match(/^rm\s+(?:-\S+\s+)*(pipeline\/gates\/\S+\.json)\s*$/);
-      if (m) targets.push(path.join(cwd, m[1]));
-    }
-  }
-  return targets;
+  return clearGatesFromFixSteps(fixSteps).map((rel) => path.join(cwd, rel));
 }
 
 function clearGates(targets) {
@@ -306,7 +301,12 @@ async function run(opts = {}) {
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
           break;
         }
-        const cleared = clearGates(extractGateClears(r.fix_steps, cwd));
+        // Prefer the structured clear_gates next() now attaches (repo-relative);
+        // fall back to deriving them from fix_steps for older action shapes.
+        const toClear = Array.isArray(r.clear_gates) && r.clear_gates.length
+          ? r.clear_gates.map((rel) => path.join(cwd, rel))
+          : extractGateClears(r.fix_steps, cwd);
+        const cleared = clearGates(toClear);
         writeRunBlockers(cwd, r.name, r.blockers);
         state.fixRetries[r.name] = attempts + 1;
         saveRunState(cwd, state);
