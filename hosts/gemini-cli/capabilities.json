@@ -16,6 +16,7 @@
     "allowed_writes": "post-hoc-audit",
     "stoplist": "prompt-only",
     "shell": true,
-    "network": true
+    "network": true,
+    "tool_budget": "prompt-only"
   }
 }

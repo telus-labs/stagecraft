@@ -122,7 +122,8 @@ function loadGate(fullPath) {
 }
 
 /**
- * Auto-inject orchestrator and host fields if the model omitted them.
+ * Auto-inject orchestrator, host, and dispatched_tool_budget fields if the
+ * model omitted them.
  *
  * The stage prompt tells models "the orchestrator adds orchestrator and host at
  * validation time." This is that injection point. We patch the gate on disk so
@@ -158,6 +159,25 @@ function autoInjectMetadata(gate, gateFilePath) {
     }
     gate.host = host;
     modified = true;
+  }
+
+  // G10: inject dispatched_tool_budget for user-driven gates that weren't
+  // stamped by the headless path. Only applies to workstream gates (gate.workstream
+  // present). Loads the adapter for the resolved host and calls toolBudgetFor();
+  // best-effort — failure leaves the field absent rather than blocking validation.
+  if (!("dispatched_tool_budget" in gate) && typeof gate.workstream === "string") {
+    try {
+      const { loadAdapter } = require("../router");
+      const resolvedHost = gate.host || "generic";
+      const adapter = loadAdapter(resolvedHost);
+      if (typeof adapter.toolBudgetFor === "function") {
+        const budget = adapter.toolBudgetFor(gate.workstream);
+        gate.dispatched_tool_budget = budget; // null when role has no declared budget
+        modified = true;
+      }
+    } catch {
+      // Injection failed — leave field absent; gate is still valid.
+    }
   }
 
   if (modified) {

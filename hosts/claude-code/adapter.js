@@ -118,6 +118,17 @@ const ROLE_FRONTMATTER = {
   },
 };
 
+// Return the declared tool budget for a role as a string array, or null if
+// no entry exists. The tools field is a comma-separated list of Claude Code
+// tool names ("Read, Write, Glob"). Called by the orchestrator to populate
+// descriptor.toolBudget; kept here so the source of truth (ROLE_FRONTMATTER)
+// stays in one place and the orchestrator never reads ROLE_FRONTMATTER directly.
+function toolBudgetFor(role) {
+  const fm = ROLE_FRONTMATTER[role];
+  if (!fm || !fm.tools) return null;
+  return fm.tools.split(", ").map((t) => t.trim()).filter(Boolean);
+}
+
 function frontmatterFor(role) {
   const fm = ROLE_FRONTMATTER[role];
   if (!fm) throw new Error(`No frontmatter defined for role "${role}" in claude-code adapter`);
@@ -375,4 +386,5 @@ module.exports = {
   status,
   renderStagePrompt,
   invoke,
+  toolBudgetFor,
 };

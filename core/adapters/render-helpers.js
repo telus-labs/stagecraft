@@ -62,6 +62,35 @@ function allowedWritesCaption(enforcementLevel, hostDisplayName) {
   }
 }
 
+// G10: render the tool budget advisory section for prompt-only hosts.
+// Returns null when no action is needed (no budget declared, or the host
+// enforces natively — claude-code subagent tool pinning makes a prompt
+// instruction redundant and potentially confusing).
+//
+// For prompt-only hosts, the section uses intent language (not just tool
+// names) so a model unfamiliar with Claude Code tool names can still apply
+// the spirit of the restriction. The declared tool names are included for
+// audit legibility and as vocabulary hints.
+function toolBudgetSection(toolBudget, enforcementLevel) {
+  if (!toolBudget || toolBudget.length === 0) return null;
+  if (enforcementLevel === "native") return null;
+
+  const listed = toolBudget.join(", ");
+  const restrictions = [];
+  if (!toolBudget.includes("Bash")) restrictions.push("avoid shell execution");
+  if (!toolBudget.some((t) => ["Write", "Edit"].includes(t))) {
+    restrictions.push("do not write or edit files");
+  } else if (!toolBudget.includes("Edit")) {
+    restrictions.push("prefer Write over Edit for new content; do not patch existing files");
+  }
+  const restrictText = restrictions.length > 0 ? ` — ${restrictions.join("; ")}` : "";
+  return [
+    `## Tool surface (advisory — ${enforcementLevel} on this host)`,
+    `Your role has a declared tool budget. Prefer: ${listed}${restrictText}.`,
+    `(Declared budget: ${listed}. Native enforcement is only available on claude-code.)`,
+  ].join("\n");
+}
+
 // Append the gate footer to a partially-assembled prompt. This is the
 // last thing every adapter pushes before returning lines.join("\n").
 // It writes:
@@ -102,4 +131,4 @@ function appendGateFooter(lines, descriptor, ctx, hostName) {
   lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
 }
 
-module.exports = { allowedWritesCaption, appendGateFooter, renderPatchBlock };
+module.exports = { allowedWritesCaption, appendGateFooter, renderPatchBlock, toolBudgetSection };
