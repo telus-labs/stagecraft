@@ -11,7 +11,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 |---|---|---|
 | 1 | Trust consolidation | ✅ complete (PRs #63–#69) |
 | 2 | Consistency, docs sweep, release | ✅ complete (PRs #71 · #72 · #75 · #76 · release/v0.6.0) |
-| 3 | Structural debt | 🔲 after Phase 2 |
+| 3 | Structural debt | ✅ complete (PRs #79–#89) |
 | 4 | Capability roadmap (ADR-first) | ⏸ after Phases 1–2 |
 | D | Documentation system | ⏸ D1 = Phase 2; D2+ after |
 
@@ -446,22 +446,13 @@ POST-MERGE STEPS (exact tag commands).
 
 ---
 
-## Phase 3 — Structural Debt
+## Phase 3 — Structural Debt ✅ complete
 
-Order: 3.7a → 3.7b → 3.3 → 3.1a → 3.1b → 3.1c → 3.2 → 3.4 → 3.5 → 3.6.
-Prerequisite: Phase 2 complete (the un-baselined checker + 1,230+ tests are the
-refactor safety net; CHANGELOG entries become fragments per preamble rule 11).
+All ten items executed and merged (PRs [#79](https://github.com/telus-labs/stagecraft/pull/79)–[#89](https://github.com/telus-labs/stagecraft/pull/89)). Prompts preserved for re-use/reference; if re-running any, re-verify the claims first — the code has changed.
 
-**Add this line to the preamble for every Phase 3 prompt:**
-"This is a refactor phase. The standard is MECHANICAL EQUIVALENCE: npm test must pass
-WITHOUT test edits unless the item explicitly authorizes them. If you find yourself
-editing many tests, stop and report — the refactor has drifted into a rewrite."
+Order executed: 3.7a → 3.7b → 3.3 → 3.1a → 3.1b → 3.1c → 3.2 → 3.4 → 3.5 → 3.6.
 
-⚠️ All Phase 3 anchors predate Phases 1–2 (which changed bin/devteam, driver.js,
-orchestrator.js, validator.js, stoplist.js substantially). Search for the quoted code;
-re-verify every claim.
-
-### 3.7a Bug basket A: guards and merging 🔲
+### 3.7a Bug basket A: guards and merging ✅ #79
 
 ```
 TASK: Implement fixes 1, 2, 5 from plans/phase-3-structural-debt.md item 3.7. All
@@ -487,7 +478,7 @@ canonical source in both. Test: validator's accepted track set equals the canoni
 set.
 ```
 
-### 3.7b Bug basket B: lifecycle and filtering 🔲
+### 3.7b Bug basket B: lifecycle and filtering ✅ #80
 
 ```
 TASK: Implement fixes 3, 6, 7 from plans/phase-3-structural-debt.md item 3.7. All
@@ -516,7 +507,7 @@ the right seams). Do NOT auto-update the pricing table. Test: gate with tokens f
 "future-model-9" → warning present, totals unchanged.
 ```
 
-### 3.3 Marker-section helpers dedup 🔲
+### 3.3 Marker-section helpers dedup ✅ #82
 
 ```
 TASK: Implement plans/phase-3-structural-debt.md, item 3.3. Read ALL THREE
@@ -542,7 +533,7 @@ pass unchanged unless one pinned the buggy duplicate-append (call it out). Grep-
 a single implementation remains.
 ```
 
-### 3.1a CLI refactor PR 1: schema-driven flag parser 🔲
+### 3.1a CLI refactor PR 1: schema-driven flag parser ✅ #83
 
 ```
 TASK: Implement PR 1 of plans/phase-3-structural-debt.md, item 3.1. Read parseFlags
@@ -568,7 +559,7 @@ unit tests for core/cli/flags.js: each type, unknown flag, generated help.
 npm run consistency catches help-text references in docs — keep it green.
 ```
 
-### 3.1b CLI refactor PR 2: extract command modules 🔲 (requires 3.1a merged)
+### 3.1b CLI refactor PR 2: extract command modules ✅ #84
 
 ```
 TASK: Implement PR 2 of plans/phase-3-structural-debt.md item 3.1, on top of merged
@@ -592,7 +583,7 @@ Hard requirements:
 tests/cli.test.js passes UNCHANGED throughout. Report the timing check.
 ```
 
-### 3.1c CLI refactor PR 3: logic into core + replay race fix 🔲 (requires 3.1b merged)
+### 3.1c CLI refactor PR 3: logic into core + replay race fix ✅ #85
 
 ```
 TASK: Implement PR 3 of plans/phase-3-structural-debt.md item 3.1, PLUS item 3.7
@@ -616,7 +607,7 @@ backup detection. Existing replay tests keep passing. Grep-prove command modules
 contain no direct gate file manipulation.
 ```
 
-### 3.2 computeFixSteps → recipe registry 🔲
+### 3.2 computeFixSteps → recipe registry ✅ #86
 
 ```
 TASK: Implement plans/phase-3-structural-debt.md, item 3.2. Read computeFixSteps and
@@ -642,7 +633,7 @@ Implement:
 orchestrator.js should shrink ~400 lines.
 ```
 
-### 3.4 Optional @huggingface/transformers 🔲
+### 3.4 Optional @huggingface/transformers ✅ #87
 
 ```
 TASK: Implement plans/phase-3-structural-debt.md, item 3.4. Read core/memory/embed.js,
@@ -663,7 +654,7 @@ transcript. Honest scope note: npm installs optionals by default, most users see
 change.
 ```
 
-### 3.5 Declare POSIX-only 🔲
+### 3.5 Declare POSIX-only ✅ #88
 
 ```
 TASK: Implement plans/phase-3-structural-debt.md, item 3.5. The DECISION is made:
@@ -686,7 +677,7 @@ declare POSIX-only now; do not attempt a Windows port. Branch: docs/posix-only
    warning function directly.
 ```
 
-### 3.6 Test the untested + coverage signal 🔲
+### 3.6 Test the untested + coverage signal ✅ #89
 
 ```
 TASK: Implement plans/phase-3-structural-debt.md, item 3.6. Branch: test/untested-core
