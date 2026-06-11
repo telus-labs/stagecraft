@@ -27,19 +27,30 @@ const { execFileSync } = require("node:child_process");
  */
 function snapshotWritables(cwd) {
   try {
-    const out = execFileSync("git", ["status", "--porcelain"], {
+    // -z: NUL-delimited records; paths are never quoted even when they contain
+    // spaces or special characters. Without -z, git wraps such paths in double
+    // quotes and applies C-style escaping, which the old slice(3) mis-parsed.
+    const out = execFileSync("git", ["status", "--porcelain", "-z"], {
       cwd,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
     const paths = new Set();
-    for (const line of out.split("\n")) {
-      if (!line.trim()) continue;
-      // Format: "XY path" where XY are two status chars followed by a space.
-      // For renames the format is "XY old -> new"; we record the new name.
-      const raw = line.slice(3).trim();
-      const arrowIdx = raw.indexOf(" -> ");
-      paths.add(arrowIdx >= 0 ? raw.slice(arrowIdx + 4) : raw);
+    let skipNext = false;
+    for (const record of out.split("\0")) {
+      if (skipNext) {
+        skipNext = false;
+        continue; // old path in a rename/copy pair — we already recorded the new name
+      }
+      if (!record) continue;
+      // Format: "XY path" — two status chars followed by a space then the path.
+      const xy = record.slice(0, 2);
+      const filePath = record.slice(3);
+      // For renames/copies the NEXT NUL-delimited record is the original path.
+      if (xy[0] === "R" || xy[0] === "C" || xy[1] === "R" || xy[1] === "C") {
+        skipNext = true;
+      }
+      paths.add(filePath);
     }
     return { paths, ok: true };
   } catch {

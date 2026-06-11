@@ -206,6 +206,39 @@ describe("snapshotWritables — real git repo", { concurrency: false }, () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("path with space is captured without surrounding quotes", () => {
+    const dir = makeGitRepo();
+    try {
+      fs.writeFileSync(path.join(dir, "file with space.js"), "content", "utf8");
+      const snap = snapshotWritables(dir);
+      assert.ok(snap.ok);
+      assert.ok(
+        snap.paths.has("file with space.js"),
+        `expected unquoted path; got: ${[...snap.paths].join(", ")}`,
+      );
+      assert.ok(
+        !snap.paths.has('"file with space.js"'),
+        "should not capture the quoted variant",
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("file with space in allowedWrites produces no violation", () => {
+    const dir = makeGitRepo();
+    try {
+      const before = snapshotWritables(dir);
+      fs.writeFileSync(path.join(dir, "file with space.js"), "content", "utf8");
+      const after = snapshotWritables(dir);
+      const { violations, audited } = auditWrites(before, after, ["file with space.js"]);
+      assert.ok(audited);
+      assert.equal(violations.length, 0, `unexpected violations: ${violations.join(", ")}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ─── 4. capabilities.json — codex and gemini-cli declare post-hoc-audit ───────

@@ -29,6 +29,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { loadConfig } = require("../config.js");
+const { TRACKS } = require("../pipeline/stages.js");
 
 // --strict mode: the validator exits 1 on unknown internal errors instead of
 // treating them as PASS. Also activated when the CI=true env var is set.
@@ -84,14 +85,9 @@ const REINFORCED_ZERO_RE = /^0$/;
 const REINFORCED_NONZERO_RE = /^([1-9]\d*)\s+\(last:\s+(\d{4}-\d{2}-\d{2})\)$/;
 
 const VALID_STATUSES = new Set(["PASS", "WARN", "FAIL", "ESCALATE"]);
-const VALID_TRACKS = new Set([
-  "full",
-  "quick",
-  "nano",
-  "config-only",
-  "dep-update",
-  "hotfix",
-]);
+// Derived from the canonical source — stages.js is the single source of truth
+// for valid track names. Any track added there automatically propagates here.
+const VALID_TRACKS = new Set(TRACKS);
 const REQUIRED_FIELDS = [
   "stage",
   "status",
@@ -725,4 +721,4 @@ if (require.main === module) {
   runMain();
 }
 
-module.exports = { main, runMain };
+module.exports = { main, runMain, VALID_TRACKS };

@@ -436,7 +436,10 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       stage: stageDef.stage,
       status: aggregate,
       orchestrator: ORCHESTRATOR_ID,
-      track: wsGates[0].gate.track,
+      // Fall back to the locally-resolved track when a workstream gate omits
+      // it (model forgot the field). Without the fallback, merged.track is
+      // undefined and the validator flags a gate the orchestrator itself wrote.
+      track: wsGates[0].gate.track ?? track,
       timestamp: new Date().toISOString(),
       blockers: wsGates.flatMap((w) => w.gate.blockers || []),
       warnings: mergedWarnings,
