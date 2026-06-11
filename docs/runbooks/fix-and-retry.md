@@ -11,21 +11,21 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 - **`code-defect`** — the normal case this runbook covers: change code, re-run the stage.
 - **`state-corruption`** — the gate file is unreadable/malformed. **Do not re-run the stage** — that won't fix a corrupt file. Repair or rewrite the gate JSON (the blocker text names the parse error), then re-run `devteam next`.
 - **`external-blocked`** — every fix step is a human/external action with no command (e.g. obtain a sign-off). Do that thing; the pipeline can't self-advance.
-- **`convergence-exhausted`** — the retry budget (`autonomy.max_retries`, default 2) is spent, so `next` returns `resolve-escalation` instead. See [`escalation.md` § 4b](escalation.md#4b-retry-loop-exhaustion--a-distinct-escalation-shape).
+- **`convergence-exhausted`** — the retry budget (`autonomy.max_retries`, default 2) is spent, so `next` returns `resolve-escalation` instead. See [`escalation.md` § 4c](escalation.md#4c-retry-loop-exhaustion--a-distinct-escalation-shape).
 
 ---
 
 - [The general pattern](#the-general-pattern)
 - [Case 1: Red-team FAIL](#case-1-red-team-fail--must_address_before_peer_review-non-empty)
 - [Case 2: QA-within-build FAIL](#case-2-qa-within-build-fail)
-- [Case 3: Pre-review FAIL](#case-3-pre-review-stage-4a-fail--lint-or-test-failure)
-- [Case 4: Peer-review CHANGES\_REQUESTED](#case-4-peer-review-stage-5-changes_requested--fail)
-- [Case 5: Peer-review quorum miss](#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss)
-- [Case 6: PM sign-off FAIL](#case-6-pm-sign-off-stage-7-fail--delta_items-non-empty)
-- [Case 7: Accessibility audit FAIL](#case-7-accessibility-audit-stage-6b-fail--blockers-non-empty)
+- [Case 3: Pre-review FAIL](#case-3-pre-review-stage-04a-fail--lint-or-test-failure)
+- [Case 4: Peer-review CHANGES\_REQUESTED](#case-4-peer-review-stage-05-changes_requested--fail)
+- [Case 5: Peer-review quorum miss](#case-5-peer-review-stage-05-fail-with-no-objections--quorum-miss)
+- [Case 6: PM sign-off FAIL](#case-6-pm-sign-off-stage-07-fail--delta_items-non-empty)
+- [Case 7: Accessibility audit FAIL](#case-7-accessibility-audit-stage-06b-fail--blockers-non-empty)
 - [Case 8: Consistency drift](#case-8-consistency-drift--devteam-consistency-analyze-exits-non-zero)
-- [Case 9: Verification-beyond-tests FAIL](#case-9-verification-beyond-tests-stage-6d-fail--blocking_findings-non-empty)
-- [Case 10: Preflight FAIL](#case-10-preflight-stage-4e-fail--committed-ignored-files-or-broken-import-path)
+- [Case 9: Verification-beyond-tests FAIL](#case-9-verification-beyond-tests-stage-06d-fail--blocking_findings-non-empty)
+- [Case 10: Preflight FAIL](#case-10-preflight-stage-04e-fail--committed-ignored-files-or-broken-import-path)
 - [Case 11: Advisory triage — noted\_for\_followup before downstream stages](#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages)
 - [Common gotchas](#common-gotchas)
 - [After resolution](#after-resolution)
@@ -238,7 +238,7 @@ devteam next
 
 ---
 
-## Case 3: Pre-review (Stage 4a) FAIL — lint or test failure
+## Case 3: Pre-review (stage-04a) FAIL — lint or test failure
 
 Stage 4a is now **orchestrator-stamped** (the orchestrator runs the lint and test commands itself; the model's claim is verified against actual exit codes). If the gate is FAIL with `lint_passed: false` or `tests_passed: false`, the failure is real — the orchestrator observed it.
 
@@ -261,7 +261,7 @@ The orchestrator re-stamps stage-04a on the next run. Hand-editing the gate to P
 
 ---
 
-## Case 4: Peer-review (Stage 5) CHANGES_REQUESTED → FAIL
+## Case 4: Peer-review (stage-05) CHANGES_REQUESTED → FAIL
 
 Stage 5 is different — the `approval-derivation` hook writes the gate based on `REVIEW: APPROVED` / `REVIEW: CHANGES REQUESTED` markers in `pipeline/code-review/by-<reviewer>.md`. A FAIL means the approval count didn't meet `required_approvals` because at least one reviewer wrote CHANGES_REQUESTED with `BLOCKER:` items.
 
@@ -319,7 +319,7 @@ If two rounds of reviews still disagree, that's an [escalation](escalation.md) �
 
 ---
 
-## Case 5: Peer-review (Stage 5) FAIL with no objections — quorum miss
+## Case 5: Peer-review (stage-05) FAIL with no objections — quorum miss
 
 A subtler Stage 5 failure: the merged `stage-05.json` is FAIL, `changes_requested[]` is empty, and no `BLOCKER:` line exists anywhere. The cause is a **missing area review** — one of the four areas didn't accumulate enough approvals to reach `required_approvals`, even though every review file that *was* written is APPROVED.
 
@@ -518,7 +518,7 @@ merge-blockers — that's the convention (see [`conventions.md`](../conventions.
 
 ---
 
-## Case 6: PM sign-off (Stage 7) FAIL — `delta_items` non-empty
+## Case 6: PM sign-off (stage-07) FAIL — `delta_items` non-empty
 
 Stage 7 is different from all other FAIL cases: the PM has read the test report
 and brief, and found that one or more acceptance criteria are not met or not
@@ -570,7 +570,7 @@ Until then, read the items and identify the owning workstream manually.
 
 ---
 
-## Case 7: Accessibility audit (Stage 6b) FAIL — `blockers[]` non-empty
+## Case 7: Accessibility audit (stage-06b) FAIL — `blockers[]` non-empty
 
 Stage 6b (`pipeline/gates/stage-06b.json`) runs the accessibility audit against the
 frontend. Blockers carry an `A11Y-*` ID, a WCAG criterion reference, the severity
@@ -721,7 +721,7 @@ devteam consistency analyze
 
 `devteam next` advances past the failing stage. The auto-injected blocker section in `context.md` is gone (stripped by the validator on PASS/WARN). The audit trail in `pipeline/gates/` shows the failed gate, the patched re-run, and the eventual PASS — the full history is on disk for the retrospective and any future audit.
 
-## Case 9: Verification-beyond-tests (Stage 6d) FAIL — `blocking_findings[]` non-empty
+## Case 9: Verification-beyond-tests (stage-06d) FAIL — `blocking_findings[]` non-empty
 
 Stage 6d runs property-based testing (Hypothesis/fast-check/PropTest), mutation testing (Stryker/mutmut/mull), and/or formal verification (TLA+/Alloy/Lean) against the changed code. `blocking_findings[]` in the gate is non-empty; those are counterexamples or surviving mutants that must be addressed before advancing.
 
@@ -803,7 +803,7 @@ cat pipeline/gates/stage-06d.json | jq '{status, blocking_findings, methods_atte
 
 ---
 
-## Case 10: Preflight (Stage 4e) FAIL — committed ignored files or broken import path
+## Case 10: Preflight (stage-04e) FAIL — committed ignored files or broken import path
 
 `devteam stage peer-review` auto-runs preflight (stage-04e) before dispatching reviewers. If preflight is FAIL the command exits immediately with the blockers printed to stderr. This is the gate that caught what peer reviewers would otherwise flag as BLOCKERs in the next stage.
 

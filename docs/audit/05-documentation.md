@@ -17,7 +17,7 @@ $ grep -c "derive-approvals" README.md
 0
 ```
 
-**Impact**: discoverability — operators reading the README CLI reference won't know the command exists. They'd only find it via the runbook (if they hit a Stage-5 quorum miss and read fix-and-retry.md Case 5) or the FAQ. The command is a small but real escape hatch for operators editing review files outside Claude Code; missing it from the reference table is a real gap.
+**Impact**: discoverability — operators reading the README CLI reference won't know the command exists. They'd only find it via the runbook (if they hit a stage-05 quorum miss and read fix-and-retry.md Case 5) or the FAQ. The command is a small but real escape hatch for operators editing review files outside Claude Code; missing it from the reference table is a real gap.
 
 **Recommended fix**: add a row to the README CLI reference table. ~3 lines.
 

@@ -311,7 +311,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 - Runs git hygiene (committed-but-ignored files), import path validation, and deferred-items risk check
 - Auto-invoked by `devteam stage peer-review`; use standalone for early feedback
-- Writes `pipeline/gates/stage-04e.json`; see [Case 10](runbooks/fix-and-retry.md#case-10-preflight-stage-4e-fail--committed-ignored-files-or-broken-import-path) for fix steps
+- Writes `pipeline/gates/stage-04e.json`; see [Case 10](runbooks/fix-and-retry.md#case-10-preflight-stage-04e-fail--committed-ignored-files-or-broken-import-path) for fix steps
 
 **Headless mode** — run a stage end-to-end without touching the chat.
 

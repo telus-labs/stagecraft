@@ -359,7 +359,7 @@ After two review rounds with persistent CHANGES_REQUESTED, the gate's `escalated
 
 A **quorum miss**, not an objection. The merged `stage-05.json` aggregates four per-area gates (`stage-05.backend.json`, `…frontend.json`, `…platform.json`, `…qa.json`); each area gate needs `approvals.length >= required_approvals` to PASS. If one area received fewer area-reviews than required — even with every review file that *was* written being APPROVED — that area's gate is FAIL, and the merge lifts the FAIL into the merged gate's `workstreams[]` entry for that area.
 
-Key vocabulary trip: at Stage 5, `workstreams[]` are **areas of code being reviewed**, not reviewers. A FAIL on `workstreams[].workstream: "qa"` means "the qa *area* didn't reach quorum," not "the qa reviewer objected." See [`concepts.md` §Stage-5 vocabulary callout](concepts.md#stage-5-vocabulary-callout).
+Key vocabulary trip: at Stage 5, `workstreams[]` are **areas of code being reviewed**, not reviewers. A FAIL on `workstreams[].workstream: "qa"` means "the qa *area* didn't reach quorum," not "the qa reviewer objected." See [`concepts.md` §stage-05 vocabulary callout](concepts.md#stage-05-vocabulary-callout).
 
 **Before reading any gate as authoritative, sync it:**
 
@@ -392,7 +392,7 @@ covers which areas) append a `## Review of <area>` section to their
 `devteam derive-approvals` step is needed because the `approval-derivation` hook fires
 only when an agent writes a file inside an active Claude Code session — shell or editor
 saves bypass it. Full operational sequence — including the override-to-WARN escape hatch
-and its caveats — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
+and its caveats — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-05-fail-with-no-objections--quorum-miss).
 
 ### How do I roll back a deploy?
 

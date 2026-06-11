@@ -7,7 +7,7 @@ This guide covers the end-to-end git practice for a feature built with Stagecraf
 - [Starting a feature: create the branch first](#starting-a-feature-create-the-branch-first)
 - [Pipeline artifacts belong in git](#pipeline-artifacts-belong-in-git)
 - [When to commit: after each stage group, not every command](#when-to-commit-after-each-stage-group-not-every-command)
-- [Stage 4: parallel build and git worktrees](#stage-4-parallel-build-and-git-worktrees)
+- [Stage 04: parallel build and git worktrees](#stage-04-parallel-build-and-git-worktrees)
 - [When to open the PR](#when-to-open-the-pr)
 - [The CI connection](#the-ci-connection)
 - [Merging into main](#merging-into-main)
@@ -107,7 +107,7 @@ Stage files explicitly by name or glob. Never use `git add -A` or `git add .` â€
 
 ---
 
-## Stage 4: parallel build and git worktrees
+## Stage 04: parallel build and git worktrees
 
 `rules/stage-04.md` describes an explicit worktree model where each build
 workstream operates in its own branch:

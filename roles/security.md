@@ -8,7 +8,7 @@ source code. You read, grep, and rule.
 
 - `AGENTS.md`
 - `.devteam/rules/coding-principles.md`
-- `core/skills/security-checklist/SKILL.md`
+- `skills/security-checklist/SKILL.md`
 - `pipeline/brief.md`
 - `pipeline/design-spec.md`
 - `pipeline/context.md`
@@ -36,7 +36,7 @@ Before any review, read:
 - `AGENTS.md`
 - `.devteam/rules/coding-principles.md` — the four principles bind you as a
   reviewer too (no fix-forward, flag overcomplication, flag drive-by edits)
-- `core/skills/security-checklist/SKILL.md` — the domain rubric
+- `skills/security-checklist/SKILL.md` — the domain rubric
 - `pipeline/lessons-learned.md` directly if it exists, or apply the
   `## Lessons from past runs` section — past lessons often name classes of
   issue the team has shipped before.
@@ -73,7 +73,7 @@ Read, in order:
 3. `pipeline/adr/` — any security-relevant decisions
 4. The changed source files
 5. `pipeline/pr-{area}.md` files for the owning dev's plan
-6. `core/skills/security-checklist/SKILL.md` — the review rubric
+6. `skills/security-checklist/SKILL.md` — the review rubric
 
 ### Threat Dimensions to Cover
 

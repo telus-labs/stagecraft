@@ -25,7 +25,7 @@ Both commands read this file and execute the phases below.
 
 - The target codebase you're auditing (the user's project, not the Stagecraft framework).
 - Optional scope constraint: `/audit src/backend/` focuses on one subtree.
-- Optional `docs/audit-extensions.md` in the target — project-specific checks appended to each phase. Read once per phase if present.
+- Optional `<target-project>/docs/audit-extensions.md` — project-specific checks appended to each phase. Read once per phase if present. Operators create this in the projects they audit; it does not live in the Stagecraft repo.
 - Optional `docs/audit/status.json` — for `--resume`, names the last completed phase.
 
 ## Outputs
@@ -404,7 +404,7 @@ read docs/audit/10-roadmap.md for the full sequenced plan.
 
 ## Extensions
 
-If `docs/audit-extensions.md` exists in the target project, read it once at the start of every phase. It contains project-specific checks to run *in addition* to the generic phase steps. Each extension specifies which phase it belongs to and what to append.
+If `<target-project>/docs/audit-extensions.md` exists in the target project, read it once at the start of every phase. It contains project-specific checks to run *in addition* to the generic phase steps. Each extension specifies which phase it belongs to and what to append.
 
 Append extension results to the corresponding `docs/audit/<NN>-*.md` file under a `## Project-Specific` heading at the bottom. Don't intersperse them with the generic findings — keep them clearly delineated so the next audit can tell which findings came from the standard pass and which from local conventions.
 
