@@ -289,6 +289,8 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 - Checks the Stagecraft install, each declared host CLI is reachable, and roles/rules/skills are correctly laid down
 - Prints a green/red checklist; fix what's red before running a stage
+- Reports local embedding availability as informational (`ℹ`) — absence is not a failure; run `npm install @huggingface/transformers` to enable `devteam memory` with the default local embedder
+- Prints a warning (not a hard exit) when run on Windows (`process.platform === "win32"`) — Stagecraft is POSIX-only; WSL2 is the supported path on Windows
 
 **`devteam next [--json] [--skip-advise]`** — find out what to do next.
 
@@ -343,6 +345,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Re-runs a recorded stage with current config, writes the new gate to `pipeline/gates/replay/`
 - Diffs the result against the original: status, blockers, cost/tokens/duration, reproducibility fields
 - `--dry-run` shows the plan and prompt-hash drift without invoking the host
+- **Crash-safe:** the original gate is snapshotted to `pipeline/gates/.replay-backup/` before dispatch and restored from disk on any exit — a crash mid-run no longer silently replaces the original; leftover backups from a prior crash are detected and reported on next invocation
 
 **Codebase audit** — a full read-only analysis of any project.
 

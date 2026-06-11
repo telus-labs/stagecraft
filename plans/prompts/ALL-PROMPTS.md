@@ -12,7 +12,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 1 | Trust consolidation | ✅ complete (PRs #63–#69) |
 | 2 | Consistency, docs sweep, release | ✅ complete (PRs #71 · #72 · #75 · #76 · release/v0.6.0) |
 | 3 | Structural debt | ✅ complete (PRs #79–#89) |
-| 4 | Capability roadmap (ADR-first) | ⏸ after Phases 1–2 |
+| 4 | Capability roadmap (ADR-first) | 🔲 ready (Phases 1–3 complete) |
 | D | Documentation system | ⏸ D1 = Phase 2; D2+ after |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -949,7 +949,7 @@ generate-commit-verify pattern. Branch: docs/generated-reference
 Done: docs:generate idempotent (second run = no diff).
 ```
 
-### D3b Generated CLI reference ⏸ (requires Phase 3.1a merged)
+### D3b Generated CLI reference 🔲 (Phase 3.1a merged — PR #83)
 
 ```
 PRECONDITION: core/cli/flags.js and per-command flag schemas exist (Phase 3.1a).
@@ -971,7 +971,7 @@ Branch: docs/generated-cli-reference
 Report: kept-vs-linked decisions from step 2.
 ```
 
-### D5 Model-facing token budget program ⏸ (requires 2.3 merged)
+### D5 Model-facing token budget program 🔲 (2.3 merged — PR #75)
 
 ```
 PRECONDITION: the gates.md split is merged (rules/gates-core.md exists and
@@ -999,7 +999,7 @@ Done: prompt-budget.md committed + idempotent; advisories fire on synthetic
 violations (meta-test); the step-4 proposal in the report.
 ```
 
-### D6 Onboarding flow upkeep ⏸ (requires 2.5 merged)
+### D6 Onboarding flow upkeep 🔲 (2.5 merged — release/v0.6.0)
 
 ```
 TASK: Implement workstream D6 of plans/documentation-plan.md. Branch: docs/onboarding-upkeep
