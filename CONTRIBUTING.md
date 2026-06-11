@@ -11,6 +11,7 @@ Before starting: read [`AGENTS.md`](AGENTS.md) for the load-bearing contracts. E
 - [Recipe 2 — Adding a stage](#recipe-2--adding-a-stage)
 - [Recipe 3 — Adding a role](#recipe-3--adding-a-role)
 - [Recipe 4 — Adding a skill](#recipe-4--adding-a-skill)
+- [Recipe 5 — Adding a CHANGELOG fragment](#recipe-5--adding-a-changelog-fragment)
 - [Style guidance](#style-guidance)
 - [Testing your change](#testing-your-change)
 - [Commit & PR style](#commit--pr-style)
@@ -169,6 +170,23 @@ Skills are task-oriented helpers the LLM consults for specific tasks (writing co
    ls "$TMPDIR/.claude/skills/<name>/"
    ```
 
+## Recipe 5 — Adding a CHANGELOG fragment
+
+Every PR that touches `core/`, `bin/`, `hosts/`, `rules/`, `roles/`, or `skills/` must include a `changelog.d/<slug>.md` entry. CI enforces this (`.github/workflows/test.yml`, `scripts/changelog-guard.js`).
+
+1. **Pick a filename.** Use your branch name or PR slug: `changelog.d/feat-my-thing.md`. Each PR owns its own file — filenames never collide.
+
+2. **Write the entry.** Use the same bullet style as existing `## [Unreleased]` entries in `CHANGELOG.md`. Long entries are encouraged — these bullets become the official release notes. Include an "Honest scope note" where the change has known limitations or deferred follow-ups.
+
+   ```markdown
+   - **Your change title** (closes BACKLOG XY). One paragraph describing what
+     changed and why, in CHANGELOG bullet style. *Honest scope note:* known limits.
+   ```
+
+3. **Assemble at release time.** `node scripts/release.js assemble <version>` reads all `changelog.d/*.md` files (stable alphabetical order) plus any content under `[Unreleased]`, folds both into the new versioned section, and deletes the fragment files. `README.md` and `.gitkeep` in `changelog.d/` are never touched.
+
+**Opt-out:** add `[skip-changelog]` to the PR title or any commit message on the branch (for refactors, test-only changes, or docs-only edits that CI misclassifies as touching guarded paths).
+
 ## Style guidance
 
 - **No comments-as-documentation in code.** If a fact needs explaining and isn't obvious from the code, put it in a doc, not a multi-paragraph code comment. One-line "why this is here" comments are fine; docstrings aren't.
@@ -195,6 +213,7 @@ If your change touches a load-bearing contract from `AGENTS.md`, add the test in
 - Reference the doc you updated alongside the code (e.g. "updates ARCHITECTURE.md decision #5"). Doc + code in the same commit.
 - Sign off with `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>` if Claude helped.
 - Don't `git add -A` or `git add .`. Stage by name to avoid accidentally committing `node_modules/` artifacts or scratch files.
+- Any PR touching `core/`, `bin/`, `hosts/`, `rules/`, `roles/`, or `skills/` must include a `changelog.d/<slug>.md` entry. See [Recipe 5](#recipe-5--adding-a-changelog-fragment).
 
 ## Where to ask
 

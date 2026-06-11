@@ -57,3 +57,16 @@ jobs:
           TARGET=$(mktemp -d)
           ./bin/devteam init --host claude-code --cwd "$TARGET"
           ./bin/devteam doctor --cwd "$TARGET"
+
+      - name: Changelog fragment guard
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          GUARD_CHANGED=$(git diff --name-only "$BASE_SHA" HEAD)
+          GUARD_FRAGMENTS=$(git diff --name-only --diff-filter=AM "$BASE_SHA" HEAD \
+            | grep '^changelog\.d/.*\.md$' | grep -v 'README\.md' || true)
+          GUARD_SKIP="$PR_TITLE"$'\n'$(git log --format=%s "$BASE_SHA"..HEAD)
+          export GUARD_CHANGED GUARD_FRAGMENTS GUARD_SKIP
+          node scripts/changelog-guard.js
