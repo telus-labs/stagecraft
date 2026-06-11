@@ -1,0 +1,220 @@
+"use strict";
+
+const name = "help";
+const flags = {};
+
+function run() {
+  console.log(`devteam — model-agnostic AI dev team orchestrator
+
+Usage: devteam <command> [args]
+
+Commands:
+  init --host <list> [--force]     Install host adapter(s) into the current
+                                   project. <list> is comma-separated, e.g.
+                                   "claude-code" or "claude-code,codex".
+                                   Writes .devteam/config.yml and creates
+                                   pipeline/gates/ workspace.
+  stage <name> [--feature "..."]   Render stage prompt(s) for <name>. With
+        [--headless]                 --headless, drives each workstream's
+        [--timeout-ms N]             host CLI non-interactively (claude --print,
+        [--patch [--from <stage>]]   codex exec) and reports exit codes +
+        [--skip-completed]           gate paths. --timeout-ms caps each
+        [--workstream <role>]        workstream's wall-clock (default 600000,
+                                   i.e. 10 min); pass 0 to disable.
+                                   --patch scopes build agents to the patch
+                                   items from the named stage's gate (reads
+                                   must_address_before_peer_review, falling
+                                   back to blockers[]); default: red-team.
+                                   --skip-completed skips dispatching any
+                                   workstream whose gate file already exists.
+                                   --workstream <role> dispatches only the
+                                   named role; repeat for multiple. All other
+                                   workstreams are left untouched (their
+                                   existing gate files are preserved).
+  next [--json]                    Inspect pipeline/gates/ and report what
+                                   to do next: run a stage, continue a
+                                   partial multi-role stage, merge, fix a
+                                   FAIL, resolve an ESCALATE, or done.
+  run [--track <t>] [--until <s>]  Bounded autonomous driver: loop next →
+      [--max-iterations N]          dispatch → merge until pipeline-complete.
+      [--budget-usd X]              Auto-fixes code-defect FAILs (clear gate,
+      [--timeout-ms N]              propagate blockers, re-dispatch) and retries
+      [--retry-delay-ms N]          transient dispatch failures with backoff.
+      [--auto-rule <classes>]       With --auto-rule, auto-applies Principal
+      [--allow-stage <s>]           rulings whose [class:] is in the granted
+                                   allowlist (never cannot-decide / ceiling).
+                                   Halts for a human on escalations, the
+      [--resume] [--force] [--json] consequence ceiling (sign-off / deploy —
+                                   needs --allow-stage), a budget cap, or a
+                                   structural dispatch failure. Writes pipeline/
+                                   run.lock, run-state.json, run-log.jsonl.
+  validate                         Validate the most recent gate in
+                                   pipeline/gates/. Exit codes: 0 PASS/WARN,
+                                   1 malformed, 2 FAIL, 3 ESCALATE. Used
+                                   by host hooks (e.g. Claude Code Stop).
+  verify-chain [--track <t>]       C6: verify the tamper-evident gate chain —
+       [--json]                     each stage gate commits to a hash of its
+                                   predecessor. Reports breaks + unstamped
+                                   gates. Exit 0 intact, 1 broken (CI-usable).
+  stamp-chain [--track <t>]        C6: (re)stamp the chain on all stage gates,
+                                   in order. Use after a deliberate earlier-
+                                   stage re-run, or to stamp interactive gates.
+  merge <stage>                    Merge per-workstream gates into stage gate.
+  preflight [--cwd <dir>]          Run mechanical pre-peer-review checks
+       [--skip-write]               (stage-04e): committed-but-ignored files,
+                                   broken test import paths, and deferred red-team
+                                   item count. Writes pipeline/gates/stage-04e.json.
+                                   Exits 1 on FAIL. Also runs automatically when
+                                   'devteam stage peer-review' is invoked (unless
+                                   stage-04e.json already exists and is PASS).
+  derive-approvals [<file>]        Re-run the approval-derivation hook on
+        [--cwd <dir>] [--json]      pipeline/code-review/by-*.md and rewrite the
+                                   per-area stage-05.<area>.json gates. Use after
+                                   hand-editing a review file outside an active
+                                   Claude Code session (the hook only fires on
+                                   agent saves; shell/editor saves bypass it).
+                                   Without an argument, derives every by-*.md
+                                   under pipeline/code-review/. Follow with
+                                   'devteam merge peer-review' to rebuild the
+                                   merged stage-05.json. See docs/runbooks/
+                                   fix-and-retry.md § Case 5.
+  restart <stage> [--cascade]      Clear a stage's gate(s) so the pipeline can
+       [--keep-context]            re-run it. With --cascade, also clears every
+       [--dry-run]                 stage that comes after this one in the active
+                                   track. By default also strips that stage's
+                                   injected blocker sections from pipeline/
+                                   context.md (--keep-context to preserve them).
+                                   Use after an ESCALATE or FAIL to re-run from
+                                   a specific point.
+  ruling [--topic "..."]           Dispatch the Principal subagent for an ad-hoc
+       [--context paths]           ruling. --topic is optional: when omitted the
+       [--target-gate path]        topic is auto-derived from the escalating gate's
+       [--headless]                escalation_reason + decision_needed. The ruling
+                                   lands in pipeline/context.md as a PRINCIPAL-RULING
+                                   line; no gate is written.
+                                   See docs/runbooks/escalation.md.
+  fix-escalation                   Implement the Principal ruling written by
+       [--headless]                devteam ruling. Dispatches an applicator agent
+                                   that reads PRINCIPAL-RULING entries from
+                                   pipeline/context.md and fixes gates, runs stages,
+                                   and merges — so devteam next advances. No
+                                   hand-editing required.
+  summary [--json]                 One-screen pipeline state report.
+  log [--follow] [--json]          Chronological event timeline: every gate
+                                   and every artifact write, in mtime order,
+                                   with key fields per stage. --follow tails
+                                   the pipeline/ directory at 1s poll. Works
+                                   in both headless and user-driven modes.
+  doctor                           Pre-flight check: install integrity,
+                                   target layout, config validity, adapter
+                                   status, host CLIs on PATH.
+  ui [--port N] [--open]           Start a local web UI on http://127.0.0.1:3737/
+                                   showing pipeline state, gate detail, live
+                                   updates via SSE. --open launches the browser.
+  memory <subcommand>              Persistent project memory.
+    ingest                         Index pipeline/* artifacts (brief,
+                                   design-spec, ADRs, retro, etc.) via
+                                   semantic embeddings into .devteam/memory/.
+    query "text" [--limit N]       Semantic search. Add --org to query
+       [--kind <k>] [--org]        the org-shared store at
+                                   ~/.stagecraft/memory/.
+    stats [--org]                  What's indexed (project or org).
+    clear [--org]                  Wipe per-project (or org) store.
+    reindex                        Re-embed everything (after embedder change).
+                                   Local embedder by default; ~150MB model
+                                   downloaded once on first ingest.
+    promote [<kinds...>]           Copy this project's records to the
+                                   org-shared store. Default kinds:
+                                   adr + lessons-learned. Architectural
+                                   continuity reads from there.
+  architecture lookup "<topic>"    Query the org-shared store for
+       [--limit N] [--kind adr|    prior ADRs (or lessons) on a topic.
+        lessons-learned]            Principal consults this before designing
+                                   so prior commitments are honored or
+                                   explicitly superseded — architecture
+                                   doesn't drift because the architect remembers.
+  reproduce <stage-id> [--json]    Read pipeline/gates/<stage-id>.json
+                                   and report what was recorded for replay
+                                   (model_version, temperature, seed, prompt
+                                   hash, tools hash). Re-renders the current
+                                   prompt and compares hashes to surface drift.
+  verify <stage-id> [--json]       Orchestrator-stamped verification. For
+                                   stage-04a (lint+tests) and stage-06 (tests
+                                   + AC mapping), runs the configured commands
+                                   and rewrites the gate fields with what was
+                                   actually observed. Flips status to FAIL if
+                                   the orchestrator's truth disagrees with the
+                                   model's claim. Commands resolve from
+                                   .devteam/config.yml pipeline.verify.* or
+                                   package.json scripts.
+  replay <stage-id> [--dry-run]    Re-run a recorded stage with CURRENT
+       [--json]                     config and diff the result. Writes the
+                                   new gate to pipeline/gates/replay/<stage>.
+                                   <timestamp>.json. --dry-run prints the
+                                   plan + drift check without invoking the
+                                   host.
+  ci install [--ci <type>]         Drop a CI workflow template into
+       [--out <dir>] [--force]      the target project. Currently supports
+                                   --ci github-actions (the default). The
+                                   workflow validates pipeline/gates/ + posts
+                                   each gate as a GitHub check run on PRs.
+                                   It does NOT run the pipeline itself in CI.
+  ci show [--ci <type>]            Print the workflow template to stdout.
+  spec verify [--strict] [--json]  Drift-check brief.md ↔ spec.feature ↔
+                                   test-report.md. Exits non-zero if any AC
+                                   in brief lacks a scenario, any scenario
+                                   lacks an AC tag, or any test references
+                                   an unknown AC. --strict also fails when
+                                   one AC is mapped by multiple scenarios.
+  spec generate [--feature "..."]  Scaffold pipeline/spec.feature from the
+       [--force]                   brief's numbered AC-N entries — one
+                                   tagged Scenario per AC. Refuses to
+                                   overwrite without --force.
+  consistency analyze              Cross-artifact drift across the full
+       [--strict] [--json]         pipeline chain: brief -> spec ->
+                                   pr-*.md ## Verify -> red-team
+                                   must-address -> test-report -> gate
+                                   field reality. Generalizes 'spec
+                                   verify' to every intermediate
+                                   artifact + the gate-vs-reality
+                                   dimension. Exits non-zero on drift.
+  assess [--description "..."]    Infer the best track for the
+       [--json] [--apply]          current change. Reads pipeline/
+       [--cwd <dir>] [files...]    changed-files.txt (or explicit file
+                                   list) and applies path/content/
+                                   description heuristics to recommend
+                                   a track. --apply writes the result
+                                   to pipeline.custom_stages in
+                                   .devteam/config.yml so subsequent
+                                   'devteam next' and 'devteam stage'
+                                   use the inferred stage list.
+  standards discover               Scan the project codebase and
+       [--cwd <dir>] [--json]      produce docs/project-conventions.md
+       [--dry-run] [--force]       with detected tech stack, module
+                                   system, file layout, naming style,
+                                   tooling, test config, and common
+                                   import paths. --dry-run prints
+                                   without writing. --json emits the
+                                   structured discovery result.
+  stages                           List known stage names.
+  hosts                            List available host adapters.
+  help                             Show this message.
+
+Quickstart:
+  1. cd into your target project (NOT the Stagecraft repo).
+  2. devteam init --host claude-code         # lays down rules, roles, hooks
+  3. devteam doctor                          # verify install
+  4. devteam stage requirements --feature "your feature description"
+       — by default, this RENDERS the prompt; you feed it to your model.
+       — inside Claude Code, use /devteam stage <name> instead.
+       — to drive the host CLI automatically: add --headless.
+  5. After the model writes the gate JSON: devteam next  → tells you
+     what to do next (advance, fix, merge, escalate, or done).
+
+devteam never calls a model itself. Adapters under hosts/ are where the
+host-specific glue lives; the orchestrator just renders prompts and
+validates the gate JSON that comes back.
+`);
+}
+
+module.exports = { name, flags, run };
