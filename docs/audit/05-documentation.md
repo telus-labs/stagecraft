@@ -17,7 +17,7 @@ $ grep -c "derive-approvals" README.md
 0
 ```
 
-**Impact**: discoverability — operators reading the README CLI reference won't know the command exists. They'd only find it via the runbook (if they hit a Stage-5 quorum miss and read fix-and-retry.md Case 5) or the FAQ. The command is a small but real escape hatch for operators editing review files outside Claude Code; missing it from the reference table is a real gap.
+**Impact**: discoverability — operators reading the README CLI reference won't know the command exists. They'd only find it via the runbook (if they hit a stage-05 quorum miss and read fix-and-retry.md Case 5) or the FAQ. The command is a small but real escape hatch for operators editing review files outside Claude Code; missing it from the reference table is a real gap.
 
 **Recommended fix**: add a row to the README CLI reference table. ~3 lines.
 
@@ -109,5 +109,5 @@ Inbound link integrity check on the README's `## Documentation map` section: all
 - **Doc velocity tracks code velocity.** 99 commits in 6 days, with doc-related files in the top 5 churn list (CHANGELOG, user-guide, README, BACKLOG, FAQ). Documentation is not treated as a post-hoc afterthought.
 - **Hierarchical structure.** README → doc map → user-guide / FAQ / runbooks / walkthroughs. Discoverable from any entry point.
 - **Recent rationalization** (PR #27 audit-section cleanup) demonstrates active stewardship: when duplication was identified, it was fixed; when bugs surfaced in the README (the `devteam stage audit` command that doesn't exist), they were corrected.
-- **Walkthroughs.** Two end-to-end traces — `stage-04-split-host.md` (multi-workstream contract stress test) and `soc2-evidence-collector.md` (full 17-stage trace). The latter is the recommended onboarding artifact and at 460 lines, it's a substantial commitment to showing-not-telling.
+- **Walkthroughs.** Two end-to-end traces — `stage-04-split-host.md` (multi-workstream contract stress test) and `soc2-evidence-collector.md` (full 18-stage trace). The latter is the recommended onboarding artifact and at 460 lines, it's a substantial commitment to showing-not-telling.
 - **Doc-as-test discipline** for the consistency check (`scripts/consistency.js` enforces 221 cross-artifact invariants between code, docs, and configs). This catches drift between role briefs and code; between stage definitions and rules; between CHANGELOG entries and shipped features.

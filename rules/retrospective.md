@@ -10,8 +10,8 @@ Two files, different lifetimes:
 
 | File | Lifetime | Purpose |
 |---|---|---|
-| `pipeline/retrospective.md` | Per run (overwritten each `/reset`) | Full retro record for this feature |
-| `pipeline/lessons-learned.md` | Persistent (survives `/reset`) | Durable rules the team carries into every future run |
+| `pipeline/retrospective.md` | Per run (overwritten each `devteam restart`) | Full retro record for this feature |
+| `pipeline/lessons-learned.md` | Persistent (survives `devteam restart`) | Durable rules the team carries into every future run |
 
 `pipeline/lessons-learned.md` is the one that actually changes behaviour. The
 per-run retro is the raw material; lessons-learned is the refined output.
@@ -209,8 +209,8 @@ surfaces it at each of those stages.
 
 - After any **red** halt (unresolved escalation, failed deploy) — run retro
   immediately, even if the feature didn't ship. Failed runs teach more.
-- After a `/hotfix` — abbreviated single-section retro from whoever ran the
-  hotfix. Skip the parallel contribution pass.
+- After a `hotfix` track run — abbreviated single-section retro from whoever
+  ran the hotfix. Skip the parallel contribution pass.
 
 ## What not to do in retro
 

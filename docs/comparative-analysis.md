@@ -76,7 +76,7 @@ Stagecraft treats software delivery as an industrial assembly line: up to 18 seq
 
 **The gating mechanism is non-cooperative.** For stages 04a (pre-review) and 06 (QA), the orchestrator runs the configured lint / test commands itself (`core/verify/runner.js`) and stamps the gate with what it actually observed. Field overrides — where the model's claim disagreed with the orchestrator's truth — are recorded in an `_orchestrator_stamped` audit block. The model can't talk its way past these gates.
 
-**Multi-model dispatch.** Routing precedence is `routing.stages[stage] → routing.roles[role] → routing.default_host`. Different stages — and different roles within a multi-role stage — can land on different host CLIs in the same pipeline run. Multi-model peer review (`routing.review_fanout: [host, host, host]`) takes this further: Stage-5's 4 area workstreams duplicate across N hosts → 4×N parallel reviews; pessimistic merge across all of them. No other framework here goes this far on heterogeneous model dispatch.
+**Multi-model dispatch.** Routing precedence is `routing.stages[stage] → routing.roles[role] → routing.default_host`. Different stages — and different roles within a multi-role stage — can land on different host CLIs in the same pipeline run. Multi-model peer review (`routing.review_fanout: [host, host, host]`) takes this further: Stage 5's 4 area workstreams duplicate across N hosts → 4×N parallel reviews; pessimistic merge across all of them. No other framework here goes this far on heterogeneous model dispatch.
 
 **Downstream-of-build coverage.** 12 stages downstream of code generation (pre-review, security-review, red-team, migration-safety, peer-review, QA, accessibility-audit, observability-gate, verification-beyond-tests, performance-budget, sign-off, deploy, retrospective). Several have veto-capable roles (security, migrations); one is adversarial-by-design (red-team); the performance-budget stage (stage-06e, shipped 2026-06-07) adds Lighthouse Web Vitals, bundle-size delta, and load-test throughput against configured thresholds. Most spec-driven tools stop at "implementation passes tests"; Stagecraft assumes you stop at "the change has been adversarially reviewed, hardened, observability-instrumented, performance-gated, signed off, and the rollback was tested."
 
@@ -120,7 +120,7 @@ Stagecraft treats software delivery as an industrial assembly line: up to 18 seq
 
 **Legacy specialization.** Agent OS is the framework here you'd reach for when Stagecraft, BMAD, or Spec Kit feels too heavy. It doesn't impose stages or roles; it just keeps your AI-assisted work consistent with patterns that already exist in your codebase. Low friction threshold, low ceiling.
 
-**Comparison to Stagecraft.** Different philosophy entirely. Stagecraft is **prescriptive** about the shape of work (17 stages, gates, role-by-area review matrix). Agent OS is **descriptive** about the style of work (extract what you already do, inject it back). Natural pairing: Agent OS feeding Stagecraft's per-stage prompts and role briefs with project-specific conventions. Stagecraft today has `docs/conventions.md` (a marker catalogue) and per-host rules in `rules/`. An Agent OS-style "discover" pass could populate or refresh those.
+**Comparison to Stagecraft.** Different philosophy entirely. Stagecraft is **prescriptive** about the shape of work (18 stages, gates, role-by-area review matrix). Agent OS is **descriptive** about the style of work (extract what you already do, inject it back). Natural pairing: Agent OS feeding Stagecraft's per-stage prompts and role briefs with project-specific conventions. Stagecraft today has `docs/conventions.md` (a marker catalogue) and per-host rules in `rules/`. An Agent OS-style "discover" pass could populate or refresh those.
 
 ### 3.5 OpenSpec
 
@@ -186,7 +186,7 @@ Spec Kit's flow stops at Implementation. OpenSpec's spec deltas don't prescribe 
 
 ### 4.2 Three honest cases where Stagecraft is *not* the best fit
 
-1. **Solo developer / small personal project.** Use **Agent OS** for convention consistency. The 17-stage pipeline is overkill below team-of-three scale.
+1. **Solo developer / small personal project.** Use **Agent OS** for convention consistency. The 18-stage pipeline is overkill below team-of-three scale.
 2. **Greenfield product where the spec is the long-term asset.** Use **Spec Kit** or **OpenSpec**. Stagecraft can be made to work (brief.md is the spec) but its center of gravity is the gate, not the spec.
 3. **Teams already deep in the AWS / Bedrock ecosystem.** Use **AWS Kiro** + **AI-DLC**. Kiro's autonomous-agent + steering-files + Agent Hooks model integrates more tightly than anything Stagecraft offers, and AI-DLC layers compliance / audit on top.
 

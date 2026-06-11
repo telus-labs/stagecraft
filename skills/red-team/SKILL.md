@@ -193,4 +193,4 @@ When `review_fanout` lands (BACKLOG D3-adjacent), red-team is a natural fanout c
 
 ## Where the report goes
 
-`pipeline/red-team-report.md`. Lives next to the other Stage-4-ish artifacts (`pipeline/build-plan.md`, `pipeline/pre-review.md`, `pipeline/security-review.md`). Read by the implementer to address `must-fix` items, by Stage 5 reviewers as context, and by Stage 9 retrospective synthesis to surface recurring patterns ("we keep missing this surface — promote a lesson").
+`pipeline/red-team-report.md`. Lives next to the other stage-04-range artifacts (`pipeline/build-plan.md`, `pipeline/pre-review.md`, `pipeline/security-review.md`). Read by the implementer to address `must-fix` items, by Stage 5 reviewers as context, and by Stage 9 retrospective synthesis to surface recurring patterns ("we keep missing this surface — promote a lesson").

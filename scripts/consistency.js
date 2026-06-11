@@ -685,7 +685,60 @@ function checkCommandSurface(scanRoot) {
   }
 }
 
-// --- Check 6: Stage rule-file coverage ---
+// --- Check 6a: Tracks matrix sync ---
+//
+// docs/tracks.md contains a fenced block delimited by
+//   <!-- generated: do not hand-edit -->  and  <!-- /generated -->
+// that is produced by scripts/generate-tracks-matrix.js.
+//
+// This check verifies that the committed block equals what the generator
+// would produce right now.  It catches manual edits to the matrix and
+// ensures that any change to STAGES_BY_TRACK is reflected in the doc.
+//
+// Only runs in full-repo mode (not fixture-tree mode) because the generator
+// imports core/pipeline/stages.js directly and needs the live repo.
+function checkTracksMatrixSync() {
+  const tracksPath = path.join(REPO_ROOT, "docs", "tracks.md");
+  if (!fs.existsSync(tracksPath)) {
+    fail("tracks-matrix", "docs/tracks.md not found");
+    return;
+  }
+  const src = fs.readFileSync(tracksPath, "utf8");
+
+  let generator;
+  try {
+    generator = require(path.join(REPO_ROOT, "scripts", "generate-tracks-matrix.js"));
+  } catch (err) {
+    fail("tracks-matrix", `could not load generate-tracks-matrix.js: ${err.message}`);
+    return;
+  }
+
+  const { FENCE_OPEN, FENCE_CLOSE, generateBlock } = generator;
+  const fenceRe = new RegExp(
+    escapeRe(FENCE_OPEN) + "[\\s\\S]*?" + escapeRe(FENCE_CLOSE)
+  );
+  const match = src.match(fenceRe);
+  if (!match) {
+    fail("tracks-matrix",
+      `docs/tracks.md does not contain a generated matrix block (expected <!-- generated: do not hand-edit --> fences)`);
+    return;
+  }
+
+  const committed = match[0];
+  const fresh = generateBlock();
+  if (committed === fresh) {
+    pass("tracks-matrix: docs/tracks.md generated block is up to date");
+  } else {
+    fail("tracks-matrix",
+      "docs/tracks.md generated matrix block is stale — re-run: node scripts/generate-tracks-matrix.js --write");
+  }
+}
+
+function escapeRe(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// --- Check 6b (was 6): Stage rule-file coverage ---
 //
 // Every non-mechanical stage in the build range (stage-04 through stage-08)
 // that is in STAGES, and every stage indexed in rules/pipeline-build.md,
@@ -733,7 +786,10 @@ function checkStageRuleFileCoverage(scanRoot) {
 }
 
 // ---------------------------------------------------------------------------
-// Prose-vs-code dispatch — run all six checks
+// Prose-vs-code dispatch — run all six scannable checks.
+// checkTracksMatrixSync() is NOT here; it only runs in full-repo mode
+// (it requires core/pipeline/stages.js and scripts/generate-tracks-matrix.js
+// from the repo root, so it cannot work against a fixture tree).
 // ---------------------------------------------------------------------------
 
 function runProseChecks(scanRoot) {
@@ -776,6 +832,7 @@ function main(opts) {
     checkSchemaIdsAndDraft();
     checkGateBaseSchemaIdentity();
     checkAuditFeatureIntegrity();
+    checkTracksMatrixSync();
     runProseChecks(null);
   }
 

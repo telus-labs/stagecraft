@@ -4,7 +4,7 @@ Stage 4c. Runs between build and peer-review on the `full` and `hotfix` tracks. 
 
 - [What it does](#what-it-does)
 - [Gate fields](#gate-fields)
-- [Why it's separate from security-review (stage 4b)](#why-its-separate-from-security-review-stage-4b)
+- [Why it's separate from security-review (stage-04b)](#why-its-separate-from-security-review-stage-04b)
 - [Routing](#routing)
 - [References](#references)
 
@@ -52,7 +52,7 @@ Each finding is triaged by severity × likelihood × scope.
 
 ---
 
-## Why it's separate from security-review (stage 4b)
+## Why it's separate from security-review (stage-04b)
 
 | | Stage 4b — security review | Stage 4c — red team |
 |---|---|---|

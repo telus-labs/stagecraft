@@ -71,7 +71,7 @@ Before build or review work, read:
      Reviewers and the orchestrator will read this section first. A PASS gate
      whose `## Verify` is empty, missing, or lists ACs you didn't actually
      exercise is invalid and will be flagged at peer review.
-9. Write `pipeline/gates/stage-04-backend.json` with `"status": "PASS"`. PASS is
+9. Write `pipeline/gates/stage-04.backend.json` with `"status": "PASS"`. PASS is
    only honest when every AC has a `## Verify` bullet with a real command and a
    real observed output. If even one AC is unverified, the right status is FAIL
    or escalate back to the PM for clarification — not PASS.
@@ -116,7 +116,7 @@ REVIEW: APPROVED
 ```
 
 The script parses each `## Review of <area>` section plus its trailing
-`REVIEW:` marker and updates the corresponding `stage-05-<area>.json` gate.
+`REVIEW:` marker and updates the corresponding `stage-05.<area>.json` gate.
 Known areas: `backend`, `frontend`, `platform`, `qa`, `deps`.
 Sections in any other shape are ignored.
 

@@ -79,7 +79,7 @@ Read the `halt_action` (and `failure_class`) in the summary, or the last line of
 
 | `halt_action` | What happened | Do this |
 |---|---|---|
-| `stoplist` | The change description or `pipeline/brief.md` matched a safety-stoplist phrase (auth/credentials/PII/payments/migrations/…) and the resolved track is lighter than `full`. Checked at run start and again before build. | Switch to `devteam run --track full` (or re-run the stage interactively via the `/pipeline` track). If this is a false positive, re-run with `--force`. |
+| `stoplist` | The change description or `pipeline/brief.md` matched a safety-stoplist phrase (auth/credentials/PII/payments/migrations/…) and the resolved track is lighter than `full`. Checked at run start and again before build. | Switch to `devteam run --track full`. If this is a false positive, re-run with `--force`. |
 | `fix-and-retry` | A FAIL the driver won't auto-retry: `state-corruption` (gate unreadable) or `external-blocked` (needs a human/external action). | Run `devteam next` and follow [fix-and-retry.md](fix-and-retry.md). |
 | `resolve-escalation` | A gate escalated (`judgment-gate`), the retry budget was spent on a `code-defect` (`convergence-exhausted`), or an escalation's ruling class wasn't in your `--auto-rule` grant. | Follow [escalation.md](escalation.md), then re-run `devteam run`. |
 | `resolve-escalation` (`cannot-decide`) | The Principal declared it cannot decide — the run summary carries `cannot_decide.{reason_class, question}`. | Supply the missing authority/information/ranking, encode a `PRINCIPAL-RULING:` line, then re-run. |
@@ -106,16 +106,18 @@ consequences, and stops there for you.
   clears the failing gate and re-dispatches — but whether the *agent* writes a
   correct fix is on the agent. If it doesn't converge within
   `autonomy.max_retries`, the driver escalates (`convergence-exhausted`).
-- **No auto-rule.** Escalations (`judgment-gate`) still halt for a human; the
-  Principal-at-escalation path is Phase 2.
-- **Gate-clearing is by recipe.** The driver clears the `pipeline/gates/*` paths
-  named in `computeFixSteps`' output (parsed from its `rm` steps). A FAIL with no
-  recipe re-dispatches nothing new and converges to an escalation. A structured
-  `clear_gates` field on the fix recipe is a planned follow-up.
+- **Transient-classification is heuristic v1.** The driver classifies dispatch
+  failures as `transient` (retry with backoff) or `structural-input` (halt) from
+  the exit code and output shape. Edge cases can mis-classify — inspect
+  `run-log.jsonl` if the driver retries something that shouldn't be retried.
 - **Convergence is count-based.** The driver-side ceiling counts re-dispatches;
-  true progress-based detection (blocker counts decreasing) needs gate archiving.
+  true progress-based detection (blocker counts decreasing) is not yet
+  implemented.
 - **Budget is retrospective.** The cap blocks the *next* dispatch; a single
   expensive stage can overshoot it.
 - **Lock is advisory.** `devteam run` holds the lock, but other mutating
   commands (`devteam stage`, `devteam merge`) do not yet check it — don't run
   them against a live autonomous run.
+- **No heartbeat.** A hung dispatch (waiting on a model API) is invisible to the
+  driver until it exits. `--budget-usd` + a wall-clock timeout in your CI config
+  are the practical guards.

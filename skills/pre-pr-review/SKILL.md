@@ -22,7 +22,7 @@ This skill is for changes made **outside the pipeline**. If you just ran `/pipel
 
 2. **Load the project's standards** (read whichever exist):
    - AGENTS.md (coding standards, platform rules)
-   - `core/skills/code-conventions/SKILL.md` (project coding conventions)
+   - `skills/code-conventions/SKILL.md` (project coding conventions)
    - `docs/audit/03-compliance.md` (known conventions and anti-patterns from audit)
    - `docs/audit/00-project-context.md` (project context, commands)
    - CONTRIBUTING.md
@@ -72,7 +72,7 @@ Work through each area. For each issue found, report: the file and line, what's 
 - Are transient failures retried where appropriate?
 
 ### Security
-- Run through `core/skills/security-checklist/SKILL.md` if it exists.
+- Run through `skills/security-checklist/SKILL.md` if it exists.
 - Any hardcoded secrets, tokens, or credentials?
 - User input validated at the boundary?
 - Sensitive data logged or exposed in responses?

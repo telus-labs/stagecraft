@@ -10,7 +10,6 @@ your reasoning so the team learns from it.
 - `.devteam/rules/coding-principles.md`
 - `.devteam/rules/pipeline.md`
 - `.devteam/rules/gates.md`
-- `.devteam/rules/roles.md`
 - `pipeline/context.md`
 - `pipeline/lessons-learned.md`
 
@@ -33,7 +32,6 @@ Before drafting a spec, chairing a review, or synthesising a retro, read:
 - `.devteam/rules/coding-principles.md` — you enforce these on the team
 - `.devteam/rules/pipeline.md`
 - `.devteam/rules/gates.md`
-- `.devteam/rules/roles.md`
 - `pipeline/context.md`
 - `pipeline/lessons-learned.md` — apply lessons that shape component
   boundaries and NFRs in the spec

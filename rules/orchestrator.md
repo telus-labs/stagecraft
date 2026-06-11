@@ -11,16 +11,16 @@ and escalate blockers. You do not write code or make technical decisions.
 - **Platform Dev** (`dev-platform`): CI/CD, infra, deploy — owns `src/infra/`
 - **QA Dev** (`dev-qa`): test authoring + Stage 6 test run — owns `src/tests/`
 - **Security Engineer** (`security-engineer`): security review with veto
-  on Stage 4.5b when the triggering heuristic fires
+  at Stage 4b when the triggering heuristic fires
 - **Reviewer** (`reviewer`): Stage 5 READ-ONLY peer code review — writes
   only to `pipeline/code-review/by-<role>.md`
 
 ### Role separation, in one paragraph
 
-`dev-platform` owns infra, CI, deploy, and the automated Stage 4.5a
-checks (lint + SCA). Test authoring and Stage 6 execution are
-`dev-qa`'s. Security review when the heuristic fires is the
-`security-engineer`'s, with veto authority. These are four distinct
+`dev-platform` owns infra, CI, deploy, and the automated Stage 4a
+checks (lint + SCA + dependency review). Test authoring and Stage 6
+execution are `dev-qa`'s. Security review when the heuristic fires is
+the `security-engineer`'s, with veto authority. These are four distinct
 judgement calls, intentionally kept under separate roles so each has
 clear ownership and a single accountable author for its gate.
 
@@ -68,34 +68,57 @@ At each checkpoint, print a one-paragraph summary and wait for "proceed".
 Stage 9 (retrospective) runs automatically after Stage 8 (deploy) or after
 any unresolved red halt. No human checkpoint — it's always safe to run.
 
-## Available Commands
+## Running the pipeline
 
-- `/pipeline [feature]` — run the full pipeline
-- `/nano [change]` — trivial edit (docs, typos, dead-code): no brief, no review, no deploy
-- `/quick [change]` — single-area change ≤ ~100 LOC: mini-brief, single dev, single reviewer
-- `/hotfix [bug description]` — expedited fix pipeline (blast-radius bounded)
-- `/pipeline-brief [feature]` — draft brief only
-- `/pipeline-review` — run code review on current src/
-- `/pipeline-context` — show current gate statuses and open questions
-- `/retrospective` — run Stage 9 standalone on the current pipeline state
+Use the `devteam` CLI to drive the pipeline. All commands run from the
+project root where `.devteam/` was installed.
+
+**Start or continue a pipeline run:**
+```
+devteam run [--track <track>]    # bounded autonomous driver (full/quick/nano/config-only/dep-update/hotfix)
+devteam stage <name>             # render and dispatch a single stage interactively
+devteam next                     # inspect gates and report what to do next
+```
+
+**Inspect state:**
+```
+devteam summary                  # one-screen pipeline state report
+devteam log [--follow]           # gate/artifact timeline
+devteam validate                 # validate the most recent gate
+```
+
+**Recover from failures:**
+```
+devteam restart <stage>          # clear a stage gate and re-run it
+devteam derive-approvals         # re-derive stage-05 workstream gates from review files
+devteam ruling                   # dispatch Principal for an ad-hoc ruling
+devteam fix-escalation           # implement a Principal ruling autonomously
+devteam merge <stage>            # merge per-workstream gates into the stage gate
+```
+
+Run `devteam --help` for the full command reference.
 
 ### Track selection guide
 
-| Change size | Auth/PII/migration? | Command |
+| Change size | Auth/PII/migration? | Track |
 |---|---|---|
-| Typo, comment, doc | No | `/nano` |
-| ≤ ~100 LOC, one area | No | `/quick` |
-| Any size | Yes | `/pipeline` |
-| Multi-area or new API | No | `/pipeline` |
-| Config values only | No | `/config-only` |
-| Dep upgrade only | No | `/dep-update` |
-| Critical prod bug | — | `/hotfix` |
+| Typo, comment, doc | No | `nano` |
+| ≤ ~100 LOC, one area | No | `quick` |
+| Any size | Yes | `full` |
+| Multi-area or new API | No | `full` |
+| Config values only | No | `config-only` |
+| Dep upgrade only | No | `dep-update` |
+| Critical prod bug | — | `hotfix` |
+
+Pass the chosen track with `devteam run --track <track>` or
+`devteam stage <name>` after setting `default_track` in `.devteam/config.yml`.
 
 ## Customization
 
-Framework files under `.devteam/` are overwritten when you re-run `bootstrap.sh`.
-To customize without losing changes on update:
+After running `devteam init`, the `.devteam/` directory is yours to edit.
+Framework updates require re-running `devteam init --force` (which
+overwrites the rules files). To customize without losing changes on update:
 
-- **Project instructions** → `AGENTS.md` (bootstrap never touches it after first create)
+- **Project instructions** → `AGENTS.md` (init never touches it after first create)
 - **Local settings** → `.devteam/settings.local.json` (merged by Claude Code automatically)
 - **Local instructions** → `CLAUDE.local.md` (loaded by Claude Code, gitignored)

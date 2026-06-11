@@ -36,7 +36,7 @@ Every adapter must:
    block under `adapter_result`.
 5. Require `pipeline/runbook.md` to exist before the gate passes.
    Rationale: every deploy needs a named rollback/recovery procedure.
-   See `docs/runbook-template.md`.
+   See `templates/runbook-template.md` for the canonical blank form.
 6. On failure: do NOT auto-rollback. Leave the environment in its
    failed state so the user can inspect, and write clear instructions
    in the deploy log pointing to the runbook's recovery section.

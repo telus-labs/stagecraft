@@ -71,7 +71,7 @@ Before build, test, or review work, read:
      `curl -i` response, a health-check status. Not "infra is set up." A PASS
      gate whose `## Verify` is empty, missing, or lists ACs you didn't
      actually exercise is invalid and will be flagged at peer review.
-6. Write `pipeline/gates/stage-04-platform.json` with `"status": "PASS"`. PASS
+6. Write `pipeline/gates/stage-04.platform.json` with `"status": "PASS"`. PASS
    is only honest when every AC has a `## Verify` bullet with a real command
    and a real observed output. If even one AC is unverified, the right status
    is FAIL or escalate back to the PM for clarification — not PASS.
@@ -81,7 +81,7 @@ Before build, test, or review work, read:
 After all Stage 4 build gates pass and before Stage 5 peer review starts:
 
 1. `npm run lint` (or the project's equivalent) — must exit 0.
-2. `npm run type-check` if present — must exit 0.
+2. The project's type-check command if one is configured (e.g. `tsc --noEmit` for TypeScript projects) — must exit 0.
 3. Dependency vulnerability scan: `npm audit --audit-level=high` (or
    `pip-audit`, `bundler-audit`, etc. per stack). Any `high` or
    `critical` finding halts.

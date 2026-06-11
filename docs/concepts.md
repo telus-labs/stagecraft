@@ -14,7 +14,7 @@ Six primitives make up Stagecraft. Every other doc assumes you know these terms.
 |---|---|---|---|
 | **Stage** | `core/pipeline/stages.js` | The framework | A numbered phase of work (e.g. `stage-01` requirements, `stage-04` build, `stage-09` retrospective). 18 stages total (including sub-stages 3b, 4a/4b/4c/4d/4e, 6b/6c/6d). |
 | **Role** | `roles/<role>.md` | The framework + your customizations | A named seat at the team — `pm`, `principal`, `backend`, `frontend`, `platform`, `qa`, `reviewer`, `security`. A role's brief is the source of truth for what it does, reads, and writes. |
-| **Workstream** | derived at dispatch time | The orchestrator | One dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review) have several. **The workstream is the unit of gate identity.** Stage 5 is a special case — see the §Stage-5 vocabulary callout below. |
+| **Workstream** | derived at dispatch time | The orchestrator | One dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review) have several. **The workstream is the unit of gate identity.** Stage 5 (peer-review) is a special case — see the §stage-05 vocabulary callout below. |
 | **Host** | `hosts/<host>/` | You choose at `devteam init` | The AI tool that actually runs the model: `claude-code`, `codex`, `gemini-cli`, or `generic` (no host). |
 | **Gate** | `pipeline/gates/<stage>*.json` | The model writes it; the validator enforces it | A JSON record of one workstream's (or stage's) outcome. **The stable seam between stages.** Required fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. |
 | **Track** | `core/pipeline/stages.js` | Your `.devteam/config.yml` (`pipeline.default_track`) | Which stages run for this kind of change. Six tracks: `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Tracks shape *which* stages run; never *what* a stage does. |
@@ -32,11 +32,11 @@ A typical `full`-track run touches every primitive:
 3. The model writes `pipeline/brief.md` (the artifact) and `pipeline/gates/stage-01.json` (the **gate**) with `status: "PASS"`.
 4. You run **`devteam next`**. It reads the gate, sees PASS, and reports `▶️ run-stage — design (stage-02)`.
 5. Two stages later you hit **stage-04 build**: 4 workstreams (backend / frontend / platform / qa), each potentially dispatched to a different host depending on routing. Each writes its own per-workstream gate (`pipeline/gates/stage-04.backend.json` etc.). `devteam merge build` aggregates them into the stage gate.
-6. The **track** you picked (`full`) is what put all 17 stages on the menu. Picking `nano` would skip everything except build + a scoped peer-review (1 reviewer) + qa.
+6. The **track** you picked (`full`) is what put all 18 stages on the menu. Picking `nano` would skip everything except build + a scoped peer-review (1 reviewer) + qa.
 
 The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator never holds state outside of those files.
 
-### Stage-5 vocabulary callout
+### stage-05 vocabulary callout
 
 At Stage 5 (peer-review), the merged `stage-05.json` gate's `workstreams[]` array means something different from every other multi-role stage. The distinction is a common source of confusion for new stage managers.
 

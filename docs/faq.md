@@ -72,7 +72,7 @@ Use the highest-risk read that applies:
 | Feature touching multiple services or adding new external dependencies | `full` |
 | Feature with auth, PII, schema migration, or security implications | `full` + run security review regardless of pre-review flag |
 
-When in doubt, `full`. The cost of a falsely-skipped stage is usually higher than the cost of running an unnecessary one. `devteam next` skips stages that aren't needed (conditional stages) automatically, so `full` doesn't mean you always run all 17 manually.
+When in doubt, `full`. The cost of a falsely-skipped stage is usually higher than the cost of running an unnecessary one. `devteam next` skips stages that aren't needed (conditional stages) automatically, so `full` doesn't mean you always run all 18 manually.
 
 ### Can I run multiple features through the pipeline simultaneously?
 
@@ -218,13 +218,13 @@ Stagecraft is the project management and code-quality reasoning layer; your CI i
 
 Stagecraft unifies them into one core. See [ADR 001](adr/001-unification-vs-fork.md) for the full reasoning. Key differences:
 
-- One framework, three host adapters (claude-code, codex, generic). No more parity drift between forks.
+- One framework, four host adapters (claude-code, codex, gemini-cli, generic). No more parity drift between forks.
 - Per-workstream routing: a single pipeline can dispatch different roles to different hosts.
 - Contract F: gate identity uses `orchestrator` + `host` + `workstream`. The legacy `agent` field is gone.
 - WARN status for non-blocking warnings.
 - Conditional stages (security review fires only when pre-review flags it).
 - Per-role `allowedWrites` filtering in multi-role stages.
-- 201 automated tests vs the forks' 20-26.
+- 1 200+ automated tests vs the forks' 20-26.
 
 ## Customization
 
@@ -359,7 +359,7 @@ After two review rounds with persistent CHANGES_REQUESTED, the gate's `escalated
 
 A **quorum miss**, not an objection. The merged `stage-05.json` aggregates four per-area gates (`stage-05.backend.json`, `…frontend.json`, `…platform.json`, `…qa.json`); each area gate needs `approvals.length >= required_approvals` to PASS. If one area received fewer area-reviews than required — even with every review file that *was* written being APPROVED — that area's gate is FAIL, and the merge lifts the FAIL into the merged gate's `workstreams[]` entry for that area.
 
-Key vocabulary trip: at Stage 5, `workstreams[]` are **areas of code being reviewed**, not reviewers. A FAIL on `workstreams[].workstream: "qa"` means "the qa *area* didn't reach quorum," not "the qa reviewer objected." See [`concepts.md` §Stage-5 vocabulary callout](concepts.md#stage-5-vocabulary-callout).
+Key vocabulary trip: at Stage 5, `workstreams[]` are **areas of code being reviewed**, not reviewers. A FAIL on `workstreams[].workstream: "qa"` means "the qa *area* didn't reach quorum," not "the qa reviewer objected." See [`concepts.md` §stage-05 vocabulary callout](concepts.md#stage-05-vocabulary-callout).
 
 **Before reading any gate as authoritative, sync it:**
 
@@ -392,7 +392,7 @@ covers which areas) append a `## Review of <area>` section to their
 `devteam derive-approvals` step is needed because the `approval-derivation` hook fires
 only when an agent writes a file inside an active Claude Code session — shell or editor
 saves bypass it. Full operational sequence — including the override-to-WARN escape hatch
-and its caveats — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-5-fail-with-no-objections--quorum-miss).
+and its caveats — is in [`docs/runbooks/fix-and-retry.md` §Case 5](runbooks/fix-and-retry.md#case-5-peer-review-stage-05-fail-with-no-objections--quorum-miss).
 
 ### How do I roll back a deploy?
 
@@ -590,7 +590,7 @@ BACKLOG A3 covers this — a "cloud-runner" adapter that ships the stage to a re
 
 ## Auditing past runs
 
-### If I need to prove a feature went through all 17 gates, what do I show an auditor?
+### If I need to prove a feature went through all 18 gates, what do I show an auditor?
 
 Three things, all in git if you committed `pipeline/`:
 
@@ -845,7 +845,7 @@ Use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventio
 
 Both, for different purposes. `/goal` is a continuation primitive: set a session-level condition and the host loops until it holds. Stagecraft is a decomposition primitive: one feature decomposes into 18 stages with defined artifacts and gates.
 
-They compose: you can set a `/goal` like "tests pass and lint clean" at the start of stage-04 build and let Claude loop on it, then read the gate. The adapter does not emit `/goal` invocations today (BACKLOG E-series). Setting one manually before a convergence-shaped stage works fine.
+They compose: for `build` (stage-04) and `qa` (stage-06), hosts that declare `capabilities.goalLoop: true` (claude-code and codex) automatically receive a `/goal "<condition>"` prepended to the headless prompt — the host loops internally until the stated condition holds, then the gate is written. Setting one manually before other stages works fine.
 
 ### Where does Stagecraft fit relative to Codex's autonomous task mode?
 

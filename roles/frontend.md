@@ -57,7 +57,7 @@ Before build or review work, read:
      ## Verify
 
      - **AC-3**: SMS opt-in toggle appears under account settings
-       - rendered `<SettingsPage />` with `npm run dev`; navigated to /settings
+       - rendered `<SettingsPage />` with the project's dev-server command; navigated to /settings
        - → screenshot at `pipeline/screenshots/ac3-opt-in-toggle.png`; toggle
          appears between "Email notifications" and "Privacy" sections
      - **AC-4**: toggle persists across page reloads
@@ -70,7 +70,7 @@ Before build or review work, read:
      assertion, a stored value. Not "looks good" or "renders correctly." A
      PASS gate whose `## Verify` is empty, missing, or lists ACs you didn't
      actually exercise is invalid and will be flagged at peer review.
-8. Write `pipeline/gates/stage-04-frontend.json` with `"status": "PASS"`. PASS
+8. Write `pipeline/gates/stage-04.frontend.json` with `"status": "PASS"`. PASS
    is only honest when every AC has a `## Verify` bullet with a real action
    and a real observed result. If even one AC is unverified, the right status
    is FAIL or escalate back to the PM for clarification — not PASS.
@@ -112,7 +112,7 @@ BLOCKER: <text>
 ```
 
 The script parses each `## Review of <area>` section and updates
-`stage-05-<area>.json`. In **scoped** review mode, write one section.
+`stage-05.<area>.json`. In **scoped** review mode, write one section.
 In **matrix** mode, write two. Known areas: `backend`, `frontend`,
 `platform`, `qa`, `deps`.
 

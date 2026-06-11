@@ -68,7 +68,7 @@ You want to add support for a new AI tool (e.g. Gemini CLI, Cursor, Aider).
    find "$TMPDIR" -type f                 # expected files landed
    ```
 
-6. **Add a tier-1 contract assertion** (when the test suite exists): your adapter must export `capabilities`, `install`, `renderStagePrompt`, `status`, `uninstall` — same shape as `tests/adapter-contract.test.js` will assert.
+6. **Add a tier-1 contract assertion**: your adapter must export `capabilities`, `install`, `renderStagePrompt`, `status`, `uninstall` — same shape as `tests/adapter-contract.test.js` asserts. Run `npm test` to verify.
 
 Examples to copy from:
 - `hosts/generic/` — minimal; install is a no-op.
@@ -179,9 +179,12 @@ Skills are task-oriented helpers the LLM consults for specific tasks (writing co
 
 ## Testing your change
 
-For now: manual smoke test against a temp target project (see Setup above).
+```bash
+npm test                  # ~1 200 tests, ~5s — run after every change
+npm run consistency       # cross-artifact lint (stage names, gate filenames, track counts, …)
+```
 
-Once available ([`docs/TESTING.md`](docs/TESTING.md)): `npm test`. Until the tier-1 test suite lands, regression-checking is the contributor's responsibility.
+Manual smoke test against a temp target project (see Setup above) is still useful for end-to-end install verification. See [`docs/TESTING.md`](docs/TESTING.md) for the full test strategy and inventory.
 
 If your change touches a load-bearing contract from `AGENTS.md`, add the test in lockstep with the code change.
 

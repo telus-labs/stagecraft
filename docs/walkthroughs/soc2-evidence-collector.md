@@ -23,18 +23,18 @@ An engineering lead preparing for a first SOC 2 Type II audit needs evidence for
 - [Prerequisites](#prerequisites)
 - [Set up the project](#set-up-the-project)
 - [Run the pipeline](#run-the-pipeline)
-  - [Stage 1 — Requirements](#stage-1--requirements)
-  - [Stage 2 — Design](#stage-2--design)
-  - [Stage 3 — Clarification](#stage-3--clarification)
-  - [Stage 3b — Executable spec](#stage-3b--executable-spec)
-  - [Stage 4 — Build](#stage-4--build)
-  - [Stage 4a — Pre-review](#stage-4a--pre-review)
-  - [Stage 4b — Security review](#stage-4b--security-review-conditional)
-  - [Stage 4c — Red-team](#stage-4c--red-team)
-  - [Stage 5 — Peer review](#stage-5--peer-review)
-  - [Stage 6 — QA](#stage-6--qa)
-  - [Stage 6c — Observability gate](#stage-6c--observability-gate)
-  - [Stage 6d — Verification beyond tests](#stage-6d--verification-beyond-tests)
+  - [Stage 01 — Requirements](#stage-01--requirements)
+  - [Stage 02 — Design](#stage-02--design)
+  - [Stage 03 — Clarification](#stage-03--clarification)
+  - [Stage 03b — Executable spec](#stage-03b--executable-spec)
+  - [Stage 04 — Build](#stage-04--build)
+  - [Stage 04a — Pre-review](#stage-04a--pre-review)
+  - [Stage 04b — Security review](#stage-04b--security-review-conditional)
+  - [Stage 04c — Red-team](#stage-04c--red-team)
+  - [Stage 05 — Peer review](#stage-05--peer-review)
+  - [Stage 06 — QA](#stage-06--qa)
+  - [Stage 06c — Observability gate](#stage-06c--observability-gate)
+  - [Stage 06d — Verification beyond tests](#stage-06d--verification-beyond-tests)
 - [What the output looks like](#what-the-output-looks-like)
 - [Timing reference](#timing-reference)
 - [Reproducing a specific run](#reproducing-a-specific-run)
@@ -76,7 +76,7 @@ devteam ui --open
 
 ## Run the pipeline
 
-### Stage 1 — Requirements
+### Stage 01 — Requirements
 
 ```bash
 devteam stage requirements --feature "Build a CLI tool called soc2-collect. \
@@ -115,7 +115,7 @@ devteam next            # → run-stage design (stage-02)
 
 ---
 
-### Stage 2 — Design
+### Stage 02 — Design
 
 ```bash
 devteam stage design --headless
@@ -135,7 +135,7 @@ devteam next            # → run-stage clarification (stage-03)
 
 ---
 
-### Stage 3 — Clarification
+### Stage 03 — Clarification
 
 ```bash
 devteam stage clarification --headless
@@ -149,7 +149,7 @@ devteam next            # → run-stage executable-spec (stage-03b)
 
 ---
 
-### Stage 3b — Executable spec
+### Stage 03b — Executable spec
 
 ```bash
 devteam stage executable-spec --headless
@@ -190,7 +190,7 @@ devteam next            # → run-stage build (stage-04)
 
 ---
 
-### Stage 4 — Build
+### Stage 04 — Build
 
 ```bash
 devteam stage build --headless
@@ -212,7 +212,7 @@ devteam next            # → run-stage pre-review (stage-04a)
 
 ---
 
-### Stage 4a — Pre-review
+### Stage 04a — Pre-review
 
 ```bash
 devteam stage pre-review --headless
@@ -226,7 +226,7 @@ devteam next            # → run-stage security-review (stage-04b, conditional)
 
 ---
 
-### Stage 4b — Security review (conditional)
+### Stage 04b — Security review (conditional)
 
 Fires because pre-review flagged it.
 
@@ -250,7 +250,7 @@ devteam next            # → run-stage red-team (stage-04c)
 
 ---
 
-### Stage 4c — Red-team
+### Stage 04c — Red-team
 
 ```bash
 devteam stage red-team --headless
@@ -274,7 +274,7 @@ devteam next            # → run-stage peer-review (stage-05)
 
 ---
 
-### Stage 5 — Peer review
+### Stage 05 — Peer review
 
 ```bash
 devteam stage peer-review --headless
@@ -292,7 +292,7 @@ devteam next            # → run-stage qa (stage-06)
 
 ---
 
-### Stage 6 — QA
+### Stage 06 — QA
 
 ```bash
 devteam stage qa --headless
@@ -308,7 +308,7 @@ devteam next            # → run-stage observability-gate (stage-06c)
 
 ---
 
-### Stage 6c — Observability gate
+### Stage 06c — Observability gate
 
 ```bash
 devteam stage observability-gate --headless
@@ -322,7 +322,7 @@ devteam next            # → run-stage verification-beyond-tests (stage-06d)
 
 ---
 
-### Stage 6d — Verification beyond tests
+### Stage 06d — Verification beyond tests
 
 ```bash
 devteam stage verification-beyond-tests --headless
@@ -475,7 +475,7 @@ For a SOC 2 tool specifically, this answers the auditor question: *how was this 
 
 ## See also
 
-- [`EXAMPLE.md`](../../EXAMPLE.md) — the canonical pipeline walkthrough (simpler feature, all 17 stages traced)
+- [`EXAMPLE.md`](../../EXAMPLE.md) — the canonical pipeline walkthrough (simpler feature, all 18 stages traced)
 - [`docs/user-guide.md`](../user-guide.md) — daily reference: tracks, multi-host, headless mode
 - [`docs/verification-beyond-tests.md`](../verification-beyond-tests.md) — property-based, mutation, and formal verification
 - [`docs/red-team.md`](../red-team.md) — the 10 attack surfaces and gate fields

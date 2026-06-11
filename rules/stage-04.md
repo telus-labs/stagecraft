@@ -10,9 +10,9 @@ Invoke in parallel:
   `dev-frontend` → `src/frontend/` → `pipeline/pr-frontend.md`
   `dev-platform` → `src/infra/`    → `pipeline/pr-platform.md`
 
-Gate file per PR: `pipeline/gates/stage-04-{area}.json`
+Gate file per workstream: `pipeline/gates/stage-04.{area}.json`
 All three must have `"status": "PASS"` before proceeding.
 
-Pre-review checks (Stage 4.5) run after the three build gates PASS and
-before Stage 5 starts. See `stage-04a.md` (lint + type-check + SCA) and
+Pre-review checks (stage-04a) run after the three build gates PASS and
+before Stage 5 starts. See `stage-04a.md` (lint + dep review + SCA) and
 `stage-04b.md` (security review, conditional).

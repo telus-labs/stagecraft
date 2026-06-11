@@ -5,7 +5,7 @@ Stage 3b (executable-spec) and the `devteam spec` commands. The pipeline enforce
 - [The chain](#the-chain)
 - [Writing acceptance criteria](#writing-acceptance-criteria)
 - [Scaffolding the spec file](#scaffolding-the-spec-file)
-- [Stage 3b gate](#stage-3b-gate)
+- [Stage 03b gate](#stage-03b-gate)
 - [Checking for drift](#checking-for-drift)
 - [QA gate requirement](#qa-gate-requirement)
 - [References](#references)
@@ -80,7 +80,7 @@ The PM fills in the Given/When/Then steps at the executable-spec stage. The `TOD
 
 ---
 
-## Stage 3b gate
+## Stage 03b gate
 
 The executable-spec stage gate (`stage-03b.json`) carries:
 

@@ -38,7 +38,7 @@ the output as a blocker, and halt. Do not auto-rollback.
   `status: ESCALATE` with reason "No docker-compose.yml found".
 - Confirm `pipeline/runbook.md` exists. If missing: write
   `status: ESCALATE` with reason "Runbook required for Stage 8
-  (v2.4+)". See `docs/runbook-template.md`.
+  (v2.4+)". See `templates/runbook-template.md` for the canonical blank form; `docs/runbook-template.md` is the section-by-section annotation guide.
 
 ### 2. Validate compose config
 
