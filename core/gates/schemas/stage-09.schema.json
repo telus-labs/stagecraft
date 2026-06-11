@@ -28,6 +28,14 @@
     "contributions_written": {
       "type": "array",
       "description": "Agents that wrote a Stage 9a contribution section (always pm + principal + 4 devs; security-engineer also when 4.5b fired)."
+    },
+    "production_feedback_reviewed": {
+      "description": "G3 production feedback seam. true = pipeline/production-feedback.md was present and reviewed; false = present but not reviewed; \"absent\" = file was not present for this run. Omit (null) when not applicable.",
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "const": "absent" },
+        { "type": "null" }
+      ]
     }
   },
   "additionalProperties": true

@@ -245,6 +245,25 @@ Marks an artifact to skip persistent memory ingest.
 | Override secret-scan | source file | `// devteam-allow-secret: <reason>` |
 | Skip memory ingest | artifact file | `stagecraft-no-memory` |
 
+## `pipeline/production-feedback.md` (G3 — production feedback seam)
+
+An operator-curated file written **after deploy** (not by any pipeline agent).
+Its purpose is to close the brief→production loop: the brief names SLOs and
+metrics; this file records what production actually showed.
+
+- **Who writes it:** the stage manager (or an external integration, e.g. a Jira/Datadog webhook).
+- **When:** after the feature has been live long enough to have signal (typically 24–72 hours post-deploy).
+- **Format:** free-form Markdown; use `templates/production-feedback-template.md` as the scaffold.
+  Sections are keyed by the brief's metric/SLO names; an incidents list is always present (write "None" if clean).
+- **What reads it:** Stage 9 (retrospective) reads it when present, adds a `## Production Deltas` section
+  to `pipeline/retrospective.md`, and records `production_feedback_reviewed: true` in the gate.
+- **When absent:** Stage 9 skips this section and stamps `production_feedback_reviewed: "absent"`.
+  `devteam next` on a completed pipeline mentions the file once as an optional follow-up.
+- **Integration seam by design:** automated tools (Datadog alerts → file, Jira comments → file) can write
+  to this path without any framework changes. The file is the integration protocol.
+
+See `docs/runbooks/open-followups.md` for how the open-followups runbook cross-references this file.
+
 ## See also
 
 - [`docs/runbooks/escalation.md`](runbooks/escalation.md) — full procedure when a gate hits `ESCALATE`

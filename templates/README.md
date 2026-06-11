@@ -36,6 +36,7 @@ per-stage schemas under `schemas/`.
 | `test-report-template.md` | 6 | `dev-qa` | `pipeline/test-report.md` | Suite summary, criterion-to-test mapping, failure attribution. The 1:1 mapping field gates the Stage 7 auto-fold. |
 | `runbook-template.md` | 7→8 | platform / project owner | `pipeline/runbook.md` | Rollback procedure and health signals. Required for Stage 8 PASS — gate-validator escalates if missing. |
 | `retrospective-template.md` | 9 | every agent + `principal` (synthesis) | `pipeline/retrospective.md` | Per-agent contribution sections plus a synthesis block. Promoted lessons land in the persistent `pipeline/lessons-learned.md`. |
+| `production-feedback-template.md` | post-9 (operator) | stage manager | `pipeline/production-feedback.md` | Operator-curated production signals: SLO/metric deltas vs. the brief's targets, incidents since deploy, adoption signals. Optional — stage-09 reads it when present. |
 
 ## Editing or adding templates
 

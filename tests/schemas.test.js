@@ -116,6 +116,43 @@ describe("schemas: dispatched_tool_budget field contract (G10)", () => {
   });
 });
 
+// G3: production_feedback_reviewed field in stage-09 schema.
+describe("schemas: stage-09 production_feedback_reviewed field (G3)", () => {
+  const s09 = schemaFor("stage-09");
+
+  it("stage-09 schema declares production_feedback_reviewed as an optional property", () => {
+    assert.ok(
+      s09.properties && s09.properties.production_feedback_reviewed,
+      "stage-09.schema.json must declare production_feedback_reviewed in properties",
+    );
+    assert.ok(
+      !s09.required || !s09.required.includes("production_feedback_reviewed"),
+      "production_feedback_reviewed must be optional (not in required[])",
+    );
+  });
+
+  it("production_feedback_reviewed accepts boolean values (oneOf includes boolean)", () => {
+    const prop = s09.properties.production_feedback_reviewed;
+    const oneOf = prop.oneOf || [];
+    const hasBool = oneOf.some((entry) => entry.type === "boolean");
+    assert.ok(hasBool, "production_feedback_reviewed oneOf must include { type: 'boolean' }");
+  });
+
+  it("production_feedback_reviewed accepts the string value 'absent'", () => {
+    const prop = s09.properties.production_feedback_reviewed;
+    const oneOf = prop.oneOf || [];
+    const hasAbsent = oneOf.some((entry) => entry.type === "string" && entry.const === "absent");
+    assert.ok(hasAbsent, "production_feedback_reviewed oneOf must include { type: 'string', const: 'absent' }");
+  });
+
+  it("production_feedback_reviewed accepts null (for not-applicable / omit)", () => {
+    const prop = s09.properties.production_feedback_reviewed;
+    const oneOf = prop.oneOf || [];
+    const hasNull = oneOf.some((entry) => entry.type === "null");
+    assert.ok(hasNull, "production_feedback_reviewed oneOf must include { type: 'null' }");
+  });
+});
+
 describe("schemas: stage IDs match files on disk", () => {
   const onDisk = new Set(
     fs.readdirSync(SCHEMAS_DIR)

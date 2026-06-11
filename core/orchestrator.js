@@ -155,7 +155,13 @@ function buildDescriptor(stageDef, role, opts = {}) {
     rolesInStage: stageDef.roles,
     workstreamId: wsId,
     objective: stageDef.objective,
-    readFirst: Array.isArray(stageDef.readFirst) ? stageDef.readFirst.map(prefix) : stageDef.readFirst,
+    readFirst: Array.isArray(stageDef.readFirst)
+      ? stageDef.readFirst.map((item) =>
+          typeof item === "object" && item.optional
+            ? `${prefix(item.path)} (if present)`
+            : prefix(item),
+        )
+      : stageDef.readFirst,
     allowedWrites: Array.isArray(allowedWrites) ? allowedWrites.map(prefix) : allowedWrites,
     artifact: prefix(stageDef.artifact),
     template: stageDef.template,

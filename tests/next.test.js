@@ -428,6 +428,46 @@ describe("next --json (H1)", () => {
   });
 });
 
+// G3: production feedback seam — pipeline-complete CLI suggestion.
+describe("next: pipeline-complete G3 production-feedback suggestion", () => {
+  function seedAllStages(cwd) {
+    const { orderedStageNamesForTrack, getStage } = require("../core/pipeline/stages");
+    for (const name of orderedStageNamesForTrack("full")) {
+      const stageId = getStage(name).stage;
+      seedGate(cwd, stageId, { status: "PASS" });
+    }
+  }
+
+  it("emits suggestion when pipeline-complete and production-feedback.md is absent", () => {
+    const cwd = track(makeTargetProject());
+    seedAllStages(cwd);
+    const { status, stdout } = runCLI(["next"], { cwd });
+    assert.equal(status, 0);
+    assert.ok(stdout.includes("pipeline-complete"), "should be pipeline-complete");
+    assert.ok(
+      stdout.includes("production-feedback"),
+      "should mention production-feedback file when absent",
+    );
+  });
+
+  it("does not emit suggestion when production-feedback.md is present", () => {
+    const cwd = track(makeTargetProject());
+    seedAllStages(cwd);
+    // Create the production-feedback file so the suggestion is suppressed.
+    const fs = require("node:fs");
+    const pfDir = require("node:path").join(cwd, "pipeline");
+    fs.mkdirSync(pfDir, { recursive: true });
+    fs.writeFileSync(require("node:path").join(pfDir, "production-feedback.md"), "# Production Feedback\n");
+    const { status, stdout } = runCLI(["next"], { cwd });
+    assert.equal(status, 0);
+    assert.ok(stdout.includes("pipeline-complete"), "should be pipeline-complete");
+    assert.ok(
+      !stdout.includes("production-feedback"),
+      "should NOT mention production-feedback file when it already exists",
+    );
+  });
+});
+
 describe("next: track filtering", () => {
   it("nano track starts at build (skips requirements/design/clarification)", () => {
     const cwd = track(makeTargetProject({

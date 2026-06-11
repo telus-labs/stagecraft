@@ -181,6 +181,16 @@ describe("contract: rules ↔ skills ↔ templates exist", () => {
       assert.ok(fs.existsSync(tpl), `template ${def.template} missing in templates/`);
     }
   });
+
+  // G3: production-feedback-template.md is not a stage-level template (it's
+  // operator-curated post-deploy) so it's not wired into STAGES; verify it
+  // exists as a standalone contract.
+  it("production-feedback-template.md exists in templates/ (G3 seam)", () => {
+    assert.ok(
+      fs.existsSync(path.join(REPO_ROOT, "templates", "production-feedback-template.md")),
+      "templates/production-feedback-template.md missing — G3 production feedback seam requires it",
+    );
+  });
 });
 
 describe("contract: gates split — gates-core.md and per-stage gate sections", () => {
