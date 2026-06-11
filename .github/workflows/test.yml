@@ -61,12 +61,15 @@ jobs:
       - name: Changelog fragment guard
         if: github.event_name == 'pull_request'
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          GUARD_CHANGED=$(git diff --name-only "$BASE_SHA" HEAD)
-          GUARD_FRAGMENTS=$(git diff --name-only --diff-filter=AM "$BASE_SHA" HEAD \
+          # Default checkout is shallow (depth 1); fetch the base branch so the
+          # diff is available. GITHUB_BASE_REF is set to e.g. "main" for PRs.
+          git fetch --depth=1 origin "$GITHUB_BASE_REF"
+          BASE_REF="origin/$GITHUB_BASE_REF"
+          GUARD_CHANGED=$(git diff --name-only "$BASE_REF" HEAD)
+          GUARD_FRAGMENTS=$(git diff --name-only --diff-filter=AM "$BASE_REF" HEAD \
             | grep '^changelog\.d/.*\.md$' | grep -v 'README\.md' || true)
-          GUARD_SKIP="$PR_TITLE"$'\n'$(git log --format=%s "$BASE_SHA"..HEAD)
+          GUARD_SKIP="$PR_TITLE"$'\n'$(git log --format=%s "$BASE_REF"..HEAD)
           export GUARD_CHANGED GUARD_FRAGMENTS GUARD_SKIP
           node scripts/changelog-guard.js
