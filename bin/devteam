@@ -2617,7 +2617,7 @@ function cmdAssess(argv) {
 
   if (flags.apply) {
     const yaml = require("js-yaml");
-    const { configPath: getConfigPath } = require(path.join(__dirname, "..", "core", "config"));
+    const { configPath: getConfigPath, clearConfigCache } = require(path.join(__dirname, "..", "core", "config"));
     const cfgPath = getConfigPath(cwd);
     let parsed = {};
     if (fs.existsSync(cfgPath)) {
@@ -2628,6 +2628,9 @@ function cmdAssess(argv) {
     parsed.pipeline = parsed.pipeline || {};
     parsed.pipeline.custom_stages = result.stages;
     fs.writeFileSync(cfgPath, yaml.dump(parsed, { lineWidth: 120 }), "utf8");
+    // Flush the per-cwd cache so any subsequent loadConfig() in this process
+    // (e.g. a chained devteam stage call) sees the new custom_stages value.
+    clearConfigCache();
     if (!flags.json) console.log(`  ✓ wrote ${path.relative(cwd, cfgPath)}`);
   }
 }
