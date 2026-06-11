@@ -574,6 +574,16 @@ register("stage-06d", (gate, _ctx) => {
   return { clear_gates, steps };
 });
 
+// ── stage-07: sign-off ────────────────────────────────────────────────────────
+
+register("stage-07", (_gate, _ctx) => ({
+  clear_gates: [],
+  steps: [
+    { description: "Obtain PM sign-off (and deploy request if applicable)", commands: [] },
+    { description: "Re-run sign-off", commands: ["devteam stage sign-off --headless"] },
+  ],
+}));
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function getRecipe(stageId) {

@@ -728,14 +728,6 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     // Once all stages are ported, the if-ladder below will be empty and removed.
   }
 
-  // Sign-off (stage-07)
-  if (stage === "stage-07") {
-    return [
-      { description: "Obtain PM sign-off (and deploy request if applicable)", commands: [] },
-      { description: "Re-run sign-off", commands: ["devteam stage sign-off --headless"] },
-    ];
-  }
-
   return null;
 }
 
