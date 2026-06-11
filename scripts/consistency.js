@@ -685,6 +685,40 @@ function checkCommandSurface(scanRoot) {
   }
 }
 
+// --- Check: CI template STAGECRAFT_REF vs package.json major.minor ---
+//
+// The CI template pins STAGECRAFT_REF so users get a stable, known-good
+// version. After each release that ref must be updated or the template
+// silently points at an old release. This check enforces that the ref
+// in the template matches the current package.json major.minor.
+//
+// Only the major.minor must match (not patch); we allow any patch suffix
+// so a hotfix release doesn't require changing the template immediately.
+function checkCiTemplateRefVersion() {
+  const templatePath = path.join(REPO_ROOT, "templates", "ci", "github-actions", "stagecraft-pr-checks.yml");
+  if (!fs.existsSync(templatePath)) {
+    fail("ci-template-ref", `template not found: ${templatePath}`);
+    return;
+  }
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  const [major, minor] = pkg.version.split(".");
+  const expectedPrefix = `v${major}.${minor}.`;
+
+  const text = fs.readFileSync(templatePath, "utf8");
+  const m = text.match(/^\s*STAGECRAFT_REF:\s+v?(\S+)/m);
+  if (!m) {
+    fail("ci-template-ref", "templates/ci/github-actions/stagecraft-pr-checks.yml: STAGECRAFT_REF line not found");
+    return;
+  }
+  const refVal = m[1].startsWith("v") ? m[1] : `v${m[1]}`;
+  if (!refVal.startsWith(expectedPrefix)) {
+    fail("ci-template-ref",
+      `templates/ci/github-actions/stagecraft-pr-checks.yml: STAGECRAFT_REF is "${refVal}" but package.json is ${pkg.version} — expected a v${major}.${minor}.x ref`);
+  } else {
+    pass(`ci-template-ref: STAGECRAFT_REF ${refVal} matches package.json ${pkg.version}`);
+  }
+}
+
 // --- Check 6a: Tracks matrix sync ---
 //
 // docs/tracks.md contains a fenced block delimited by
@@ -833,6 +867,7 @@ function main(opts) {
     checkGateBaseSchemaIdentity();
     checkAuditFeatureIntegrity();
     checkTracksMatrixSync();
+    checkCiTemplateRefVersion();
     runProseChecks(null);
   }
 

@@ -571,3 +571,39 @@ test("baseline: completely clean fixture exits 0 with no baseline", () => {
     cleanup(root);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Check: CI template STAGECRAFT_REF version matches package.json major.minor
+// (runs against the real repo — checkCiTemplateRefVersion only runs in full-repo mode)
+// ---------------------------------------------------------------------------
+
+test("check ci-template-ref: STAGECRAFT_REF in CI template matches package.json major.minor", () => {
+  // Verifies the same invariant as checkCiTemplateRefVersion() in consistency.js.
+  const templatePath = path.join(REPO_ROOT, "templates", "ci", "github-actions", "stagecraft-pr-checks.yml");
+  const templateText = fs.readFileSync(templatePath, "utf8");
+  const refMatch = templateText.match(/^\s*STAGECRAFT_REF:\s+(v?\S+)/m);
+  assert.ok(refMatch, "STAGECRAFT_REF must be present in CI template");
+
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  const [major, minor] = pkg.version.split(".");
+  const refVal = refMatch[1].startsWith("v") ? refMatch[1] : `v${refMatch[1]}`;
+  assert.ok(
+    refVal.startsWith(`v${major}.${minor}.`),
+    `CI template STAGECRAFT_REF "${refVal}" must match package.json v${major}.${minor}.x (currently ${pkg.version})`,
+  );
+});
+
+test("check ci-template-ref: detection logic catches major.minor mismatch", () => {
+  // Unit-tests the matching logic used by checkCiTemplateRefVersion().
+  function refMatchesMajorMinor(ref, version) {
+    const [maj, min] = version.split(".");
+    const normalized = ref.startsWith("v") ? ref : `v${ref}`;
+    return normalized.startsWith(`v${maj}.${min}.`);
+  }
+
+  assert.ok(refMatchesMajorMinor("v0.6.0", "0.6.0"), "exact match passes");
+  assert.ok(refMatchesMajorMinor("v0.6.1", "0.6.0"), "newer patch still passes (major.minor match)");
+  assert.ok(!refMatchesMajorMinor("v0.3.0", "0.6.0"), "stale old ref fails");
+  assert.ok(!refMatchesMajorMinor("v0.7.0", "0.6.0"), "future minor ref fails");
+  assert.ok(!refMatchesMajorMinor("v1.0.0", "0.6.0"), "next major fails");
+});
