@@ -33,25 +33,34 @@ Or override per-invocation: `devteam stage build --track quick`.
 
 ## What each track runs
 
+<!-- generated: do not hand-edit -->
 ```
-                            req  des  cla  bld  4a  4b  5    qa  6b  6c   7    8    9
-   full                     ✓    ✓    ✓    ✓    ✓   ✓⁺  ✓    ✓   ✓   ✓    ✓    ✓    ✓
-   quick                    ✓              ✓              ✓    ✓   ✓        ✓    ✓    ✓
-   nano                                    ✓              ✓ˢ   ✓
-   config-only                              ✓    ✓   ✓⁺           ✓             ✓    ✓
-   dep-update                               ✓              ✓    ✓             ✓    ✓
-   hotfix                                   ✓    ✓   ✓⁺  ✓    ✓   ✓   ✓    ✓    ✓    ✓
+              req des cla 3b  bld 4a  4b  4c  4d  5   qa  6b  6c  6d  6e  7   8   9   
+full          ✓   ✓   ✓   ✓   ✓   ✓   ✓⁺  ✓   ✓⁺  ✓   ✓   ✓   ✓   ✓   ✓   ✓   ✓   ✓   
+quick         ✓           ✓   ✓                   ✓   ✓   ✓           ✓   ✓   ✓   ✓   
+nano                          ✓                   ✓ˢ  ✓                               
+config-only                   ✓   ✓   ✓⁺      ✓⁺      ✓                   ✓   ✓       
+dep-update                    ✓                   ✓   ✓                   ✓   ✓       
+hotfix                        ✓   ✓   ✓⁺  ✓   ✓⁺  ✓   ✓   ✓   ✓       ✓   ✓   ✓   ✓   
 
-   Legend: ✓⁺ = stage-04b (security review) is conditional — only runs
-   when stage-04a reports security_review_required: true.
-   ✓ˢ = scoped peer-review (single reviewer, required_approvals=1)
-        on nano. See PEER_REVIEW_SIZING in core/pipeline/stages.js.
-   6b = accessibility audit (axe-core / pa11y / lighthouse). See
-        skills/accessibility-audit/SKILL.md.
-   6c = observability gate (verify the brief's promised metrics/logs/
-        traces actually ship). full + hotfix only. See
-        skills/observability-verification/SKILL.md.
+   Legend:
+   ✓⁺ = conditional stage — only runs when stage-04a triggers it
+       (security-review: security_review_required; migration-safety: migration_safety_required)
+   ✓ˢ = scoped peer-review on nano (single reviewer, required_approvals=1).
+       See PEER_REVIEW_SIZING in core/pipeline/stages.js.
+   ✓ᵐ = mechanical script (preflight/stage-04e), not an LLM dispatch.
+   3b = executable-spec (Gherkin scenarios from acceptance criteria)
+   4a = pre-review (lint + dep review + SCA + trigger heuristics)
+   4b = security review (conditional; veto power)
+   4c = red-team adversarial review
+   4d = migration-safety review (conditional; veto power)
+   4e = preflight mechanical checks
+   6b = accessibility audit (axe-core / pa11y / lighthouse)
+   6c = observability gate (verify brief §9 signals ship)
+   6d = verification beyond tests (property-based / mutation / formal; full only)
+   6e = performance budget (Lighthouse / bundle / load test)
 ```
+<!-- /generated -->
 
 ## Safety: the stoplist
 

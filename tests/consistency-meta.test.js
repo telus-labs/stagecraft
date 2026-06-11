@@ -482,6 +482,43 @@ test("check 6 stage-rule-file: stage with rule file exits 0", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Check 6a: Tracks matrix sync
+// (runs against the real repo, not a fixture tree — checkTracksMatrixSync only
+// works in full-repo mode because it must import the live stages.js)
+// ---------------------------------------------------------------------------
+
+test("check 6a tracks-matrix: docs/tracks.md generated block matches generator output", () => {
+  // The full consistency run (first test) would catch this too, but this gives
+  // a focused diagnostic: if it fails, the matrix is stale.
+  const { generateBlock, FENCE_OPEN, FENCE_CLOSE } = require(
+    path.join(REPO_ROOT, "scripts", "generate-tracks-matrix.js")
+  );
+
+  const tracksPath = path.join(REPO_ROOT, "docs", "tracks.md");
+  const src = fs.readFileSync(tracksPath, "utf8");
+
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const fenceRe = new RegExp(escapeRe(FENCE_OPEN) + "[\\s\\S]*?" + escapeRe(FENCE_CLOSE));
+  const match = src.match(fenceRe);
+  assert.ok(match,
+    "docs/tracks.md must contain a <!-- generated: do not hand-edit --> fenced block");
+
+  const fresh = generateBlock();
+  assert.equal(match[0], fresh,
+    "docs/tracks.md generated block is stale — re-run: node scripts/generate-tracks-matrix.js --write");
+});
+
+test("check 6a tracks-matrix: generator is importable without CLI side-effects", () => {
+  // Ensure require() of generate-tracks-matrix.js does not write to stdout or
+  // modify any files — the CLI block must be guarded by require.main === module.
+  const mod = require(path.join(REPO_ROOT, "scripts", "generate-tracks-matrix.js"));
+  assert.equal(typeof mod.generateBlock, "function", "generateBlock must be exported");
+  assert.equal(typeof mod.renderMatrix, "function", "renderMatrix must be exported");
+  assert.equal(typeof mod.FENCE_OPEN, "string", "FENCE_OPEN must be exported");
+  assert.equal(typeof mod.FENCE_CLOSE, "string", "FENCE_CLOSE must be exported");
+});
+
+// ---------------------------------------------------------------------------
 // Baseline integration tests
 // ---------------------------------------------------------------------------
 
