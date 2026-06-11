@@ -14,7 +14,7 @@ const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
 const { chunkByHeading, extractTitle } = require(path.join(REPO_ROOT, "core", "memory", "chunker"));
 const { JSONMemoryStore, sha1 } = require(path.join(REPO_ROOT, "core", "memory", "store"));
 const memory = require(path.join(REPO_ROOT, "core", "memory"));
-const { getEmbedder, resetCache } = require(path.join(REPO_ROOT, "core", "memory", "embed"));
+const { getEmbedder, resetCache, _setRequireHF } = require(path.join(REPO_ROOT, "core", "memory", "embed"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -134,6 +134,26 @@ describe("memory: stub embedder", () => {
         resetCache();
       },
     );
+  });
+
+  it("local provider with absent @huggingface/transformers throws actionable MODULE_NOT_FOUND error", async () => {
+    const before = process.env.DEVTEAM_EMBEDDING_PROVIDER;
+    process.env.DEVTEAM_EMBEDDING_PROVIDER = "local";
+    resetCache();
+    const missingErr = new Error("Cannot find module '@huggingface/transformers'");
+    missingErr.code = "MODULE_NOT_FOUND";
+    _setRequireHF(() => { throw missingErr; });
+    try {
+      await getEmbedder({ fresh: true });
+      assert.fail("should have thrown");
+    } catch (err) {
+      assert.match(err.message, /npm install @huggingface\/transformers/);
+      assert.match(err.message, /optional dependency/);
+    } finally {
+      _setRequireHF(() => require("@huggingface/transformers"));
+      process.env.DEVTEAM_EMBEDDING_PROVIDER = before;
+      resetCache();
+    }
   });
 });
 

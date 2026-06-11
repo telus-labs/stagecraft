@@ -23,7 +23,7 @@ function run(positional, _flags) {
   let warnings = 0;
 
   function check(label, ok, detail) {
-    const icon = ok === true ? "✓" : ok === "warn" ? "⚠" : "✗";
+    const icon = ok === true ? "✓" : ok === "info" ? "ℹ" : ok === "warn" ? "⚠" : "✗";
     console.log(`  ${icon} ${label}${detail ? `  — ${detail}` : ""}`);
     if (ok === false) criticalFailures++;
     if (ok === "warn") warnings++;
@@ -36,6 +36,10 @@ function run(positional, _flags) {
     (() => { try { JSON.parse(fs.readFileSync(path.join(FRAMEWORK_ROOT, "package.json"), "utf8")); return true; } catch { return false; } })());
   check("node_modules/js-yaml present", fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "js-yaml")),
     fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "js-yaml")) ? null : "run `npm install` in the framework dir");
+  const hfAvailable = fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "@huggingface", "transformers"));
+  check("local embeddings (optional)",
+    "info",
+    hfAvailable ? "available (DEVTEAM_EMBEDDING_PROVIDER=local works)" : "not installed — run: npm install @huggingface/transformers");
 
   console.log("\nTarget project");
   console.log(`  cwd: ${cwd}`);

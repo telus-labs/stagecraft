@@ -23,6 +23,10 @@
 const DEFAULT_MODEL = "Xenova/bge-small-en-v1.5";
 const DEFAULT_DIM = 384;
 
+// Seam for tests — replaced with a throwing stub to exercise the absent-module path.
+let _requireHF = () => require("@huggingface/transformers");
+function _setRequireHF(fn) { _requireHF = fn; }
+
 let _cached = null;
 
 async function getEmbedder(opts = {}) {
@@ -45,14 +49,17 @@ async function makeLocal(opts = {}) {
   const modelId = opts.modelId || process.env.DEVTEAM_EMBEDDING_MODEL || DEFAULT_MODEL;
   let pipeline;
   try {
-    const transformers = require("@huggingface/transformers");
+    const transformers = _requireHF();
     pipeline = transformers.pipeline;
-  } catch {
-    throw new Error(
-      `@huggingface/transformers not installed; cannot load local embedder. ` +
-      `Install with: npm install @huggingface/transformers --save\n` +
-      `(or set DEVTEAM_EMBEDDING_PROVIDER=stub for tests)`,
-    );
+  } catch (e) {
+    if (e.code === "MODULE_NOT_FOUND") {
+      throw new Error(
+        `devteam memory's local embeddings need the optional dependency:\n` +
+        `  npm install @huggingface/transformers\n` +
+        `(or set DEVTEAM_EMBEDDING_PROVIDER=stub for tests)`,
+      );
+    }
+    throw e;
   }
   // Quiet the library's progress chatter unless DEBUG asks for it.
   if (!process.env.DEBUG) {
@@ -109,4 +116,4 @@ function makeStub(opts = {}) {
 
 function resetCache() { _cached = null; }
 
-module.exports = { getEmbedder, resetCache, DEFAULT_MODEL, DEFAULT_DIM };
+module.exports = { getEmbedder, resetCache, DEFAULT_MODEL, DEFAULT_DIM, _setRequireHF };
