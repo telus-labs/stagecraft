@@ -703,7 +703,7 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
       "re-run verification command");
   });
 
-  it("blocker without Fix: clause → generic description, still re-runs verification", () => {
+  it("blocker without Fix: clause → dispatches build globally + re-runs verification", () => {
     const cwd = track(makeTargetProject());
     seedThroughQa(cwd);
     seedGate(cwd, "stage-06d", {
@@ -716,9 +716,48 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(allCmds.some(c => c.includes("devteam stage verification-beyond-tests")),
       "re-run verification always present");
-    // No build steps without a parseable file path
-    assert.ok(!allCmds.some(c => c.includes("devteam stage build")),
-      "no build step when no file path");
+    // When workstream not identified, driver dispatches build globally with --patch context
+    assert.ok(allCmds.some(c => c.includes("devteam stage build") && c.includes("--patch")),
+      "build dispatched globally when workstream not identified");
+    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
+      "merged build gate cleared so next() dispatches build not a merge");
+    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),
+      "verification gate cleared before re-run");
+  });
+
+  it("string blocker with code Fix: clause (not a file path) → dispatches build globally", () => {
+    // Real case: F-VER-01 blocker is a string with 'Fix: if (value instanceof Date) ...'
+    // FIX_FILE_RE extracts 'if' which is not a file path; _wsFromText finds nothing.
+    const cwd = track(makeTargetProject());
+    seedThroughQa(cwd);
+    seedGate(cwd, "stage-06d", {
+      status: "FAIL",
+      blockers: [
+        "F-VER-01: hash() throws RangeError for new Date(NaN) — sortKeysDeep:11 missing isNaN guard. "
+        + "Real path: AWS IAM CreateDate -> invalid Date -> hash() throws -> builder.js:29 -> run() crashes. "
+        + "Fix: if (value instanceof Date) return isNaN(value.getTime()) ? null : value.toISOString();",
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage build") && c.includes("--patch")),
+      "build dispatched with --patch so agent implements the fix from context.md"
+    );
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
+      "merged build gate cleared so next() dispatches build"
+    );
+    assert.ok(
+      allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),
+      "verification gate cleared"
+    );
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage verification-beyond-tests")),
+      "verification re-run after build"
+    );
   });
 });
 
