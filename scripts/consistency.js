@@ -9,29 +9,140 @@
 // the full test suite, and CI can fail fast on cross-artifact drift.
 //
 // Usage:
-//   node scripts/consistency.js          # run all checks
-//   node scripts/consistency.js --json   # machine-readable output
+//   node scripts/consistency.js               # run all checks (with baseline)
+//   node scripts/consistency.js --json        # machine-readable output
+//   node scripts/consistency.js --no-baseline # show raw violations (no suppression)
+//
+// Baseline mode (2.1):
+//   scripts/consistency-baseline.json lists known prose-vs-code violations
+//   that pre-date the checker. Baselined findings are reported but do NOT
+//   fail the run. Item 2.2 burns the baseline down; once it's empty the file
+//   is deleted and the checker runs fully un-baselined.
+//
+// Baseline entry keys are stable across runs (file + checkClass + identifier)
+// so unrelated edits don't churn the baseline.
+
+"use strict";
 
 const fs = require("node:fs");
 const path = require("node:path");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
-const { STAGES, STAGES_BY_TRACK, ORDERED_STAGE_NAMES, stageNames } =
+const { STAGES, TRACKS, STAGES_BY_TRACK, ORDERED_STAGE_NAMES, stageNames } =
   require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 const { listHosts, loadAdapter } = require(path.join(REPO_ROOT, "core", "router"));
 
+// ---------------------------------------------------------------------------
+// Failure collection — prose-vs-code checks use a separate array so baseline
+// logic can handle them independently from the core contract checks.
+// ---------------------------------------------------------------------------
+
 const failures = [];
 const passes = [];
+// Prose-vs-code violations (subject to baseline suppression)
+const proseViolations = [];
+// Baselined violations reported as informational
+const baselined = [];
 
 function pass(name) { passes.push(name); }
 function fail(name, detail) { failures.push({ name, detail }); }
+
+// Record a prose-vs-code violation.
+// checkClass: string identifying the check (e.g. "gate-filename").
+// file: root-relative path to the file.
+// line: 1-based line number (0 = file-level).
+// detail: human-readable description.
+// key: stable identifier for baseline matching (must NOT contain line number alone).
+function proseViolation(checkClass, file, line, detail, key) {
+  proseViolations.push({ checkClass, file, line, detail, key });
+}
 
 function exists(rel) { return fs.existsSync(path.join(REPO_ROOT, rel)); }
 function readJSON(rel) { return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, rel), "utf8")); }
 function listDir(rel) { return fs.readdirSync(path.join(REPO_ROOT, rel)); }
 
 // ---------------------------------------------------------------------------
-// Checks
+// Baseline support (2.1): baseline lives in scripts/consistency-baseline.json.
+// Each entry is a stable key string. Keyed on file+class+identifier so line
+// number changes from unrelated edits do not churn the baseline.
+// ---------------------------------------------------------------------------
+
+const BASELINE_PATH = path.join(__dirname, "consistency-baseline.json");
+
+function loadBaseline() {
+  // CONSISTENCY_BASELINE_FILE env var overrides the default path.
+  // Used in fixture-tree tests so they can inject a known-small baseline
+  // without touching the real repo baseline file.
+  const filePath = process.env.CONSISTENCY_BASELINE_FILE || BASELINE_PATH;
+  if (!fs.existsSync(filePath)) return new Set();
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    if (Array.isArray(raw)) return new Set(raw);
+    if (raw && Array.isArray(raw.entries)) return new Set(raw.entries);
+    return new Set();
+  } catch { return new Set(); }
+}
+
+// ---------------------------------------------------------------------------
+// Scan utilities
+// ---------------------------------------------------------------------------
+
+// Excluded relative dir suffixes. Applied relative to any scanRoot, not just
+// REPO_ROOT, so fixture-tree tests work correctly.
+const EXCLUDED_RELATIVE = [
+  path.join("docs", "historical"),
+  path.join("docs", "audit-archive"),
+];
+
+function isExcluded(absPath, scanRoot) {
+  for (const rel of EXCLUDED_RELATIVE) {
+    const ex = path.join(scanRoot, rel);
+    if (absPath === ex || absPath.startsWith(ex + path.sep)) return true;
+  }
+  return false;
+}
+
+// Recursively scan a directory for .md files matching `re`.
+// Returns array of { file (relative to scanRoot), line, text, match }.
+function scanDirRec(absDir, re, scanRoot, results) {
+  let entries;
+  try { entries = fs.readdirSync(absDir, { withFileTypes: true }); } catch { return; }
+  for (const e of entries) {
+    const abs = path.join(absDir, e.name);
+    if (isExcluded(abs, scanRoot)) continue;
+    if (e.isDirectory()) { scanDirRec(abs, re, scanRoot, results); continue; }
+    if (!e.name.endsWith(".md")) continue;
+    const rel = path.relative(scanRoot, abs);
+    let content;
+    try { content = fs.readFileSync(abs, "utf8"); } catch { continue; }
+    const lines = content.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const r = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+      r.lastIndex = 0;
+      let m;
+      while ((m = r.exec(line)) !== null) {
+        results.push({ file: rel, line: i + 1, text: line.trim(), match: m });
+      }
+    }
+  }
+}
+
+// Scan relative dir names (joined with scanRoot) for matching .md content.
+// scanRoot defaults to REPO_ROOT. Returns { file, line, text, match } array.
+function scanDirs(relDirs, re, scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const results = [];
+  for (const d of relDirs) {
+    const absDir = path.join(root, d);
+    if (!fs.existsSync(absDir)) continue;
+    scanDirRec(absDir, re, root, results);
+  }
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Checks — original contract checks (preserved unchanged)
 // ---------------------------------------------------------------------------
 
 function checkStagesToSchemas() {
@@ -204,41 +315,527 @@ function checkAuditFeatureIntegrity() {
 }
 
 // ---------------------------------------------------------------------------
-// Main
+// Prose-vs-code checks (new in 2.1) — six check classes
 // ---------------------------------------------------------------------------
 
-function main() {
-  const json = process.argv.includes("--json");
+// --- Check 1: Gate filename references ---
+//
+// Canonical gate filename formats (derived from approval-derivation.js:217):
+//   Stage gate:           stage-NN[x].json
+//   Workstream gate:      stage-NN[x].<area>.json      (DOT-separated)
+//   Fanout gate:          stage-NN[x].<area>.<host>.json
+//
+// Violations: dash-separated forms like stage-04-backend.json (wrong separator),
+// or gate names referencing non-canonical stage IDs.
+//
+// Scan: rules/, roles/, docs/runbooks/, skills/
+function checkGateFilenameReferences(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const scanRelDirs = ["rules", "roles", "docs/runbooks", "skills"];
 
-  checkStagesToSchemas();
-  checkSchemasToStages();
-  checkStagesToRoles();
-  checkRoleWritesValid();
-  checkSubagentOverrides();
-  checkTracksReferenceKnownStages();
-  checkOrderedStageNamesCoversAll();
-  checkAdaptersExportContract();
-  checkRequiredRulesPresent();
-  checkSchemaIdsAndDraft();
-  checkGateBaseSchemaIdentity();
-  checkAuditFeatureIntegrity();
+  // Match gate filename patterns anywhere in a line (inside paths, backticks, etc.).
+  // Linear pattern: stage-NNx followed by a separator (- or .) and a non-empty
+  // alphanumeric segment ending in .json.
+  // Must NOT use catastrophic backtracking — use a simple non-quantifier-stacked form.
+  // Matches: stage-04-backend.json, stage-04.backend.json, stage-05.area.host.json
+  const gateRefRe = /(stage-\d+[a-z]?[-.][\w][\w.,-]*\.json)/gi;
 
-  if (json) {
-    console.log(JSON.stringify({ passes: passes.length, failures }, null, 2));
-  } else {
-    if (failures.length === 0) {
-      console.log(`✅ consistency: ${passes.length} checks passed`);
-    } else {
-      console.log(`❌ consistency: ${failures.length} failure(s), ${passes.length} pass(es)`);
-      for (const f of failures) {
-        console.log(`  ✗ ${f.name}: ${f.detail}`);
+  const canonicalStageIds = new Set(
+    Object.values(STAGES).filter(Boolean).map((d) => d.stage)
+  );
+
+  // Also scan for dash-form patterns with template placeholders (stage-04-{area}.json,
+  // stage-05-<area>.json) which the main regex doesn't match but are still violations.
+  // We match: stage-NNx- followed by a brace/angle placeholder.
+  // This is a separate simpler scan so we can skip the placeholder check.
+  const dashPlaceholderRe = /(stage-\d+[a-z]?)-(?:\{[^}]+\}|<[^>]+>)\.json/gi;
+
+  const hits = scanDirs(scanRelDirs, gateRefRe, root);
+  const placeholderHits = scanDirs(scanRelDirs, dashPlaceholderRe, root);
+  const seen = new Set();
+
+  // Check dash-form with placeholders (stage-05-{area}.json)
+  for (const hit of placeholderHits) {
+    const raw = hit.match[0]; // full match
+    // Extract the stage ID part before the dash-area
+    const stageMatch = raw.match(/^(stage-\d+[a-z]?)-/i);
+    if (!stageMatch) continue;
+    const stageId = stageMatch[1].toLowerCase();
+    const placeholder = raw.replace(stageId + "-", "").replace(".json", "");
+    const corrected = `${stageId}.${placeholder}.json`;
+    const key = `gate-filename:${hit.file}:${stageId}-placeholder.json`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      proseViolation("gate-filename", hit.file, hit.line,
+        `dash-form gate pattern "${raw.match(/stage-[^}\s]*/)[0]}" — should use dot-separator: "${corrected}" (per approval-derivation.js:217)`,
+        key);
+    }
+  }
+
+  for (const hit of hits) {
+    const rawMatch = hit.match[1];
+    if (!rawMatch) continue;
+
+    // Skip template placeholders: {area}, <area>, etc. — handled by dashPlaceholderRe above
+    if (rawMatch.includes("{") || rawMatch.includes("<") || rawMatch.includes(">")) continue;
+
+    // Extract the core filename (strip any path prefix before stage-)
+    const filenameMatch = rawMatch.match(/(stage-\d+[a-z]?[-.][\w.-]*)$/i);
+    if (!filenameMatch) continue;
+    const fname = filenameMatch[1];
+    if (!fname.endsWith(".json")) continue;
+
+    // Dash form (VIOLATION): stage-NNx-area.json
+    // Regex: starts with stage-NN[x], then a hyphen, then a word (not a digit run with no letter)
+    const dashViolationRe = /^(stage-\d+[a-z]?)-([A-Za-z][\w-]*)\.json$/i;
+    // Valid dot form: stage-NNx.something.json
+    const validDotRe = /^(stage-\d+[a-z]?)\.[A-Za-z][\w.-]+\.json$/i;
+    // Valid bare form: stage-NNx.json
+    const validBareRe = /^(stage-\d+[a-z]?)\.json$/i;
+
+    if (dashViolationRe.test(fname)) {
+      const m = fname.match(dashViolationRe);
+      const stageId = m[1].toLowerCase();
+      const area = m[2];
+      const key = `gate-filename:${hit.file}:${fname}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        proseViolation("gate-filename", hit.file, hit.line,
+          `dash-form gate name "${fname}" — should be "${stageId}.${area}.json" (dot-separated, per approval-derivation.js:217)`,
+          key);
+      }
+    } else if (validDotRe.test(fname) || validBareRe.test(fname)) {
+      const sid = (fname.match(/^(stage-\d+[a-z]?)/i) || [])[1];
+      if (sid && !canonicalStageIds.has(sid.toLowerCase())) {
+        const key = `gate-filename:${hit.file}:${fname}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          proseViolation("gate-filename", hit.file, hit.line,
+            `gate name "${fname}" references non-canonical stage ID "${sid}"`,
+            key);
+        }
+      }
+    }
+  }
+}
+
+// --- Check 2: Stage-ID existence and N-stage count claims ---
+//
+// Every `stage-\d+[a-z]?` ID mentioned in prose must exist in STAGES.stage values.
+// Canonical IDs are zero-padded (stage-04, stage-04b). Un-padded forms (stage-4)
+// are violations. "N-stage" claims must match ORDERED_STAGE_NAMES.length.
+//
+// Scan: rules/, roles/, docs/, skills/
+// Exclusions: docs/historical/, docs/audit-archive/ (wholesale)
+function checkStageIdAndCountClaims(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const scanRelDirs = ["rules", "roles", "docs", "skills"];
+
+  // True non-mechanical stage count per code (item 2.1 spec: derive from code)
+  const TRUE_STAGE_COUNT = ORDERED_STAGE_NAMES.length; // currently 18
+
+  const canonicalStageIds = new Set(
+    Object.values(STAGES).filter(Boolean).map((d) => d.stage)
+  );
+
+  // Stage ID ref pattern. Match `stage-NN` or `stage-NNx` as whole tokens.
+  // Avoid matching inside longer identifiers. Case-insensitive for robustness.
+  // We capture the full `stage-NNx` token for case-normalised lookup.
+  const stageIdRe = /\b(stage-\d+[a-z]?)\b/gi;
+
+  // "N-stage" count claim: "13-stage pipeline", "18-stage workflow", etc.
+  const stageCountRe = /\b(\d+)-stage\b/gi;
+
+  const idHits = scanDirs(scanRelDirs, stageIdRe, root);
+  const countHits = scanDirs(scanRelDirs, stageCountRe, root);
+
+  const seenId = new Set();
+  for (const hit of idHits) {
+    const raw = hit.match[1];
+    const id = raw.toLowerCase();
+    if (!canonicalStageIds.has(id)) {
+      // Deduplicate by file+id (same non-canonical ID appearing multiple times in a file)
+      const key = `stage-id:${hit.file}:${id}`;
+      if (!seenId.has(key)) {
+        seenId.add(key);
+        proseViolation("stage-id", hit.file, hit.line,
+          `"${raw}" not found in STAGES — non-canonical or unknown stage ID (canonical: stage-NN or stage-NNx with zero-padding)`,
+          key);
       }
     }
   }
 
-  process.exit(failures.length === 0 ? 0 : 1);
+  const seenCount = new Set();
+  for (const hit of countHits) {
+    const claimed = parseInt(hit.match[1], 10);
+    if (claimed !== TRUE_STAGE_COUNT) {
+      const key = `stage-count:${hit.file}:${hit.match[0].trim()}`;
+      if (!seenCount.has(key)) {
+        seenCount.add(key);
+        proseViolation("stage-count", hit.file, hit.line,
+          `"${hit.match[0].trim()}" disagrees with true stage count (${TRUE_STAGE_COUNT} per ORDERED_STAGE_NAMES)`,
+          key);
+      }
+    }
+  }
 }
 
-if (require.main === module) main();
+// --- Check 3: Track list claims ---
+//
+// (a) "N tracks" count claims must match TRACKS.length.
+// (b) Enumerated "Valid values:" lists that mention some tracks but omit others.
+//
+// Scan: rules/, roles/, docs/
+function checkTrackListClaims(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const scanRelDirs = ["rules", "roles", "docs"];
+  const TRUE_TRACK_COUNT = TRACKS.length; // currently 6
+  const TRACK_SET = new Set(TRACKS);
+
+  // (a) "N tracks" or "Four tracks", "five tracks", etc.
+  const trackCountRe = /\b(\d+|[Ff]our|[Ff]ive|[Ss]ix)\s+tracks?\b/g;
+
+  // (b) "valid values: ..." lines or similar that enumerate tracks
+  //     We look for lines that list some track names but not all, when at
+  //     least two TRACKS names appear in the same sentence/line.
+  const validValuesRe = /[Vv]alid(?:\s+values?)?[:\s]+([^\n]{5,})/g;
+
+  // (a) Count claims
+  const countHits = scanDirs(scanRelDirs, trackCountRe, root);
+  const seenCount = new Set();
+  for (const hit of countHits) {
+    const raw = hit.match[1];
+    let claimed;
+    if (/^\d+$/.test(raw)) claimed = parseInt(raw, 10);
+    else if (/four/i.test(raw)) claimed = 4;
+    else if (/five/i.test(raw)) claimed = 5;
+    else if (/six/i.test(raw)) claimed = 6;
+    else continue;
+
+    if (claimed !== TRUE_TRACK_COUNT) {
+      const key = `track-count:${hit.file}:${hit.match[0].trim()}`;
+      if (!seenCount.has(key)) {
+        seenCount.add(key);
+        proseViolation("track-list", hit.file, hit.line,
+          `"${hit.match[0].trim()}" claims ${claimed} tracks but TRACKS has ${TRUE_TRACK_COUNT}: ${TRACKS.join(", ")}`,
+          key);
+      }
+    }
+  }
+
+  // (b) Valid-values lists that omit tracks
+  const validHits = scanDirs(scanRelDirs, validValuesRe, root);
+  for (const hit of validHits) {
+    const valueStr = hit.match[1];
+    const mentioned = new Set();
+    for (const tk of TRACKS) {
+      // Check if this track name appears (as word or backtick-quoted token)
+      if (new RegExp(`(^|[\\s,\`'"(])${tk}([\\s,\`'")])`, "").test(valueStr) ||
+          valueStr.includes("`" + tk + "`")) {
+        mentioned.add(tk);
+      }
+    }
+    // Only flag if multiple tracks mentioned but some are missing
+    if (mentioned.size >= 2 && mentioned.size < TRACK_SET.size) {
+      const missing = TRACKS.filter((t) => !mentioned.has(t));
+      const key = `track-list:${hit.file}:missing-${missing.join("+")}:L${hit.line}`;
+      proseViolation("track-list", hit.file, hit.line,
+        `track list mentions {${[...mentioned].join(", ")}} but omits: ${missing.join(", ")}`,
+        key);
+    }
+  }
+}
+
+// --- Check 4: Referenced-file existence ---
+//
+// Relative path references in rules/roles/skills/runbooks that point to files
+// that should exist in the repo must actually exist. We only check paths with
+// known-repo prefixes (rules/, roles/, core/, skills/, .devteam/rules/, *.sh).
+//
+// Target-project runtime paths (pipeline/*) and implementation paths (src/)
+// are excluded — they exist in target projects, not this repo.
+//
+// Scan: rules/, roles/, skills/, docs/runbooks/
+function checkReferencedFileExistence(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const scanRelDirs = ["rules", "roles", "skills", "docs/runbooks"];
+
+  // Backtick-quoted file paths
+  const backtickRe = /`([^`\s]+\.(md|sh|json|feature|yml|yaml))`/g;
+  // Markdown links to .md files: [text](path.md) or [text](path.md#anchor)
+  const mdLinkRe = /\[(?:[^\]]+)\]\(([^)\s]+\.md(?:#[^)]*)?)\)/g;
+
+  // Prefixes that indicate a repo-relative path we can validate
+  const REPO_PREFIXES = [
+    "rules/", "roles/", "core/", "skills/", "docs/", "hosts/",
+    "templates/", "scripts/",
+  ];
+  // .devteam/ paths: installed copies of rules/ files; validate source exists
+  const DEVTEAM_RULES_PREFIX = ".devteam/rules/";
+
+  function shouldCheck(ref) {
+    if (!ref) return false;
+    if (ref.startsWith("http://") || ref.startsWith("https://")) return false;
+    if (ref.startsWith("#")) return false;       // anchor-only
+    if (ref.startsWith("pipeline/")) return false; // target-project runtime
+    if (ref.startsWith("src/")) return false;    // implementation
+    if (ref.includes("{") || ref.includes("<") || ref.includes(">")) return false; // placeholders
+    if (ref.startsWith(DEVTEAM_RULES_PREFIX)) return true; // check source path
+    if (ref.endsWith(".sh")) return true;
+    return REPO_PREFIXES.some((p) => ref.startsWith(p));
+  }
+
+  function resolveRef(ref) {
+    // .devteam/rules/foo.md → check rules/foo.md (the source)
+    if (ref.startsWith(DEVTEAM_RULES_PREFIX)) {
+      const sourceRel = ref.replace(DEVTEAM_RULES_PREFIX, "rules/").split("#")[0];
+      return sourceRel;
+    }
+    return ref.split("#")[0];
+  }
+
+  const seenViolations = new Set();
+
+  function checkRef(ref, file, lineNum) {
+    if (!shouldCheck(ref)) return;
+    const checkPath = resolveRef(ref);
+    const abs = path.join(root, checkPath);
+    if (!fs.existsSync(abs)) {
+      const key = `ref-existence:${file}:${checkPath}`;
+      if (!seenViolations.has(key)) {
+        seenViolations.add(key);
+        proseViolation("ref-existence", file, lineNum,
+          `references "${ref}" but file does not exist`, key);
+      }
+    }
+  }
+
+  const btHits = scanDirs(scanRelDirs, backtickRe, root);
+  for (const hit of btHits) checkRef(hit.match[1], hit.file, hit.line);
+
+  const mdHits = scanDirs(scanRelDirs, mdLinkRe, root);
+  for (const hit of mdHits) checkRef(hit.match[1], hit.file, hit.line);
+}
+
+// --- Check 5: Command surface ---
+//
+// (a) Slash commands documented in rules/ must be installed by an adapter.
+//     claude-code installs: devteam.md, audit.md, audit-quick.md
+//     → valid slash commands: /devteam, /audit, /audit-quick.
+//     Rule: /devteam is always valid (it's the core installed command).
+//
+// (b) `npm run <script>` references in rules/roles/runbooks that describe
+//     the stagecraft framework's own commands must exist in package.json.
+//
+// Scan: rules/, roles/, docs/runbooks/
+function checkCommandSurface(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const scanRelDirs = ["rules", "roles", "docs/runbooks"];
+
+  // (a) Installed slash commands
+  const commandsDir = path.join(root, "hosts", "claude-code", "install", "commands");
+  const installedCmds = new Set(["/devteam"]); // always installed
+  if (fs.existsSync(commandsDir)) {
+    for (const f of fs.readdirSync(commandsDir)) {
+      if (f.endsWith(".md")) installedCmds.add("/" + f.replace(".md", ""));
+    }
+  }
+
+  // Match slash commands: standalone `/cmd` in backticks or as list items
+  // Must start with / followed by lowercase letter
+  const slashRe = /`(\/[a-z][a-z0-9-]*)(?:\s[^`]*)?`/g;
+
+  const slashHits = scanDirs(scanRelDirs, slashRe, root);
+  const seenSlash = new Set();
+  for (const hit of slashHits) {
+    const cmd = hit.match[1];
+    if (!cmd) continue;
+    if (installedCmds.has(cmd)) continue;
+    // /devteam subcommands (e.g. `/devteam stage`) are valid — only the prefix matters
+    const key = `slash-cmd:${hit.file}:${cmd}`;
+    if (!seenSlash.has(key)) {
+      seenSlash.add(key);
+      proseViolation("command-surface", hit.file, hit.line,
+        `slash command "${cmd}" is documented but not installed by any adapter`,
+        key);
+    }
+  }
+
+  // (b) `npm run <script>` — check against package.json in the root
+  let pkgScripts = {};
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+    pkgScripts = pkg.scripts || {};
+  } catch { /* no package.json — skip */ }
+
+  const npmRunRe = /`npm run ([\w:.-]+)`/g;
+  const npmRunHits = scanDirs(scanRelDirs, npmRunRe, root);
+  const seenNpm = new Set();
+  for (const hit of npmRunHits) {
+    const scriptName = hit.match[1];
+    if (!pkgScripts[scriptName]) {
+      const key = `npm-run:${hit.file}:${scriptName}`;
+      if (!seenNpm.has(key)) {
+        seenNpm.add(key);
+        proseViolation("command-surface", hit.file, hit.line,
+          `"npm run ${scriptName}" is documented but not found in package.json scripts`,
+          key);
+      }
+    }
+  }
+}
+
+// --- Check 6: Stage rule-file coverage ---
+//
+// Every non-mechanical stage in the build range (stage-04 through stage-08)
+// that is in STAGES, and every stage indexed in rules/pipeline-build.md,
+// must have a corresponding rules/stage-NN[x].md rule file.
+//
+// Currently missing: stage-04c, stage-04d, stage-06d, stage-06e.
+function checkStageRuleFileCoverage(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const isFixtureMode = root !== REPO_ROOT;
+
+  // In repo mode, also check all non-mechanical stages in the build range from
+  // live STAGES. In fixture-tree mode, skip this: the fixture only has the stages
+  // it explicitly defines; requiring all live STAGES would force every fixture to
+  // create dozens of stub rule files just to pass unrelated tests.
+  const allStageIds = new Set();
+  if (!isFixtureMode) {
+    const buildRangeRe = /^stage-0[4-8]/;
+    for (const def of Object.values(STAGES)) {
+      if (def && buildRangeRe.test(def.stage) && def.roles.length > 0) {
+        allStageIds.add(def.stage);
+      }
+    }
+  }
+
+  // Always: collect stage IDs referenced in the (fixture or repo) pipeline-build.md
+  const pipelineBuildPath = path.join(root, "rules", "pipeline-build.md");
+  if (fs.existsSync(pipelineBuildPath)) {
+    const content = fs.readFileSync(pipelineBuildPath, "utf8");
+    // Match markdown links like [stage-04.md](stage-04.md) or [`stage-04.md`](stage-04.md)
+    // (the backtick-wrapped form is used in the real pipeline-build.md index table)
+    const linkRe = /\[`?(stage-\d+[a-z]?)\.md`?\]\(stage-\d+[a-z]?\.md\)/g;
+    let m;
+    while ((m = linkRe.exec(content)) !== null) allStageIds.add(m[1]);
+  }
+
+  for (const stageId of allStageIds) {
+    const ruleFile = `rules/${stageId}.md`;
+    if (!fs.existsSync(path.join(root, ruleFile))) {
+      const key = `stage-rule-file:${stageId}`;
+      proseViolation("stage-rule-file", "rules/pipeline-build.md", 0,
+        `stage "${stageId}" is in STAGES (build range) but has no rule file at ${ruleFile}`,
+        key);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Prose-vs-code dispatch — run all six checks
+// ---------------------------------------------------------------------------
+
+function runProseChecks(scanRoot) {
+  checkGateFilenameReferences(scanRoot);
+  checkStageIdAndCountClaims(scanRoot);
+  checkTrackListClaims(scanRoot);
+  checkReferencedFileExistence(scanRoot);
+  checkCommandSurface(scanRoot);
+  checkStageRuleFileCoverage(scanRoot);
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+function main(opts) {
+  // Support both programmatic invocation (opts.args) and CLI (process.argv)
+  const args = (opts && opts.args) ? opts.args : process.argv.slice(2);
+  const json = args.includes("--json");
+  const noBaseline = args.includes("--no-baseline");
+
+  // --root <path> allows tests to run the checker against fixture trees
+  const rootIdx = args.indexOf("--root");
+  const customRoot = rootIdx >= 0 ? args[rootIdx + 1] : null;
+
+  if (customRoot) {
+    // Fixture-tree mode: run only prose checks (core checks need the live repo)
+    runProseChecks(customRoot);
+  } else {
+    // Full run: original core checks + prose checks against real repo
+    checkStagesToSchemas();
+    checkSchemasToStages();
+    checkStagesToRoles();
+    checkRoleWritesValid();
+    checkSubagentOverrides();
+    checkTracksReferenceKnownStages();
+    checkOrderedStageNamesCoversAll();
+    checkAdaptersExportContract();
+    checkRequiredRulesPresent();
+    checkSchemaIdsAndDraft();
+    checkGateBaseSchemaIdentity();
+    checkAuditFeatureIntegrity();
+    runProseChecks(null);
+  }
+
+  // Apply baseline suppression: baselined keys don't fail the run
+  const baselineSet = noBaseline ? new Set() : loadBaseline();
+  const newViolations = [];
+  for (const v of proseViolations) {
+    if (baselineSet.has(v.key)) {
+      baselined.push(v);
+    } else {
+      newViolations.push(v);
+    }
+  }
+
+  const totalFails = failures.length + newViolations.length;
+
+  if (json) {
+    const allFails = [
+      ...failures,
+      ...newViolations.map((v) => ({
+        name: `${v.checkClass}:${v.file}:${v.line}`,
+        detail: v.detail,
+      })),
+    ];
+    console.log(JSON.stringify({
+      passes: passes.length,
+      failures: allFails,
+      baselined: baselined.length,
+      proseViolations: noBaseline ? proseViolations : newViolations,
+    }, null, 2));
+  } else {
+    if (totalFails === 0 && baselined.length === 0) {
+      console.log(`✅ consistency: ${passes.length} checks passed`);
+    } else if (totalFails === 0) {
+      console.log(`✅ consistency: ${passes.length} checks passed, ${baselined.length} baselined`);
+      for (const v of baselined) {
+        console.log(`  ⏭ [baselined] ${v.file}:${v.line}: (${v.checkClass}) ${v.detail}`);
+      }
+    } else {
+      console.log(`❌ consistency: ${totalFails} failure(s), ${passes.length} pass(es)${baselined.length > 0 ? `, ${baselined.length} baselined` : ""}`);
+      for (const f of failures) {
+        console.log(`  ✗ ${f.name}: ${f.detail}`);
+      }
+      for (const v of newViolations) {
+        console.log(`  ✗ ${v.file}:${v.line}: (${v.checkClass}) ${v.detail}`);
+      }
+      if (baselined.length > 0) {
+        console.log(`  — baselined violations (suppressed, not failing):`);
+        for (const v of baselined) {
+          console.log(`    ⏭ ${v.file}:${v.line}: (${v.checkClass}) ${v.detail}`);
+        }
+      }
+    }
+  }
+
+  const exitCode = totalFails === 0 ? 0 : 1;
+  if (require.main === module) process.exit(exitCode);
+  return exitCode;
+}
 
 module.exports = { main };
+
+if (require.main === module) main();
