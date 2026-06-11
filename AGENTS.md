@@ -108,4 +108,4 @@ Stagecraft has a tier-1 + tier-2 test suite (1 200+ tests; run `npm test`). See 
 - Most smoke testing uses `mktemp -d` as a scratch target project, runs `./bin/devteam init --host claude-code --cwd $TMPDIR`, then exercises subcommands against it.
 - `DEVTEAM_HEADLESS_COMMAND=cat` or `=true` stubs the host CLI for testing `--headless` without `claude` or `codex` installed.
 - Stage prompts go to stdout; orchestrator logs go to stderr (`[devteam] …`). Do not mix.
-- Every contract change should land with: (a) the code change, (b) the doc update in `ARCHITECTURE.md`, `rules/gates.md`, or `core/adapters/host-adapter.md` as relevant, (c) a corresponding test.
+- Every contract change should land with: (a) the code change, (b) the doc update in `ARCHITECTURE.md`, `rules/gates-core.md` (universal contract), the relevant `rules/stage-NN.md` (per-stage gate), or `core/adapters/host-adapter.md` as relevant, (c) a corresponding test.

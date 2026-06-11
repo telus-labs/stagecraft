@@ -212,3 +212,34 @@ The round counter resets if a different reviewer takes over the area.
 Record the escalation in `pipeline/context.md` as
 `REVIEW-ESCALATED: <area> after 2 rounds — principal ruling requested`.
 
+
+## Gate
+
+Workstream gate files: `pipeline/gates/stage-05.<area>.json` (one per area).
+Merged stage gate: `pipeline/gates/stage-05.json`.
+
+```json
+{
+  "stage": "stage-05",
+  "status": "PASS | FAIL",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "workstream": "backend | frontend | platform | qa",
+  "host": "claude-code",
+  "blockers": [],
+  "warnings": [],
+  "area": "backend | frontend | platform | qa",
+  "review_shape": "scoped | matrix",
+  "required_approvals": 2,
+  "approvals": ["dev-frontend", "security-engineer"],
+  "changes_requested": [
+    { "reviewer": "dev-backend", "timestamp": "<ISO>" }
+  ],
+  "escalated_to_principal": false
+}
+```
+
+`approvals` and `changes_requested` are written by the `approval-derivation.js` hook,
+not by the reviewer agent. `status: "PASS"` when `approvals.length >= required_approvals`
+AND `changes_requested` is empty.

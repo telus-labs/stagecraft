@@ -8,6 +8,27 @@ Gate key: `"pm_signoff": true`
 On NO: PM writes delta list. Return to Stage 4 with delta items only.
 Delta items must not trigger a full pipeline rerun — scope them explicitly.
 
+## Gate
+
+Gate file: `pipeline/gates/stage-07.json`.
+
+```json
+{
+  "stage": "stage-07",
+  "status": "PASS",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "blockers": [],
+  "warnings": [],
+  "pm_signoff": true,
+  "deploy_requested": true,
+  "runbook_referenced": true,
+  "open_followups": [],
+  "delta_items": []
+}
+```
+
 ### `open_followups[]` — PM acknowledgment of deferred work
 
 > Stage manager guide for reading this field and creating tickets: [`docs/runbooks/open-followups.md`](../docs/runbooks/open-followups.md)

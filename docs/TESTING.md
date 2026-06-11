@@ -20,7 +20,7 @@ node --experimental-test-coverage --test tests/*.test.js
 
 | File | What it covers |
 |---|---|
-| `contract.test.js` | Cross-artifact consistency — every stage in `stages.js` has a matching schema, every role has a matching brief, every schema's fields align with `rules/gates.md`. |
+| `contract.test.js` | Cross-artifact consistency — every stage in `stages.js` has a matching schema, every role has a matching brief, every schema's fields align with `rules/gates-core.md` and per-stage `rules/stage-NN.md`. |
 | `gate-validator.test.js` | Validator exit codes (PASS=0, FAIL=2, ESCALATE=3, malformed=1), bypassed-escalation detection, retry-protocol enforcement, malformed reinforced-lines surfacing. |
 | `orchestrator.test.js` | `runStage` decomposition, `buildDescriptor` with `roleWrites` + `subagent` overrides, `mergeWorkstreamGates` aggregation (ESCALATE > FAIL > WARN > PASS), `summary` rendering. |
 | `next.test.js` | All `next()` scenarios: empty, run-stage, continue-stage, merge, fix-and-retry, resolve-escalation, pipeline-complete, conditional skip, track filter, `--json`. |
@@ -32,7 +32,7 @@ node --experimental-test-coverage --test tests/*.test.js
 | `stoplist.test.js` | Phrase matching across the guarded tracks; bypass requires explicit flag. |
 | `security-heuristic.test.js` | Stage 4b trigger paths fire on sensitive files; safe paths don't false-positive. |
 | `tracks.test.js` | `orderedStageNamesForTrack(track)` returns the right list per track; unknown → throws; nano excludes most stages; full has all 18. |
-| `schemas.test.js` | Each `stage-NN.schema.json` is a valid JSON Schema 2020-12; example gates in `rules/gates.md` validate against their declared schema. |
+| `schemas.test.js` | Each `stage-NN.schema.json` is a valid JSON Schema 2020-12; example gates in `rules/stage-NN.md` validate against their declared schema. |
 | `cli.test.js` | `bin/devteam` exit codes for known/unknown commands; `--json` outputs valid JSON; `--cwd` honored uniformly. |
 | `observability.test.js` | OpenTelemetry spans emitted at every instrumented call site, with expected attributes, via `InMemorySpanExporter`. |
 | `secret-scan.test.js` | PreToolUse hook: pattern detection, false-positive guards, magic-comment override, path allowlist, end-to-end stdin parsing, snippet redaction. |

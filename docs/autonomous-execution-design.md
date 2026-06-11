@@ -151,7 +151,7 @@ So what `next()` can honor today is a **count-based ceiling** on `retry_number`
 (`autonomy.max_retries`, default 2): a still-FAIL gate at or above the ceiling
 returns `resolve-escalation` (`failure_class: convergence-exhausted`) instead of
 another `fix-and-retry`. This is the orchestrator-side backstop for the agent-side
-self-escalation rule in `rules/gates.md` § Retry Protocol. True progress-based
+self-escalation rule in `rules/gates-core.md` § Retry Protocol. True progress-based
 detection is a **follow-up that requires gate archiving** (preserve each attempt's
 blocker set so counts can be compared) — see §4.4 and Deferred.
 

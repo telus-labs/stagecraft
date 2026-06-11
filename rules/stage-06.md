@@ -10,16 +10,41 @@ Output: `pipeline/test-report.md`.
 
 2. **Input validation boundaries.** Each validation rule that rejects input (empty text, unrecognised model, oversized payload) needs both the rejection test and at least one test at the exact acceptance boundary, not just a value well inside the valid range.
 
-Gate file: `pipeline/gates/stage-06.json`.
-Gate keys:
-- `"status": "PASS"` with `"all_acceptance_criteria_met": true`
-- `"criterion_to_test_mapping_is_one_to_one": true | false` — this
-  drives the Stage 7 auto-fold
-
 On failure: identify owning dev from the failing test's path (dev-qa
 writes `"assigned_retry_to"` in the gate), invoke that dev with the
 failure context. Retry limit: 3 cycles. On 3rd identical failure,
 auto-escalate to `principal`.
+
+## Gate
+
+Gate file: `pipeline/gates/stage-06.json`.
+
+```json
+{
+  "stage": "stage-06",
+  "status": "PASS | FAIL",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "blockers": [],
+  "warnings": [],
+  "all_acceptance_criteria_met": true,
+  "tests_total": 42,
+  "tests_passed": 42,
+  "tests_failed": 0,
+  "failing_tests": [],
+  "assigned_retry_to": null,
+  "criterion_to_test_mapping_is_one_to_one": true,
+  "scenarios_total": 5,
+  "scenarios_covered": 5,
+  "all_scenarios_have_tests": true,
+  "noted_for_followup": []
+}
+```
+
+`criterion_to_test_mapping_is_one_to_one` drives the Stage 7 auto-fold.
+Set `true` only when every AC has a dedicated test and no test covers multiple
+criteria with distinct verify conditions. When in doubt, set `false`.
 
 After gate passes → HUMAN CHECKPOINT C.
 

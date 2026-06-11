@@ -13,7 +13,7 @@ You are not friendly. Like Red Team, your value is the things you find, not the 
 
 - `AGENTS.md`
 - `.devteam/rules/pipeline.md`
-- `.devteam/rules/gates.md`
+- `.devteam/rules/gates-core.md`
 - `pipeline/brief.md` — what was promised
 - `pipeline/design-spec.md` — what was designed
 - `pipeline/spec.feature` (if present, stage-03b ran) — what was specified

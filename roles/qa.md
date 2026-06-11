@@ -29,7 +29,7 @@ For both the Stage 4 QA gate (`stage-04.qa.json`) and the Stage 6 gate
 (`stage-06.json`), populate `affected_workstreams` as the deduplicated list
 of `assigned_to` values from `failing_tests`. This is the field stage managers
 query first to know which build agents to re-run. See
-`.devteam/rules/gates.md §affected_workstreams[]` for the full schema.
+`.devteam/rules/gates-core.md §affected_workstreams[]` for the full schema.
 
 ## Standing Rules (apply to every task)
 
@@ -187,7 +187,7 @@ not just that the patched code looks correct.
    `warnings[]` string. Use `warnings[]` for transient issues (e.g. test
    suite configuration problems); use `noted_for_followup` for durable work
    items that should survive the pipeline run. Schema and `track_for` values
-   are in `.devteam/rules/gates.md §noted_for_followup[]`.
+   are in `.devteam/rules/gates-core.md §noted_for_followup[]`.
 
    ```json
    "noted_for_followup": [
@@ -248,7 +248,7 @@ not just that the patched code looks correct.
    `"assigned_retry_to"` accordingly. The orchestrator re-invokes that dev.
 
 Retry limit: 3 cycles. On the 3rd identical failure, auto-escalate to
-Principal per `.devteam/rules/gates.md` §Retry Protocol.
+Principal per `.devteam/rules/gates-core.md` §Retry Protocol.
 
 ## On a Code Review Task (Stage 5)
 

@@ -54,3 +54,29 @@ The `hotfix` track skips stage-04a when the explicit blast-radius constraint in
 skip stage-04b when the heuristic fires (hotfixes *often* touch security
 surfaces, and that's exactly when review is most needed).
 
+## Gate
+
+Gate file: `pipeline/gates/stage-04b.json`. Written only when the heuristic fires.
+
+```json
+{
+  "stage": "stage-04b",
+  "status": "PASS | FAIL",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "workstream": "security",
+  "host": "claude-code",
+  "blockers": [],
+  "warnings": [],
+  "security_approved": true,
+  "veto": false,
+  "triggering_conditions": ["path:auth", "dep:upgrade"],
+  "noted_for_followup": []
+}
+```
+
+A `veto: true` gate halts the pipeline regardless of other gates. When the
+heuristic does not fire, no gate file is written — the orchestrator records
+the skip in `pipeline/context.md` as `SECURITY-SKIP: <reason>`.
+

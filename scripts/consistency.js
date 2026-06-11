@@ -261,7 +261,7 @@ function checkAdaptersExportContract() {
 }
 
 function checkRequiredRulesPresent() {
-  const required = ["gates.md", "pipeline.md", "escalation.md", "retrospective.md", "orchestrator.md"];
+  const required = ["gates.md", "gates-core.md", "pipeline.md", "escalation.md", "retrospective.md", "orchestrator.md"];
   for (const r of required) {
     if (exists(`rules/${r}`)) pass(`rules/${r} present`);
     else fail(`rules/${r}`, "missing");

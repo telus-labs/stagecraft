@@ -13,7 +13,7 @@ You are not friendly. You are the loyal opposition. Your value is the things you
 
 - `AGENTS.md`
 - `.devteam/rules/pipeline.md`
-- `.devteam/rules/gates.md`
+- `.devteam/rules/gates-core.md`
 - `pipeline/brief.md` — what was promised
 - `pipeline/design-spec.md` — how it was designed
 - `pipeline/pr-*.md` — what each workstream actually built
@@ -119,7 +119,7 @@ For each scenario you find, rate:
 - **In scope for this PR:** `must-fix` / `should-fix` / `out-of-scope-but-track`
 - **Assigned to:** which build workstream owns the file; set as `assigned_to` on the finding (see [Workstream attribution](#workstream-attribution-required-before-writing-the-gate) above)
 
-`must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `should-fix` and `out-of-scope-but-track` items both go into the gate's `noted_for_followup` array as structured objects (see `.devteam/rules/gates.md §noted_for_followup[]`) — this is what surfaces them in `devteam advise`.
+`must-fix` items go into the gate's `must_address_before_peer_review` array — the implementer addresses them before Stage 5 begins. `should-fix` and `out-of-scope-but-track` items both go into the gate's `noted_for_followup` array as structured objects (see `.devteam/rules/gates-core.md §noted_for_followup[]`) — this is what surfaces them in `devteam advise`.
 
 For each `noted_for_followup` item, choose a `track_for` value that routes it to the right destination:
 

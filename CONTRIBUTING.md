@@ -91,7 +91,7 @@ You want to insert a new stage (e.g. an accessibility audit between QA and sign-
 
 4. **Create the gate schema** at `core/gates/schemas/<stage>.schema.json`. Stage-specific required fields only — the base fields (`stage`, `status`, `orchestrator`, …) come from `gate.schema.json`.
 
-5. **Update `rules/gates.md`** with a section under `## Stage-Specific Extra Fields` documenting the gate body for the new stage.
+5. **Add a `## Gate` section to `rules/stage-NN.md`** documenting the gate body for the new stage with a JSON example (field names matching the `gate:` skeleton in `stages.js`). The universal contract is in `rules/gates-core.md` — only per-stage extra fields go in the stage file.
 
 6. **Add a per-stage rules file** at `rules/stage-NN.md` (e.g. `stage-04d.md` for a new sub-stage between 4c and 5). Add a row to the index table in `rules/pipeline-build.md` pointing at it. For stages 1–3 or 9, append the section to `pipeline-core.md` instead. For track-level behavior, edit `pipeline-tracks.md`.
 

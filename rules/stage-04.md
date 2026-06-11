@@ -16,3 +16,28 @@ All three must have `"status": "PASS"` before proceeding.
 Pre-review checks (stage-04a) run after the three build gates PASS and
 before Stage 5 starts. See `stage-04a.md` (lint + dep review + SCA) and
 `stage-04b.md` (security review, conditional).
+
+## Gate
+
+Workstream gate files: `pipeline/gates/stage-04.<area>.json` (one per role).
+Merged stage gate: `pipeline/gates/stage-04.json`.
+
+```json
+{
+  "stage": "stage-04",
+  "status": "PASS",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "workstream": "backend | frontend | platform | qa",
+  "host": "claude-code",
+  "blockers": [],
+  "warnings": [],
+  "area": "backend | frontend | platform",
+  "files_changed": ["src/backend/foo.js"],
+  "pr_summaries_written": ["pipeline/pr-backend.md"],
+  "local_verification": ["npm test — 42 passed"]
+}
+```
+
+All workstream gates must have `"status": "PASS"` before Stage 4a begins.

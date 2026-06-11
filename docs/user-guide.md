@@ -249,7 +249,7 @@ Non-pass actions also carry a **`failure_class`** (shown as a `[tag]` in the out
 | `judgment-gate` | `resolve-escalation` | A gate wrote `status: ESCALATE`; make a ruling. |
 | `convergence-exhausted` | `resolve-escalation` | Retry budget (`autonomy.max_retries`, default 2) spent — escalated automatically. |
 
-`devteam next --json` also includes a `schema_version` for programmatic callers. See [`rules/gates.md` § Failure classification](../rules/gates.md#failure-classification-next-failure_class).
+`devteam next --json` also includes a `schema_version` for programmatic callers. See [`rules/gates-core.md` § Failure classification](../rules/gates-core.md#failure-classification).
 
 For a snapshot of where the pipeline is right now:
 

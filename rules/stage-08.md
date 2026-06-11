@@ -20,10 +20,37 @@ Output:
   `environment`, `smoke_test_passed`, `runbook_referenced`, and an
   adapter-specific `adapter_result` block
 
-Gate key: `"status": "PASS"` AND `"runbook_referenced": true`.
-
 On failure: do NOT auto-rollback. The deploy log points to the
 runbook's `§Rollback` section; the orchestrator surfaces that
 pointer and the user decides.
 
 Post-deploy: invoke `pm` agent to write stakeholder summary.
+
+## Gate
+
+Gate file: `pipeline/gates/stage-08.json`.
+
+```json
+{
+  "stage": "stage-08",
+  "status": "PASS",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "workstream": "platform",
+  "host": "claude-code",
+  "blockers": [],
+  "warnings": [],
+  "deploy_completed": true,
+  "smoke_tests_passed": true,
+  "rollback_executed": false,
+  "deploy_adapter": "docker-compose | kubernetes | terraform | custom",
+  "environment": "<adapter-specific>",
+  "runbook_referenced": true,
+  "adapter_result": {}
+}
+```
+
+`deploy_adapter` is the **deploy** adapter (Stage 8 target). The **host** adapter
+(which AI tool produced the gate) lives in the top-level `host` field.
+The gate passes only when `status: "PASS"` AND `runbook_referenced: true`.
