@@ -277,3 +277,70 @@ describe("orchestrator: summary() — status-less gate", () => {
     assert.equal(frontendWs.state, "pass", "workstream with PASS status should render as 'pass'");
   });
 });
+
+describe("orchestrator: --workstream filter (Fix 3.7.6)", () => {
+  // The filter must be applied BEFORE prompt rendering and shared by both
+  // headless and non-headless modes. Defined once in runStage (orchestrator).
+
+  it("non-headless: --workstream backend returns only backend workstream", () => {
+    const cwd = track(makeTargetProject());
+    const r = runStage("build", { cwd, workstream: ["backend"] });
+    assert.equal(r.workstreams.length, 1);
+    assert.equal(r.workstreams[0].role, "backend");
+    // roles[] reflects filtered set
+    assert.deepEqual(r.roles, ["backend"]);
+  });
+
+  it("non-headless: --workstream frontend,qa returns two workstreams", () => {
+    const cwd = track(makeTargetProject());
+    const r = runStage("build", { cwd, workstream: ["frontend", "qa"] });
+    assert.equal(r.workstreams.length, 2);
+    const roles = r.workstreams.map((w) => w.role).sort();
+    assert.deepEqual(roles, ["frontend", "qa"]);
+  });
+
+  it("non-headless: --workstream with unknown role throws", () => {
+    const cwd = track(makeTargetProject());
+    assert.throws(
+      () => runStage("build", { cwd, workstream: ["nonexistent"] }),
+      /--workstream filter matched no roles/,
+    );
+  });
+
+  it("non-headless: no --workstream returns all workstreams (unfiltered)", () => {
+    const cwd = track(makeTargetProject());
+    const r = runStage("build", { cwd });
+    assert.equal(r.workstreams.length, 4);
+  });
+
+  it("fanout: --workstream backend selects all fanout instances of backend", () => {
+    // Role-prefix match rule: for fanout, ws.role is the bare role name even
+    // when workstreamId = "stage-05.backend.claude-code". All fanout instances
+    // of a role are selected by filtering on ws.role.
+    const cwd = track(makeTargetProject({
+      config: `routing:
+  default_host: generic
+  review_fanout: [claude-code, codex]
+pipeline:
+  default_track: full
+`,
+    }));
+    const r = runStage("peer-review", { cwd, workstream: ["backend"] });
+    // 2 fanout hosts × 1 role = 2 workstreams
+    assert.equal(r.workstreams.length, 2);
+    assert.ok(r.workstreams.every((w) => w.role === "backend"));
+    // Both fanout hosts present
+    const hosts = r.workstreams.map((w) => w.host).sort();
+    assert.deepEqual(hosts, ["claude-code", "codex"]);
+  });
+
+  it("both modes produce identical workstream sets for the same filter", () => {
+    // Non-headless (runStage) and headless (runStageHeadless) use the same
+    // filter in runStage, so this test exercises the shared path.
+    const cwd = track(makeTargetProject());
+    const r = runStage("build", { cwd, workstream: ["platform"] });
+    assert.equal(r.workstreams.length, 1);
+    assert.equal(r.workstreams[0].role, "platform");
+    assert.equal(r.workstreams[0].descriptor.workstreamId, "stage-04.platform");
+  });
+});
