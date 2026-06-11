@@ -121,6 +121,103 @@ function notes(version) {
   process.stdout.write(cleaned.trimEnd() + "\n");
 }
 
+// assemble — fold changelog.d/*.md fragments + [Unreleased] into a new version section.
+// Closes BACKLOG C8.
+function assemble(version) {
+  if (!version) {
+    console.error("Usage: release.js assemble <version>");
+    process.exit(1);
+  }
+
+  const changelogPath = path.join(REPO_ROOT, "CHANGELOG.md");
+  const fragmentDir = path.join(REPO_ROOT, "changelog.d");
+
+  const changelog = fs.readFileSync(changelogPath, "utf8");
+  const lines = changelog.split("\n");
+  const headerRe = /^##\s+\[([^\]]+)\]/;
+
+  // Locate [Unreleased] header and the next section header.
+  let unreleasedIdx = -1;
+  let nextSectionIdx = lines.length;
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(headerRe);
+    if (!m) continue;
+    if (m[1] === "Unreleased") {
+      unreleasedIdx = i;
+    } else if (unreleasedIdx !== -1) {
+      nextSectionIdx = i;
+      break;
+    }
+  }
+
+  if (unreleasedIdx === -1) {
+    console.error("No [Unreleased] section found in CHANGELOG.md");
+    process.exit(1);
+  }
+
+  // Extract existing [Unreleased] body, stripping the trailing --- separator.
+  const unreleasedBody = lines
+    .slice(unreleasedIdx + 1, nextSectionIdx)
+    .join("\n")
+    .trim()
+    .replace(/\n*---\s*$/, "")
+    .trimEnd();
+
+  // Read changelog.d/*.md fragments in stable alphabetical order.
+  // README.md and .gitkeep are bookkeeping — they are never merged.
+  let fragments = [];
+  if (fs.existsSync(fragmentDir)) {
+    fragments = fs.readdirSync(fragmentDir)
+      .filter((f) => f.endsWith(".md") && f !== "README.md")
+      .sort();
+  }
+  const fragmentContents = fragments.map((f) =>
+    fs.readFileSync(path.join(fragmentDir, f), "utf8").trim(),
+  );
+
+  // Combine: existing [Unreleased] first, then fragments in order.
+  const parts = [unreleasedBody, ...fragmentContents].filter(Boolean);
+  const versionBody = parts.join("\n\n");
+
+  // Build the new versioned section.
+  const today = new Date().toISOString().slice(0, 10);
+  const versionHeader = `## [${version}] — ${today}`;
+  const newVersionLines = versionBody
+    ? [versionHeader, "", versionBody, "", "---"]
+    : [versionHeader, "", "---"];
+
+  // Reconstruct CHANGELOG.md:
+  //   <preamble + ## [Unreleased] line>
+  //   (empty [Unreleased])
+  //   ---
+  //   <new version section>
+  //   <rest of existing sections>
+  const before = lines.slice(0, unreleasedIdx + 1); // includes "## [Unreleased]"
+  const after = lines.slice(nextSectionIdx);          // starts with prior version header
+
+  const rebuilt = [
+    ...before,
+    "",
+    "---",
+    "",
+    ...newVersionLines,
+    "",
+    ...after,
+  ].join("\n").replace(/\n{3,}/g, "\n\n");
+
+  fs.writeFileSync(changelogPath, rebuilt.endsWith("\n") ? rebuilt : rebuilt + "\n");
+
+  // Delete merged fragment files; leave README.md and .gitkeep intact.
+  for (const f of fragments) {
+    fs.unlinkSync(path.join(fragmentDir, f));
+  }
+
+  console.log(`✓ assembled ${fragments.length} fragment(s) into [${version}] (${today})`);
+  if (fragments.length > 0) {
+    console.log(`  fragments merged: ${fragments.join(", ")}`);
+  }
+}
+
 function usage() {
   console.log(`release — pre-release checks + release-notes extraction
 
@@ -131,6 +228,11 @@ Usage:
                                                section of CHANGELOG.md.
                                                Defaults to [Unreleased].
                                                Example: notes 0.1.0
+  node scripts/release.js assemble <version>   Fold changelog.d/*.md
+                                               fragments and [Unreleased]
+                                               into a new [<version>]
+                                               section; delete fragments.
+                                               Example: assemble 0.6.0
 `);
 }
 
@@ -139,6 +241,7 @@ function main() {
   switch (cmd) {
     case "check": return check();
     case "notes": return notes(process.argv[3]);
+    case "assemble": return assemble(process.argv[3]);
     case "help":
     case "-h":
     case "--help":
@@ -152,4 +255,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { check, notes };
+module.exports = { check, notes, assemble };

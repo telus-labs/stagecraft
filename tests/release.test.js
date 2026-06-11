@@ -155,3 +155,166 @@ test("notes trims trailing whitespace and a final --- separator from the section
   // The fixture has `---\n` between sections; the trim should kill it.
   assert.doesNotMatch(r.stdout, /---\s*$/);
 });
+
+// ─── assemble tests ────────────────────────────────────────────────────────────
+//
+// assemble reads changelog.d/*.md (alphabetical, skip README.md/.gitkeep) plus
+// the existing [Unreleased] body, writes them into a new versioned section, and
+// deletes the fragment files.  Tests run against fixture repos in tempdirs so
+// they never touch the real CHANGELOG.md.
+
+function makeAssembleFixture({ changelog, fragments = {} } = {}) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "release-test-"));
+
+  fs.mkdirSync(path.join(tmp, "scripts"), { recursive: true });
+  fs.mkdirSync(path.join(tmp, "changelog.d"), { recursive: true });
+
+  // release.js computes REPO_ROOT as path.resolve(__dirname, "..") so placing
+  // it at <tmp>/scripts/release.js makes <tmp> its REPO_ROOT.
+  const scriptText = fs.readFileSync(RELEASE_SCRIPT, "utf8");
+  fs.writeFileSync(path.join(tmp, "scripts", "release.js"), scriptText);
+  fs.writeFileSync(path.join(tmp, "package.json"), JSON.stringify({ version: "0.0.0-test" }));
+
+  fs.writeFileSync(
+    path.join(tmp, "CHANGELOG.md"),
+    changelog ?? SAMPLE_ASSEMBLE_CHANGELOG,
+  );
+
+  // Write fragment files (and always create a README.md + .gitkeep so we can
+  // verify they survive the assemble step).
+  fs.writeFileSync(path.join(tmp, "changelog.d", "README.md"), "# placeholder\n");
+  fs.writeFileSync(path.join(tmp, "changelog.d", ".gitkeep"), "");
+  for (const [name, content] of Object.entries(fragments)) {
+    fs.writeFileSync(path.join(tmp, "changelog.d", name), content);
+  }
+
+  return tmp;
+}
+
+function runAssemble(tmp, version) {
+  return spawnSync(
+    "node",
+    [path.join(tmp, "scripts", "release.js"), "assemble", version],
+    { encoding: "utf8" },
+  );
+}
+
+const SAMPLE_ASSEMBLE_CHANGELOG = `# Changelog
+
+---
+
+## [Unreleased]
+
+### Added
+
+- existing unreleased item
+
+---
+
+## [0.1.0] — 2026-01-01
+
+First release.
+
+### Added
+
+- initial core
+`;
+
+test("assemble: two fragments → assembled alphabetically into version section, fragments deleted", () => {
+  const tmp = makeAssembleFixture({
+    fragments: {
+      "beta-thing.md": "- beta feature added",
+      "alpha-thing.md": "- alpha feature added",
+    },
+  });
+  try {
+    const r = runAssemble(tmp, "0.2.0");
+    assert.equal(r.status, 0, `assemble failed: ${r.stderr}`);
+
+    const result = fs.readFileSync(path.join(tmp, "CHANGELOG.md"), "utf8");
+
+    // New version section present
+    assert.match(result, /## \[0\.2\.0\]/);
+    // Existing unreleased content preserved
+    assert.match(result, /existing unreleased item/);
+    // alpha comes before beta (alphabetical by filename)
+    const alphaPos = result.indexOf("alpha feature added");
+    const betaPos = result.indexOf("beta feature added");
+    assert.ok(alphaPos < betaPos, "alpha-thing.md must appear before beta-thing.md");
+    // [Unreleased] section still present and empty
+    assert.match(result, /## \[Unreleased\]/);
+    const unreleasedBody = result.match(/## \[Unreleased\]([\s\S]*?)## \[0\.2\.0\]/)?.[1] ?? "";
+    assert.doesNotMatch(unreleasedBody, /existing unreleased item/, "unreleased body must be cleared");
+
+    // Fragment files deleted
+    assert.ok(!fs.existsSync(path.join(tmp, "changelog.d", "alpha-thing.md")), "alpha fragment must be deleted");
+    assert.ok(!fs.existsSync(path.join(tmp, "changelog.d", "beta-thing.md")), "beta fragment must be deleted");
+    // README.md and .gitkeep preserved
+    assert.ok(fs.existsSync(path.join(tmp, "changelog.d", "README.md")), "README.md must survive");
+    assert.ok(fs.existsSync(path.join(tmp, "changelog.d", ".gitkeep")), ".gitkeep must survive");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("assemble: zero fragments → release still works, existing [Unreleased] content promoted", () => {
+  // Regression guard: assemble must not break when changelog.d/ has no .md fragments.
+  const tmp = makeAssembleFixture({ fragments: {} });
+  try {
+    const r = runAssemble(tmp, "0.2.0");
+    assert.equal(r.status, 0, `assemble failed: ${r.stderr}`);
+
+    const result = fs.readFileSync(path.join(tmp, "CHANGELOG.md"), "utf8");
+    assert.match(result, /## \[0\.2\.0\]/);
+    assert.match(result, /existing unreleased item/);
+    // [Unreleased] cleared
+    const unreleasedBody = result.match(/## \[Unreleased\]([\s\S]*?)## \[0\.2\.0\]/)?.[1] ?? "";
+    assert.doesNotMatch(unreleasedBody, /existing unreleased item/);
+    // Prior version still present
+    assert.match(result, /## \[0\.1\.0\]/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("assemble: fragments + existing [Unreleased] → both appear in the released section", () => {
+  const tmp = makeAssembleFixture({
+    fragments: {
+      "new-feature.md": "- shiny new feature from PR fragment",
+    },
+  });
+  try {
+    const r = runAssemble(tmp, "0.2.0");
+    assert.equal(r.status, 0, `assemble failed: ${r.stderr}`);
+
+    const result = fs.readFileSync(path.join(tmp, "CHANGELOG.md"), "utf8");
+    assert.match(result, /## \[0\.2\.0\]/);
+    // Both sources appear under the version section
+    assert.match(result, /existing unreleased item/);
+    assert.match(result, /shiny new feature from PR fragment/);
+    // Both are under [0.2.0], not under [Unreleased]
+    const versionBody = result.match(/## \[0\.2\.0\]([\s\S]*?)## \[0\.1\.0\]/)?.[1] ?? "";
+    assert.match(versionBody, /existing unreleased item/);
+    assert.match(versionBody, /shiny new feature from PR fragment/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("assemble: README.md and .gitkeep preserved; no other changelog.d files remain", () => {
+  const tmp = makeAssembleFixture({
+    fragments: {
+      "feat-x.md": "- feature x",
+      "feat-y.md": "- feature y",
+    },
+  });
+  try {
+    const r = runAssemble(tmp, "0.2.0");
+    assert.equal(r.status, 0, `assemble failed: ${r.stderr}`);
+
+    const remaining = fs.readdirSync(path.join(tmp, "changelog.d"));
+    assert.deepEqual(remaining.sort(), [".gitkeep", "README.md"]);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

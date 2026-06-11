@@ -57,3 +57,19 @@ jobs:
           TARGET=$(mktemp -d)
           ./bin/devteam init --host claude-code --cwd "$TARGET"
           ./bin/devteam doctor --cwd "$TARGET"
+
+      - name: Changelog fragment guard
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Default checkout is shallow (depth 1); fetch the base branch so the
+          # diff is available. GITHUB_BASE_REF is set to e.g. "main" for PRs.
+          git fetch --depth=1 origin "$GITHUB_BASE_REF"
+          BASE_REF="origin/$GITHUB_BASE_REF"
+          GUARD_CHANGED=$(git diff --name-only "$BASE_REF" HEAD)
+          GUARD_FRAGMENTS=$(git diff --name-only --diff-filter=AM "$BASE_REF" HEAD \
+            | grep '^changelog\.d/.*\.md$' | grep -v 'README\.md' || true)
+          GUARD_SKIP="$PR_TITLE"$'\n'$(git log --format=%s "$BASE_REF"..HEAD)
+          export GUARD_CHANGED GUARD_FRAGMENTS GUARD_SKIP
+          node scripts/changelog-guard.js
