@@ -728,57 +728,6 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     // Once all stages are ported, the if-ladder below will be empty and removed.
   }
 
-  // Verification-beyond-tests (stage-06d): property/mutation/formal counterexamples.
-  // Blockers often carry a "Fix: <file>:<line> — <remedy>" clause; parse that to
-  // derive which workstream owns the fix and what file to edit.
-  if (stage === "stage-06d") {
-    const blockers = gate.blockers || [];
-    const wsSet = new Set();
-    const fileHints = [];
-
-    const FIX_FILE_RE = /Fix:\s*([\w./\\-]+(?::\d+)?)/i;
-    for (const b of blockers) {
-      const text = typeof b === "string" ? b : (b && b.text) || "";
-      if (!text) continue;
-      const m = text.match(FIX_FILE_RE);
-      if (m) {
-        fileHints.push(m[1]);
-        _wsFromText(m[1]).forEach(w => wsSet.add(w));
-      }
-      // Also scan the full blocker text as a fallback.
-      _wsFromText(text).forEach(w => wsSet.add(w));
-    }
-    const ws = [...wsSet];
-
-    const steps = [];
-    if (ws.length) {
-      const fileClause = fileHints.length ? ` (${fileHints.join(", ")})` : "";
-      steps.push({
-        description: `Rebuild workstream${ws.length !== 1 ? "s" : ""} ${ws.join(", ")}${fileClause} — build agent applies the fix`,
-        commands: [..._rmBuildGates(ws), ...ws.map(w => `devteam stage build --workstream ${w} --headless`)],
-      });
-      steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
-    } else {
-      // Workstream not identified from blocker text — clear all build gates and dispatch
-      // build globally so the agent can locate and patch the flagged file from the
-      // verification findings in pipeline/context.md.
-      steps.push({
-        description: "Re-run build with verification findings as context — build agent applies the fix",
-        commands: _rmBuildGates(["backend", "frontend", "platform", "qa"]),
-      });
-      steps.push({
-        description: "Dispatch build",
-        commands: ["devteam stage build --patch --from verification-beyond-tests --headless"],
-      });
-      steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
-    }
-    steps.push({
-      description: "Re-run verification",
-      commands: ["rm pipeline/gates/stage-06d.json", "devteam stage verification-beyond-tests --headless"],
-    });
-    return steps;
-  }
-
   // Sign-off (stage-07)
   if (stage === "stage-07") {
     return [

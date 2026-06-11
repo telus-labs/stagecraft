@@ -519,6 +519,61 @@ register("stage-06b", (gate, ctx) => {
   };
 });
 
+// ── stage-06d: verification-beyond-tests ─────────────────────────────────────
+//
+// Blockers often carry a "Fix: <file>:<line> — <remedy>" clause; parse that to
+// derive which workstream owns the fix and what file to edit.
+
+register("stage-06d", (gate, _ctx) => {
+  const blockers = gate.blockers || [];
+  const wsSet = new Set();
+  const fileHints = [];
+  const verifPath = "pipeline/gates/stage-06d.json";
+
+  const FIX_FILE_RE = /Fix:\s*([\w./\\-]+(?::\d+)?)/i;
+  for (const b of blockers) {
+    const text = typeof b === "string" ? b : (b && b.text) || "";
+    if (!text) continue;
+    const m = text.match(FIX_FILE_RE);
+    if (m) {
+      fileHints.push(m[1]);
+      _wsFromText(m[1]).forEach(w => wsSet.add(w));
+    }
+    _wsFromText(text).forEach(w => wsSet.add(w));
+  }
+  const ws = [...wsSet];
+
+  const steps = [];
+  let buildClearGates;
+  if (ws.length) {
+    const fileClause = fileHints.length ? ` (${fileHints.join(", ")})` : "";
+    buildClearGates = buildGatePaths(ws);
+    steps.push({
+      description: `Rebuild workstream${ws.length !== 1 ? "s" : ""} ${ws.join(", ")}${fileClause} — build agent applies the fix`,
+      commands: [...formatGateClear(buildClearGates), ...ws.map(w => `devteam stage build --workstream ${w} --headless`)],
+    });
+    steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
+  } else {
+    // Workstream not identified — clear all build gates and dispatch globally.
+    buildClearGates = buildGatePaths(["backend", "frontend", "platform", "qa"]);
+    steps.push({
+      description: "Re-run build with verification findings as context — build agent applies the fix",
+      commands: formatGateClear(buildClearGates),
+    });
+    steps.push({
+      description: "Dispatch build",
+      commands: ["devteam stage build --patch --from verification-beyond-tests --headless"],
+    });
+    steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
+  }
+  steps.push({
+    description: "Re-run verification",
+    commands: [...formatGateClear([verifPath]), "devteam stage verification-beyond-tests --headless"],
+  });
+  const clear_gates = [...buildClearGates, verifPath];
+  return { clear_gates, steps };
+});
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function getRecipe(stageId) {
