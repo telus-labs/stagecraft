@@ -85,6 +85,37 @@ describe("schemas: stage skeletons satisfy schema required fields", () => {
   }
 });
 
+// G10: gate.schema.json must declare dispatched_tool_budget so workstream
+// gates that carry it are recognised as valid (not flagged as unknown fields
+// by strict consumers). The field is optional and accepts array|null per ADR-004.
+describe("schemas: dispatched_tool_budget field contract (G10)", () => {
+  const base = JSON.parse(
+    fs.readFileSync(path.join(SCHEMAS_DIR, "gate.schema.json"), "utf8"),
+  );
+
+  it("gate.schema.json declares dispatched_tool_budget as an optional property", () => {
+    assert.ok(base.properties.dispatched_tool_budget,
+      "gate.schema.json must declare dispatched_tool_budget in properties");
+    assert.ok(!base.required || !base.required.includes("dispatched_tool_budget"),
+      "dispatched_tool_budget must be optional (not in required[])");
+  });
+
+  it("dispatched_tool_budget accepts array or null", () => {
+    const prop = base.properties.dispatched_tool_budget;
+    const types = Array.isArray(prop.type) ? prop.type : [prop.type];
+    assert.ok(types.includes("array"),
+      "dispatched_tool_budget must include type 'array'");
+    assert.ok(types.includes("null"),
+      "dispatched_tool_budget must include type 'null' (absent budget = full host surface)");
+  });
+
+  it("dispatched_tool_budget items are strings (tool names)", () => {
+    const prop = base.properties.dispatched_tool_budget;
+    assert.ok(prop.items && prop.items.type === "string",
+      "dispatched_tool_budget items must be strings (Claude Code tool names)");
+  });
+});
+
 describe("schemas: stage IDs match files on disk", () => {
   const onDisk = new Set(
     fs.readdirSync(SCHEMAS_DIR)
