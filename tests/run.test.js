@@ -28,11 +28,13 @@ function seedAllPass(cwd, { exclude = [] } = {}) {
 }
 
 describe("driver: halt paths (real next)", () => {
-  it("auto-retries a code-defect FAIL, then escalates when the budget is spent", async () => {
+  it("auto-retries a code-defect FAIL, then escalates as convergence-exhausted", async () => {
     const cwd = track(makeTargetProject());
     seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["bad criterion"] });
-    // stage-01 (requirements) has no fix recipe, so nothing is cleared and the
-    // gate stays FAIL; the driver retries to the ceiling, then escalates.
+    // stage-01 (requirements) has no fix recipe → no gate cleared → gate stays FAIL.
+    // After two retry archives the progress-based breaker detects identical blockers
+    // and escalates as convergence-exhausted (same observable outcome as the old
+    // count-based ceiling; which path fires is an implementation detail — 4.2 spec).
     const s = await run({ cwd });
     assert.equal(s.completed, false);
     assert.equal(s.halt_action, "resolve-escalation");
@@ -596,5 +598,101 @@ describe("driver: budget cap accounts for unmerged workstream gate costs (fix 1.
     // With no double-counting, total = $2 < $3 cap → should NOT halt on budget.
     assert.equal(s.completed, true, "pipeline should complete without budget halt when no double-counting occurs");
     assert.equal(s.halted, false, "should not be halted");
+  });
+});
+
+describe("driver: progress-based convergence (4.2)", () => {
+  // Write minimal run-state so the driver can be resumed with pre-seeded fixRetries.
+  function seedRunState(cwd, fixRetries) {
+    const p = path.join(cwd, "pipeline", "run-state.json");
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify({
+      track: "full",
+      iterations: Object.values(fixRetries)[0] || 0,
+      retries: {},
+      started_at: new Date().toISOString(),
+      fixRetries,
+      autoRule: {},
+      transient: {},
+    }, null, 2));
+  }
+
+  // Write an archive gate directly into pipeline/gates/archive/.
+  function seedArchive(cwd, stageId, attempt, gate) {
+    const dir = path.join(cwd, "pipeline", "gates", "archive");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, `${stageId}.attempt-${attempt}.json`),
+      JSON.stringify({ stage: stageId, blockers: [], ...gate }, null, 2),
+    );
+  }
+
+  it("trips the progress-based breaker when archived blockers are identical (same blocker unchanged)", async () => {
+    // Setup: one prior archive at attempt-1 with the same stuck blocker.
+    // The driver archives the current gate at attempt-2 → identical → halt.
+    const cwd = track(makeTargetProject());
+    seedRunState(cwd, { build: 1 });
+    seedArchive(cwd, "stage-04", 1, { blockers: ["unit tests still failing"] });
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["unit tests still failing"] });
+
+    const s = await run({
+      cwd,
+      resume: true,
+      next: () => ({
+        action: "fix-and-retry", stage: "stage-04", name: "build",
+        failure_class: "code-defect",
+        blockers: ["unit tests still failing"],
+      }),
+    });
+
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+    assert.ok(s.no_progress_evidence, "no_progress_evidence must be set in summary");
+    assert.match(s.no_progress_evidence, /unit tests still failing/);
+    assert.match(s.no_progress_evidence, /1,2/);
+    assert.match(s.halt_reason, /no-progress convergence/);
+
+    // run-log must carry the no_progress_evidence for operator inspection.
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const events = log.trim().split("\n").map((l) => JSON.parse(l));
+    const haltEvent = events.find((e) => e.outcome === "convergence-halt");
+    assert.ok(haltEvent, "run-log must contain a convergence-halt event");
+    assert.ok(haltEvent.no_progress_evidence, "run-log convergence-halt must carry no_progress_evidence");
+  });
+
+  it("does NOT trip the progress-based breaker when blockers changed between archives", async () => {
+    // Setup: attempt-1 had different blockers → progress was made → no-progress check passes.
+    // The count ceiling (attempts=2 >= maxRetries=2) triggers the halt instead.
+    const cwd = track(makeTargetProject());
+    seedRunState(cwd, { build: 1 });
+    seedArchive(cwd, "stage-04", 1, { blockers: ["original blocker"] });
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["new blocker"] }); // different!
+
+    const s = await run({
+      cwd,
+      resume: true,
+      next: () => ({
+        action: "fix-and-retry", stage: "stage-04", name: "build",
+        failure_class: "code-defect",
+        blockers: ["new blocker"],
+      }),
+    });
+
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+    assert.ok(!s.no_progress_evidence, "no_progress_evidence must be absent — halt was count-based");
+    assert.match(s.halt_reason, /retry budget exhausted/);
+  });
+
+  it("no_progress_evidence is absent on a count-based convergence-exhausted halt (max_retries=0)", async () => {
+    // With max_retries=0, the count ceiling fires before any archiving occurs,
+    // so there are no two archives to compare → no_progress_evidence must be absent.
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  max_retries: 0\n",
+    }));
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["x"] });
+    const s = await run({ cwd });
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+    assert.ok(!s.no_progress_evidence, "count-based halt must not set no_progress_evidence");
   });
 });

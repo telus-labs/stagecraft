@@ -133,29 +133,48 @@ response). **No new gate fields and no schema migration are required** — the m
 assembles signals that `runHeadless`, the validator, and `computeFixSteps` already
 produce.
 
-### 2.5 The convergence mechanism: schema intent vs. what `next()` can enforce today
+### 2.5 The convergence mechanism
 
 The gate schema defines `this_attempt_differs_by` with the stated intent *"same
 content twice escalates instead of retrying"* (`gate.schema.json:80–83`). The
-aspiration is a **progress-based** breaker (trip on lack of change: blockers
+design goal is a **progress-based** breaker (trip on lack of change: blockers
 5→3→3, not on a fixed count that would kill a run converging 5→3→1).
 
-**Grounding correction (verified against the code):** that progress-based breaker
-is *not* actually implemented. The validator only enforces that
-`this_attempt_differs_by` is *non-empty* when `retry_number >= 1`
-(`validator.js:342–351`) — it does not compare attempt content. And `next()` reads
-only the *current* gate; retries overwrite the file, so no blocker-count history
-survives on disk to compare against.
+**Implemented state (Phase 4.2):** the progress-based breaker is fully implemented
+on both the interactive (`devteam next`) and autonomous (`devteam run`) paths.
 
-So what `next()` can honor today is a **count-based ceiling** on `retry_number`
-(`autonomy.max_retries`, default 2): a still-FAIL gate at or above the ceiling
-returns `resolve-escalation` (`failure_class: convergence-exhausted`) instead of
-another `fix-and-retry`. This is the orchestrator-side backstop for the agent-side
-self-escalation rule in `rules/gates-core.md` § Retry Protocol. True progress-based
-detection is a **follow-up that requires gate archiving** (preserve each attempt's
-blocker set so counts can be compared) — see §4.4 and Deferred.
+**Progress metric:** `core/gates/convergence.js` reads archived attempt gates
+(`pipeline/gates/archive/<stage>.attempt-N.json`, written by `core/gates/archive.js`
+before each retry clears the live gate) and compares the blocker sets of the last
+two attempts. If the normalized, sorted blocker fingerprints are identical across
+two consecutive archives, the breaker trips. Empty blocker sets are not treated as
+stuck — they are a rare edge case, not a stall.
+
+**Interactive path (`next()`):** uses `countArchivedAttempts()` instead of the
+model-written `gate.retry_number` for the count ceiling — removes an
+agent-falsifiable input. Runs the progress check first; if blockers are stuck it
+escalates with `no_progress_evidence` in the return object before even reaching the
+count ceiling. The count ceiling is a backstop for stages where only one archive
+exists yet (first retry — insufficient data for comparison).
+
+**Driver path (`devteam run`):** the driver's own `state.fixRetries` counter
+(written to `run-state.json`) was already agent-independent. The progress check
+is added after each `archiveGate()` call: if `detectNoProgress()` fires, the halt
+carries `no_progress_evidence` in the summary and run-log for operator inspection.
+The count ceiling (`state.fixRetries[stage] >= max_retries`) remains as the
+backstop for the first retry.
+
+**Operator surface:** when the breaker trips, `halt_reason` and `no_progress_evidence`
+both state what didn't change, e.g.:
+`"blocker 'unit tests failing' identical across attempts 1,2"`. This feeds the
+escalation context the same way the count-based halt did.
+
+This is the orchestrator-side backstop for the agent-side self-escalation rule in
+`rules/gates-core.md` § Retry Protocol.
 
 **Landed in H1 PR-1:** the count-based ceiling, wired into `next()`.
+**Landed in Phase 4.2:** progress-based detection, operator evidence, interactive-path
+parity (archive count replaces `gate.retry_number`).
 
 ### 2.6 Where the classifier lives
 
@@ -310,9 +329,11 @@ Loop, per iteration:
 2. `run-stage` / `continue-stage` → dispatch (inheriting per-workstream routing from
    config; `continue-stage` dispatches only the *remaining* workstreams).
 3. `merge` → `devteam merge <stage>`.
-4. `fix-and-retry` (`code-defect`) → execute `fix_steps.commands[]`, propagate the
-   blockers into `context.md` (§4.3), re-dispatch; honor the **count-based** retry
-   ceiling (§2.5 — progress-based detection is deferred, pending gate archiving).
+4. `fix-and-retry` (`code-defect`) → archive the current gate, check for
+   no-progress (identical blockers across last two archives → escalate immediately
+   with `no_progress_evidence`), execute `fix_steps.commands[]`, propagate the
+   blockers into `context.md` (§4.3), re-dispatch; the count-based ceiling
+   (`autonomy.max_retries`) is a backstop for the first retry. See §2.5.
 5. `transient` → backoff, re-dispatch identical; do not increment the convergence
    budget.
 6. `halt` (`structural-input` / `state-corruption`) → stop with a typed diagnosis.

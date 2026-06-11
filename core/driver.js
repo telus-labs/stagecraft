@@ -33,6 +33,7 @@ const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate } = require("./gates/archive");
+const { detectNoProgress, noProgressEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 const { upsertSection } = require("./markers");
 
@@ -385,10 +386,29 @@ async function run(opts = {}) {
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
           break;
         }
-        // Archive the failed attempt's stage gate before it's cleared/overwritten,
-        // so the progression of attempts survives for post-mortem (and for a
-        // future progress-based convergence check). Best-effort.
+        // Archive the failed attempt's stage gate before it's cleared/overwritten.
+        // The archive is the data source for the progress-based convergence check
+        // below — archiving must happen first. Best-effort.
         const archived = archiveGate(gatesDir(cwd, changeId), r.stage, attempts + 1);
+
+        // Progress-based convergence check (4.2): trip the breaker when the last
+        // two archived attempts carry identical non-empty blocker sets, even before
+        // the count ceiling is reached. Prefers archived data (orchestrator-written)
+        // over the current live gate (model-written). (ADR-003)
+        const progress = detectNoProgress(gatesDir(cwd, changeId), r.stage);
+        if (progress.noProgress) {
+          const evidence = noProgressEvidence(progress.stuckBlockers, progress.attempts);
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = "convergence-exhausted";
+          summary.halt_reason = `no-progress convergence for "${r.name}": ${evidence}; escalating for a ruling`;
+          summary.blockers = r.blockers || [];
+          summary.no_progress_evidence = evidence;
+          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_progress_evidence: evidence, archived: archived || null });
+          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_progress_evidence: evidence });
+          break;
+        }
+
         const toClear = (r.clear_gates || []).map((rel) => path.join(cwd, rel));
         const cleared = clearGates(toClear);
         // If a recipe exists but cleared nothing, next() will return the same
