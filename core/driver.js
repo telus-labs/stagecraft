@@ -34,6 +34,7 @@ const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } =
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate } = require("./gates/archive");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
+const { upsertSection } = require("./markers");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -190,16 +191,6 @@ function clearGates(targets) {
     catch { /* not present, or a placeholder like stage-04.<affected-ws>.json */ }
   }
   return cleared;
-}
-
-// Replace (or append) a marker-delimited section in a file's text.
-function upsertSection(existing, begin, end, section) {
-  const b = existing.indexOf(begin);
-  const e = existing.indexOf(end);
-  if (b !== -1 && e !== -1 && e > b) {
-    return existing.slice(0, b) + section + existing.slice(e + end.length);
-  }
-  return (existing ? existing.replace(/\s*$/, "") + "\n\n" : "") + section + "\n";
 }
 
 // Cross-stage context propagation (ADR-003 §4.3): record WHY a stage is being

@@ -29,6 +29,7 @@ const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "r
 const { stageNames, getStage, TRACKS } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
+const { stripSection } = require(path.join(__dirname, "..", "core", "markers"));
 
 // STOPLIST_TRACKS is the single source of truth (core/guards/stoplist.js).
 // Imported here so the interactive path (cmdStage) and the autonomous driver
@@ -1832,21 +1833,11 @@ function cmdSummary(argv) {
 }
 
 // Strip a section between HTML-comment markers from a file, idempotently.
-// Returns true if the file was rewritten. Duplicates the contract that
-// core/gates/validator.js uses for its strip-on-resolve path; both must
-// stay in sync. Both call sites are short so the duplication is
-// acceptable; a future PR can extract this into core/context/blockers.js
-// if a third caller appears.
 function stripMarkedSection(filePath, beginMarker, endMarker) {
   if (!fs.existsSync(filePath)) return false;
   const content = fs.readFileSync(filePath, "utf8");
-  if (!content.includes(beginMarker)) return false;
-  const startIdx = content.indexOf(beginMarker);
-  const endIdx = content.indexOf(endMarker);
-  if (endIdx < 0) return false;
-  let after = content.slice(endIdx + endMarker.length);
-  after = after.replace(/^\n+/, "\n");
-  const next = content.slice(0, startIdx) + after.replace(/^\n+/, "");
+  const next = stripSection(content, beginMarker, endMarker);
+  if (next === content) return false;
   fs.writeFileSync(filePath, next, "utf8");
   return true;
 }
