@@ -131,6 +131,43 @@ describe("journal: buildEvents", () => {
     assert.equal(adrs.length, 1);
     assert.equal(adrs[0].owner, "principal");
   });
+
+  it("suppresses artifacts older than brief.md (prior-run artifacts)", () => {
+    const cwd = track(makeTargetProject());
+    // Simulate first-run artifacts written at t0, then brief.md for second
+    // feature written at t1 > t0. Old artifacts must not appear in the log.
+    const adr = writeArtifact(cwd, "pipeline/adr/0001-old.md", "# old ADR\n");
+    const designSpec = writeArtifact(cwd, "pipeline/design-spec.md", "# old design\n");
+    setMtime(adr, "2026-06-10T17:00:00Z");
+    setMtime(designSpec, "2026-06-10T19:00:00Z");
+    const brief = writeArtifact(cwd, "pipeline/brief.md", "# new feature brief\n");
+    setMtime(brief, "2026-06-10T22:50:00Z");
+    const events = buildEvents(cwd);
+    const artifacts = events.filter((e) => e.kind === "artifact");
+    assert.equal(artifacts.length, 1, "only brief.md survives; stale adr and design-spec are hidden");
+    assert.ok(artifacts[0].path.endsWith("brief.md"));
+  });
+
+  it("shows all artifacts when no brief.md exists (epoch = 0, no filtering)", () => {
+    const cwd = track(makeTargetProject());
+    // Project with no brief yet — epoch is 0, nothing is filtered.
+    const adr = writeArtifact(cwd, "pipeline/adr/0001-new.md", "# ADR\n");
+    setMtime(adr, "2026-06-10T17:00:00Z");
+    const events = buildEvents(cwd);
+    const artifacts = events.filter((e) => e.kind === "artifact");
+    assert.equal(artifacts.length, 1);
+    assert.ok(artifacts[0].path.endsWith("0001-new.md"));
+  });
+
+  it("brief.md itself is always shown (mtime equals epoch, not older than it)", () => {
+    const cwd = track(makeTargetProject());
+    const brief = writeArtifact(cwd, "pipeline/brief.md", "# Brief\n");
+    setMtime(brief, "2026-06-10T22:50:00Z");
+    const events = buildEvents(cwd);
+    const artifacts = events.filter((e) => e.kind === "artifact");
+    assert.equal(artifacts.length, 1);
+    assert.ok(artifacts[0].path.endsWith("brief.md"));
+  });
 });
 
 describe("journal: summarizeGate (per-stage extras)", () => {
