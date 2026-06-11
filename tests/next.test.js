@@ -692,9 +692,11 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
 
     // File path surfaces in description
     assert.ok(descs.includes("src/backend/server.js:10"), "file path in description");
-    // Workstream derived from src/backend/ path
-    assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream backend")),
-      "backend build command");
+    // Workstream derived from src/backend/ path; must include --patch so build agent implements fix
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage build --workstream backend") && c.includes("--patch")),
+      "backend build command includes --patch"
+    );
     assert.ok(allCmds.some(c => c.includes("devteam merge build")), "merge build");
     // Gate cleared before re-run
     assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),

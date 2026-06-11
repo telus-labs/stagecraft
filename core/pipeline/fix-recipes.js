@@ -550,7 +550,7 @@ register("stage-06d", (gate, _ctx) => {
     buildClearGates = buildGatePaths(ws);
     steps.push({
       description: `Rebuild workstream${ws.length !== 1 ? "s" : ""} ${ws.join(", ")}${fileClause} — build agent applies the fix`,
-      commands: [...formatGateClear(buildClearGates), ...ws.map(w => `devteam stage build --workstream ${w} --headless`)],
+      commands: [...formatGateClear(buildClearGates), ...ws.map(w => `devteam stage build --workstream ${w} --patch --from verification-beyond-tests --headless`)],
     });
     steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
   } else {
