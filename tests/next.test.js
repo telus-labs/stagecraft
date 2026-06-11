@@ -159,6 +159,83 @@ describe("next: stage-04a (pre-review) fix steps", () => {
   });
 });
 
+describe("next: stage-04c (red-team) fix steps", () => {
+  function seedThroughPreReview(cwd) {
+    for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04", "stage-04a"]) {
+      seedGate(cwd, s, { status: "PASS" });
+    }
+  }
+
+  it("red-team FAIL with workstream-less blockers → fix steps include rm stage-04c.json", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughPreReview(cwd);
+    // Blockers with file paths not matched by _wsFromText heuristics (e.g. src/collectors/)
+    seedGate(cwd, "stage-04c", {
+      status: "FAIL",
+      must_address_before_peer_review: [
+        { id: "RT-01", severity: "high", file: "src/collectors/aws-cloudtrail.js", summary: "Unbounded event accumulation — OOM risk" },
+        { id: "RT-02", severity: "high", file: "src/grader/grader.js", summary: "Multi-source controls report false PASS" },
+      ],
+      blockers: [
+        { id: "RT-01", severity: "high", file: "src/collectors/aws-cloudtrail.js", summary: "Unbounded event accumulation — OOM risk" },
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "red-team");
+    assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
+
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04c.json"),
+      "fix steps must include rm stage-04c.json so driver clears the failing red-team gate"
+    );
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage red-team")),
+      "fix steps must re-run red-team"
+    );
+    // When wsSet is empty and no gate files on disk, must not emit <affected-ws> placeholder
+    assert.ok(
+      !allCmds.some(c => c.includes("<affected-ws>")),
+      "fix steps must not emit unresolvable <affected-ws> placeholder"
+    );
+    assert.ok(
+      allCmds.some(c => c.includes("devteam stage build") && c.includes("--patch") && c.includes("--from red-team")),
+      "fix steps must re-run build with red-team context"
+    );
+  });
+
+  it("red-team FAIL with assigned_to blockers → fix steps rm the named workstream gates", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughPreReview(cwd);
+    seedGate(cwd, "stage-04c", {
+      status: "FAIL",
+      blockers: [
+        { id: "RT-01", severity: "high", summary: "Auth bypass", assigned_to: "backend" },
+      ],
+    });
+    // Seed the actual build workstream gate so disk scan has something to find
+    seedGate(cwd, "stage-04.backend", { workstream: "backend", status: "PASS" });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04.backend.json"),
+      "fix steps include rm for the assigned_to workstream"
+    );
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04c.json"),
+      "fix steps include rm stage-04c.json"
+    );
+    assert.ok(
+      !allCmds.some(c => c.includes("<affected-ws>")),
+      "no placeholder in output"
+    );
+  });
+});
+
 describe("next: malformed gate handling", () => {
   it("returns fix-and-retry with a clear error when a stage gate is malformed", () => {
     const cwd = track(makeTargetProject());

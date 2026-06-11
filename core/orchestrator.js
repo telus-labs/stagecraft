@@ -769,9 +769,11 @@ function computeFixSteps(gate, stageDef, gatesDir) {
           commands: actualGateFiles.map((f) => `rm pipeline/gates/${f}`),
         });
       } else {
+        // No workstream identified from gate data and no gate files found on disk —
+        // clear all known build workstream gates as a safe last resort.
         steps.push({
-          description: "Clear the affected build workstream gate",
-          commands: ["rm pipeline/gates/stage-04.<affected-ws>.json"],
+          description: "Clear all build workstream gates (workstream not identified from gate data)",
+          commands: _rmBuildGates(["backend", "frontend", "platform", "qa"]),
         });
       }
     }
@@ -780,7 +782,7 @@ function computeFixSteps(gate, stageDef, gatesDir) {
       commands: ["devteam stage build --patch --from red-team --skip-completed --headless"],
     });
     steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
-    steps.push({ description: "Re-run red team", commands: ["devteam stage red-team --headless"] });
+    steps.push({ description: "Re-run red team", commands: ["rm pipeline/gates/stage-04c.json", "devteam stage red-team --headless"] });
     return steps;
   }
 
