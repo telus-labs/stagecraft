@@ -157,6 +157,35 @@ describe("orchestrator: mergeWorkstreamGates aggregation", () => {
     assert.match(r.reason, /unreadable workstream gate/);
     assert.match(r.reason, /backend/);
   });
+
+  it("track-less workstream gates inherit the resolved pipeline track", () => {
+    // When a workstream gate omits the track field (e.g. model forgot to include
+    // it), the merged gate must carry the pipeline-resolved track rather than
+    // shipping track:undefined which the validator would flag.
+    const cwd = track(makeTargetProject());
+    const roles = ["backend", "frontend", "platform", "qa"];
+    roles.forEach((role) => {
+      const gate = {
+        stage: "stage-04",
+        workstream: role,
+        host: "claude-code",
+        status: "PASS",
+        blockers: [],
+        warnings: [],
+        orchestrator: "devteam@test",
+        timestamp: "2026-05-26T20:00:00Z",
+        // deliberately omit track
+      };
+      fs.writeFileSync(
+        path.join(cwd, "pipeline", "gates", `stage-04.${role}.json`),
+        JSON.stringify(gate, null, 2),
+        "utf8",
+      );
+    });
+    const r = mergeWorkstreamGates("build", { cwd, track: "quick" });
+    assert.equal(r.merged, true);
+    assert.equal(r.gate.track, "quick", `merged gate should carry resolved track; got: ${r.gate.track}`);
+  });
 });
 
 describe("orchestrator: runStageHeadless --skip-completed", () => {
