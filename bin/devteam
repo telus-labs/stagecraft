@@ -30,6 +30,7 @@ const { stageNames, getStage, TRACKS } = require(path.join(__dirname, "..", "cor
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
 const { stripSection } = require(path.join(__dirname, "..", "core", "markers"));
+const { parseFlags, generateHelp } = require(path.join(__dirname, "..", "core", "cli", "flags"));
 
 // STOPLIST_TRACKS is the single source of truth (core/guards/stoplist.js).
 // Imported here so the interactive path (cmdStage) and the autonomous driver
@@ -250,80 +251,234 @@ validates the gate JSON that comes back.
 `);
 }
 
-function parseFlags(argv) {
-  const flags = {};
-  const positional = [];
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--feature") { flags.feature = argv[++i]; continue; }
-    if (a === "--track")   { flags.track   = argv[++i]; continue; }
-    if (a === "--cwd")     { flags.cwd     = argv[++i]; continue; }
-    if (a === "--host")    { flags.host    = argv[++i]; continue; }
-    if (a === "--force")   { flags.force   = true;      continue; }
-    if (a === "--json")    { flags.json    = true;      continue; }
-    if (a === "--headless"){ flags.headless = true;     continue; }
-    if (a === "--timeout-ms"){ flags.timeoutMs = Number(argv[++i]); continue; }
-    if (a === "--budget-usd"){ flags.budgetUsd = Number(argv[++i]); continue; }
-    if (a === "--retry-delay-ms"){ flags.retryDelayMs = Number(argv[++i]); continue; }
-    if (a === "--auto-rule") { const v = argv[++i] || ""; if (!flags.autoRule) flags.autoRule = []; flags.autoRule.push(...v.split(",").map((s) => s.trim()).filter(Boolean)); continue; }
-    if (a === "--max-iterations"){ flags.maxIterations = Number(argv[++i]); continue; }
-    if (a === "--until")   { flags.until   = argv[++i]; continue; }
-    if (a === "--allow-stage") { if (!flags.allowStage) flags.allowStage = []; flags.allowStage.push(argv[++i]); continue; }
-    if (a === "--resume")  { flags.resume  = true;      continue; }
-    if (a === "--patch")          { flags.patch         = true;      continue; }
-    if (a === "--from")           { flags.from          = argv[++i]; continue; }
-    if (a === "--skip-completed") { flags.skipCompleted = true;      continue; }
-    if (a === "--workstream")    { if (!flags.workstream) flags.workstream = []; flags.workstream.push(argv[++i]); continue; }
-    if (a === "--port")    { flags.port    = Number(argv[++i]); continue; }
-    if (a === "--open")    { flags.open    = true;      continue; }
-    if (a === "--limit")   { flags.limit   = argv[++i]; continue; }
-    if (a === "--kind")    { flags.kind    = argv[++i]; continue; }
-    if (a === "--org")     { flags.org     = true;      continue; }
-    if (a === "--dry-run") { flags.dryRun  = true;      continue; }
-    if (a === "--ci")      { flags.ci      = argv[++i]; continue; }
-    if (a === "--out")     { flags.out     = argv[++i]; continue; }
-    if (a === "--strict")  { flags.strict  = true;      continue; }
-    if (a === "--cascade") { flags.cascade = true;      continue; }
-    if (a === "--keep-context") { flags.keepContext = true; continue; }
-    if (a === "--topic")   { flags.topic   = argv[++i]; continue; }
-    if (a === "--context") { flags.context = argv[++i]; continue; }
-    if (a === "--target-gate") { flags.targetGate = argv[++i]; continue; }
-    if (a === "--follow")  { flags.follow  = true;      continue; }
-    if (a === "--description") { flags.description = argv[++i]; continue; }
-    // --apply is boolean-or-value: if the next token is absent or another flag,
-    // treat as a bare boolean (e.g. `assess --apply --json`); otherwise consume
-    // it as the value string (e.g. `advise --apply AC-11=A,AC-12=B`).
-    if (a === "--apply") {
-      const next = argv[i + 1];
-      if (next === undefined || next.startsWith("--")) {
-        flags.apply = true;
-      } else {
-        flags.apply = argv[++i];
-      }
-      continue;
-    }
-    if (a === "--no-content") { flags.noContent = true; continue; }
-    // Boolean guards checked by cmdStage (--skip-preflight), cmdPreflight
-    // (--skip-write), and cmdNext (--skip-advise).  They were missing from
-    // parseFlags so using them always exited 2 "Unknown flag".
-    if (a === "--skip-preflight") { flags["skip-preflight"] = true; continue; }
-    if (a === "--skip-write")     { flags["skip-write"]     = true; continue; }
-    if (a === "--skip-advise")    { flags["skip-advise"]    = true; continue; }
-    if (a.startsWith("--")) {
-      console.error(`Unknown flag: ${a}`);
-      process.exit(2);
-    }
-    positional.push(a);
-  }
-  return { positional, flags };
-}
+// FLAGS schemas — one per command, co-located with its handler below.
+// parseFlags(argv, schema) is imported from core/cli/flags.js.
+// generateHelp(commandLine, schema) produces --help text from the schema.
+
+const FLAGS_STAGE = {
+  feature:           { type: "string",  description: "Feature description passed to the prompt" },
+  track:             { type: "string",  description: "Override the pipeline track" },
+  cwd:               { type: "string",  description: "Target project directory" },
+  headless:          { type: "boolean", description: "Drive host CLI non-interactively" },
+  "timeout-ms":      { type: "number",  description: "Per-workstream wall-clock cap (default 600000)" },
+  patch:             { type: "boolean", description: "Scope build agents to patch items from a prior gate" },
+  from:              { type: "string",  description: "Stage to read patch items from (default: red-team)" },
+  "skip-completed":  { type: "boolean", description: "Skip workstreams whose gate file already exists" },
+  workstream:        { type: "list",    description: "Dispatch only this workstream (repeatable)" },
+  force:             { type: "boolean", description: "Bypass stoplist guard" },
+  json:              { type: "boolean", description: "JSON output" },
+  "skip-preflight":  { type: "boolean", description: "Skip automatic preflight check before peer-review" },
+  help:              { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_PREFLIGHT = {
+  cwd:          { type: "string",  description: "Target project directory" },
+  "skip-write": { type: "boolean", description: "Run checks but do not write stage-04e.json" },
+  help:         { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_ADVISE = {
+  cwd:          { type: "string",  description: "Target project directory" },
+  apply:        { type: "string",  description: "Apply selections, e.g. AC-11=A,AC-12=B" },
+  json:         { type: "boolean", description: "JSON output" },
+  "timeout-ms": { type: "number",  description: "Timeout for a11y-fixer dispatch (ms)" },
+  help:         { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_VALIDATE = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_NEXT = {
+  cwd:           { type: "string",  description: "Target project directory" },
+  json:          { type: "boolean", description: "JSON output" },
+  "skip-advise": { type: "boolean", description: "Suppress unresolved follow-up advisory warning" },
+  help:          { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_RUN = {
+  cwd:               { type: "string",  description: "Target project directory" },
+  feature:           { type: "string",  description: "Feature description" },
+  track:             { type: "string",  description: "Override the pipeline track" },
+  until:             { type: "string",  description: "Stop before this stage" },
+  "max-iterations":  { type: "number",  description: "Iteration cap" },
+  "budget-usd":      { type: "number",  description: "Cost cap in USD" },
+  "timeout-ms":      { type: "number",  description: "Per-dispatch timeout (ms)" },
+  "retry-delay-ms":  { type: "number",  description: "Backoff delay between transient retries (ms)" },
+  "auto-rule":       { type: "list", split: true, description: "Auto-apply Principal rulings of these classes (comma-separated)" },
+  "allow-stage":     { type: "list",    description: "Grant consequence-ceiling approval for this stage (repeatable)" },
+  resume:            { type: "boolean", description: "Resume an interrupted run" },
+  force:             { type: "boolean", description: "Force-unlock a stale run.lock" },
+  json:              { type: "boolean", description: "JSON summary on stdout" },
+  help:              { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_VERIFY_CHAIN = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  track: { type: "string", description: "Override the pipeline track" },
+  json: { type: "boolean", description: "JSON output" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_STAMP_CHAIN = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  track: { type: "string", description: "Override the pipeline track" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_MERGE = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  track: { type: "string", description: "Override the pipeline track" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_MEMORY = {
+  cwd:   { type: "string",  description: "Target project directory" },
+  limit: { type: "string",  description: "Max results to return" },
+  kind:  { type: "string",  description: "Filter by artifact kind" },
+  org:   { type: "boolean", description: "Target org-shared store" },
+  json:  { type: "boolean", description: "JSON output" },
+  help:  { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_ARCHITECTURE = {
+  cwd:   { type: "string",  description: "Target project directory" },
+  limit: { type: "string",  description: "Max results to return" },
+  kind:  { type: "string",  description: "Artifact kind (default: adr)" },
+  json:  { type: "boolean", description: "JSON output" },
+  help:  { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_REPRODUCE = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  json: { type: "boolean", description: "JSON output" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_VERIFY = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  json: { type: "boolean", description: "JSON output" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_REPLAY = {
+  cwd:       { type: "string",  description: "Target project directory" },
+  json:      { type: "boolean", description: "JSON output" },
+  "dry-run": { type: "boolean", description: "Print plan without invoking host" },
+  help:      { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_CI = {
+  cwd:   { type: "string",  description: "Target project directory" },
+  ci:    { type: "string",  description: "CI system (default: github-actions)" },
+  out:   { type: "string",  description: "Output directory for install" },
+  force: { type: "boolean", description: "Overwrite existing workflow file" },
+  help:  { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_UI = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  port: { type: "number",  description: "Port to listen on (default: 3737)" },
+  open: { type: "boolean", description: "Open browser automatically" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_DOCTOR = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_LOG = {
+  cwd:    { type: "string",  description: "Target project directory" },
+  json:   { type: "boolean", description: "JSON output (one object per line)" },
+  follow: { type: "boolean", description: "Tail pipeline/ at 1s poll" },
+  help:   { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_SUMMARY = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  json: { type: "boolean", description: "JSON output" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_RESTART = {
+  cwd:            { type: "string",  description: "Target project directory" },
+  cascade:        { type: "boolean", description: "Also clear every stage after this one" },
+  "keep-context": { type: "boolean", description: "Preserve injected blocker sections in context.md" },
+  "dry-run":      { type: "boolean", description: "Print what would be deleted without acting" },
+  track:          { type: "string",  description: "Override the pipeline track (for cascade)" },
+  help:           { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_RULING = {
+  cwd:           { type: "string",  description: "Target project directory" },
+  topic:         { type: "string",  description: "Ruling topic (auto-derived when omitted)" },
+  context:       { type: "string",  description: "Comma-separated extra context paths" },
+  "target-gate": { type: "string",  description: "Path to the escalating gate" },
+  headless:      { type: "boolean", description: "Dispatch via host CLI non-interactively" },
+  help:          { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_FIX_ESCALATION = {
+  cwd:      { type: "string",  description: "Target project directory" },
+  headless: { type: "boolean", description: "Dispatch via host CLI non-interactively" },
+  help:     { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_INIT = {
+  host:  { type: "string",  description: "Host adapter(s), comma-separated" },
+  force: { type: "boolean", description: "Overwrite existing config/files" },
+  cwd:   { type: "string",  description: "Target project directory" },
+  help:  { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_DERIVE_APPROVALS = {
+  cwd:  { type: "string",  description: "Target project directory" },
+  json: { type: "boolean", description: "JSON output" },
+  help: { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_SPEC = {
+  cwd:     { type: "string",  description: "Target project directory" },
+  strict:  { type: "boolean", description: "Also fail on multi-mapped ACs" },
+  json:    { type: "boolean", description: "JSON output" },
+  force:   { type: "boolean", description: "Overwrite existing spec.feature" },
+  feature: { type: "string",  description: "Feature name for scaffold" },
+  help:    { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_CONSISTENCY = {
+  cwd:    { type: "string",  description: "Target project directory" },
+  strict: { type: "boolean", description: "Stricter drift checks" },
+  json:   { type: "boolean", description: "JSON output" },
+  help:   { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_ASSESS = {
+  cwd:          { type: "string",  description: "Target project directory" },
+  description:  { type: "string",  description: "Change description for heuristics" },
+  json:         { type: "boolean", description: "JSON output" },
+  apply:        { type: "boolean", description: "Write inferred track to .devteam/config.yml" },
+  "no-content": { type: "boolean", description: "Skip file content scan" },
+  help:         { type: "boolean", description: "Show this help" },
+};
+
+const FLAGS_STANDARDS = {
+  cwd:       { type: "string",  description: "Target project directory" },
+  json:      { type: "boolean", description: "JSON output" },
+  "dry-run": { type: "boolean", description: "Print report without writing" },
+  force:     { type: "boolean", description: "Overwrite existing docs/project-conventions.md" },
+  help:      { type: "boolean", description: "Show this help" },
+};
 
 function cmdStage(argv) {
   const { runStage, runStageHeadless } = getOrchestrator();
-  const { positional, flags } = parseFlags(argv);
+  const { positional, flags } = parseFlags(argv, FLAGS_STAGE);
+  if (flags.help) { console.log(generateHelp("devteam stage <name> [options]", FLAGS_STAGE)); process.exit(0); }
   const name = positional[0];
   if (!name) {
-    console.error("Usage: devteam stage <name> [--feature \"...\"] [--headless]");
+    console.error(generateHelp("devteam stage <name> [options]", FLAGS_STAGE));
     process.exit(2);
   }
   // Resolve track and run stoplist if applicable
@@ -354,7 +509,7 @@ function cmdStage(argv) {
   // Skipped if stage-04e.json already exists and is PASS (stage manager ran manually).
   const stageDef = getStage(name);
   const isPeerReview = stageDef ? stageDef.stage === "stage-05" : name === "peer-review";
-  if (isPeerReview && !flags["skip-preflight"]) {
+  if (isPeerReview && !flags.skipPreflight) {
     const { runPreflight } = require(path.join(__dirname, "..", "core", "preflight"));
     const preflightGatePath = path.join(cwd, "pipeline", "gates", "stage-04e.json");
     let needsPreflight = true;
@@ -520,11 +675,12 @@ function printStagePostamble(result, flags) {
 }
 
 function cmdPreflight(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_PREFLIGHT);
+  if (flags.help) { console.log(generateHelp("devteam preflight [options]", FLAGS_PREFLIGHT)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const { runPreflight } = require(path.join(__dirname, "..", "core", "preflight"));
   const track = loadConfig(cwd).pipeline.default_track;
-  const result = runPreflight(cwd, { track, skipWrite: flags["skip-write"] });
+  const result = runPreflight(cwd, { track, skipWrite: flags.skipWrite });
   if (result.status === "PASS") {
     console.log(`[preflight] PASS — all checks clean${result.warnings.length > 0 ? ` (${result.warnings.length} warning(s))` : ""}`);
     result.warnings.forEach((w) => console.log(`  WARN: ${w}`));
@@ -551,17 +707,14 @@ function cmdPreflight(argv) {
 //   <itemId>=<optionLetter>[:<ticketId>]
 // ---------------------------------------------------------------------------
 async function cmdAdvise(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_ADVISE);
+  if (flags.help) { console.log(generateHelp("devteam advise [options]", FLAGS_ADVISE)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
 
   // Parse --apply selections into Map<itemId, { action, ticketId }>
-  // --apply requires a value string (e.g. AC-11=A); bare --apply with no
-  // value is a user error — report it rather than silently doing nothing.
-  if (flags.apply === true) {
-    console.error("Error: --apply requires a value, e.g.: devteam advise --apply AC-11=A,AC-12=B");
-    process.exit(2);
-  }
+  // advise declares --apply as string so parseFlags ensures it always has a
+  // value when present (bare --apply exits 2 "requires a value" in the parser).
   let applyMap = new Map();
   if (flags.apply) {
     const CLASS_TO_ACTION = {
@@ -721,7 +874,8 @@ async function cmdAdvise(argv) {
 }
 
 function cmdValidate(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_VALIDATE);
+  if (flags.help) { console.log(generateHelp("devteam validate [options]", FLAGS_VALIDATE)); process.exit(0); }
   if (flags.cwd) process.chdir(flags.cwd);
   const { runMain } = require(path.join(__dirname, "..", "core", "gates", "validator"));
   runMain();
@@ -735,11 +889,12 @@ const NEXT_SCHEMA_VERSION = "1.1";
 
 function cmdNext(argv) {
   const { next } = getOrchestrator();
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_NEXT);
+  if (flags.help) { console.log(generateHelp("devteam next [options]", FLAGS_NEXT)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
 
   // Advisory check — non-blocking; warn when unresolved BLOCKER-risk follow-up items exist
-  if (!flags.json && !flags["skip-advise"]) {
+  if (!flags.json && !flags.skipAdvise) {
     try {
       const { runAdvise } = require(path.join(__dirname, "..", "core", "advise"));
       const { items } = runAdvise(cwd, { checkOnly: true });
@@ -852,7 +1007,8 @@ const RUN_SCHEMA_VERSION = "1.0";
 // a budget cap, or a dispatch that wrote no gate). It does NOT auto-fix or
 // auto-rule yet — that is PR-B / Phase 2.
 function cmdRun(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_RUN);
+  if (flags.help) { console.log(generateHelp("devteam run [options]", FLAGS_RUN)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const { run } = require(path.join(__dirname, "..", "core", "driver"));
   const jsonMode = Boolean(flags.json);
@@ -925,7 +1081,8 @@ function cmdRun(argv) {
 // Walks the tamper-evident stage-gate chain and reports breaks + unstamped
 // gates. Exit 0 = intact, 1 = a break (CI-usable).
 function cmdVerifyChain(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_VERIFY_CHAIN);
+  if (flags.help) { console.log(generateHelp("devteam verify-chain [options]", FLAGS_VERIFY_CHAIN)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
   const { gatesDir: getGatesDir } = require(path.join(__dirname, "..", "core", "paths"));
@@ -963,7 +1120,8 @@ function cmdVerifyChain(argv) {
 // (Re)stamps the chain on every existing stage gate, in order. Use after a
 // deliberate earlier-stage re-run, or to stamp gates written interactively.
 function cmdStampChain(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_STAMP_CHAIN);
+  if (flags.help) { console.log(generateHelp("devteam stamp-chain [options]", FLAGS_STAMP_CHAIN)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const { loadConfig } = require(path.join(__dirname, "..", "core", "config"));
   const { gatesDir: getGatesDir } = require(path.join(__dirname, "..", "core", "paths"));
@@ -979,7 +1137,8 @@ function cmdStampChain(argv) {
 function cmdMemory(argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
-  const { flags, positional } = parseFlags(rest);
+  const { flags, positional } = parseFlags(rest, FLAGS_MEMORY);
+  if (flags.help) { console.log(generateHelp("devteam memory <subcommand> [options]", FLAGS_MEMORY)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const mem = require(path.join(__dirname, "..", "core", "memory"));
 
@@ -1090,7 +1249,8 @@ function cmdMemory(argv) {
 function cmdArchitecture(argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
-  const { flags, positional } = parseFlags(rest);
+  const { flags, positional } = parseFlags(rest, FLAGS_ARCHITECTURE);
+  if (flags.help) { console.log(generateHelp("devteam architecture <subcommand> [options]", FLAGS_ARCHITECTURE)); process.exit(0); }
   const mem = require(path.join(__dirname, "..", "core", "memory"));
 
   if (sub === "lookup") {
@@ -1142,7 +1302,8 @@ function cmdArchitecture(argv) {
 // tests) and stage-06 (qa: tests + AC mapping). Closes the audit
 // finding that gate JSON was "mostly self-reported metadata."
 async function cmdVerify(argv) {
-  const { flags, positional } = parseFlags(argv);
+  const { flags, positional } = parseFlags(argv, FLAGS_VERIFY);
+  if (flags.help) { console.log(generateHelp("devteam verify <stage-id> [options]", FLAGS_VERIFY)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const stageId = positional[0];
   if (!stageId) {
@@ -1207,7 +1368,8 @@ async function cmdVerify(argv) {
 
 // surface drift in system_prompt_hash.
 function cmdReproduce(argv) {
-  const { flags, positional } = parseFlags(argv);
+  const { flags, positional } = parseFlags(argv, FLAGS_REPRODUCE);
+  if (flags.help) { console.log(generateHelp("devteam reproduce <stage-id> [options]", FLAGS_REPRODUCE)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const stageId = positional[0];
   if (!stageId) {
@@ -1340,7 +1502,8 @@ function cmdReproduce(argv) {
 // me what changed" — which is real audit value even without
 // param-level reproduction.
 function cmdReplay(argv) {
-  const { flags, positional } = parseFlags(argv);
+  const { flags, positional } = parseFlags(argv, FLAGS_REPLAY);
+  if (flags.help) { console.log(generateHelp("devteam replay <stage-id> [options]", FLAGS_REPLAY)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const stageId = positional[0];
   if (!stageId) {
@@ -1429,7 +1592,7 @@ function cmdReplay(argv) {
     console.log("");
   }
 
-  if (flags.dryRun || flags["dry-run"]) {
+  if (flags.dryRun) {
     if (flags.json) {
       console.log(JSON.stringify({
         plan: "dry-run",
@@ -1561,7 +1724,7 @@ function cmdReplay(argv) {
 function cmdCi(argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
-  const { flags } = parseFlags(rest);
+  const { flags } = parseFlags(rest, FLAGS_CI);
 
   if (sub === "install") {
     const ci = flags.ci || "github-actions";
@@ -1616,7 +1779,7 @@ function cmdCi(argv) {
 }
 
 function cmdUI(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_UI);
   const { startServer } = require(path.join(__dirname, "..", "core", "ui", "server"));
   startServer({
     port: flags.port,
@@ -1639,7 +1802,8 @@ function cmdUI(argv) {
 }
 
 function cmdDoctor(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_DOCTOR);
+  if (flags.help) { console.log(generateHelp("devteam doctor [options]", FLAGS_DOCTOR)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const FRAMEWORK_ROOT = path.join(__dirname, "..");
   const { loadConfig, configPath } = require(path.join(FRAMEWORK_ROOT, "core", "config"));
@@ -1741,7 +1905,8 @@ function formatLogEvent(event, cwd) {
 // agent's transcript). Pair with the per-stage transcripts in
 // pipeline/logs/ (written by headless dispatches) for the full picture.
 function cmdLog(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_LOG);
+  if (flags.help) { console.log(generateHelp("devteam log [options]", FLAGS_LOG)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const { buildEvents } = require(path.join(__dirname, "..", "core", "log", "journal"));
 
@@ -1800,7 +1965,8 @@ function cmdLog(argv) {
 
 function cmdSummary(argv) {
   const { summary } = getOrchestrator();
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_SUMMARY);
+  if (flags.help) { console.log(generateHelp("devteam summary [options]", FLAGS_SUMMARY)); process.exit(0); }
   const result = summary({ cwd: flags.cwd });
   if (flags.json) {
     console.log(JSON.stringify(result, null, 2));
@@ -1849,26 +2015,13 @@ function stripMarkedSection(filePath, beginMarker, endMarker) {
 // for after an ESCALATE or FAIL when they want to re-do work from a
 // specific point.
 function cmdRestart(argv) {
-  const { positional, flags } = parseFlags(argv);
+  const { positional, flags } = parseFlags(argv, FLAGS_RESTART);
+  if (flags.help) { console.log(generateHelp("devteam restart <stage> [options]", FLAGS_RESTART)); process.exit(0); }
   const stageInput = positional[0];
   if (!stageInput) {
-    console.error("Usage: devteam restart <stage> [--cascade] [--keep-context] [--dry-run]");
+    console.error(generateHelp("devteam restart <stage> [options]", FLAGS_RESTART));
     console.error("");
-    console.error("Clear a stage's gate file(s) so the pipeline can re-run it.");
-    console.error("");
-    console.error("Arguments:");
-    console.error("  <stage>          Stage name (e.g. 'peer-review') or id (e.g. 'stage-05').");
-    console.error("");
-    console.error("Flags:");
-    console.error("  --cascade        Also clear every stage that comes AFTER this one in the");
-    console.error("                   active track. Use when you want to undo a chain of work.");
-    console.error("                   Default: clear only the named stage.");
-    console.error("  --keep-context   Don't strip injected blocker sections from");
-    console.error("                   pipeline/context.md. Default: strip the section(s) this");
-    console.error("                   stage injected (red-team-blockers for stage-04c,");
-    console.error("                   qa-build-blockers for stage-04.qa).");
-    console.error("  --dry-run        Print what would be deleted/stripped without doing it.");
-    console.error("");
+    console.error("  <stage>  Stage name (e.g. 'peer-review') or stage id (e.g. 'stage-05').");
     console.error("After restart, run `devteam next` to see the new starting point.");
     process.exit(2);
   }
@@ -1978,10 +2131,11 @@ function cmdRestart(argv) {
 
 function cmdMerge(argv) {
   const { mergeWorkstreamGates } = getOrchestrator();
-  const { positional, flags } = parseFlags(argv);
+  const { positional, flags } = parseFlags(argv, FLAGS_MERGE);
+  if (flags.help) { console.log(generateHelp("devteam merge <stage-name> [options]", FLAGS_MERGE)); process.exit(0); }
   const stageName = positional[0];
   if (!stageName) {
-    console.error("Usage: devteam merge <stage-name>");
+    console.error(generateHelp("devteam merge <stage-name> [options]", FLAGS_MERGE));
     process.exit(2);
   }
   const result = mergeWorkstreamGates(stageName, flags);
@@ -2007,7 +2161,8 @@ function cmdMerge(argv) {
 // Followed by `devteam merge peer-review` to rebuild the merged
 // stage-05.json from the updated per-area gates.
 function cmdDeriveApprovals(argv) {
-  const { positional, flags } = parseFlags(argv);
+  const { positional, flags } = parseFlags(argv, FLAGS_DERIVE_APPROVALS);
+  if (flags.help) { console.log(generateHelp("devteam derive-approvals [<file>] [options]", FLAGS_DERIVE_APPROVALS)); process.exit(0); }
   const cwd = flags.cwd ? path.resolve(flags.cwd) : process.cwd();
   const hookPath = path.join(__dirname, "..", "core", "hooks", "approval-derivation.js");
   const reviewDir = path.join(cwd, "pipeline", "code-review");
@@ -2099,7 +2254,8 @@ const loadPrincipalRulings = _escalation.loadPrincipalRulingLines;
 // judgment without re-running an entire stage. The ruling lands in
 // pipeline/context.md as a PRINCIPAL-RULING line; no gate is written.
 async function cmdRuling(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_RULING);
+  if (flags.help) { console.log(generateHelp("devteam ruling [options]", FLAGS_RULING)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   let topic = flags.topic;
   let targetGate = flags.targetGate;
@@ -2183,7 +2339,8 @@ async function cmdRuling(argv) {
 // an escalation-applicator agent to implement them — fixing gate shapes,
 // running devteam stage commands, and merging — so `devteam next` advances.
 async function cmdFixEscalation(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_FIX_ESCALATION);
+  if (flags.help) { console.log(generateHelp("devteam fix-escalation [options]", FLAGS_FIX_ESCALATION)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
 
   const rulings = loadPrincipalRulings(cwd);
@@ -2242,9 +2399,10 @@ function cmdHosts() {
 }
 
 function cmdInit(argv) {
-  const { flags } = parseFlags(argv);
+  const { flags } = parseFlags(argv, FLAGS_INIT);
+  if (flags.help) { console.log(generateHelp("devteam init --host <list> [options]", FLAGS_INIT)); process.exit(0); }
   if (!flags.host) {
-    console.error("Usage: devteam init --host <name>[,<name>...] [--force]");
+    console.error(generateHelp("devteam init --host <list> [options]", FLAGS_INIT));
     console.error(`Available hosts: ${listHosts().join(", ") || "(none)"}`);
     process.exit(2);
   }
@@ -2297,7 +2455,8 @@ function cmdStages() {
 function cmdSpec(argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
-  const { flags } = parseFlags(rest);
+  const { flags } = parseFlags(rest, FLAGS_SPEC);
+  if (flags.help) { console.log(generateHelp("devteam spec <verify|generate> [options]", FLAGS_SPEC)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const FRAMEWORK_ROOT = path.join(__dirname, "..");
 
@@ -2432,7 +2591,8 @@ function cmdSpec(argv) {
 function cmdConsistency(argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
-  const { flags } = parseFlags(rest);
+  const { flags } = parseFlags(rest, FLAGS_CONSISTENCY);
+  if (flags.help) { console.log(generateHelp("devteam consistency analyze [options]", FLAGS_CONSISTENCY)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
   const FRAMEWORK_ROOT = path.join(__dirname, "..");
 
@@ -2562,7 +2722,8 @@ function cmdConsistency(argv) {
 // With --apply, writes pipeline.custom_stages to .devteam/config.yml.
 function cmdAssess(argv) {
   const { assess } = require(path.join(__dirname, "..", "core", "stage-shopping", "assess"));
-  const { positional, flags } = parseFlags(argv);
+  const { positional, flags } = parseFlags(argv, FLAGS_ASSESS);
+  if (flags.help) { console.log(generateHelp("devteam assess [options] [files...]", FLAGS_ASSESS)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
 
   // Resolve file list: positional args > --files > pipeline/changed-files.txt
@@ -2627,7 +2788,8 @@ function cmdAssess(argv) {
 function cmdStandards(argv) {
   const sub = argv[0];
   const rest = argv.slice(1);
-  const { flags } = parseFlags(rest);
+  const { flags } = parseFlags(rest, FLAGS_STANDARDS);
+  if (flags.help) { console.log(generateHelp("devteam standards discover [options]", FLAGS_STANDARDS)); process.exit(0); }
   const cwd = flags.cwd || process.cwd();
 
   if (sub === "discover") {
