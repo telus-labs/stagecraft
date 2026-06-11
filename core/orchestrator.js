@@ -19,6 +19,7 @@ const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
 const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
 const { pricingFor } = require("./pricing");
+const { getRecipe } = require("./pipeline/fix-recipes");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -717,37 +718,14 @@ function clearGatesFromFixSteps(fixSteps) {
 function computeFixSteps(gate, stageDef, gatesDir) {
   const stage = stageDef.stage;
 
-  // Pre-review (stage-04a): static-check failures
-  if (stage === "stage-04a") {
-    const issues = [];
-    if (gate.lint_passed === false) issues.push("lint errors");
-    if (gate.tests_passed === false) issues.push("failing tests");
-    if (gate.dependency_review_passed === false) issues.push("SCA / dependency findings");
-    if (gate.license_check_passed === false) issues.push("license violations");
-
-    const ws = _wsFromBlockers(gate);
-    if (!ws.length && gate.workstream) ws.push(gate.workstream);
-
-    const steps = [];
-    steps.push({
-      description: issues.length
-        ? `Fix pre-review failures: ${issues.join(", ")}`
-        : "Address pre-review blockers listed above",
-      commands: [],
-    });
-    if (ws.length) {
-      steps.push({
-        description: `Clear build workstream gate${ws.length > 1 ? "s" : ""}: ${ws.join(", ")}`,
-        commands: _rmBuildGates(ws),
-      });
-    }
-    steps.push({
-      description: "Re-run build with pre-review blockers as context",
-      commands: ["devteam stage build --patch --from pre-review --skip-completed --headless"],
-    });
-    steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
-    steps.push({ description: "Re-run pre-review", commands: ["rm pipeline/gates/stage-04a.json", "devteam stage pre-review --headless"] });
-    return steps;
+  // Check the recipe registry first. Migrated stages return early here;
+  // the remaining if-ladder handles stages not yet ported to fix-recipes.js.
+  const _recipe = getRecipe(stage);
+  if (_recipe && _recipe.diagnose !== undefined) {
+    const _diagnosed = _recipe.diagnose(gate, { gatesDir, stageDef });
+    if (_diagnosed && _diagnosed.steps !== null) return _diagnosed.steps;
+    // null steps means no special recipe — fall through for non-migrated stages.
+    // Once all stages are ported, the if-ladder below will be empty and removed.
   }
 
   // Red team (stage-04c): must-address findings
