@@ -63,7 +63,7 @@ New here? Read in this order:
 8. **[docs/faq.md](docs/faq.md)** — operational questions, common gotchas, comparisons to other tools.
 
 Reference / extension:
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — 11 locked design decisions. Read when you want to know *why*.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — 12 locked design decisions. Read when you want to know *why*.
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** — recipes for adding a host, role, stage, or skill.
 - **[core/adapters/host-adapter.md](core/adapters/host-adapter.md)** — the host-adapter contract. ~150 lines; defines everything an adapter must implement.
 - **[docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)** — multi-workstream contract stress-test trace.
@@ -336,7 +336,7 @@ stagecraft/
 
 ## Design decisions
 
-11 locked decisions are documented in [ARCHITECTURE.md](ARCHITECTURE.md). The big ones:
+12 locked decisions are documented in [ARCHITECTURE.md](ARCHITECTURE.md). The big ones:
 
 1. **The core never spawns a model.** It emits prompts and validates JSON.
 2. **Gate JSON is the stable seam.** Identity fields: `stage`, `workstream`, `orchestrator`, `host`, `status`. Anything host-specific stays in the adapter.

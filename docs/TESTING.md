@@ -1,6 +1,6 @@
 # Testing
 
-**Current state:** **`npm test` runs the full suite in ~1.5s** — currently around 380 tests across 25+ files, all offline, no external services. CI runs on Node 20 / 22 / 24. (Exact counts in `npm test` output; this doc avoids quoting specific numbers since they drift.)
+**Current state:** **`npm test` runs the full suite in ~5s** — all offline, no external services. CI runs on Node 20 / 22 / 24. (Exact counts in `npm test` output; this doc avoids quoting specific numbers since they drift.)
 
 ## Running the suite
 
@@ -44,6 +44,12 @@ node --experimental-test-coverage --test tests/*.test.js
 | `budget.test.js` | `scripts/budget.js`: `parseBudgetMd` round-trip; config parsing; init/update/check sequence; contract-F gate on escalation. |
 | `release.test.js` | `scripts/release.js notes` extraction: `[Unreleased]` default, middle section, last section (no trailing header to anchor to), missing-version error, blank-line preservation, trailing `---` stripping. |
 | `headless.test.js` | `core/adapters/headless.js`: command resolution, env override, missing-command rejection, exit-code propagation, spawn-ENOENT message, gatePath detection, EPIPE swallowing, whitespace-split. |
+| `run.test.js` | `devteam run` driver: happy-path loop, auto-fix `code-defect` retry, transient dispatch retry with backoff, `--auto-rule` escalation resolution, consequence-ceiling halt, `--until` boundary stop. |
+| `classify.test.js` | `classifyDispatch` failure-class derivation: `code-defect`, `judgment-gate`, `state-corruption`, `external-blocked`, `transient`, `structural-input`. |
+| `escalation.test.js` | Escalation-handling end-to-end: `devteam ruling` dispatch, `fix-escalation` encoding, auto-rule grant/deny, `PRINCIPAL-CANNOT-DECIDE` halt. |
+| `chain.test.js` | Multi-stage fix-and-retry chains: blocker propagation across stage boundaries, retry ceiling, convergence-exhausted promotion to escalation. |
+| `archive.test.js` | Gate archiving (`pipeline/gates/archive/<stage>.attempt-N.json`): snapshot-before-clear, diff fields, replay-compatible format. |
+| `consistency-meta.test.js` | `scripts/consistency.js` exits 0 against the live repo; fixture-tree tests for all six check classes (violation detection, clean exits, baseline suppression, non-baselined exit 1). |
 
 ## Conventions
 
@@ -79,7 +85,6 @@ These are nice-to-haves not currently in the suite. If you hit a bug in one of t
 - **`tests/multi-host.test.js`** — end-to-end with two adapters: install both, run a build with split routing, merge, verify per-workstream gates carry the right host field. The pieces are covered by `router.test.js` + `fanout.test.js` + `install-roundtrip.test.js`, but no single test threads the whole flow.
 - **`tests/stage-numbering.test.js`** — grep-based assertion that every role brief's mentioned stage matches a real stage name in `stages.js`. The contract test catches most of this; an explicit numbering check would catch off-by-one bugs at the prose layer.
 - **`tests/concurrency.test.js`** — approval-derivation lock under contention (spawn N processes writing to the same area). The lock is exercised by `approval-derivation.test.js` but not under real concurrency.
-- **`tests/consistency-meta.test.js`** — meta-test that runs `scripts/consistency.js` as a subprocess and asserts exit 0. Currently the consistency check runs in CI but isn't gated by `npm test`.
 
 ## Historical notes
 

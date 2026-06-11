@@ -13,8 +13,8 @@ When Claude Code compacts this conversation, preserve:
    losing this count after compaction allows the unbounded review loop to
    resume)
 8. The current retry count for any stage on its Nth retry
-8. Which agents have written their Stage 9a contribution sections
-9. Whether Stage 9b synthesis has completed and which lessons were promoted/retired
+9. Which agents have written their Stage 9a contribution sections
+10. Whether Stage 9b synthesis has completed and which lessons were promoted/retired
 
 Do NOT preserve:
 - Full file contents (re-read from disk as needed — including

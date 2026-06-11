@@ -218,13 +218,13 @@ Stagecraft is the project management and code-quality reasoning layer; your CI i
 
 Stagecraft unifies them into one core. See [ADR 001](adr/001-unification-vs-fork.md) for the full reasoning. Key differences:
 
-- One framework, three host adapters (claude-code, codex, generic). No more parity drift between forks.
+- One framework, four host adapters (claude-code, codex, gemini-cli, generic). No more parity drift between forks.
 - Per-workstream routing: a single pipeline can dispatch different roles to different hosts.
 - Contract F: gate identity uses `orchestrator` + `host` + `workstream`. The legacy `agent` field is gone.
 - WARN status for non-blocking warnings.
 - Conditional stages (security review fires only when pre-review flags it).
 - Per-role `allowedWrites` filtering in multi-role stages.
-- 201 automated tests vs the forks' 20-26.
+- 1 200+ automated tests vs the forks' 20-26.
 
 ## Customization
 
@@ -845,7 +845,7 @@ Use cases: PCI / HIPAA / SOC 2 compliance checks, team-specific naming conventio
 
 Both, for different purposes. `/goal` is a continuation primitive: set a session-level condition and the host loops until it holds. Stagecraft is a decomposition primitive: one feature decomposes into 18 stages with defined artifacts and gates.
 
-They compose: you can set a `/goal` like "tests pass and lint clean" at the start of stage-04 build and let Claude loop on it, then read the gate. The adapter does not emit `/goal` invocations today (BACKLOG E-series). Setting one manually before a convergence-shaped stage works fine.
+They compose: for `build` (stage-04) and `qa` (stage-06), hosts that declare `capabilities.goalLoop: true` (claude-code and codex) automatically receive a `/goal "<condition>"` prepended to the headless prompt — the host loops internally until the stated condition holds, then the gate is written. Setting one manually before other stages works fine.
 
 ### Where does Stagecraft fit relative to Codex's autonomous task mode?
 

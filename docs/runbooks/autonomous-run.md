@@ -106,16 +106,18 @@ consequences, and stops there for you.
   clears the failing gate and re-dispatches — but whether the *agent* writes a
   correct fix is on the agent. If it doesn't converge within
   `autonomy.max_retries`, the driver escalates (`convergence-exhausted`).
-- **No auto-rule.** Escalations (`judgment-gate`) still halt for a human; the
-  Principal-at-escalation path is Phase 2.
-- **Gate-clearing is by recipe.** The driver clears the `pipeline/gates/*` paths
-  named in `computeFixSteps`' output (parsed from its `rm` steps). A FAIL with no
-  recipe re-dispatches nothing new and converges to an escalation. A structured
-  `clear_gates` field on the fix recipe is a planned follow-up.
+- **Transient-classification is heuristic v1.** The driver classifies dispatch
+  failures as `transient` (retry with backoff) or `structural-input` (halt) from
+  the exit code and output shape. Edge cases can mis-classify — inspect
+  `run-log.jsonl` if the driver retries something that shouldn't be retried.
 - **Convergence is count-based.** The driver-side ceiling counts re-dispatches;
-  true progress-based detection (blocker counts decreasing) needs gate archiving.
+  true progress-based detection (blocker counts decreasing) is not yet
+  implemented.
 - **Budget is retrospective.** The cap blocks the *next* dispatch; a single
   expensive stage can overshoot it.
 - **Lock is advisory.** `devteam run` holds the lock, but other mutating
   commands (`devteam stage`, `devteam merge`) do not yet check it — don't run
   them against a live autonomous run.
+- **No heartbeat.** A hung dispatch (waiting on a model API) is invisible to the
+  driver until it exits. `--budget-usd` + a wall-clock timeout in your CI config
+  are the practical guards.

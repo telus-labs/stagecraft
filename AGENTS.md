@@ -13,7 +13,7 @@ It replaces two prior forks (`claude-dev-team`, `codex-dev-team`) that were ~80%
 ## What to read first, in order
 
 1. [`README.md`](README.md) — what the system does end-to-end, the CLI surface, the install layout.
-2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the design model (spine + adapter), the proposed directory tree, and **11 locked design decisions** that are load-bearing. Do not edit these casually.
+2. [`ARCHITECTURE.md`](ARCHITECTURE.md) — the design model (spine + adapter), the proposed directory tree, and **12 locked design decisions** that are load-bearing. Do not edit these casually.
 3. [`core/adapters/host-adapter.md`](core/adapters/host-adapter.md) — the contract a host adapter must satisfy.
 4. [`docs/concepts.md`](docs/concepts.md) — one-sentence definitions of stage, role, workstream, gate, track, adapter, host, capability.
 5. [`docs/walkthroughs/stage-04-split-host.md`](docs/walkthroughs/stage-04-split-host.md) — the stress-test trace that locked the multi-workstream contract. Read this before changing anything in the multi-role dispatch path.
@@ -96,11 +96,11 @@ Common changes and where they go:
 
 ## What the tests currently cover
 
-Stagecraft has a tier-1 + tier-2 test suite (300+ tests; run `npm test`). See [`docs/TESTING.md`](docs/TESTING.md) for the strategy and tier layout. Add tests in lockstep with any contract change.
+Stagecraft has a tier-1 + tier-2 test suite (1 200+ tests; run `npm test`). See [`docs/TESTING.md`](docs/TESTING.md) for the strategy and tier layout. Add tests in lockstep with any contract change.
 
 ## Open backlog
 
-[`docs/BACKLOG.md`](docs/BACKLOG.md) — bucketed list of next ideas with impact/effort scores. Top items: OpenTelemetry per-stage tracing, secret-scanning hook, Gemini CLI adapter, accessibility audit stage, gate-pass-rate dashboards, GitHub PR integration, web UI, persistent embeddings-indexed memory, multi-model peer review.
+[`docs/BACKLOG.md`](docs/BACKLOG.md) — bucketed list of next ideas with impact/effort scores.
 
 ## Working on this codebase
 
@@ -108,4 +108,4 @@ Stagecraft has a tier-1 + tier-2 test suite (300+ tests; run `npm test`). See [`
 - Most smoke testing uses `mktemp -d` as a scratch target project, runs `./bin/devteam init --host claude-code --cwd $TMPDIR`, then exercises subcommands against it.
 - `DEVTEAM_HEADLESS_COMMAND=cat` or `=true` stubs the host CLI for testing `--headless` without `claude` or `codex` installed.
 - Stage prompts go to stdout; orchestrator logs go to stderr (`[devteam] …`). Do not mix.
-- Every contract change should land with: (a) the code change, (b) the doc update in `ARCHITECTURE.md`, `rules/gates.md`, or `core/adapters/host-adapter.md` as relevant, (c) a corresponding test (once the test suite exists).
+- Every contract change should land with: (a) the code change, (b) the doc update in `ARCHITECTURE.md`, `rules/gates.md`, or `core/adapters/host-adapter.md` as relevant, (c) a corresponding test.

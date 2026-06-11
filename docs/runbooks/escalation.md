@@ -231,7 +231,7 @@ devteam validate    # confirm the gate is structurally valid
 devteam next        # should now report run-stage <next-stage>
 ```
 
-## 4b. Retry loop exhaustion — a distinct escalation shape
+## 4c. Retry loop exhaustion — a distinct escalation shape
 
 When `devteam next` reports `resolve-escalation` but the gate shows
 `retry_number: 3` (or higher) on a stage-06 gate, this is **not** a
