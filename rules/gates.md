@@ -166,7 +166,7 @@ contains all sections required for its track. Required sections:
   single `## Risk notes` line when the change is trivial on all six
   dimensions
 
-See `docs/brief-template.md` for the canonical shape.
+See `templates/brief-template.md` for the canonical blank form; `docs/brief-template.md` is the section-by-section annotation guide.
 
 ### Stage 02 (Design)
 ```json
