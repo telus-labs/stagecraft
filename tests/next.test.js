@@ -2,7 +2,7 @@ const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
-const { next, clearGatesFromFixSteps } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -762,16 +762,21 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
 });
 
 describe("next: structured clear_gates", () => {
-  it("clearGatesFromFixSteps extracts repo-relative pipeline/gates targets, deduped", () => {
-    const steps = [
-      { description: "x", commands: ["rm pipeline/gates/stage-04.backend.json", "devteam stage build --headless"] },
-      { description: "y", commands: ["rm -f pipeline/gates/stage-04.json", "rm pipeline/gates/stage-04.json"] },
-      { description: "z", commands: ["rm /etc/passwd"] }, // outside pipeline/gates — ignored
-    ];
-    assert.deepEqual(clearGatesFromFixSteps(steps), [
-      "pipeline/gates/stage-04.backend.json",
-      "pipeline/gates/stage-04.json",
-    ]);
+  it("registry: every stage in STAGES resolves to a recipe with a diagnose function", () => {
+    const { STAGES } = require("../core/pipeline/stages");
+    const { getRecipe } = require("../core/pipeline/fix-recipes");
+    for (const [name, stageDef] of Object.entries(STAGES)) {
+      if (!stageDef) continue;
+      const recipe = getRecipe(stageDef.stage);
+      assert.ok(recipe, `getRecipe("${stageDef.stage}") must return an object (stage: ${name})`);
+      assert.equal(typeof recipe.diagnose, "function",
+        `recipe for "${stageDef.stage}" must have a diagnose() function (stage: ${name})`);
+      // Smoke-call with a minimal FAIL gate — must not throw.
+      const result = recipe.diagnose({ status: "FAIL", blockers: [], workstreams: [] }, { gatesDir: null, stageDef });
+      assert.ok(result, `diagnose() for "${stageDef.stage}" must return a result`);
+      assert.ok(Array.isArray(result.clear_gates),
+        `diagnose() for "${stageDef.stage}" must return clear_gates array`);
+    }
   });
 
   it("next() attaches structured clear_gates on a recipe-bearing FAIL", () => {

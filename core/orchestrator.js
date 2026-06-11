@@ -659,78 +659,6 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
   return { ok: true, gate, acCount: briefAcs.length };
 }
 
-// ── Fix-step computation ──────────────────────────────────────────────────────
-
-function _wsFromWorkstreams(gate) {
-  if (!Array.isArray(gate.workstreams)) return [];
-  return gate.workstreams
-    .filter(w => w.status === "FAIL" || w.status === "ESCALATE")
-    .map(w => w.role);
-}
-
-function _wsFromBlockers(gate) {
-  if (!Array.isArray(gate.blockers)) return [];
-  const set = new Set();
-  for (const b of gate.blockers) {
-    if (typeof b === "object" && b.assigned_to) set.add(b.assigned_to);
-  }
-  return [...set];
-}
-
-// Heuristic: map free-text blocker strings to build workstream roles by
-// file-path patterns. Used as a fallback when structured assigned_to is absent.
-function _wsFromText(text) {
-  const ws = new Set();
-  if (/\.test\.[jt]sx?|\.spec\.[jt]sx?|spec\.feature|__tests__|\/tests?\//i.test(text)) ws.add("qa");
-  if (/src[/\\]backend[/\\]|\/api\/|\/routes\/|\/controller/i.test(text)) ws.add("backend");
-  if (/src[/\\]frontend[/\\]|\/components?\//i.test(text)) ws.add("frontend");
-  if (/src[/\\]infra[/\\]|Dockerfile|docker-compose/i.test(text)) ws.add("platform");
-  return [...ws];
-}
-
-function _rmBuildGates(workstreams) {
-  const cmds = workstreams.map(w => `rm pipeline/gates/stage-04.${w}.json`);
-  cmds.push("rm pipeline/gates/stage-04.json");
-  return cmds;
-}
-
-// The canonical home for "which gate files does this recipe want cleared".
-// computeFixSteps embeds gate-clears as `rm pipeline/gates/*.json` command
-// strings; this extracts them as structured, repo-relative paths so the
-// autonomous driver consumes data (action.clear_gates) instead of re-parsing
-// shell strings itself. Placeholder targets (e.g. `<affected-ws>`) are kept —
-// the driver's unlink is best-effort and skips non-existent paths.
-function clearGatesFromFixSteps(fixSteps) {
-  const out = [];
-  for (const step of (fixSteps || [])) {
-    for (const cmd of (step.commands || [])) {
-      const m = typeof cmd === "string" && cmd.match(/^rm\s+(?:-\S+\s+)*(pipeline\/gates\/\S+\.json)\s*$/);
-      if (m && !out.includes(m[1])) out.push(m[1]);
-    }
-  }
-  return out;
-}
-
-/**
- * Returns an ordered array of { description, commands[] } fix steps for a
- * failed gate, or null when no stage-specific recipe can be derived.
- */
-function computeFixSteps(gate, stageDef, gatesDir) {
-  const stage = stageDef.stage;
-
-  // Check the recipe registry first. Migrated stages return early here;
-  // the remaining if-ladder handles stages not yet ported to fix-recipes.js.
-  const _recipe = getRecipe(stage);
-  if (_recipe && _recipe.diagnose !== undefined) {
-    const _diagnosed = _recipe.diagnose(gate, { gatesDir, stageDef });
-    if (_diagnosed && _diagnosed.steps !== null) return _diagnosed.steps;
-    // null steps means no special recipe — fall through for non-migrated stages.
-    // Once all stages are ported, the if-ladder below will be empty and removed.
-  }
-
-  return null;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 // B9: cwd and changeId are threaded through so tryAutoFoldSignOff can
@@ -862,7 +790,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
       };
     }
     if (gate.status === "FAIL") {
-      const fix_steps = computeFixSteps(gate, stageDef, gatesDir);
+      const { clear_gates, steps: fix_steps } = getRecipe(stageDef.stage).diagnose(gate, { gatesDir, stageDef });
 
       // Convergence ceiling (ADR-003 / H1). When the gate has already been
       // retried up to the budget and is still FAIL, stop returning
@@ -882,7 +810,6 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
         };
       }
 
-      const clear_gates = clearGatesFromFixSteps(fix_steps);
       return {
         action: "fix-and-retry", stage: stageDef.stage, name: stageName,
         gate: stageGatePath,
@@ -1026,7 +953,6 @@ module.exports = {
   summary,
   buildDescriptor,
   computeDispatchPlan,
-  clearGatesFromFixSteps,
   ORCHESTRATOR_ID,
   rolesPath,
   templatesPath,
