@@ -112,6 +112,8 @@ A coordinated team of role-specific subagents running a structured software-deve
 
 ## Prerequisites
 
+**Platform:** macOS and Linux are the supported platforms. Windows users should run Stagecraft inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) — native Windows is not supported: `devteam doctor` shells out to POSIX utilities, the headless command splitter assumes POSIX argument syntax, and fix-step commands use POSIX `rm`. Running under WSL2 is the straightforward workaround and works without any configuration changes.
+
 - Node.js ≥ 18
 - At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), **Gemini CLI** (`gemini --version` works), or just a terminal (generic adapter — prompts rendered for manual use, no automation)
 - Git (recommended for version-controlling artifacts; the pipeline itself does not require it)

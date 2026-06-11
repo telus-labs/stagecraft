@@ -2,13 +2,34 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { TRACKS } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
 
 const FRAMEWORK_ROOT = path.join(__dirname, "..", "..", "..");
 
 const name = "doctor";
+
+// Exported for direct unit-testing without spawning a subprocess.
+function warnIfWindows(platform, write) {
+  if (platform !== "win32") return;
+  (write || process.stderr.write.bind(process.stderr))(
+    "⚠️  Warning: Stagecraft is not supported on native Windows.\n" +
+    "   Please run inside WSL2 (Windows Subsystem for Linux 2).\n" +
+    "   See: https://learn.microsoft.com/en-us/windows/wsl/install\n",
+  );
+}
+
+// Pure-Node PATH probe — no subprocess. Returns the resolved path on success, null if not found.
+// Exported for unit-testing.
+function findOnPath(bin, pathVar) {
+  const dirs = (pathVar !== undefined ? pathVar : process.env.PATH || "").split(path.delimiter);
+  for (const dir of dirs) {
+    if (!dir) continue;
+    const full = path.join(dir, bin);
+    try { fs.accessSync(full, fs.constants.X_OK); return full; } catch { /* try next */ }
+  }
+  return null;
+}
 
 const flags = {
   cwd:  { type: "string",  description: "Target project directory" },
@@ -17,6 +38,7 @@ const flags = {
 
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam doctor [options]", flags)); process.exit(0); }
+  warnIfWindows(process.platform);
   const cwd = _flags.cwd || process.cwd();
   const { loadConfig, configPath } = require(path.join(FRAMEWORK_ROOT, "core", "config"));
   let criticalFailures = 0;
@@ -79,9 +101,9 @@ function run(positional, _flags) {
     check(`host "${h}" install`, status.ok, status.ok ? null : `${status.missing.length} missing file(s)`);
     if (adapter.capabilities && adapter.capabilities.headless && adapter.capabilities.headlessCommand) {
       const bin = adapter.capabilities.headlessCommand.split(/\s+/)[0];
-      const which = spawnSync("which", [bin], { encoding: "utf8" });
-      check(`  ${bin} on PATH (for --headless)`, which.status === 0 ? true : "warn",
-        which.status === 0 ? which.stdout.trim() : `${bin} not found; --headless will fail`);
+      const found = findOnPath(bin);
+      check(`  ${bin} on PATH (for --headless)`, found ? true : "warn",
+        found ? found : `${bin} not found; --headless will fail`);
     }
   }
 
@@ -97,4 +119,4 @@ function run(positional, _flags) {
   console.log("✅ everything looks good");
 }
 
-module.exports = { name, flags, run };
+module.exports = { name, flags, run, warnIfWindows, findOnPath };

@@ -63,6 +63,15 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
 
   const prompt = preRenderedPrompt || adapter.renderStagePrompt(descriptor, ctx);
   const gatePath = path.join(gatesDir(ctx.cwd, ctx.changeId), `${descriptor.workstreamId}.json`);
+  // Guard: quoted segments would be mis-split by the naive whitespace split below.
+  // Throw early rather than silently invoke the wrong binary (e.g. a path with spaces).
+  if (/['"]/.test(cmdString)) {
+    return Promise.reject(new Error(
+      `headlessCommand "${cmdString}" contains quote characters. ` +
+      "Stagecraft does not support shell quoting in headless commands — " +
+      "use an unquoted binary name or set DEVTEAM_HEADLESS_COMMAND to a single token.",
+    ));
+  }
   const [bin, ...args] = cmdString.split(/\s+/);
 
   // C1: post-hoc write audit for adapters that declare enforces.allowed_writes = "post-hoc-audit".
