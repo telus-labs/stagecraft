@@ -396,7 +396,13 @@ const STAGES = {
     stage: "stage-09",
     roles: ["principal"],
     objective: "Synthesize the run, capture durable lessons, and close the pipeline loop.",
-    readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/lessons-learned.md"],
+    readFirst: [
+      "AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md",
+      "pipeline/context.md", "pipeline/lessons-learned.md",
+      // G3: optional production-feedback file closes the brief→production loop.
+      // Render as "(if present)" so the agent skips it gracefully when absent.
+      { path: "pipeline/production-feedback.md", optional: true },
+    ],
     allowedWrites: ["pipeline/retrospective.md", "pipeline/lessons-learned.md", "pipeline/gates/stage-09.json", "pipeline/context.md"],
     artifact: "pipeline/retrospective.md",
     template: "retrospective-template.md",
@@ -405,6 +411,9 @@ const STAGES = {
       lessons_promoted: [],
       patterns_harvested: 0,
       contributions_written: [],
+      // G3: optional field. true = reviewed, false = present but skipped,
+      // "absent" = file was not present. Omit when not relevant (null default).
+      production_feedback_reviewed: null,
     },
   },
 };

@@ -480,6 +480,17 @@ A surviving mutant on a critical path, a property counterexample, or a formal co
 
 See [`docs/verification-beyond-tests.md`](verification-beyond-tests.md) for candidate identification, gate fields, and skip-reason policy.
 
+### Production feedback seam — close the brief→production SLO loop (G3)
+
+After deploy, the operator copies `templates/production-feedback-template.md` to `pipeline/production-feedback.md` and fills in production signals — SLO/metric deltas vs. the brief's targets, incidents since deploy, adoption signals. No automated ingestion; the file is the integration seam (Jira/Datadog automation can write it without framework changes).
+
+- Stage 9 (retrospective) reads the file when present and adds a `## Production Deltas` section to `pipeline/retrospective.md`, recording which brief SLOs were met or missed and whether any incident suggests a promotable lesson
+- Gate field `production_feedback_reviewed` records `true` (reviewed) / `false` (present but skipped) / `"absent"` (not present this run)
+- `devteam next` on a completed pipeline mentions the file once as an optional follow-up when absent — not a nag, not a blocker
+- Effort-1 by design: no automation, no new commands, no integrations. The file is the seam; automation plugs in later at the write side with no framework changes
+
+See `docs/conventions.md` for the full file convention and `templates/production-feedback-template.md` for the scaffold.
+
 ### Architecture continuity — binding architectural decisions across projects
 
 Prior architectural decisions become binding commitments across every future project in the org.

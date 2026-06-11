@@ -103,6 +103,15 @@ function run(positional, _flags) {
   } else if (result.command) {
     console.log(`   → ${result.command}`);
   }
+  // G3: if the pipeline just completed and the operator hasn't created the
+  // production-feedback file yet, mention it once as an optional follow-up.
+  if (result.action === "pipeline-complete") {
+    const fs = require("node:fs");
+    const feedbackFile = require("node:path").join(cwd, "pipeline", "production-feedback.md");
+    if (!fs.existsSync(feedbackFile)) {
+      console.log(`   Tip: copy templates/production-feedback-template.md → pipeline/production-feedback.md after deploy to close the brief→production SLO loop (optional).`);
+    }
+  }
   if (result.action === "resolve-escalation") {
     const _cwd = _flags.cwd || process.cwd();
     const _rulings = loadPrincipalRulings(_cwd);

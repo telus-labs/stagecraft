@@ -122,6 +122,24 @@ This is the manual equivalent of what a JIRA integration performs automatically.
 
 ---
 
+## Production feedback (G3 seam)
+
+Open followups cover work deferred **before** deploy. For signals that only
+become visible **after** deploy — SLO regressions, incidents, adoption gaps —
+use the production feedback file:
+
+1. Copy `templates/production-feedback-template.md` → `pipeline/production-feedback.md`
+2. Fill in the SLO/metric delta table, incidents list, and any retrospective notes
+3. Stage 9 reads it on the next `devteam stage retrospective` run and adds a
+   `## Production Deltas` section to `pipeline/retrospective.md`
+
+`devteam next` mentions this file once (as an optional follow-up) when the
+pipeline is complete and the file is absent.
+
+See `docs/conventions.md` § `pipeline/production-feedback.md` for the full protocol.
+
+---
+
 ## What about non-ticket followups?
 
 `noted_for_followup` items with `track_for` values other than `"ticket"` are
