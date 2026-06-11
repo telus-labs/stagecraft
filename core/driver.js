@@ -26,7 +26,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { next, runStageHeadless, mergeWorkstreamGates, clearGatesFromFixSteps } = require("./orchestrator");
+const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
 const { loadConfig, changeIdFromFeature } = require("./config");
 const { pipelineRoot, gatesDir: getGatesDir } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
@@ -172,17 +172,6 @@ function resolveTrack(opts, config) {
 
 const RUN_BLOCKERS_BEGIN = "<!-- devteam:run-blockers:begin -->";
 const RUN_BLOCKERS_END = "<!-- devteam:run-blockers:end -->";
-
-// Resolve the gate files a fix recipe wants cleared, as absolute paths.
-// next() now attaches a structured `clear_gates` (repo-relative) to the
-// fix-and-retry action; this fallback derives the same set from fix_steps via
-// the shared orchestrator helper (single source of truth — no driver-local
-// shell-string parsing). The driver applies these in-process so it stays the
-// sole owner of dispatch/merge; the recipe's `devteam stage/merge` strings are
-// ignored (the driver's loop re-dispatches and re-merges via next()).
-function extractGateClears(fixSteps, cwd) {
-  return clearGatesFromFixSteps(fixSteps).map((rel) => path.join(cwd, rel));
-}
 
 function clearGates(targets) {
   const cleared = [];
@@ -400,11 +389,7 @@ async function run(opts = {}) {
         // so the progression of attempts survives for post-mortem (and for a
         // future progress-based convergence check). Best-effort.
         const archived = archiveGate(gatesDir(cwd, changeId), r.stage, attempts + 1);
-        // Prefer the structured clear_gates next() attaches (repo-relative);
-        // fall back to deriving them from fix_steps for older action shapes.
-        const toClear = Array.isArray(r.clear_gates) && r.clear_gates.length
-          ? r.clear_gates.map((rel) => path.join(cwd, rel))
-          : extractGateClears(r.fix_steps, cwd);
+        const toClear = (r.clear_gates || []).map((rel) => path.join(cwd, rel));
         const cleared = clearGates(toClear);
         // If a recipe exists but cleared nothing, next() will return the same
         // fix-and-retry unchanged. Halt immediately rather than burning retries.
@@ -674,4 +659,4 @@ async function run(opts = {}) {
   return summary;
 }
 
-module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, extractGateClears };
+module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd };

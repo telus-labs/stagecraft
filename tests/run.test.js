@@ -11,7 +11,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { run, extractGateClears } = require(path.join(REPO_ROOT, "core", "driver"));
+const { run } = require(path.join(REPO_ROOT, "core", "driver"));
 const { orderedStageNamesForTrack } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 
 let _dirs = [];
@@ -212,6 +212,7 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
       {
         action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
         blockers: ["backend test failing"],
+        clear_gates: ["pipeline/gates/stage-04.backend.json"],
         fix_steps: [{ description: "rebuild backend", commands: ["rm pipeline/gates/stage-04.backend.json", "devteam stage build --headless"] }],
       },
       { action: "run-stage", stage: "stage-04", name: "build" },
@@ -292,14 +293,14 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
 
   it("halts (structural-input) immediately when recipe targets gates that don't exist", async () => {
     const cwd = track(makeTargetProject());
-    // fix_steps names a gate file to rm, but the file is absent → clearGates returns []
+    // clear_gates names a gate that is absent → clearGates returns []
     // → toClear.length > 0 AND cleared.length === 0 → no progress possible → halt immediately.
     const s = await run({
       cwd,
       next: () => ({
         action: "fix-and-retry", stage: "stage-05", name: "peer-review", failure_class: "code-defect",
         blockers: [],
-        fix_steps: [{ description: "Clear merged gate", commands: ["rm pipeline/gates/stage-05.json"] }],
+        clear_gates: ["pipeline/gates/stage-05.json"],
       }),
     });
     assert.equal(s.halt_action, "fix-and-retry");
@@ -317,14 +318,24 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.equal(s.halt_failure_class, "state-corruption");
   });
 
-  it("extractGateClears pulls only pipeline/gates rm targets", () => {
-    const steps = [
-      { description: "x", commands: ["rm pipeline/gates/stage-04.backend.json", "devteam stage build --headless"] },
-      { description: "y", commands: ["rm -f pipeline/gates/stage-04.json"] },
-      { description: "z", commands: ["rm /etc/passwd"] }, // must NOT be picked up
-    ];
-    const got = extractGateClears(steps, "/proj");
-    assert.deepEqual(got, ["/proj/pipeline/gates/stage-04.backend.json", "/proj/pipeline/gates/stage-04.json"]);
+  it("fix_steps alone (no clear_gates) does not clear gates — no rm-parsing fallback", async () => {
+    // Verifies that fix-recipes migration is complete: clear_gates is the only
+    // machine-readable source; the driver no longer parses rm strings from fix_steps.
+    const cwd = track(makeTargetProject());
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.json");
+    fs.writeFileSync(victim, "{}");
+    const s = await run({
+      cwd,
+      next: () => ({
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: ["failing"],
+        fix_steps: [{ description: "clear gate", commands: ["rm pipeline/gates/stage-04.json"] }],
+        // no clear_gates — driver does not parse fix_steps for rm commands
+      }),
+    });
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+    assert.ok(fs.existsSync(victim), "fix_steps alone does not clear gates; clear_gates must be present");
   });
 });
 
