@@ -728,32 +728,6 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     // Once all stages are ported, the if-ladder below will be empty and removed.
   }
 
-  // Build merged (stage-04): find failing workstreams and patch
-  if (stage === "stage-04") {
-    const ws = _wsFromWorkstreams(gate).length
-      ? _wsFromWorkstreams(gate)
-      : _wsFromBlockers(gate);
-
-    const steps = [];
-    if (ws.length) {
-      steps.push({
-        description: `Clear failing workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
-        commands: _rmBuildGates(ws),
-      });
-    } else {
-      steps.push({
-        description: "Clear the merged build gate",
-        commands: ["rm pipeline/gates/stage-04.json"],
-      });
-    }
-    steps.push({
-      description: "Re-run build in patch mode",
-      commands: ["devteam stage build --patch --from build --skip-completed --headless"],
-    });
-    steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
-    return steps;
-  }
-
   // Peer review (stage-05): changes requested or quorum miss.
   //
   // We read the per-area gate files (stage-05.<area>.json) directly so we

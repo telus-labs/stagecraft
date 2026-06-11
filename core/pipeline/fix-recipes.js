@@ -198,6 +198,36 @@ register("stage-04c", (gate, ctx) => {
   return { clear_gates, steps };
 });
 
+// ── stage-04: build (merged gate) ────────────────────────────────────────────
+
+register("stage-04", (gate, _ctx) => {
+  const ws = _wsFromWorkstreams(gate).length
+    ? _wsFromWorkstreams(gate)
+    : _wsFromBlockers(gate);
+
+  let clear_gates;
+  const steps = [];
+  if (ws.length) {
+    clear_gates = buildGatePaths(ws);
+    steps.push({
+      description: `Clear failing workstream gate${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
+      commands: formatGateClear(clear_gates),
+    });
+  } else {
+    clear_gates = ["pipeline/gates/stage-04.json"];
+    steps.push({
+      description: "Clear the merged build gate",
+      commands: formatGateClear(clear_gates),
+    });
+  }
+  steps.push({
+    description: "Re-run build in patch mode",
+    commands: ["devteam stage build --patch --from build --skip-completed --headless"],
+  });
+  steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
+  return { clear_gates, steps };
+});
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function getRecipe(stageId) {
