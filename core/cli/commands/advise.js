@@ -34,13 +34,6 @@ async function run(positional, _flags) {
   // value when present (bare --apply exits 2 "requires a value" in the parser).
   let applyMap = new Map();
   if (_flags.apply) {
-    const CLASS_TO_ACTION = {
-      A11Y_FIX:         ["fix", "defer", "amend", "nothing"],
-      QA_BLOCKER:       ["scaffold", "defer", "amend", "nothing"],
-      PEER_REVIEW_RISK: ["defer", "nothing", "amend"],
-      QA_NOISE:         ["nothing", "known-flaky", "fix-now"],
-      INFO:             ["nothing", "defer"],
-    };
     for (const sel of String(_flags.apply).split(",")) {
       const [lhs, rhs = "A"] = sel.trim().split("=");
       const itemId = lhs.trim();

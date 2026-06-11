@@ -186,10 +186,8 @@ function run(positional, _flags) {
             continue;
           }
           // Read gate to surface FAIL/WARN without requiring a separate `devteam next`.
-          let gateStatus = null;
           try {
             const gate = JSON.parse(fs.readFileSync(r.gatePath, "utf8"));
-            gateStatus = gate.status;
             if (gate.status === "FAIL" || gate.status === "ESCALATE") {
               console.log(`  ✗ ${r.role} (${r.host}): ${agentStatus}${gateNote} [gate: ${gate.status}]`);
               const blockers = gate.blockers || gate.must_address_before_peer_review || [];

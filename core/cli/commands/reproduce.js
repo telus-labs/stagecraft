@@ -40,7 +40,7 @@ function run(positional, _flags) {
   try { gate = JSON.parse(fs.readFileSync(gateFile, "utf8")); }
   catch (err) { console.error(`Could not parse gate: ${err.message}`); process.exit(1); }
 
-  const { reproducibilityFingerprint, replayReadiness, compareFingerprints, hashSystemPrompt } =
+  const { reproducibilityFingerprint, replayReadiness, hashSystemPrompt } =
     require(path.join(__dirname, "..", "..", "reproducibility"));
 
   const fp = reproducibilityFingerprint(gate);
@@ -54,7 +54,6 @@ function run(positional, _flags) {
   let driftCheck = null;
   try {
     const { runStage } = require(path.join(__dirname, "..", "..", "orchestrator"));
-    const { getStage } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
     // Walk known stage names; pick the one whose stage field matches.
     const stages = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
     let stageName = null;
