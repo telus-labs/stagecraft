@@ -1,0 +1,201 @@
+// Tests for item 3.5: POSIX-only declaration + cheap correctness wins.
+//
+// Coverage:
+//   - warnIfWindows(platform) in doctor.js and init.js: emits on "win32", silent otherwise
+//   - findOnPath(bin, pathVar) in doctor.js: pure-Node PATH probe, no subprocess
+//   - runHeadless rejects on quoted DEVTEAM_HEADLESS_COMMAND
+//   - dispatchToPrincipal throws on quoted DEVTEAM_HEADLESS_COMMAND
+
+"use strict";
+
+const { describe, it, afterEach } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
+
+const { warnIfWindows: doctorWarn, findOnPath } =
+  require(path.join(REPO_ROOT, "core", "cli", "commands", "doctor"));
+const { warnIfWindows: initWarn } =
+  require(path.join(REPO_ROOT, "core", "cli", "commands", "init"));
+const { runHeadless } =
+  require(path.join(REPO_ROOT, "core", "adapters", "headless"));
+const { dispatchToPrincipal } =
+  require(path.join(REPO_ROOT, "core", "escalation"));
+
+let _dirs = [];
+function track(cwd) { _dirs.push(cwd); return cwd; }
+afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
+
+// ---------------------------------------------------------------------------
+// warnIfWindows
+// ---------------------------------------------------------------------------
+
+describe("warnIfWindows (doctor)", () => {
+  it("emits a WSL2 recommendation when platform is win32", () => {
+    const msgs = [];
+    doctorWarn("win32", (s) => msgs.push(s));
+    assert.equal(msgs.length, 1);
+    assert.match(msgs[0], /Warning/i);
+    assert.match(msgs[0], /WSL2/);
+    assert.match(msgs[0], /Windows/);
+  });
+
+  it("emits nothing when platform is linux", () => {
+    const msgs = [];
+    doctorWarn("linux", (s) => msgs.push(s));
+    assert.equal(msgs.length, 0);
+  });
+
+  it("emits nothing when platform is darwin", () => {
+    const msgs = [];
+    doctorWarn("darwin", (s) => msgs.push(s));
+    assert.equal(msgs.length, 0);
+  });
+});
+
+describe("warnIfWindows (init)", () => {
+  it("emits a WSL2 recommendation when platform is win32", () => {
+    const msgs = [];
+    initWarn("win32", (s) => msgs.push(s));
+    assert.equal(msgs.length, 1);
+    assert.match(msgs[0], /Warning/i);
+    assert.match(msgs[0], /WSL2/);
+  });
+
+  it("emits nothing when platform is not win32", () => {
+    const msgs = [];
+    initWarn("darwin", (s) => msgs.push(s));
+    assert.equal(msgs.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// findOnPath — pure-Node PATH probe
+// ---------------------------------------------------------------------------
+
+describe("findOnPath", () => {
+  it("finds a binary in a custom pathVar directory", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir);
+    const bin = path.join(dir, "my-fake-bin");
+    fs.writeFileSync(bin, "#!/bin/sh\n");
+    fs.chmodSync(bin, 0o755);
+    const found = findOnPath("my-fake-bin", dir);
+    assert.equal(found, bin);
+  });
+
+  it("returns null when the binary is not in pathVar", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir);
+    const found = findOnPath("definitely-not-a-real-binary-xyz", dir);
+    assert.equal(found, null);
+  });
+
+  it("returns null for an empty pathVar", () => {
+    const found = findOnPath("node", "");
+    assert.equal(found, null);
+  });
+
+  it("finds a binary across multiple colon-separated dirs", () => {
+    const dir1 = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir1, dir2);
+    const bin = path.join(dir2, "multi-dir-bin");
+    fs.writeFileSync(bin, "#!/bin/sh\n");
+    fs.chmodSync(bin, 0o755);
+    const found = findOnPath("multi-dir-bin", `${dir1}${path.delimiter}${dir2}`);
+    assert.equal(found, bin);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// headless.js — quote guard
+// ---------------------------------------------------------------------------
+
+describe("runHeadless: quote guard", () => {
+  function makeAdapter({ headlessCommand = "true", name = "test-host" } = {}) {
+    return {
+      capabilities: { name, headlessCommand },
+      renderStagePrompt: () => "prompt\n",
+    };
+  }
+
+  function makeCtx() {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+    _dirs.push(cwd);
+    return { track: "full", feature: "test", cwd, isolation: "in-place", log: false };
+  }
+
+  function makeDescriptor() {
+    return { stage: "stage-01", workstreamId: "stage-01", allowedWrites: [] };
+  }
+
+  it("rejects with a clear message when headlessCommand contains single quotes", async () => {
+    const ctx = makeCtx();
+    const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
+    process.env.DEVTEAM_HEADLESS_COMMAND = "claude '--print'";
+    try {
+      await assert.rejects(
+        () => runHeadless(makeAdapter(), makeDescriptor(), ctx),
+        /quote characters/,
+      );
+    } finally {
+      if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
+    }
+  });
+
+  it("rejects with a clear message when headlessCommand contains double quotes", async () => {
+    const ctx = makeCtx();
+    const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
+    process.env.DEVTEAM_HEADLESS_COMMAND = `claude "--print"`;
+    try {
+      await assert.rejects(
+        () => runHeadless(makeAdapter(), makeDescriptor(), ctx),
+        /quote characters/,
+      );
+    } finally {
+      if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
+    }
+  });
+
+  it("does not reject a plain command with no quotes", async () => {
+    const ctx = makeCtx();
+    const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
+    process.env.DEVTEAM_HEADLESS_COMMAND = "true";
+    try {
+      const r = await runHeadless(makeAdapter(), makeDescriptor(), ctx);
+      assert.equal(r.exitCode, 0);
+    } finally {
+      if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// escalation.js — quote guard in dispatchToPrincipal
+// ---------------------------------------------------------------------------
+
+describe("dispatchToPrincipal: quote guard", () => {
+  it("throws with a clear message when DEVTEAM_HEADLESS_COMMAND contains quotes", () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n",
+    }));
+    const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
+    process.env.DEVTEAM_HEADLESS_COMMAND = `claude "--print"`;
+    try {
+      assert.throws(
+        () => dispatchToPrincipal(cwd, "prompt"),
+        /quote characters/,
+      );
+    } finally {
+      if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
+    }
+  });
+});

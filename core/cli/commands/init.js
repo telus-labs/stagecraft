@@ -8,6 +8,16 @@ const { writeConfigIfAbsent, configPath } = require(path.join(__dirname, "..", "
 
 const name = "init";
 
+// Exported for direct unit-testing without spawning a subprocess.
+function warnIfWindows(platform, write) {
+  if (platform !== "win32") return;
+  (write || process.stderr.write.bind(process.stderr))(
+    "⚠️  Warning: Stagecraft is not supported on native Windows.\n" +
+    "   Please run inside WSL2 (Windows Subsystem for Linux 2).\n" +
+    "   See: https://learn.microsoft.com/en-us/windows/wsl/install\n",
+  );
+}
+
 const flags = {
   host:  { type: "string",  description: "Host adapter(s), comma-separated" },
   force: { type: "boolean", description: "Overwrite existing config/files" },
@@ -17,6 +27,7 @@ const flags = {
 
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam init --host <list> [options]", flags)); process.exit(0); }
+  warnIfWindows(process.platform);
   if (!_flags.host) {
     console.error(generateHelp("devteam init --host <list> [options]", flags));
     console.error(`Available hosts: ${listHosts().join(", ") || "(none)"}`);
@@ -61,4 +72,4 @@ function run(positional, _flags) {
   console.log(`\nNext: edit ${path.relative(cwd, configPath(cwd))} if you need custom routing, then \`devteam stage requirements --feature "..."\`.`);
 }
 
-module.exports = { name, flags, run };
+module.exports = { name, flags, run, warnIfWindows };

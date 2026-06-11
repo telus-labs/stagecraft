@@ -45,6 +45,10 @@ Two distinct places:
 
 You can drive many target projects from one framework install. Updating the framework (`git pull`) updates every target on its next `devteam init --force`.
 
+### Does this run on Windows?
+
+Not natively. Stagecraft is macOS/Linux only for now. Three things break on bare Windows: `devteam doctor` probes the PATH using POSIX conventions, the headless command splitter assumes POSIX argument quoting, and fix-step commands contain POSIX `rm` strings. If you're on Windows, run Stagecraft inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) — it works without any special configuration. Native Windows support is tracked in `docs/BACKLOG.md` (item A6) if there's demand and someone wants to port it.
+
 ### Can I run this without Node?
 
 No. The CLI, orchestrator, validator, and hooks are all Node. The host CLIs (`claude`, `codex`) can be whatever they're written in; the framework just calls them.

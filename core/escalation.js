@@ -346,6 +346,14 @@ function dispatchToPrincipal(cwd, prompt, { label = "principal" } = {}) {
   const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND || adapter.capabilities.headlessCommand;
   if (!cmdString) throw new Error(`Host "${host}" declares no headlessCommand.`);
 
+  // Guard: quoted segments would be mis-split by the naive whitespace split below.
+  if (/['"]/.test(cmdString)) {
+    throw new Error(
+      `headlessCommand "${cmdString}" contains quote characters. ` +
+      "Stagecraft does not support shell quoting in headless commands — " +
+      "use an unquoted binary name or set DEVTEAM_HEADLESS_COMMAND to a single token.",
+    );
+  }
   const { spawn } = require("node:child_process");
   const [bin, ...args] = cmdString.split(/\s+/);
   process.stderr.write(`[devteam] dispatching ${label} → ${host} (headless)\n`);
