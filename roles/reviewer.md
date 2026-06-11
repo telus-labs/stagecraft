@@ -63,7 +63,7 @@ REVIEW: APPROVED
 
 The `approval-derivation.js` script parses each `## Review of <area>` section
 plus its trailing `REVIEW:` marker and updates the corresponding
-`stage-05-<area>.json` gate. Known areas: `backend`, `frontend`, `platform`,
+`stage-05.<area>.json` gate. Known areas: `backend`, `frontend`, `platform`,
 `qa`, `deps`.
 
 In **scoped** review mode (`review_shape: "scoped"` on the gate, set by the

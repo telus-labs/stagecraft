@@ -1,24 +1,10 @@
 [
-  "gate-filename:roles/backend.md:stage-04-backend.json",
-  "gate-filename:roles/backend.md:stage-05-placeholder.json",
-  "gate-filename:roles/frontend.md:stage-04-frontend.json",
-  "gate-filename:roles/frontend.md:stage-05-placeholder.json",
-  "gate-filename:roles/platform.md:stage-04-platform.json",
-  "gate-filename:roles/qa.md:stage-05-placeholder.json",
-  "gate-filename:roles/reviewer.md:stage-05-placeholder.json",
-  "gate-filename:roles/security.md:stage-04a-security.json",
-  "gate-filename:rules/gates.md:stage-05-backend.json",
-  "gate-filename:rules/stage-04.md:stage-04-placeholder.json",
-  "gate-filename:rules/stage-04a.md:stage-04-pre-review.json",
-  "gate-filename:rules/stage-04b.md:stage-04-security.json",
-  "gate-filename:rules/stage-05.md:stage-05-placeholder.json",
   "npm-run:roles/frontend.md:dev",
   "npm-run:roles/platform.md:type-check",
   "npm-run:roles/reviewer.md:review:derive",
   "ref-existence:roles/principal.md:rules/roles.md",
   "ref-existence:roles/security.md:core/skills/security-checklist/SKILL.md",
   "ref-existence:rules/orchestrator.md:bootstrap.sh",
-  "ref-existence:rules/stage-04a.md:roles/dev-platform.md",
   "ref-existence:skills/audit/SKILL.md:docs/audit-extensions.md",
   "ref-existence:skills/pre-pr-review/SKILL.md:core/skills/code-conventions/SKILL.md",
   "ref-existence:skills/pre-pr-review/SKILL.md:core/skills/security-checklist/SKILL.md",
@@ -84,5 +70,5 @@
   "stage-rule-file:stage-06d",
   "stage-rule-file:stage-06e",
   "track-count:rules/pipeline-tracks.md:Four tracks",
-  "track-list:rules/gates.md:missing-nano+dep-update+hotfix:L479"
+  "track-list:rules/gates.md:missing-nano+dep-update+hotfix:L480"
 ]

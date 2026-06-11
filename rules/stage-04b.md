@@ -24,7 +24,7 @@ If the heuristic does not fire, the security gate is skipped and the
 orchestrator records the skip decision in `pipeline/context.md` under
 `## Brief Changes` as `SECURITY-SKIP: <reason>`.
 
-Output: `pipeline/gates/stage-04-security.json`.
+Output: `pipeline/gates/stage-04b.json`.
 Gate key: `"status": "PASS"` with `"security_approved": true` and
 `"veto": false`.
 

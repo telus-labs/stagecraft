@@ -71,7 +71,7 @@ Before build, test, or review work, read:
      `curl -i` response, a health-check status. Not "infra is set up." A PASS
      gate whose `## Verify` is empty, missing, or lists ACs you didn't
      actually exercise is invalid and will be flagged at peer review.
-6. Write `pipeline/gates/stage-04-platform.json` with `"status": "PASS"`. PASS
+6. Write `pipeline/gates/stage-04.platform.json` with `"status": "PASS"`. PASS
    is only honest when every AC has a `## Verify` bullet with a real command
    and a real observed output. If even one AC is unverified, the right status
    is FAIL or escalate back to the PM for clarification — not PASS.

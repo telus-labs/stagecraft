@@ -41,7 +41,7 @@ How each gate type derives the value:
 | `stage-05` merged (peer-review) | Area gates where `changes_requested` is non-empty | `devteam merge peer-review` derives at merge time |
 
 `stage-05` per-area gates do not need this field — the area name *is* the
-attribution (a `stage-05-backend.json` FAIL means the backend workstream must
+attribution (a `stage-05.backend.json` FAIL means the backend workstream must
 fix). The merged gate's `affected_workstreams[]` covers the stage manager need for
 that stage.
 
@@ -208,10 +208,10 @@ not recorded.
 Runs after all Stage 4 area gates pass and before Stage 5 peer review
 starts. See `roles/platform.md` §"On a Pre-Review Task".
 
-### Stage 04a-security (Security review, conditional)
+### Stage 04b (Security review, conditional)
 ```json
 {
-  "stage": "stage-04a-security",
+  "stage": "stage-04b",
   "workstream": "security",
   "status": "PASS | FAIL",
   "security_approved": true | false,
@@ -220,10 +220,11 @@ starts. See `roles/platform.md` §"On a Pre-Review Task".
 }
 ```
 
-Written only when the heuristic in `.devteam/rules/pipeline.md` Stage
-4.5b fires. A `veto: true` gate halts the pipeline regardless of other
-gates — the security-engineer must personally re-review the fix and
-flip the flag. Peer-review approvals cannot override a veto.
+Written only when the heuristic in `roles/security.md` fires (set by
+stage-04a's `security_review_required` flag). A `veto: true` gate halts
+the pipeline regardless of other gates — the security-engineer must
+personally re-review the fix and flip the flag. Peer-review approvals
+cannot override a veto.
 
 When the heuristic does not fire, no gate file is written. The
 orchestrator records the skip decision in `pipeline/context.md` under

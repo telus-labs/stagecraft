@@ -285,7 +285,7 @@ REVIEW: CHANGES REQUESTED
 BLOCKER: <text>
 ```
 
-The script parses each section and updates `stage-05-<area>.json`. In scoped
+The script parses each section and updates `stage-05.<area>.json`. In scoped
 review mode you write one section; in matrix mode, two. Known areas:
 `backend`, `frontend`, `platform`, `qa`, `deps`.
 

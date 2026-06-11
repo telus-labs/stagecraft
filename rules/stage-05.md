@@ -14,7 +14,7 @@ with no cross-area edits. One reviewer from a different area is
 sufficient. The pairing uses the same cross-area convention as `/quick`.
 
 **Gate pre-creation (required for scoped reviews).** Before invoking the
-reviewer, the orchestrator must write `pipeline/gates/stage-05-{area}.json`
+reviewer, the orchestrator must write `pipeline/gates/stage-05.{area}.json`
 with `"required_approvals": 1` and `"review_shape": "scoped"`. The
 `approval-derivation.js` hook defaults newly-created gates to
 `required_approvals: 2`. If the gate doesn't pre-exist with the correct
@@ -95,7 +95,7 @@ BLOCKER: <text>
 
 The `approval-derivation.js` hook (registered as PostToolUse on
 Write/Edit in `.devteam/settings.json`) parses these sections after the
-reviewer writes the file and updates `pipeline/gates/stage-05-<area>.json`
+reviewer writes the file and updates `pipeline/gates/stage-05.<area>.json`
 accordingly. **Agents no longer author the `approvals` or
 `changes_requested` fields directly** — that path was how v1/v2 let
 reviewers effectively approve themselves. The hook is the single
@@ -128,7 +128,7 @@ clears the array.
 
 During a Stage 5 review invocation, a reviewer agent writes ONLY to:
   - `pipeline/code-review/by-{reviewer}.md` (their review file)
-  - `pipeline/gates/stage-05-{area}.json` (append-only approval gate)
+  - `pipeline/gates/stage-05.{area}.json` (append-only approval gate)
 
 A reviewer agent MUST NOT:
   - Use `Write` or `Edit` on any file under `src/`
@@ -148,7 +148,7 @@ bug, no reviewer is assigned to catch it.
 
 ### Gate merge strategy (hook-derived)
 
-Each area gate (`pipeline/gates/stage-05-{area}.json`) accumulates
+Each area gate (`pipeline/gates/stage-05.{area}.json`) accumulates
 approvals via `approval-derivation.js`, not via agent self-write. The
 gate reaches `"status": "PASS"` when:
 
