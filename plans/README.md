@@ -6,15 +6,16 @@ written to be executed by Claude (Sonnet) one item at a time.
 
 | Phase | Plan | Prompts | Theme | Gate to start |
 |---|---|---|---|---|
-| 1 | [phase-1-trust-consolidation.md](phase-1-trust-consolidation.md) | [prompts](prompts/phase-1-prompts.md) | Safety gaps in the autonomous path + verified CLI bugs | none — start here |
-| 2 | [phase-2-consistency-and-docs.md](phase-2-consistency-and-docs.md) | [prompts](prompts/phase-2-prompts.md) | Make prose/code drift mechanically impossible; release | Phase 1 items 1.1–1.5 merged |
-| 3 | [phase-3-structural-debt.md](phase-3-structural-debt.md) | [prompts](prompts/phase-3-prompts.md) | bin/devteam split, fix-steps registry, dependency & portability decisions | Phase 2 item 2.1 merged (consistency checker protects the refactor) |
-| 4 | [phase-4-capability-roadmap.md](phase-4-capability-roadmap.md) | [prompts](prompts/phase-4-prompts.md) | Resume planned capability work (G10, convergence, G3, H3 pre-work) | Phases 1–2 complete |
-| Docs | [documentation-plan.md](documentation-plan.md) | [prompts](prompts/docs-prompts.md) | Documentation system: audience paths, generated reference, token budgets | D1 (= Phase 2) done; see its sequencing table |
+| 1 | [phase-1-trust-consolidation.md](phase-1-trust-consolidation.md) | [prompts](prompts/ALL-PROMPTS.md) | Safety gaps in the autonomous path + verified CLI bugs | none — start here |
+| 2 | [phase-2-consistency-and-docs.md](phase-2-consistency-and-docs.md) | [prompts](prompts/ALL-PROMPTS.md) | Make prose/code drift mechanically impossible; release | Phase 1 items 1.1–1.5 merged |
+| 3 | [phase-3-structural-debt.md](phase-3-structural-debt.md) | [prompts](prompts/ALL-PROMPTS.md) | bin/devteam split, fix-steps registry, dependency & portability decisions | Phase 2 item 2.1 merged (consistency checker protects the refactor) |
+| 4 | [phase-4-capability-roadmap.md](phase-4-capability-roadmap.md) | [prompts](prompts/ALL-PROMPTS.md) | Resume planned capability work (G10, convergence, G3, H3 pre-work) | Phases 1–2 complete |
+| Docs | [documentation-plan.md](documentation-plan.md) | [prompts](prompts/ALL-PROMPTS.md) | Documentation system: audience paths, generated reference, token budgets | D1 (= Phase 2) done; see its sequencing table |
 
-**Executing with Sonnet:** every work item has an exact paste-ready prompt under
-[prompts/](prompts/README.md). Paste the shared PREAMBLE from prompts/README.md, then the
-item prompt, into a fresh Sonnet session — one item per session per branch.
+**Executing with Sonnet:** every work item has an exact paste-ready prompt in
+[prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status
+chips). Paste its §0 PREAMBLE plus the item prompt into a fresh Sonnet session — one
+item per session per branch.
 
 ## How to run these with Sonnet
 
