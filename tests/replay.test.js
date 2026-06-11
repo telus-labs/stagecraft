@@ -177,3 +177,124 @@ test("real replay: when the headless command writes a gate, replay writes to rep
   const restored = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-01.json"), "utf8"));
   assert.equal(restored.cost_usd, 0.05, "original gate should be restored");
 });
+
+// ── Part B: disk-based backup / restore (3.7.4 race fix) ─────────────────────
+
+test("backup file exists in .replay-backup/ during headless dispatch", () => {
+  // The headless command checks for the backup mid-run and records its
+  // finding in a sentinel file. We verify the backup existed before the
+  // gate was (re)written — confirming the snapshot happens before dispatch.
+  const cwd = track(makeTargetProject({
+    config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n",
+  }));
+  seedGate(cwd, "stage-01", {
+    workstream: "pm",
+    host: "claude-code",
+    status: "PASS",
+    model: "claude-opus-4-7",
+    cost_usd: 0.05,
+  });
+
+  // Sentinel: the fake host writes "true" or "false" here.
+  const sentinelPath = path.join(cwd, "backup-check.txt");
+  const fakeGate = JSON.stringify({
+    stage: "stage-01", workstream: "pm", host: "claude-code",
+    orchestrator: "devteam@test", track: "full",
+    timestamp: "2026-06-01T00:00:00Z", blockers: [], warnings: [],
+    status: "PASS", model: "claude-opus-4-7", cost_usd: 0.06,
+  });
+  const writerPath = path.join(cwd, "fake-host-backup-check.js");
+  fs.writeFileSync(writerPath, `
+const fs = require("node:fs");
+const path = require("node:path");
+const gatesDir = path.join(process.cwd(), "pipeline", "gates");
+const backupDir = path.join(gatesDir, ".replay-backup");
+const backupExists = fs.existsSync(backupDir) &&
+  fs.readdirSync(backupDir).some(f => f.endsWith(".json"));
+fs.writeFileSync(${JSON.stringify(sentinelPath)}, String(backupExists));
+fs.mkdirSync(gatesDir, { recursive: true });
+fs.writeFileSync(path.join(gatesDir, "stage-01.json"), ${JSON.stringify(fakeGate)});
+`);
+
+  const r = runCLI(["replay", "stage-01"], {
+    cwd,
+    env: { ...process.env, DEVTEAM_HEADLESS_COMMAND: `node ${writerPath}`, DEVTEAM_NO_LOG: "1" },
+  });
+  assert.equal(r.status, 0, `replay failed: ${r.stderr}\n---\n${r.stdout}`);
+  assert.ok(fs.existsSync(sentinelPath), "sentinel file was not written by fake host");
+  assert.equal(
+    fs.readFileSync(sentinelPath, "utf8"),
+    "true",
+    "backup did not exist during dispatch — snapshot-before-dispatch guarantee violated",
+  );
+});
+
+test("backup is deleted on successful replay (no leftover after clean run)", () => {
+  const cwd = track(makeTargetProject({
+    config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n",
+  }));
+  seedGate(cwd, "stage-01", {
+    workstream: "pm", host: "claude-code", status: "PASS", model: "claude-opus-4-7", cost_usd: 0.05,
+  });
+
+  const fakeGate = JSON.stringify({
+    stage: "stage-01", workstream: "pm", host: "claude-code",
+    orchestrator: "devteam@test", track: "full",
+    timestamp: "2026-06-01T00:00:00Z", blockers: [], warnings: [],
+    status: "PASS", model: "claude-opus-4-7", cost_usd: 0.07,
+  });
+  const writerPath = path.join(cwd, "fake-host-success.js");
+  fs.writeFileSync(writerPath, `
+const fs = require("node:fs");
+const path = require("node:path");
+const gatesDir = path.join(process.cwd(), "pipeline", "gates");
+fs.mkdirSync(gatesDir, { recursive: true });
+fs.writeFileSync(path.join(gatesDir, "stage-01.json"), ${JSON.stringify(fakeGate)});
+`);
+
+  const r = runCLI(["replay", "stage-01"], {
+    cwd,
+    env: { ...process.env, DEVTEAM_HEADLESS_COMMAND: `node ${writerPath}`, DEVTEAM_NO_LOG: "1" },
+  });
+  assert.equal(r.status, 0, `replay failed: ${r.stderr}\n---\n${r.stdout}`);
+
+  // Backup directory must be gone (or empty) after a clean run.
+  const backupDir = path.join(cwd, "pipeline", "gates", ".replay-backup");
+  if (fs.existsSync(backupDir)) {
+    const leftovers = fs.readdirSync(backupDir).filter((n) => n.endsWith(".json"));
+    assert.equal(leftovers.length, 0, `backup files remain after successful replay: ${leftovers.join(", ")}`);
+  }
+
+  // Original gate still restored.
+  const restored = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-01.json"), "utf8"));
+  assert.equal(restored.cost_usd, 0.05, "original gate should be restored after successful replay");
+});
+
+test("leftover backup from crashed replay triggers warning and non-zero exit", () => {
+  // Simulate a previous crash: the backup exists but the original was
+  // already overwritten. On the next replay invocation, devteam must warn
+  // and exit 1 before doing any new dispatch.
+  const cwd = track(makeTargetProject({
+    config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n",
+  }));
+  seedGate(cwd, "stage-01", {
+    workstream: "pm", host: "claude-code", status: "PASS", model: "claude-opus-4-7",
+    system_prompt_hash: `sha256:${"a".repeat(64)}`,
+  });
+
+  // Plant a leftover backup as if a previous replay crashed mid-run.
+  const backupDir = path.join(cwd, "pipeline", "gates", ".replay-backup");
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(backupDir, "stage-01.json"),
+    JSON.stringify({ stage: "stage-01", status: "PASS", _note: "leftover-backup" }),
+  );
+
+  const r = runCLI(["replay", "stage-01"], { cwd });
+  assert.notEqual(r.status, 0, "should exit non-zero when leftover backup detected");
+  assert.match(
+    r.stderr,
+    /leftover backup|crashed replay|WARNING/i,
+    "should warn about leftover backup in stderr",
+  );
+});
