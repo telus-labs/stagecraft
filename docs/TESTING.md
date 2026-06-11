@@ -31,7 +31,7 @@ node --experimental-test-coverage --test tests/*.test.js
 | `approval-derivation.test.js` | Stage 5 PostToolUse hook: section + `REVIEW:` marker → verdict, upserts gate, PASS only with approvals ≥ required AND no changes_requested. Lock acquisition under contention. |
 | `stoplist.test.js` | Phrase matching across the guarded tracks; bypass requires explicit flag. |
 | `security-heuristic.test.js` | Stage 4b trigger paths fire on sensitive files; safe paths don't false-positive. |
-| `tracks.test.js` | `orderedStageNamesForTrack(track)` returns the right list per track; unknown → throws; nano excludes most stages; full has all 17. |
+| `tracks.test.js` | `orderedStageNamesForTrack(track)` returns the right list per track; unknown → throws; nano excludes most stages; full has all 18. |
 | `schemas.test.js` | Each `stage-NN.schema.json` is a valid JSON Schema 2020-12; example gates in `rules/gates.md` validate against their declared schema. |
 | `cli.test.js` | `bin/devteam` exit codes for known/unknown commands; `--json` outputs valid JSON; `--cwd` honored uniformly. |
 | `observability.test.js` | OpenTelemetry spans emitted at every instrumented call site, with expected attributes, via `InMemorySpanExporter`. |

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Stagecraft is a model-agnostic AI dev-team pipeline orchestrator. It installs role briefs, slash commands, hooks, and rules into a target project, then orchestrates a 17-stage software-development pipeline across one or more AI coding tools (Claude Code, Codex CLI, Gemini CLI, generic). It also ships a codebase audit feature — which is what's producing this very document.
+Stagecraft is a model-agnostic AI dev-team pipeline orchestrator. It installs role briefs, hooks, and rules into a target project, then orchestrates an 18-stage software-development pipeline across one or more AI coding tools (Claude Code, Codex CLI, Gemini CLI, generic). It also ships a codebase audit feature — which is what's producing this very document.
 
 This is the **second self-audit** — Stagecraft auditing itself, six days after the first dogfood run on 2026-05-28. The prior audit's full output is preserved at `docs/audit-archive/2026-05-28-v0.4.0-initial-dogfood/`. Phase 3 of this audit will carry forward unresolved items from that backlog (per the new audit skill § 3.1 rule).
 

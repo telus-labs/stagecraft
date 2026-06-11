@@ -159,5 +159,5 @@ The five things that hold up cleanly across the host boundary:
 ## See also
 
 - [`core/adapters/host-adapter.md`](../../core/adapters/host-adapter.md) — the contract every adapter implements.
-- [`docs/walkthroughs/soc2-evidence-collector.md`](soc2-evidence-collector.md) — full 17-stage pipeline trace on a non-trivial feature (single-host).
+- [`docs/walkthroughs/soc2-evidence-collector.md`](soc2-evidence-collector.md) — full 18-stage pipeline trace on a non-trivial feature (single-host).
 - [`examples/sms-opt-in/`](../../examples/sms-opt-in/) — the gate files referenced in this trace, on disk.

@@ -32,7 +32,7 @@ A typical `full`-track run touches every primitive:
 3. The model writes `pipeline/brief.md` (the artifact) and `pipeline/gates/stage-01.json` (the **gate**) with `status: "PASS"`.
 4. You run **`devteam next`**. It reads the gate, sees PASS, and reports `▶️ run-stage — design (stage-02)`.
 5. Two stages later you hit **stage-04 build**: 4 workstreams (backend / frontend / platform / qa), each potentially dispatched to a different host depending on routing. Each writes its own per-workstream gate (`pipeline/gates/stage-04.backend.json` etc.). `devteam merge build` aggregates them into the stage gate.
-6. The **track** you picked (`full`) is what put all 17 stages on the menu. Picking `nano` would skip everything except build + a scoped peer-review (1 reviewer) + qa.
+6. The **track** you picked (`full`) is what put all 18 stages on the menu. Picking `nano` would skip everything except build + a scoped peer-review (1 reviewer) + qa.
 
 The whole pipeline is reconstructable from `pipeline/gates/`. The orchestrator never holds state outside of those files.
 

@@ -72,7 +72,7 @@ Use the highest-risk read that applies:
 | Feature touching multiple services or adding new external dependencies | `full` |
 | Feature with auth, PII, schema migration, or security implications | `full` + run security review regardless of pre-review flag |
 
-When in doubt, `full`. The cost of a falsely-skipped stage is usually higher than the cost of running an unnecessary one. `devteam next` skips stages that aren't needed (conditional stages) automatically, so `full` doesn't mean you always run all 17 manually.
+When in doubt, `full`. The cost of a falsely-skipped stage is usually higher than the cost of running an unnecessary one. `devteam next` skips stages that aren't needed (conditional stages) automatically, so `full` doesn't mean you always run all 18 manually.
 
 ### Can I run multiple features through the pipeline simultaneously?
 
@@ -590,7 +590,7 @@ BACKLOG A3 covers this — a "cloud-runner" adapter that ships the stage to a re
 
 ## Auditing past runs
 
-### If I need to prove a feature went through all 17 gates, what do I show an auditor?
+### If I need to prove a feature went through all 18 gates, what do I show an auditor?
 
 Three things, all in git if you committed `pipeline/`:
 

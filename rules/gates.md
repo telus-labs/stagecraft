@@ -477,8 +477,7 @@ When `devteam run --auto-rule` autonomously resolves an escalation, it also writ
 ## Track field
 
 Every gate should carry a `"track"` field identifying which pipeline
-track the gate belongs to. Valid values: `full`, `quick`, `config-only`,
-`dep-update`, `hotfix`.
+track the gate belongs to. Valid values: `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`.
 
 ```json
 { "track": "full" }

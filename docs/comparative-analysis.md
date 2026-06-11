@@ -120,7 +120,7 @@ Stagecraft treats software delivery as an industrial assembly line: up to 18 seq
 
 **Legacy specialization.** Agent OS is the framework here you'd reach for when Stagecraft, BMAD, or Spec Kit feels too heavy. It doesn't impose stages or roles; it just keeps your AI-assisted work consistent with patterns that already exist in your codebase. Low friction threshold, low ceiling.
 
-**Comparison to Stagecraft.** Different philosophy entirely. Stagecraft is **prescriptive** about the shape of work (17 stages, gates, role-by-area review matrix). Agent OS is **descriptive** about the style of work (extract what you already do, inject it back). Natural pairing: Agent OS feeding Stagecraft's per-stage prompts and role briefs with project-specific conventions. Stagecraft today has `docs/conventions.md` (a marker catalogue) and per-host rules in `rules/`. An Agent OS-style "discover" pass could populate or refresh those.
+**Comparison to Stagecraft.** Different philosophy entirely. Stagecraft is **prescriptive** about the shape of work (18 stages, gates, role-by-area review matrix). Agent OS is **descriptive** about the style of work (extract what you already do, inject it back). Natural pairing: Agent OS feeding Stagecraft's per-stage prompts and role briefs with project-specific conventions. Stagecraft today has `docs/conventions.md` (a marker catalogue) and per-host rules in `rules/`. An Agent OS-style "discover" pass could populate or refresh those.
 
 ### 3.5 OpenSpec
 
@@ -186,7 +186,7 @@ Spec Kit's flow stops at Implementation. OpenSpec's spec deltas don't prescribe 
 
 ### 4.2 Three honest cases where Stagecraft is *not* the best fit
 
-1. **Solo developer / small personal project.** Use **Agent OS** for convention consistency. The 17-stage pipeline is overkill below team-of-three scale.
+1. **Solo developer / small personal project.** Use **Agent OS** for convention consistency. The 18-stage pipeline is overkill below team-of-three scale.
 2. **Greenfield product where the spec is the long-term asset.** Use **Spec Kit** or **OpenSpec**. Stagecraft can be made to work (brief.md is the spec) but its center of gravity is the gate, not the spec.
 3. **Teams already deep in the AWS / Bedrock ecosystem.** Use **AWS Kiro** + **AI-DLC**. Kiro's autonomous-agent + steering-files + Agent Hooks model integrates more tightly than anything Stagecraft offers, and AI-DLC layers compliance / audit on top.
 

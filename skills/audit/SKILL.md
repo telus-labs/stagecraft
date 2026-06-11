@@ -5,7 +5,7 @@ description: "Run a structured codebase audit — map architecture, assess healt
 
 # Audit a Codebase
 
-A four-phase analysis pass over an existing codebase. Different from Stagecraft's 13-stage *pipeline* — the pipeline builds features through staged production; an **audit** is read-only analysis of code that already exists. The output is a prioritized roadmap, not a deployable change.
+A four-phase analysis pass over an existing codebase. Different from Stagecraft's 18-stage *pipeline* — the pipeline builds features through staged production; an **audit** is read-only analysis of code that already exists. The output is a prioritized roadmap, not a deployable change.
 
 ## When to use this vs the pipeline
 

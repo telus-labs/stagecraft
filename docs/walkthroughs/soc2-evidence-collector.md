@@ -475,7 +475,7 @@ For a SOC 2 tool specifically, this answers the auditor question: *how was this 
 
 ## See also
 
-- [`EXAMPLE.md`](../../EXAMPLE.md) — the canonical pipeline walkthrough (simpler feature, all 17 stages traced)
+- [`EXAMPLE.md`](../../EXAMPLE.md) — the canonical pipeline walkthrough (simpler feature, all 18 stages traced)
 - [`docs/user-guide.md`](../user-guide.md) — daily reference: tracks, multi-host, headless mode
 - [`docs/verification-beyond-tests.md`](../verification-beyond-tests.md) — property-based, mutation, and formal verification
 - [`docs/red-team.md`](../red-team.md) — the 10 attack surfaces and gate fields
