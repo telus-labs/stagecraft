@@ -110,9 +110,13 @@ consequences, and stops there for you.
   failures as `transient` (retry with backoff) or `structural-input` (halt) from
   the exit code and output shape. Edge cases can mis-classify — inspect
   `run-log.jsonl` if the driver retries something that shouldn't be retried.
-- **Convergence is count-based.** The driver-side ceiling counts re-dispatches;
-  true progress-based detection (blocker counts decreasing) is not yet
-  implemented.
+- **Convergence is progress-based (Phase 4.2).** Both `devteam run` and
+  `devteam next` detect a stuck agent by comparing the blocker sets of the last
+  two archived attempts: if they are identical the breaker trips and escalates
+  with evidence (`"blocker 'X' identical across attempts 1,2"`). A count-based
+  ceiling (`autonomy.max_retries`, default 2) is the backstop for the first
+  retry, before two archives exist to compare. The `no_progress_evidence` field
+  in `run-log.jsonl` carries the operator-readable evidence when this fires.
 - **Budget is retrospective.** The cap blocks the *next* dispatch; a single
   expensive stage can overshoot it.
 - **Lock is advisory.** `devteam run` holds the lock, but other mutating

@@ -20,6 +20,7 @@ const { loadGateSafe } = require("./gates/load-gate");
 const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
 const { pricingFor } = require("./pricing");
 const { getRecipe } = require("./pipeline/fix-recipes");
+const { detectNoProgress, countArchivedAttempts, noProgressEvidence } = require("./gates/convergence");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -792,20 +793,37 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
     if (gate.status === "FAIL") {
       const { clear_gates, steps: fix_steps } = getRecipe(stageDef.stage).diagnose(gate, { gatesDir, stageDef });
 
-      // Convergence ceiling (ADR-003 / H1). When the gate has already been
-      // retried up to the budget and is still FAIL, stop returning
-      // fix-and-retry and escalate for a ruling instead — re-running the same
-      // stage that hasn't converged just burns work. This is a count-based
-      // ceiling on retry_number; progress-based detection is a follow-up
-      // (needs gate archiving to compare blocker counts across attempts).
-      const retryNumber = typeof gate.retry_number === "number" ? gate.retry_number : 0;
-      if (retryNumber >= maxRetries) {
+      // Convergence ceiling (ADR-003 / H1 + 4.2).
+      //
+      // Use archive-based attempt count (agent-independent) instead of the
+      // model-written gate.retry_number — removes an agent-falsifiable input
+      // from the convergence decision on the interactive path (4.2 spec).
+      //
+      // Progress-based check runs first: if the last two archived attempts carry
+      // identical non-empty blocker sets the breaker trips immediately, even
+      // before the count ceiling is reached. This catches a stuck agent that
+      // keeps writing the same FAIL without making forward progress.
+      const archiveCount = countArchivedAttempts(gatesDir, stageDef.stage);
+      const progress = detectNoProgress(gatesDir, stageDef.stage);
+      if (progress.noProgress) {
+        const evidence = noProgressEvidence(progress.stuckBlockers, progress.attempts);
         return {
           action: "resolve-escalation", stage: stageDef.stage, name: stageName,
           gate: stageGatePath,
           failure_class: "convergence-exhausted",
           blockers: gate.blockers || [],
-          reason: `retry budget exhausted (${retryNumber}/${maxRetries} attempts); escalating for a ruling`,
+          no_progress_evidence: evidence,
+          reason: `no-progress convergence: ${evidence}; escalating for a ruling`,
+          command: `devteam ruling --topic "..." --target-gate ${stageGatePath} [--headless]`,
+        };
+      }
+      if (archiveCount >= maxRetries) {
+        return {
+          action: "resolve-escalation", stage: stageDef.stage, name: stageName,
+          gate: stageGatePath,
+          failure_class: "convergence-exhausted",
+          blockers: gate.blockers || [],
+          reason: `retry budget exhausted (${archiveCount}/${maxRetries} attempts); escalating for a ruling`,
           command: `devteam ruling --topic "..." --target-gate ${stageGatePath} [--headless]`,
         };
       }

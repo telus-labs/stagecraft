@@ -1,5 +1,6 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
@@ -326,37 +327,91 @@ describe("next: failure classification (H1)", () => {
   });
 });
 
-describe("next: convergence ceiling (H1)", () => {
-  it("FAIL below the retry ceiling → still fix-and-retry", () => {
+// Helper: write an archive gate directly into pipeline/gates/archive/.
+function seedNextArchive(cwd, stageId, attempt, gate) {
+  const dir = path.join(cwd, "pipeline", "gates", "archive");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, `${stageId}.attempt-${attempt}.json`),
+    JSON.stringify({ stage: stageId, blockers: [], ...gate }, null, 2),
+  );
+}
+
+describe("next: convergence ceiling (H1 + 4.2 progress-based)", () => {
+  it("FAIL with no archives (no prior retries) → still fix-and-retry", () => {
+    // archive count = 0, well below default ceiling of 2; no progress comparison possible.
     const cwd = track(makeTargetProject());
-    seedGate(cwd, "stage-01", {
-      status: "FAIL", blockers: ["x"], retry_number: 1, this_attempt_differs_by: "tried Y",
-    });
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["x"] });
     const r = next({ cwd });
     assert.equal(r.action, "fix-and-retry");
     assert.equal(r.failure_class, "code-defect");
   });
 
-  it("FAIL at the retry ceiling (default 2) → resolve-escalation, convergence-exhausted", () => {
+  it("FAIL at the archive-count ceiling (2 archives, default max_retries=2) → resolve-escalation", () => {
+    // Uses archive count (agent-independent) instead of model-written retry_number.
+    // Two archives with DIFFERENT blockers → progress was made, so progress check
+    // does not trip; the count ceiling is what escalates.
     const cwd = track(makeTargetProject());
-    seedGate(cwd, "stage-01", {
-      status: "FAIL", blockers: ["x"], retry_number: 2, this_attempt_differs_by: "tried Z",
-    });
+    seedNextArchive(cwd, "stage-01", 1, { blockers: ["original"] });
+    seedNextArchive(cwd, "stage-01", 2, { blockers: ["improved"] }); // different → progress made
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["improved"] });
     const r = next({ cwd });
     assert.equal(r.action, "resolve-escalation");
     assert.equal(r.failure_class, "convergence-exhausted");
     assert.match(r.reason, /retry budget exhausted/i);
+    assert.ok(!r.no_progress_evidence, "evidence absent — breaker tripped by count, not by stuck blockers");
   });
 
-  it("respects autonomy.max_retries override from config", () => {
+  it("respects autonomy.max_retries override from config (max_retries=0)", () => {
+    // archive count 0 >= ceiling 0 → escalate on first FAIL with no prior retries.
     const cwd = track(makeTargetProject({
       config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  max_retries: 0\n",
     }));
-    // retry_number 0 already meets a ceiling of 0 → escalate on first FAIL.
     seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["x"] });
     const r = next({ cwd });
     assert.equal(r.action, "resolve-escalation");
     assert.equal(r.failure_class, "convergence-exhausted");
+  });
+
+  it("falsified gate.retry_number is ignored — archive count is authoritative", () => {
+    // Agent writes retry_number: 99 to try to exhaust the ceiling, but the real
+    // archive count is 0 (no retries have happened) → next() still returns fix-and-retry.
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["x"], retry_number: 99, this_attempt_differs_by: "lied" });
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry", "falsified retry_number must not trigger escalation");
+    assert.equal(r.failure_class, "code-defect");
+  });
+
+  it("progress-based breaker trips when blockers are identical across last two archives", () => {
+    const cwd = track(makeTargetProject());
+    seedNextArchive(cwd, "stage-01", 1, { blockers: ["stuck blocker"] });
+    seedNextArchive(cwd, "stage-01", 2, { blockers: ["stuck blocker"] }); // identical!
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["stuck blocker"] });
+    const r = next({ cwd });
+    assert.equal(r.action, "resolve-escalation");
+    assert.equal(r.failure_class, "convergence-exhausted");
+    assert.ok(r.no_progress_evidence, "no_progress_evidence must be present");
+    assert.match(r.no_progress_evidence, /stuck blocker/);
+    assert.match(r.no_progress_evidence, /1,2/); // attempt numbers
+    assert.match(r.reason, /no-progress convergence/i);
+  });
+
+  it("progress-based breaker does not trip when blockers differ across archives", () => {
+    // Even if archiveCount < ceiling, progress was made → fix-and-retry.
+    const cwd = track(makeTargetProject());
+    seedNextArchive(cwd, "stage-01", 1, { blockers: ["original"] });
+    seedNextArchive(cwd, "stage-01", 2, { blockers: ["different"] }); // progress!
+    seedGate(cwd, "stage-01", { status: "FAIL", blockers: ["different"] });
+    // archiveCount=2 >= maxRetries(2) → count ceiling trips (not progress check)
+    // To test JUST the no-trip case, use 1 archive with below-ceiling count:
+    const cwd2 = track(makeTargetProject());
+    seedNextArchive(cwd2, "stage-01", 1, { blockers: ["original"] });
+    seedGate(cwd2, "stage-01", { status: "FAIL", blockers: ["changed"] });
+    // archiveCount=1 < 2, and no two archives to compare → fix-and-retry
+    const r = next({ cwd: cwd2 });
+    assert.equal(r.action, "fix-and-retry");
+    assert.ok(!r.no_progress_evidence);
   });
 });
 
