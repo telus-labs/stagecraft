@@ -46,6 +46,16 @@ jobs:
         env:
           DEVTEAM_HEADLESS_COMMAND: cat
 
+      # Coverage report — report-only, never fails the build.
+      # Baseline recorded at item 3.6 (2026-06-11):
+      #   lines: 85.43%  branches: 76.02%  functions: 82.42%
+      # No threshold is set yet; thresholds without history invite gaming.
+      - name: Coverage report (informational)
+        continue-on-error: true
+        run: node --test --experimental-test-coverage tests/*.test.js
+        env:
+          DEVTEAM_HEADLESS_COMMAND: cat
+
       - name: Run consistency checks
         run: npm run consistency
 
