@@ -77,6 +77,16 @@ function buildEvents(cwd) {
   const pipelineDir = path.join(cwd, "pipeline");
   if (!fs.existsSync(pipelineDir)) return events;
 
+  // Epoch: mtime of pipeline/brief.md anchors the current pipeline run.
+  // Artifacts older than the brief belong to a prior run and are suppressed.
+  // devteam restart clears gate files but not artifacts; the brief is always
+  // (re)written at the start of a new feature, so it is the right anchor.
+  // When no brief exists yet (fresh project) epochMs stays 0 — no filtering.
+  let epochMs = 0;
+  try {
+    epochMs = fs.statSync(path.join(pipelineDir, "brief.md")).mtimeMs;
+  } catch { /* no brief yet */ }
+
   // Gate events.
   const gatesDir = path.join(pipelineDir, "gates");
   if (fs.existsSync(gatesDir)) {
@@ -100,12 +110,12 @@ function buildEvents(cwd) {
 
   // Artifact events. Walk pipeline/ but skip pipeline/gates/ (already
   // covered) and pipeline/logs/ (would be self-referential noise).
-  walkArtifacts(pipelineDir, cwd, events);
+  walkArtifacts(pipelineDir, cwd, events, epochMs);
 
   return events.sort((a, b) => a.mtime - b.mtime);
 }
 
-function walkArtifacts(dir, cwd, out) {
+function walkArtifacts(dir, cwd, out, epochMs = 0) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
   catch { return; }
@@ -113,13 +123,16 @@ function walkArtifacts(dir, cwd, out) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (e.name === "gates" || e.name === "logs") continue;
-      walkArtifacts(full, cwd, out);
+      walkArtifacts(full, cwd, out, epochMs);
       continue;
     }
     const rel = path.relative(cwd, full).replace(/\\/g, "/");
     if (SKIP_PATHS.has(rel)) continue;
     const match = ARTIFACT_PATTERNS.find((p) => p.re.test(rel));
     if (!match) continue;
+    const stat = fs.statSync(full);
+    // Suppress artifacts from prior pipeline runs (written before the current brief).
+    if (epochMs > 0 && stat.mtimeMs < epochMs) continue;
     let owner = match.owner;
     if (owner === null && match.kind === "review") {
       const m = e.name.match(/^by-([a-z0-9-]+)\.md$/);
@@ -128,7 +141,7 @@ function walkArtifacts(dir, cwd, out) {
     out.push({
       kind: "artifact",
       path: full,
-      mtime: fs.statSync(full).mtime,
+      mtime: stat.mtime,
       owner,
       artifactKind: match.kind,
     });
