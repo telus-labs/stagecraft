@@ -728,29 +728,6 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     // Once all stages are ported, the if-ladder below will be empty and removed.
   }
 
-  // QA (stage-06): failing tests attributed to workstreams
-  if (stage === "stage-06") {
-    const failing = gate.failing_tests || [];
-    const wsSet = new Set();
-    for (const t of failing) { if (t.assigned_to) wsSet.add(t.assigned_to); }
-    const ws = [...wsSet];
-
-    const steps = [];
-    if (ws.length) {
-      steps.push({
-        description: `Fix failing tests in: ${ws.join(", ")}`,
-        commands: _rmBuildGates(ws),
-      });
-      steps.push({
-        description: "Re-run build with QA context",
-        commands: ["devteam stage build --patch --from qa --skip-completed --headless"],
-      });
-      steps.push({ description: "Merge workstream gates", commands: ["devteam merge build"] });
-    }
-    steps.push({ description: "Re-run QA", commands: ["devteam stage qa --headless"] });
-    return steps.length > 1 ? steps : null;
-  }
-
   // Accessibility audit (stage-06b): dispatch the automated fixer via devteam advise.
   // Option A for A11Y_FIX items is the "fix" action — it runs fixA11yBlockers headlessly
   // (frontend agent applies the ARIA/HTML change) then re-runs the audit in one go.

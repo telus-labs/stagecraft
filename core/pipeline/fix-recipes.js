@@ -442,6 +442,32 @@ register("stage-05", (gate, ctx) => {
   return { clear_gates, steps };
 });
 
+// ── stage-06: qa ─────────────────────────────────────────────────────────────
+
+register("stage-06", (gate, _ctx) => {
+  const failing = gate.failing_tests || [];
+  const wsSet = new Set();
+  for (const t of failing) { if (t.assigned_to) wsSet.add(t.assigned_to); }
+  const ws = [...wsSet];
+
+  if (!ws.length) return { clear_gates: [], steps: null };
+
+  const clear_gates = buildGatePaths(ws);
+  const steps = [
+    {
+      description: `Fix failing tests in: ${ws.join(", ")}`,
+      commands: formatGateClear(clear_gates),
+    },
+    {
+      description: "Re-run build with QA context",
+      commands: ["devteam stage build --patch --from qa --skip-completed --headless"],
+    },
+    { description: "Merge workstream gates", commands: ["devteam merge build"] },
+    { description: "Re-run QA", commands: ["devteam stage qa --headless"] },
+  ];
+  return { clear_gates, steps };
+});
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function getRecipe(stageId) {
