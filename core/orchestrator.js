@@ -728,51 +728,6 @@ function computeFixSteps(gate, stageDef, gatesDir) {
     // Once all stages are ported, the if-ladder below will be empty and removed.
   }
 
-  // Accessibility audit (stage-06b): dispatch the automated fixer via devteam advise.
-  // Option A for A11Y_FIX items is the "fix" action — it runs fixA11yBlockers headlessly
-  // (frontend agent applies the ARIA/HTML change) then re-runs the audit in one go.
-  //
-  // IDs come from noted_for_followup across gate files (the same source devteam advise
-  // reads), NOT from stage-06b.blockers — the blocker IDs (e.g. "A11Y-01") differ from
-  // the noted_for_followup IDs that advise can resolve (e.g. "QA-A11Y-01").
-  if (stage === "stage-06b") {
-    const A11Y_RE = /a11y|accessibility|aria|wcag/i;
-    const a11yIds = [];
-    const seen = new Set();
-
-    if (gatesDir) {
-      try {
-        const gateFiles = fs.readdirSync(gatesDir).filter((f) => f.endsWith(".json"));
-        for (const f of gateFiles) {
-          let g;
-          try { g = JSON.parse(fs.readFileSync(path.join(gatesDir, f), "utf8")); } catch { continue; }
-          for (const item of Array.isArray(g.noted_for_followup) ? g.noted_for_followup : []) {
-            const id = item && item.id;
-            if (!id || seen.has(id)) continue;
-            const text = item.summary || item.text || "";
-            if (A11Y_RE.test(id) || A11Y_RE.test(text)) {
-              seen.add(id);
-              a11yIds.push(id);
-            }
-          }
-        }
-      } catch { /* unreadable gatesDir — fall through */ }
-    }
-
-    if (a11yIds.length) {
-      const applyArg = a11yIds.map((id) => `${id}=A`).join(",");
-      return [{
-        description: "Dispatch accessibility fixer — stagecraft applies the ARIA/HTML fix and re-runs the audit",
-        commands: [`devteam advise --apply ${applyArg}`],
-      }];
-    }
-    // No A11Y items found in noted_for_followup — show the panel so the operator can confirm and apply.
-    return [{
-      description: "Run devteam advise — select option A for each A11Y_FIX item to dispatch the automated fixer",
-      commands: ["devteam advise"],
-    }];
-  }
-
   // Verification-beyond-tests (stage-06d): property/mutation/formal counterexamples.
   // Blockers often carry a "Fix: <file>:<line> — <remedy>" clause; parse that to
   // derive which workstream owns the fix and what file to edit.

@@ -468,6 +468,57 @@ register("stage-06", (gate, _ctx) => {
   return { clear_gates, steps };
 });
 
+// ── stage-06b: accessibility-audit ───────────────────────────────────────────
+//
+// IDs come from noted_for_followup across gate files (the same source devteam
+// advise reads), NOT from stage-06b.blockers — the blocker IDs (e.g. "A11Y-01")
+// differ from the noted_for_followup IDs that advise can resolve (e.g. "QA-A11Y-01").
+// advise handles gate reset and re-run internally — no rm commands needed.
+
+register("stage-06b", (gate, ctx) => {
+  const A11Y_RE = /a11y|accessibility|aria|wcag/i;
+  const a11yIds = [];
+  const seen = new Set();
+
+  if (ctx.gatesDir) {
+    try {
+      const gateFiles = fs.readdirSync(ctx.gatesDir).filter((f) => f.endsWith(".json"));
+      for (const f of gateFiles) {
+        let g;
+        try { g = JSON.parse(fs.readFileSync(path.join(ctx.gatesDir, f), "utf8")); } catch { continue; }
+        for (const item of Array.isArray(g.noted_for_followup) ? g.noted_for_followup : []) {
+          const id = item && item.id;
+          if (!id || seen.has(id)) continue;
+          const text = item.summary || item.text || "";
+          if (A11Y_RE.test(id) || A11Y_RE.test(text)) {
+            seen.add(id);
+            a11yIds.push(id);
+          }
+        }
+      }
+    } catch { /* unreadable gatesDir — fall through */ }
+  }
+
+  if (a11yIds.length) {
+    const applyArg = a11yIds.map((id) => `${id}=A`).join(",");
+    return {
+      clear_gates: [],
+      steps: [{
+        description: "Dispatch accessibility fixer — stagecraft applies the ARIA/HTML fix and re-runs the audit",
+        commands: [`devteam advise --apply ${applyArg}`],
+      }],
+    };
+  }
+  // No A11Y items found in noted_for_followup — show the panel so the operator can confirm.
+  return {
+    clear_gates: [],
+    steps: [{
+      description: "Run devteam advise — select option A for each A11Y_FIX item to dispatch the automated fixer",
+      commands: ["devteam advise"],
+    }],
+  };
+});
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 function getRecipe(stageId) {
