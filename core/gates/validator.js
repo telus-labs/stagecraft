@@ -30,6 +30,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { loadConfig } = require("../config.js");
 const { TRACKS } = require("../pipeline/stages.js");
+const { stripSection } = require("../markers.js");
 
 // --strict mode: the validator exits 1 on unknown internal errors instead of
 // treating them as PASS. Also activated when the CI=true env var is set.
@@ -288,16 +289,8 @@ function injectQABuildBlockers(gate, cwd) {
 function stripMarkedSection(contextPath, beginMarker, endMarker) {
   if (!fs.existsSync(contextPath)) return false;
   const content = fs.readFileSync(contextPath, "utf8");
-  if (!content.includes(beginMarker)) return false;
-  const startIdx = content.indexOf(beginMarker);
-  const endIdx = content.indexOf(endMarker);
-  if (endIdx < 0) return false;
-  // Strip the section and any blank line(s) immediately after the end
-  // marker so we don't leave a dangling gap. Leading whitespace before
-  // the begin marker is preserved (the section may be at file start).
-  let after = content.slice(endIdx + endMarker.length);
-  after = after.replace(/^\n+/, "\n");
-  const next = content.slice(0, startIdx) + after.replace(/^\n+/, "");
+  const next = stripSection(content, beginMarker, endMarker);
+  if (next === content) return false;
   fs.writeFileSync(contextPath, next, "utf8");
   return true;
 }
