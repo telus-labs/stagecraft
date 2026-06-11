@@ -26,7 +26,7 @@ function getOrchestrator() {
   return _orch;
 }
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
-const { stageNames, getStage, TRACKS } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
+const { getStage } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
 const { stripSection } = require(path.join(__dirname, "..", "core", "markers"));
@@ -37,218 +37,17 @@ const { parseFlags, generateHelp } = require(path.join(__dirname, "..", "core", 
 // (core/driver.js) enforce exactly the same set. (Phase 1 § 1.1)
 const STOPLIST_GUARDED_TRACKS = STOPLIST_TRACKS;
 
-function usage() {
-  console.log(`devteam — model-agnostic AI dev team orchestrator
+// --- Group 1: read-only commands — dispatched via registry (no orchestrator load) ---
+const _helpCmd    = require(path.join(__dirname, "..", "core", "cli", "commands", "help"));
+const _stagesCmd  = require(path.join(__dirname, "..", "core", "cli", "commands", "stages"));
+const _hostsCmd   = require(path.join(__dirname, "..", "core", "cli", "commands", "hosts"));
+const _doctorCmd  = require(path.join(__dirname, "..", "core", "cli", "commands", "doctor"));
+const _summaryCmd = require(path.join(__dirname, "..", "core", "cli", "commands", "summary"));
+const _logCmd     = require(path.join(__dirname, "..", "core", "cli", "commands", "log"));
 
-Usage: devteam <command> [args]
-
-Commands:
-  init --host <list> [--force]     Install host adapter(s) into the current
-                                   project. <list> is comma-separated, e.g.
-                                   "claude-code" or "claude-code,codex".
-                                   Writes .devteam/config.yml and creates
-                                   pipeline/gates/ workspace.
-  stage <name> [--feature "..."]   Render stage prompt(s) for <name>. With
-        [--headless]                 --headless, drives each workstream's
-        [--timeout-ms N]             host CLI non-interactively (claude --print,
-        [--patch [--from <stage>]]   codex exec) and reports exit codes +
-        [--skip-completed]           gate paths. --timeout-ms caps each
-        [--workstream <role>]        workstream's wall-clock (default 600000,
-                                   i.e. 10 min); pass 0 to disable.
-                                   --patch scopes build agents to the patch
-                                   items from the named stage's gate (reads
-                                   must_address_before_peer_review, falling
-                                   back to blockers[]); default: red-team.
-                                   --skip-completed skips dispatching any
-                                   workstream whose gate file already exists.
-                                   --workstream <role> dispatches only the
-                                   named role; repeat for multiple. All other
-                                   workstreams are left untouched (their
-                                   existing gate files are preserved).
-  next [--json]                    Inspect pipeline/gates/ and report what
-                                   to do next: run a stage, continue a
-                                   partial multi-role stage, merge, fix a
-                                   FAIL, resolve an ESCALATE, or done.
-  run [--track <t>] [--until <s>]  Bounded autonomous driver: loop next →
-      [--max-iterations N]          dispatch → merge until pipeline-complete.
-      [--budget-usd X]              Auto-fixes code-defect FAILs (clear gate,
-      [--timeout-ms N]              propagate blockers, re-dispatch) and retries
-      [--retry-delay-ms N]          transient dispatch failures with backoff.
-      [--auto-rule <classes>]       With --auto-rule, auto-applies Principal
-      [--allow-stage <s>]           rulings whose [class:] is in the granted
-                                   allowlist (never cannot-decide / ceiling).
-                                   Halts for a human on escalations, the
-      [--resume] [--force] [--json] consequence ceiling (sign-off / deploy —
-                                   needs --allow-stage), a budget cap, or a
-                                   structural dispatch failure. Writes pipeline/
-                                   run.lock, run-state.json, run-log.jsonl.
-  validate                         Validate the most recent gate in
-                                   pipeline/gates/. Exit codes: 0 PASS/WARN,
-                                   1 malformed, 2 FAIL, 3 ESCALATE. Used
-                                   by host hooks (e.g. Claude Code Stop).
-  verify-chain [--track <t>]       C6: verify the tamper-evident gate chain —
-       [--json]                     each stage gate commits to a hash of its
-                                   predecessor. Reports breaks + unstamped
-                                   gates. Exit 0 intact, 1 broken (CI-usable).
-  stamp-chain [--track <t>]        C6: (re)stamp the chain on all stage gates,
-                                   in order. Use after a deliberate earlier-
-                                   stage re-run, or to stamp interactive gates.
-  merge <stage>                    Merge per-workstream gates into stage gate.
-  preflight [--cwd <dir>]          Run mechanical pre-peer-review checks
-       [--skip-write]               (stage-04e): committed-but-ignored files,
-                                   broken test import paths, and deferred red-team
-                                   item count. Writes pipeline/gates/stage-04e.json.
-                                   Exits 1 on FAIL. Also runs automatically when
-                                   'devteam stage peer-review' is invoked (unless
-                                   stage-04e.json already exists and is PASS).
-  derive-approvals [<file>]        Re-run the approval-derivation hook on
-        [--cwd <dir>] [--json]      pipeline/code-review/by-*.md and rewrite the
-                                   per-area stage-05.<area>.json gates. Use after
-                                   hand-editing a review file outside an active
-                                   Claude Code session (the hook only fires on
-                                   agent saves; shell/editor saves bypass it).
-                                   Without an argument, derives every by-*.md
-                                   under pipeline/code-review/. Follow with
-                                   'devteam merge peer-review' to rebuild the
-                                   merged stage-05.json. See docs/runbooks/
-                                   fix-and-retry.md § Case 5.
-  restart <stage> [--cascade]      Clear a stage's gate(s) so the pipeline can
-       [--keep-context]            re-run it. With --cascade, also clears every
-       [--dry-run]                 stage that comes after this one in the active
-                                   track. By default also strips that stage's
-                                   injected blocker sections from pipeline/
-                                   context.md (--keep-context to preserve them).
-                                   Use after an ESCALATE or FAIL to re-run from
-                                   a specific point.
-  ruling [--topic "..."]           Dispatch the Principal subagent for an ad-hoc
-       [--context paths]           ruling. --topic is optional: when omitted the
-       [--target-gate path]        topic is auto-derived from the escalating gate's
-       [--headless]                escalation_reason + decision_needed. The ruling
-                                   lands in pipeline/context.md as a PRINCIPAL-RULING
-                                   line; no gate is written.
-                                   See docs/runbooks/escalation.md.
-  fix-escalation                   Implement the Principal ruling written by
-       [--headless]                devteam ruling. Dispatches an applicator agent
-                                   that reads PRINCIPAL-RULING entries from
-                                   pipeline/context.md and fixes gates, runs stages,
-                                   and merges — so devteam next advances. No
-                                   hand-editing required.
-  summary [--json]                 One-screen pipeline state report.
-  log [--follow] [--json]          Chronological event timeline: every gate
-                                   and every artifact write, in mtime order,
-                                   with key fields per stage. --follow tails
-                                   the pipeline/ directory at 1s poll. Works
-                                   in both headless and user-driven modes.
-  doctor                           Pre-flight check: install integrity,
-                                   target layout, config validity, adapter
-                                   status, host CLIs on PATH.
-  ui [--port N] [--open]           Start a local web UI on http://127.0.0.1:3737/
-                                   showing pipeline state, gate detail, live
-                                   updates via SSE. --open launches the browser.
-  memory <subcommand>              Persistent project memory.
-    ingest                         Index pipeline/* artifacts (brief,
-                                   design-spec, ADRs, retro, etc.) via
-                                   semantic embeddings into .devteam/memory/.
-    query "text" [--limit N]       Semantic search. Add --org to query
-       [--kind <k>] [--org]        the org-shared store at
-                                   ~/.stagecraft/memory/.
-    stats [--org]                  What's indexed (project or org).
-    clear [--org]                  Wipe per-project (or org) store.
-    reindex                        Re-embed everything (after embedder change).
-                                   Local embedder by default; ~150MB model
-                                   downloaded once on first ingest.
-    promote [<kinds...>]           Copy this project's records to the
-                                   org-shared store. Default kinds:
-                                   adr + lessons-learned. Architectural
-                                   continuity reads from there.
-  architecture lookup "<topic>"    Query the org-shared store for
-       [--limit N] [--kind adr|    prior ADRs (or lessons) on a topic.
-        lessons-learned]            Principal consults this before designing
-                                   so prior commitments are honored or
-                                   explicitly superseded — architecture
-                                   doesn't drift because the architect remembers.
-  reproduce <stage-id> [--json]    Read pipeline/gates/<stage-id>.json
-                                   and report what was recorded for replay
-                                   (model_version, temperature, seed, prompt
-                                   hash, tools hash). Re-renders the current
-                                   prompt and compares hashes to surface drift.
-  verify <stage-id> [--json]       Orchestrator-stamped verification. For
-                                   stage-04a (lint+tests) and stage-06 (tests
-                                   + AC mapping), runs the configured commands
-                                   and rewrites the gate fields with what was
-                                   actually observed. Flips status to FAIL if
-                                   the orchestrator's truth disagrees with the
-                                   model's claim. Commands resolve from
-                                   .devteam/config.yml pipeline.verify.* or
-                                   package.json scripts.
-  replay <stage-id> [--dry-run]    Re-run a recorded stage with CURRENT
-       [--json]                     config and diff the result. Writes the
-                                   new gate to pipeline/gates/replay/<stage>.
-                                   <timestamp>.json. --dry-run prints the
-                                   plan + drift check without invoking the
-                                   host.
-  ci install [--ci <type>]         Drop a CI workflow template into
-       [--out <dir>] [--force]      the target project. Currently supports
-                                   --ci github-actions (the default). The
-                                   workflow validates pipeline/gates/ + posts
-                                   each gate as a GitHub check run on PRs.
-                                   It does NOT run the pipeline itself in CI.
-  ci show [--ci <type>]            Print the workflow template to stdout.
-  spec verify [--strict] [--json]  Drift-check brief.md ↔ spec.feature ↔
-                                   test-report.md. Exits non-zero if any AC
-                                   in brief lacks a scenario, any scenario
-                                   lacks an AC tag, or any test references
-                                   an unknown AC. --strict also fails when
-                                   one AC is mapped by multiple scenarios.
-  spec generate [--feature "..."]  Scaffold pipeline/spec.feature from the
-       [--force]                   brief's numbered AC-N entries — one
-                                   tagged Scenario per AC. Refuses to
-                                   overwrite without --force.
-  consistency analyze              Cross-artifact drift across the full
-       [--strict] [--json]         pipeline chain: brief -> spec ->
-                                   pr-*.md ## Verify -> red-team
-                                   must-address -> test-report -> gate
-                                   field reality. Generalizes 'spec
-                                   verify' to every intermediate
-                                   artifact + the gate-vs-reality
-                                   dimension. Exits non-zero on drift.
-  assess [--description "..."]    Infer the best track for the
-       [--json] [--apply]          current change. Reads pipeline/
-       [--cwd <dir>] [files...]    changed-files.txt (or explicit file
-                                   list) and applies path/content/
-                                   description heuristics to recommend
-                                   a track. --apply writes the result
-                                   to pipeline.custom_stages in
-                                   .devteam/config.yml so subsequent
-                                   'devteam next' and 'devteam stage'
-                                   use the inferred stage list.
-  standards discover               Scan the project codebase and
-       [--cwd <dir>] [--json]      produce docs/project-conventions.md
-       [--dry-run] [--force]       with detected tech stack, module
-                                   system, file layout, naming style,
-                                   tooling, test config, and common
-                                   import paths. --dry-run prints
-                                   without writing. --json emits the
-                                   structured discovery result.
-  stages                           List known stage names.
-  hosts                            List available host adapters.
-  help                             Show this message.
-
-Quickstart:
-  1. cd into your target project (NOT the Stagecraft repo).
-  2. devteam init --host claude-code         # lays down rules, roles, hooks
-  3. devteam doctor                          # verify install
-  4. devteam stage requirements --feature "your feature description"
-       — by default, this RENDERS the prompt; you feed it to your model.
-       — inside Claude Code, use /devteam stage <name> instead.
-       — to drive the host CLI automatically: add --headless.
-  5. After the model writes the gate JSON: devteam next  → tells you
-     what to do next (advance, fix, merge, escalate, or done).
-
-devteam never calls a model itself. Adapters under hosts/ are where the
-host-specific glue lives; the orchestrator just renders prompts and
-validates the gate JSON that comes back.
-`);
+const _registry = Object.create(null);
+for (const cmd of [_helpCmd, _stagesCmd, _hostsCmd, _doctorCmd, _summaryCmd, _logCmd]) {
+  _registry[cmd.name] = cmd;
 }
 
 // FLAGS schemas — one per command, co-located with its handler below.
@@ -384,23 +183,6 @@ const FLAGS_UI = {
   help: { type: "boolean", description: "Show this help" },
 };
 
-const FLAGS_DOCTOR = {
-  cwd:  { type: "string",  description: "Target project directory" },
-  help: { type: "boolean", description: "Show this help" },
-};
-
-const FLAGS_LOG = {
-  cwd:    { type: "string",  description: "Target project directory" },
-  json:   { type: "boolean", description: "JSON output (one object per line)" },
-  follow: { type: "boolean", description: "Tail pipeline/ at 1s poll" },
-  help:   { type: "boolean", description: "Show this help" },
-};
-
-const FLAGS_SUMMARY = {
-  cwd:  { type: "string",  description: "Target project directory" },
-  json: { type: "boolean", description: "JSON output" },
-  help: { type: "boolean", description: "Show this help" },
-};
 
 const FLAGS_RESTART = {
   cwd:            { type: "string",  description: "Target project directory" },
@@ -1801,202 +1583,6 @@ function cmdUI(argv) {
   });
 }
 
-function cmdDoctor(argv) {
-  const { flags } = parseFlags(argv, FLAGS_DOCTOR);
-  if (flags.help) { console.log(generateHelp("devteam doctor [options]", FLAGS_DOCTOR)); process.exit(0); }
-  const cwd = flags.cwd || process.cwd();
-  const FRAMEWORK_ROOT = path.join(__dirname, "..");
-  const { loadConfig, configPath } = require(path.join(FRAMEWORK_ROOT, "core", "config"));
-  const { spawnSync } = require("node:child_process");
-  let criticalFailures = 0;
-  let warnings = 0;
-
-  function check(label, ok, detail) {
-    const icon = ok === true ? "✓" : ok === "warn" ? "⚠" : "✗";
-    console.log(`  ${icon} ${label}${detail ? `  — ${detail}` : ""}`);
-    if (ok === false) criticalFailures++;
-    if (ok === "warn") warnings++;
-  }
-
-  console.log("Framework install");
-  check("bin/devteam exists", fs.existsSync(path.join(FRAMEWORK_ROOT, "bin", "devteam")));
-  check("core/orchestrator.js loads", fs.existsSync(path.join(FRAMEWORK_ROOT, "core", "orchestrator.js")));
-  check("package.json parses",
-    (() => { try { JSON.parse(fs.readFileSync(path.join(FRAMEWORK_ROOT, "package.json"), "utf8")); return true; } catch { return false; } })());
-  check("node_modules/js-yaml present", fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "js-yaml")),
-    fs.existsSync(path.join(FRAMEWORK_ROOT, "node_modules", "js-yaml")) ? null : "run `npm install` in the framework dir");
-
-  console.log("\nTarget project");
-  console.log(`  cwd: ${cwd}`);
-  const configFile = configPath(cwd);
-  check(".devteam/config.yml exists", fs.existsSync(configFile),
-    fs.existsSync(configFile) ? null : "run `devteam init --host <name>`");
-  check("pipeline/gates/ exists", fs.existsSync(path.join(cwd, "pipeline", "gates")));
-
-  if (!fs.existsSync(configFile)) {
-    console.log(`\n${criticalFailures} critical failure(s), ${warnings} warning(s)`);
-    process.exit(1);
-  }
-
-  const config = loadConfig(cwd);
-  console.log("\nConfig");
-  check("config parses", config._source === "file", `source: ${config._source}`);
-  check("default_host set", !!config.routing.default_host, `→ ${config.routing.default_host}`);
-  check(`default_track is valid`, TRACKS.includes(config.pipeline.default_track),
-    `→ ${config.pipeline.default_track}`);
-
-  // Gather all hosts referenced by the config
-  const referencedHosts = new Set();
-  referencedHosts.add(config.routing.default_host);
-  for (const v of Object.values(config.routing.roles || {})) referencedHosts.add(v);
-  for (const v of Object.values(config.routing.stages || {})) referencedHosts.add(v);
-
-  console.log("\nAdapters");
-  const { listHosts, loadAdapter } = require(path.join(FRAMEWORK_ROOT, "core", "router"));
-  const available = new Set(listHosts());
-  for (const h of referencedHosts) {
-    if (!available.has(h)) {
-      check(`host "${h}" available`, false, `no adapter at hosts/${h}/`);
-      continue;
-    }
-    const adapter = loadAdapter(h);
-    const status = adapter.status(cwd);
-    check(`host "${h}" install`, status.ok, status.ok ? null : `${status.missing.length} missing file(s)`);
-    if (adapter.capabilities && adapter.capabilities.headless && adapter.capabilities.headlessCommand) {
-      const bin = adapter.capabilities.headlessCommand.split(/\s+/)[0];
-      const which = spawnSync("which", [bin], { encoding: "utf8" });
-      check(`  ${bin} on PATH (for --headless)`, which.status === 0 ? true : "warn",
-        which.status === 0 ? which.stdout.trim() : `${bin} not found; --headless will fail`);
-    }
-  }
-
-  console.log("");
-  if (criticalFailures > 0) {
-    console.log(`❌ ${criticalFailures} critical failure(s), ${warnings} warning(s)`);
-    process.exit(1);
-  }
-  if (warnings > 0) {
-    console.log(`⚠️  ${warnings} warning(s)`);
-    process.exit(0);
-  }
-  console.log("✅ everything looks good");
-}
-
-// Format an event from core/log/journal.js as a single terminal line.
-function formatLogEvent(event, cwd) {
-  const { summarizeGate, summarizeArtifact } = require(path.join(__dirname, "..", "core", "log", "journal"));
-  const time = new Date(event.mtime).toISOString().slice(11, 19); // HH:MM:SS
-  if (event.kind === "gate") {
-    const s = summarizeGate(event.gate);
-    const extras = s.extras ? `  ${s.extras}` : "";
-    return `${time}  ${s.icon}  ${s.label.padEnd(20)}  ${s.status.padEnd(8)}${extras}`;
-  }
-  if (event.kind === "artifact") {
-    const a = summarizeArtifact(event, cwd);
-    const owner = a.owner ? `  (${a.owner})` : "";
-    return `${time}  📝  ${a.rel.padEnd(20)}  ${a.lines} lines${owner}`;
-  }
-  return `${time}  ?  ${event.path}`;
-}
-
-// `devteam log [--follow] [--json] [--cwd <path>]`
-// Chronological view of pipeline state — works in both headless and
-// user-driven modes (it reads gate files + artifact files, not the
-// agent's transcript). Pair with the per-stage transcripts in
-// pipeline/logs/ (written by headless dispatches) for the full picture.
-function cmdLog(argv) {
-  const { flags } = parseFlags(argv, FLAGS_LOG);
-  if (flags.help) { console.log(generateHelp("devteam log [options]", FLAGS_LOG)); process.exit(0); }
-  const cwd = flags.cwd || process.cwd();
-  const { buildEvents } = require(path.join(__dirname, "..", "core", "log", "journal"));
-
-  function emit(events) {
-    if (flags.json) {
-      for (const e of events) {
-        const out = {
-          ts: new Date(e.mtime).toISOString(),
-          kind: e.kind,
-          path: path.relative(cwd, e.path).replace(/\\/g, "/"),
-        };
-        if (e.kind === "gate") {
-          out.stage = e.gate.stage;
-          out.workstream = e.gate.workstream;
-          out.status = e.gate.status;
-        } else {
-          out.owner = e.owner;
-          out.artifactKind = e.artifactKind;
-        }
-        console.log(JSON.stringify(out));
-      }
-    } else {
-      for (const e of events) console.log(formatLogEvent(e, cwd));
-    }
-  }
-
-  const initial = buildEvents(cwd);
-  emit(initial);
-
-  if (!flags.follow) return;
-
-  // --follow: re-scan periodically and emit anything new. Polling
-  // (1s) keeps the implementation portable across platforms (fs.watch
-  // recursive isn't reliable on Linux). The cost — ~1 readdir/sec
-  // over a small dir — is negligible.
-  const seen = new Set();
-  for (const e of initial) seen.add(`${e.kind}:${e.path}:${e.mtime.getTime()}`);
-  const interval = setInterval(() => {
-    let events;
-    try { events = buildEvents(cwd); } catch { return; }
-    const fresh = [];
-    for (const e of events) {
-      const key = `${e.kind}:${e.path}:${e.mtime.getTime()}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        fresh.push(e);
-      }
-    }
-    if (fresh.length > 0) emit(fresh);
-  }, 1000);
-  // Keep process alive on Ctrl-C — interval.unref would otherwise let
-  // node exit when the only handle left is the interval. We want the
-  // user to hit Ctrl-C explicitly.
-  process.on("SIGINT", () => { clearInterval(interval); process.exit(0); });
-}
-
-function cmdSummary(argv) {
-  const { summary } = getOrchestrator();
-  const { flags } = parseFlags(argv, FLAGS_SUMMARY);
-  if (flags.help) { console.log(generateHelp("devteam summary [options]", FLAGS_SUMMARY)); process.exit(0); }
-  const result = summary({ cwd: flags.cwd });
-  if (flags.json) {
-    console.log(JSON.stringify(result, null, 2));
-    return;
-  }
-  const icons = { pass: "✅", warn: "⚠️ ", fail: "❌", escalate: "🚨",
-                  partial: "⏳", skipped: "⏸ ", pending: "○ " };
-  console.log(`Pipeline state — track: ${result.track}`);
-  console.log("".padEnd(50, "─"));
-  for (const row of result.rows) {
-    const icon = icons[row.state] || "•";
-    const left = `${icon} ${row.name.padEnd(20)}${row.stage}`;
-    if (row.state === "skipped") {
-      console.log(`${left}  (skipped — ${row.reason || "condition not met"})`);
-      continue;
-    }
-    console.log(`${left}  ${row.state.toUpperCase()}`);
-    if (row.workstreams) {
-      for (const w of row.workstreams) {
-        const wicon = icons[w.state] || "•";
-        console.log(`    ${wicon} ${(w.role || "").padEnd(14)}${(w.host ? `(${w.host})` : "").padEnd(20)} ${w.state.toUpperCase()}`);
-      }
-      if (row.remaining && row.remaining.length > 0) {
-        console.log(`    pending workstreams: ${row.remaining.join(", ")}`);
-      }
-    }
-    if (row.blockers) for (const b of row.blockers) console.log(`    ❌ ${b}`);
-    if (row.warnings) for (const w of row.warnings) console.log(`    ⚠️  ${w}`);
-  }
-}
 
 // Strip a section between HTML-comment markers from a file, idempotently.
 function stripMarkedSection(filePath, beginMarker, endMarker) {
@@ -2389,15 +1975,6 @@ async function cmdFixEscalation(argv) {
   process.stderr.write(`[devteam] escalation-applicator complete.\n`);
 }
 
-function cmdHosts() {
-  const hosts = listHosts();
-  if (hosts.length === 0) {
-    console.log("(no host adapters installed under hosts/)");
-    return;
-  }
-  for (const h of hosts) console.log(h);
-}
-
 function cmdInit(argv) {
   const { flags } = parseFlags(argv, FLAGS_INIT);
   if (flags.help) { console.log(generateHelp("devteam init --host <list> [options]", FLAGS_INIT)); process.exit(0); }
@@ -2443,10 +2020,6 @@ function cmdInit(argv) {
   }
 
   console.log(`\nNext: edit ${path.relative(cwd, configPath(cwd))} if you need custom routing, then \`devteam stage requirements --feature "..."\`.`);
-}
-
-function cmdStages() {
-  for (const n of stageNames()) console.log(n);
 }
 
 // G2 — `devteam spec <verify|generate>`. Bridges brief.md ACs ↔ Gherkin
@@ -2827,6 +2400,20 @@ function cmdStandards(argv) {
 
 function main() {
   const [, , command, ...rest] = process.argv;
+
+  // Help aliases bypass the registry lookup (no flag parsing needed).
+  if (command === "-h" || command === "--help" || command === undefined) {
+    return _registry.help.run([], {});
+  }
+
+  // Group 1: read-only commands dispatched via registry.
+  if (_registry[command]) {
+    const cmd = _registry[command];
+    const { positional, flags } = parseFlags(rest, cmd.flags);
+    return cmd.run(positional, flags);
+  }
+
+  // Groups 2 and 3: commands still inline in bin/devteam.
   switch (command) {
     case "init":   return cmdInit(rest);
     case "stage":    return cmdStage(rest);
@@ -2842,9 +2429,6 @@ function main() {
     case "restart":  return cmdRestart(rest);
     case "ruling":   return cmdRuling(rest);
     case "fix-escalation": return cmdFixEscalation(rest);
-    case "summary":  return cmdSummary(rest);
-    case "log":      return cmdLog(rest);
-    case "doctor":   return cmdDoctor(rest);
     case "ui":       return cmdUI(rest);
     case "memory":   return cmdMemory(rest);
     case "architecture": return cmdArchitecture(rest);
@@ -2856,15 +2440,9 @@ function main() {
     case "consistency": return cmdConsistency(rest);
     case "assess":   return cmdAssess(rest);
     case "standards": return cmdStandards(rest);
-    case "stages": return cmdStages();
-    case "hosts":  return cmdHosts();
-    case "help":
-    case "-h":
-    case "--help":
-    case undefined: return usage();
     default:
       console.error(`Unknown command: ${command}`);
-      usage();
+      _registry.help.run([], {});
       process.exit(2);
   }
 }
