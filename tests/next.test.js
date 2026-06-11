@@ -206,6 +206,44 @@ describe("next: stage-04c (red-team) fix steps", () => {
     );
   });
 
+  it("red-team FAIL, disk scan finds build gates → fix steps include rm stage-04.json (merged)", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughPreReview(cwd);
+    // Seed build workstream gates on disk so the disk scan finds them (wsSet is empty
+    // because the blocker file paths don't match _wsFromText heuristics)
+    for (const ws of ["backend", "frontend", "platform", "qa"]) {
+      seedGate(cwd, `stage-04.${ws}`, { workstream: ws, status: "PASS" });
+    }
+    seedGate(cwd, "stage-04", { status: "PASS" }); // merged gate
+    seedGate(cwd, "stage-04c", {
+      status: "FAIL",
+      must_address_before_peer_review: [
+        { id: "F-01", severity: "high", file: "src/evidence/hasher.js", summary: "Array-replacer strips nested props from hash" },
+      ],
+      blockers: [
+        { id: "F-01", severity: "high", file: "src/evidence/hasher.js", summary: "Array-replacer strips nested props from hash" },
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.equal(r.name, "red-team");
+
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
+      "fix steps must include rm stage-04.json (merged) so driver clears it and next() dispatches build"
+    );
+    assert.ok(
+      allCmds.some(c => c === "rm pipeline/gates/stage-04c.json"),
+      "fix steps must include rm stage-04c.json"
+    );
+    assert.ok(
+      !allCmds.some(c => c.includes("<affected-ws>")),
+      "no unresolvable placeholder"
+    );
+  });
+
   it("red-team FAIL with assigned_to blockers → fix steps rm the named workstream gates", () => {
     const cwd = track(makeTargetProject());
     seedThroughPreReview(cwd);

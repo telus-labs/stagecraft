@@ -764,9 +764,14 @@ function computeFixSteps(gate, stageDef, gatesDir) {
         } catch { /* gatesDir unreadable — keep empty */ }
       }
       if (actualGateFiles.length > 0) {
+        // Extract workstream names ("stage-04.backend.json" → "backend") and use
+        // _rmBuildGates so the merged stage-04.json is always included alongside
+        // the per-area gates. Without it, next() sees stage-04.json still PASS and
+        // skips the build step, dispatching red-team against unfixed code.
+        const diskWs = actualGateFiles.map((f) => f.replace(/^stage-04\./, "").replace(/\.json$/, ""));
         steps.push({
-          description: `Clear affected build workstream gate${actualGateFiles.length !== 1 ? "s" : ""}`,
-          commands: actualGateFiles.map((f) => `rm pipeline/gates/${f}`),
+          description: `Clear affected build workstream gate${diskWs.length !== 1 ? "s" : ""}: ${diskWs.join(", ")}`,
+          commands: _rmBuildGates(diskWs),
         });
       } else {
         // No workstream identified from gate data and no gate files found on disk —
