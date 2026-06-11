@@ -1,8 +1,15 @@
 "use strict";
 
-const fs = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
+const {
+  snapshotGate,
+  restoreFromBackup,
+  deleteBackup,
+  findLeftoverBackups,
+  archiveReplayGate,
+  clearOriginalGate,
+} = require(path.join(__dirname, "..", "..", "gates", "replay-backup"));
 
 const name = "replay";
 
@@ -29,7 +36,28 @@ function run(positional, _flags) {
     process.exit(2);
   }
 
-  const originalPath = path.join(cwd, "pipeline", "gates", `${stageId}.json`);
+  const gatesDir = path.join(cwd, "pipeline", "gates");
+
+  // On startup, warn if a previous replay left an unfinished backup (crash
+  // between dispatch and restore). Offer to restore before proceeding.
+  const leftovers = findLeftoverBackups(gatesDir);
+  if (leftovers.length > 0) {
+    process.stderr.write(
+      `[replay] WARNING: found ${leftovers.length} leftover backup(s) from a previous crashed replay:\n`,
+    );
+    for (const b of leftovers) {
+      process.stderr.write(`  ${b.name}  (backup: ${b.backupPath})\n`);
+    }
+    process.stderr.write(
+      "[replay] A crash between dispatch and restore left the original gate replaced on disk.\n" +
+      "[replay] To restore: copy each backup file over its original path, then delete the backup.\n" +
+      "[replay] Run `devteam replay --restore-backup` (or manually) before replaying again.\n",
+    );
+    process.exit(1);
+  }
+
+  const fs = require("node:fs");
+  const originalPath = path.join(gatesDir, `${stageId}.json`);
   if (!fs.existsSync(originalPath)) {
     console.error(`No gate at ${originalPath}`);
     process.exit(1);
@@ -125,19 +153,23 @@ function run(positional, _flags) {
     return;
   }
 
-  // Real replay. Run the stage headlessly, then read the workstream
-  // gate it produced. Since we don't want to clobber the original,
-  // we use a writable subdir for the replay output.
-  const replayDir = path.join(cwd, "pipeline", "gates", "replay");
-  fs.mkdirSync(replayDir, { recursive: true });
-  const ts = new Date().toISOString().replace(/[:.]/g, "-");
-  const replayPath = path.join(replayDir, `${stageId}.${ts}.json`);
+  // Real replay. Snapshot the original gate to disk before dispatch so a
+  // crash between headless-run and restore cannot silently leave the
+  // original replaced. (3.7.4 race fix)
+  const originalGateName = `${ws.descriptor.workstreamId}.json`;
+  const originalGatePath = path.join(gatesDir, originalGateName);
+  const originalGateRaw = fs.existsSync(originalGatePath)
+    ? fs.readFileSync(originalGatePath, "utf8")
+    : null;
+  // Capture mtime before snapshot so we can detect whether dispatch
+  // actually wrote a new gate vs. the original being left untouched.
+  const originalMtimeMs = originalGateRaw !== null
+    ? fs.statSync(originalGatePath).mtimeMs
+    : 0;
 
-  // Capture the original gate file's mtime so we can detect whether
-  // the headless run actually wrote a new gate vs. just exiting without
-  // touching the file.
-  const originalGatePath = path.join(cwd, "pipeline", "gates", `${ws.descriptor.workstreamId}.json`);
-  const originalMtimeMs = fs.existsSync(originalGatePath) ? fs.statSync(originalGatePath).mtimeMs : 0;
+  if (originalGateRaw !== null) {
+    snapshotGate(gatesDir, originalGateName, originalGateRaw);
+  }
 
   process.stderr.write(`[replay] invoking ${ws.host} headlessly…\n`);
   const { runStageHeadless } = require(path.join(__dirname, "..", "..", "orchestrator"));
@@ -148,16 +180,29 @@ function run(positional, _flags) {
         && fs.existsSync(wsResult.gatePath)
         && fs.statSync(wsResult.gatePath).mtimeMs > originalMtimeMs;
       if (!gateWasWritten) {
+        // Restore from backup before exiting so we don't leave the
+        // canonical path missing or corrupted.
+        if (originalGateRaw !== null) {
+          restoreFromBackup(gatesDir, originalGateName, originalGatePath);
+        }
         process.stderr.write(`[replay] host did not write a new workstream gate (file at ${originalGatePath} is unchanged from before)\n`);
         if (!_flags.json) console.log(`Replay produced no new gate.`);
         process.exit(1);
       }
-      // Read what was written and move it.
+
+      // Read what was written, then archive it to replay/.
       const newGateRaw = fs.readFileSync(wsResult.gatePath, "utf8");
-      fs.writeFileSync(replayPath, newGateRaw);
-      // Restore the original to its canonical path (the headless run
-      // overwrote it). Atomicity isn't critical for a replay flow.
-      fs.writeFileSync(wsResult.gatePath, JSON.stringify(originalGate, null, 2) + "\n");
+      const replayPath = archiveReplayGate(gatesDir, stageId, newGateRaw);
+
+      // Restore the original from the disk backup, then remove the backup.
+      if (originalGateRaw !== null) {
+        restoreFromBackup(gatesDir, originalGateName, originalGatePath);
+      } else {
+        // No original existed; remove the file the headless run wrote so
+        // the canonical path is left in its pre-replay state (absent).
+        deleteBackup(gatesDir, originalGateName);
+        clearOriginalGate(originalGatePath);
+      }
 
       // Diff the gates.
       let newGate;
