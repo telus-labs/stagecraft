@@ -81,7 +81,7 @@ The auto-fold is skipped (and the PM agent invoked normally) when:
 - The Stage 6 test report does not have a 1:1 criterion-to-test mapping
   (one test covers multiple criteria, or one criterion has no test)
 - The user explicitly requested a manual sign-off
-- The track is `/hotfix` (hotfixes always require PM sign-off)
+- The track is `hotfix` (hotfixes always require PM sign-off)
 
 Rationale: when criteria are clean, Stage 7 re-derives the same verdict
 the platform dev already wrote at Stage 6. PM judgment adds value on

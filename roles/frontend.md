@@ -57,7 +57,7 @@ Before build or review work, read:
      ## Verify
 
      - **AC-3**: SMS opt-in toggle appears under account settings
-       - rendered `<SettingsPage />` with `npm run dev`; navigated to /settings
+       - rendered `<SettingsPage />` with the project's dev-server command; navigated to /settings
        - → screenshot at `pipeline/screenshots/ac3-opt-in-toggle.png`; toggle
          appears between "Email notifications" and "Privacy" sections
      - **AC-4**: toggle persists across page reloads

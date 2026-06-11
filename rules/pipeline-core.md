@@ -88,7 +88,7 @@ promoted. Until then, agents skip the "read lessons-learned" step.
 
 Typical durations for each stage. These are guidelines, not hard limits —
 Claude Code does not enforce timeouts on agent execution. If a stage
-seems stalled, use `/status` to check progress and `/pipeline-context`
+seems stalled, use `devteam next` to check progress and `devteam summary`
 for a full state dump.
 
 | Stage | Typical Duration | Notes |
@@ -115,5 +115,5 @@ for a full state dump.
 
 **Claude Code session limits**: Claude Code conversations have a context
 window limit. Long pipeline runs may trigger automatic compaction. The
-`/pipeline-context` command captures state before compaction, and
-`.devteam/rules/compaction.md` tells Claude what to preserve.
+`devteam summary` command captures current pipeline state, and
+`.devteam/rules/compaction.md` tells Claude what to preserve after compaction.

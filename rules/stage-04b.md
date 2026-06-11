@@ -10,7 +10,7 @@ fires. The heuristic matches any of:
   `pyproject.toml`, `Gemfile`, `go.mod`, `composer.json`, `Pipfile`
 - Changes to `Dockerfile` or `docker-compose*.yml` that add/modify a
   **service image, network, or volume** (environment-value-only changes
-  that qualify for `/config-only` do not trigger)
+  that qualify for the `config-only` track do not trigger)
 - Files under `src/infra/` that affect **network topology, IAM/RBAC,
   TLS/certificates, secrets management, or CI/CD secret handling** — e.g.
   `**/iam*`, `**/rbac*`, `**/network*`, `**/firewall*`, `**/certs*`,
@@ -48,9 +48,9 @@ can surface them for the stage manager:
 }
 ```
 
-Both 4.5a and 4.5b must pass (when applicable) before Stage 5 begins.
-`/hotfix` skips 4.5a when the explicit blast-radius constraint in
+Both stage-04a and stage-04b must pass (when applicable) before Stage 5 begins.
+The `hotfix` track skips stage-04a when the explicit blast-radius constraint in
 `pipeline/hotfix-spec.md` already bounds the scope tightly; it does NOT
-skip 4.5b when the heuristic fires (hotfixes *often* touch security
+skip stage-04b when the heuristic fires (hotfixes *often* touch security
 surfaces, and that's exactly when review is most needed).
 

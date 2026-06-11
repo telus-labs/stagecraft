@@ -81,7 +81,7 @@ Before build, test, or review work, read:
 After all Stage 4 build gates pass and before Stage 5 peer review starts:
 
 1. `npm run lint` (or the project's equivalent) — must exit 0.
-2. `npm run type-check` if present — must exit 0.
+2. The project's type-check command if one is configured (e.g. `tsc --noEmit` for TypeScript projects) — must exit 0.
 3. Dependency vulnerability scan: `npm audit --audit-level=high` (or
    `pip-audit`, `bundler-audit`, etc. per stack). Any `high` or
    `critical` finding halts.

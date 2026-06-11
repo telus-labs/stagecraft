@@ -11,7 +11,7 @@ gate's `"review_shape"` and `"required_approvals"` fields.
 Used when the diff is **area-contained**: every changed file lives under
 one of `src/backend/`, `src/frontend/`, `src/infra/`, or `src/tests/`,
 with no cross-area edits. One reviewer from a different area is
-sufficient. The pairing uses the same cross-area convention as `/quick`.
+sufficient. The pairing uses the same cross-area convention as the `quick` track.
 
 **Gate pre-creation (required for scoped reviews).** Before invoking the
 reviewer, the orchestrator must write `pipeline/gates/stage-05.{area}.json`

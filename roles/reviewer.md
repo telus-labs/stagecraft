@@ -16,7 +16,7 @@ are READ-ONLY: during a Stage 5 review invocation you write to
 ## Writes
 
 - `pipeline/code-review/by-<role>.md`
-- Stage 5 review gates through `npm run review:derive`
+- Stage 5 review gates through `devteam derive-approvals` (run by the stage manager after each review file is saved)
 
 ## Handoff
 
@@ -137,8 +137,8 @@ Do NOT write directly to stage-05 gates. The `approval-derivation.js` script
 writes those gates from your review file. Your only write outputs are:
 - `pipeline/code-review/by-<role>.md`
 
-If running `npm run review:derive` manually, this script processes all existing
-review files and updates corresponding stage-05 gates atomically.
+If running `devteam derive-approvals` manually, this command processes all
+existing review files and updates corresponding stage-05 gates atomically.
 
 ## Escalation Triggers
 
