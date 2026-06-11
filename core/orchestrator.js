@@ -18,6 +18,7 @@ const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
 const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
+const { pricingFor } = require("./pricing");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -180,16 +181,37 @@ function runStage(stageName, opts = {}) {
 
   const plan = computeDispatchPlan(stageDef, config, ctx.track);
 
+  // Apply --workstream filter BEFORE rendering prompts so only the requested
+  // workstreams are built. This is the single shared filter for both headless
+  // and non-headless modes — keeping them identical.
+  //
+  // Role-prefix match rule: filter values are bare role names. For fanout stages,
+  // each fanout entry keeps the bare role name (e.g. ws.role = "backend" even when
+  // workstreamId = "stage-05.backend.claude-code"), so all fanout instances of a
+  // role are selected together by a single --workstream value.
+  let effectivePlan = plan;
+  if (opts.workstream && opts.workstream.length > 0) {
+    const wsFilter = new Set(opts.workstream);
+    effectivePlan = plan.filter((entry) => wsFilter.has(entry.role));
+    if (effectivePlan.length === 0) {
+      throw new Error(
+        `--workstream filter matched no roles in stage "${stageName}". ` +
+        `Available: ${[...new Set(plan.map((e) => e.role))].join(", ")}`,
+      );
+    }
+    process.stderr.write(`[devteam] --workstream: dispatching ${[...new Set(effectivePlan.map((e) => e.role))].join(", ")} only\n`);
+  }
+
   return withSpan("pipeline.stage", {
     "devteam.stage": stageDef.stage,
     "devteam.stage.name": stageName,
     "devteam.track": trackLabel(ctx.track),
     "devteam.roles": stageDef.roles.join(","),
-    "devteam.workstream_count": plan.length,
-    "devteam.fanout": plan.some((p) => p.fanout) || undefined,
+    "devteam.workstream_count": effectivePlan.length,
+    "devteam.fanout": effectivePlan.some((p) => p.fanout) || undefined,
     "devteam.feature": ctx.feature || undefined,
   }, () => {
-    const dispatches = plan.map((entry) => withSpan("pipeline.workstream", {
+    const dispatches = effectivePlan.map((entry) => withSpan("pipeline.workstream", {
       "devteam.stage": stageDef.stage,
       "devteam.workstream.role": entry.role,
       "devteam.workstream.id": entry.workstreamId,
@@ -217,10 +239,16 @@ function runStage(stageName, opts = {}) {
       return { role: entry.role, host: hostName, descriptor, prompt, adapter, fanout: entry.fanout };
     }));
 
+    // roles[] reflects the filtered set when --workstream is active, so callers
+    // (e.g. printStagePreamble) show the correct workstream count.
+    const filteredRoles = effectivePlan.length < plan.length
+      ? [...new Set(effectivePlan.map((e) => e.role))]
+      : stageDef.roles;
+
     return {
       stage: stageDef.stage,
       name: stageName,
-      roles: stageDef.roles,
+      roles: filteredRoles,
       workstreams: dispatches,
       ctx,
     };
@@ -260,19 +288,9 @@ async function runStageHeadless(stageName, opts = {}) {
     let preGateMtime = null;
     if (singleRoleGate) { try { preGateMtime = fs.statSync(singleRoleGate).mtimeMs; } catch { preGateMtime = null; } }
 
-    let workstreams = plan.workstreams;
-    if (opts.workstream && opts.workstream.length > 0) {
-      const filter = new Set(opts.workstream);
-      workstreams = workstreams.filter(ws => filter.has(ws.role));
-      if (workstreams.length === 0) {
-        throw new Error(
-          `--workstream filter matched no roles in stage "${stageName}". ` +
-          `Available: ${plan.workstreams.map(w => w.role).join(", ")}`,
-        );
-      }
-      process.stderr.write(`[devteam] --workstream: dispatching ${workstreams.map(w => w.role).join(", ")} only\n`);
-    }
-    const results = await Promise.all(workstreams.map(async (ws) => {
+    // --workstream filtering is applied in runStage (before rendering), so
+    // plan.workstreams already contains only the requested workstreams here.
+    const results = await Promise.all(plan.workstreams.map(async (ws) => {
       if (opts.skipCompleted) {
         const gateFile = path.join(gatesDir, `${ws.descriptor.workstreamId}.json`);
         if (fs.existsSync(gateFile)) {
@@ -410,6 +428,18 @@ function mergeWorkstreamGates(stageName, opts = {}) {
     }
 
     const mergedWarnings = wsGates.flatMap((w) => w.gate.warnings || []);
+    // D7: when a workstream gate reports token usage for an unpriced model,
+    // budget totals silently under-count. Surface a visible warning so the
+    // operator knows enforcement is incomplete for this stage.
+    for (const w of wsGates) {
+      if (
+        typeof w.gate.tokens_in === "number" &&
+        typeof w.gate.model === "string" &&
+        !pricingFor(w.gate.model)
+      ) {
+        mergedWarnings.push(`unpriced model ${w.gate.model} — budget enforcement incomplete`);
+      }
+    }
     const mergedChangesRequested = wsGates.flatMap((w) => {
       const cr = w.gate.changes_requested || [];
       return cr.map((entry) => ({ ...entry, workstream: w.role }));

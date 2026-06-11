@@ -253,6 +253,11 @@ function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
  */
 async function run(opts = {}) {
   const cwd = opts.cwd || process.cwd();
+  // Config is intentionally pinned for the lifetime of this run. The track,
+  // isolation mode, and changeId are derived here and baked into run-state.json —
+  // re-reading config mid-loop could change the stage order or isolation path and
+  // silently corrupt an in-progress run. Users who edit .devteam/config.yml mid-run
+  // must stop and restart (run.lock will alert them to the active run).
   const config = opts.config || loadConfig(cwd);
   const track = resolveTrack(opts, config);
   // B9 (item 1.6): derive changeId from feature + isolation config so the

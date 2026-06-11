@@ -456,17 +456,9 @@ function cmdStage(argv) {
       });
     return;
   }
+  // --workstream filtering is handled in the orchestrator (runStage) before
+  // rendering — result already contains only the requested workstreams.
   const result = runStage(name, flags);
-  if (flags.workstream && flags.workstream.length > 0) {
-    const filter = new Set(flags.workstream);
-    const kept = result.workstreams.filter(ws => filter.has(ws.role));
-    if (kept.length === 0) {
-      console.error(`devteam: --workstream filter matched no roles. Available: ${result.roles.join(", ")}`);
-      process.exit(2);
-    }
-    result.workstreams = kept;
-    result.roles = kept.map(ws => ws.role);
-  }
   printStagePreamble(result, flags);
   for (const ws of result.workstreams) {
     console.log(`\n────────  workstream: ${ws.role}  (host: ${ws.host})  ────────\n`);
@@ -2617,7 +2609,7 @@ function cmdAssess(argv) {
 
   if (flags.apply) {
     const yaml = require("js-yaml");
-    const { configPath: getConfigPath } = require(path.join(__dirname, "..", "core", "config"));
+    const { configPath: getConfigPath, clearConfigCache } = require(path.join(__dirname, "..", "core", "config"));
     const cfgPath = getConfigPath(cwd);
     let parsed = {};
     if (fs.existsSync(cfgPath)) {
@@ -2628,6 +2620,9 @@ function cmdAssess(argv) {
     parsed.pipeline = parsed.pipeline || {};
     parsed.pipeline.custom_stages = result.stages;
     fs.writeFileSync(cfgPath, yaml.dump(parsed, { lineWidth: 120 }), "utf8");
+    // Flush the per-cwd cache so any subsequent loadConfig() in this process
+    // (e.g. a chained devteam stage call) sees the new custom_stages value.
+    clearConfigCache();
     if (!flags.json) console.log(`  ✓ wrote ${path.relative(cwd, cfgPath)}`);
   }
 }

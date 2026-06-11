@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
-const { loadConfig, resolveHost, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS } =
+const { loadConfig, clearConfigCache, resolveHost, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS } =
   require(path.join(REPO_ROOT, "core", "config"));
 
 let _tmpDirs = [];
@@ -98,5 +98,51 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     assert.equal(r2.written, true);
     const content = fs.readFileSync(r2.path, "utf8");
     assert.match(content, /default_host: codex/);
+  });
+});
+
+describe("config: clearConfigCache invalidates in-process reads", () => {
+  it("assess --apply then loadConfig sees new custom_stages (same process)", () => {
+    // Regression: loadConfig memoizes per-cwd. After writing config (as
+    // assess --apply does), a subsequent loadConfig in the same process must
+    // see the new value. clearConfigCache() must be called after the write.
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n",
+    }));
+    const before = loadConfig(cwd);
+    assert.equal(before.pipeline.custom_stages, null);
+
+    // Simulate what assess --apply does: write custom_stages then clear cache.
+    const yaml = require("js-yaml");
+    const cfgPath = path.join(cwd, ".devteam", "config.yml");
+    const parsed = yaml.load(fs.readFileSync(cfgPath, "utf8")) || {};
+    parsed.pipeline = parsed.pipeline || {};
+    parsed.pipeline.custom_stages = ["requirements", "build"];
+    fs.writeFileSync(cfgPath, yaml.dump(parsed), "utf8");
+    clearConfigCache();
+
+    const after = loadConfig(cwd);
+    assert.deepEqual(after.pipeline.custom_stages, ["requirements", "build"]);
+  });
+
+  it("without clearConfigCache, loadConfig returns stale cached value", () => {
+    // Confirms the bug: without clearing, the old value is returned.
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n",
+    }));
+    const before = loadConfig(cwd);
+    assert.equal(before.pipeline.custom_stages, null);
+
+    const yaml = require("js-yaml");
+    const cfgPath = path.join(cwd, ".devteam", "config.yml");
+    const parsed = yaml.load(fs.readFileSync(cfgPath, "utf8")) || {};
+    parsed.pipeline = parsed.pipeline || {};
+    parsed.pipeline.custom_stages = ["requirements", "build"];
+    fs.writeFileSync(cfgPath, yaml.dump(parsed), "utf8");
+    // No clearConfigCache() — stale cache remains.
+
+    const stale = loadConfig(cwd);
+    assert.equal(stale.pipeline.custom_stages, null, "stale cache should still return null");
+    clearConfigCache(); // clean up for subsequent tests
   });
 });
