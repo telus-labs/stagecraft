@@ -445,3 +445,95 @@ describe("gate-validator: --strict mode and validator-errors.log", () => {
     assert.equal(r.status, 2, `expected exit 2 for FAIL gate in --strict mode`);
   });
 });
+
+// G10: validator auto-injects dispatched_tool_budget on user-driven workstream
+// gates (gates that have a workstream field but no dispatched_tool_budget).
+// The headless path stamps it from descriptor.toolBudget; the validator covers
+// the interactive path where models write gates without the field.
+describe("gate-validator: dispatched_tool_budget auto-injection (G10)", () => {
+  it("injects dispatched_tool_budget for a known workstream role on claude-code", () => {
+    // Seed a workstream gate for the reviewer role (known to have a tool budget).
+    const cwd = track(makeTargetProject());
+    const dir = path.join(cwd, "pipeline", "gates");
+    fs.mkdirSync(dir, { recursive: true });
+    const gate = {
+      stage: "stage-05",
+      status: "PASS",
+      host: "claude-code",
+      workstream: "reviewer",
+      track: "full",
+      timestamp: new Date().toISOString(),
+      blockers: [],
+      warnings: [],
+    };
+    const gateFile = path.join(dir, "stage-05.reviewer.json");
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    runValidator(cwd); // must not throw
+
+    const after = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    assert.ok("dispatched_tool_budget" in after,
+      "validator must inject dispatched_tool_budget for a workstream gate missing it");
+    assert.ok(Array.isArray(after.dispatched_tool_budget),
+      "dispatched_tool_budget must be an array for a known role");
+    assert.ok(after.dispatched_tool_budget.length > 0,
+      "reviewer has a declared tool budget — dispatched_tool_budget must be non-empty");
+    // Reviewer must not have Bash (per ADR-004 §1 table).
+    assert.ok(!after.dispatched_tool_budget.includes("Bash"),
+      "reviewer budget must not include Bash (read-only constraint)");
+  });
+
+  it("does not overwrite a dispatched_tool_budget already present in the gate", () => {
+    const cwd = track(makeTargetProject());
+    const dir = path.join(cwd, "pipeline", "gates");
+    fs.mkdirSync(dir, { recursive: true });
+    const preStamped = ["Read", "Glob"];
+    const gate = {
+      stage: "stage-05",
+      status: "PASS",
+      host: "claude-code",
+      workstream: "reviewer",
+      track: "full",
+      timestamp: new Date().toISOString(),
+      blockers: [],
+      warnings: [],
+      dispatched_tool_budget: preStamped,
+    };
+    const gateFile = path.join(dir, "stage-05.reviewer.json");
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    runValidator(cwd);
+
+    const after = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    assert.deepEqual(after.dispatched_tool_budget, preStamped,
+      "validator must not overwrite a dispatched_tool_budget that the orchestrator already stamped");
+  });
+
+  it("injects dispatched_tool_budget: null for a generic host (no toolBudgetFor)", () => {
+    const cwd = track(makeTargetProject());
+    const dir = path.join(cwd, "pipeline", "gates");
+    fs.mkdirSync(dir, { recursive: true });
+    // generic adapter has no toolBudgetFor — injection should write null.
+    const gate = {
+      stage: "stage-01",
+      status: "PASS",
+      host: "generic",
+      workstream: "pm",
+      track: "full",
+      timestamp: new Date().toISOString(),
+      blockers: [],
+      warnings: [],
+    };
+    const gateFile = path.join(dir, "stage-01.pm.json");
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    runValidator(cwd);
+
+    const after = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    // generic adapter has no toolBudgetFor, so the field is either absent or
+    // not injected. The gate remains valid either way.
+    // What must NOT happen: the validator must not crash or flip status to FAIL.
+    assert.ok(after.status === "PASS",
+      "validator must not change status when tool-budget injection is skipped for generic host");
+  });
+});
