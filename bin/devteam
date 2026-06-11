@@ -26,7 +26,7 @@ function getOrchestrator() {
   return _orch;
 }
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "core", "router"));
-const { stageNames, getStage } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
+const { stageNames, getStage, TRACKS } = require(path.join(__dirname, "..", "core", "pipeline", "stages"));
 const { writeConfigIfAbsent, configPath, loadConfig } = require(path.join(__dirname, "..", "core", "config"));
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require(path.join(__dirname, "..", "core", "guards", "stoplist"));
 
@@ -1685,7 +1685,7 @@ function cmdDoctor(argv) {
   console.log("\nConfig");
   check("config parses", config._source === "file", `source: ${config._source}`);
   check("default_host set", !!config.routing.default_host, `→ ${config.routing.default_host}`);
-  check(`default_track is valid`, ["full","quick","nano","config-only","dep-update","hotfix"].includes(config.pipeline.default_track),
+  check(`default_track is valid`, TRACKS.includes(config.pipeline.default_track),
     `→ ${config.pipeline.default_track}`);
 
   // Gather all hosts referenced by the config

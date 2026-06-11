@@ -131,6 +131,23 @@ describe("tracks: TRACKS ↔ STAGES_BY_TRACK", () => {
   });
 });
 
+describe("tracks: VALID_TRACKS in gate-validator derives from canonical TRACKS", () => {
+  it("validator exports VALID_TRACKS equal to the canonical TRACKS array", () => {
+    // Before fix: validator.js has its own inline literal and does not export
+    // VALID_TRACKS — this assertion fails because VALID_TRACKS is undefined.
+    // After fix: validator imports TRACKS from stages.js, derives the Set from
+    // it, and exports it so this test can verify the two are identical.
+    const { VALID_TRACKS } = require(path.join(REPO_ROOT, "core", "gates", "validator.js"));
+    assert.ok(VALID_TRACKS instanceof Set,
+      "validator.js must export VALID_TRACKS as a Set (derived from stages.js TRACKS)");
+    assert.deepEqual(
+      [...VALID_TRACKS].sort(),
+      [...TRACKS].sort(),
+      "validator VALID_TRACKS must be exactly the canonical TRACKS from stages.js",
+    );
+  });
+});
+
 describe("tracks: isStageInTrack", () => {
   it("design is in full and quick — wait actually only full", () => {
     assert.equal(isStageInTrack("design", "full"), true);
