@@ -44,3 +44,4 @@ What else was on the table and why we didn't pick those.
 | [001](001-unification-vs-fork.md) | Unification: one core, per-host adapters (vs maintaining two forks) | Accepted |
 | [002](002-host-adapter-contract.md) | Host adapter contract: capabilities + install + renderStagePrompt + status + uninstall | Accepted |
 | [003](003-bounded-autonomous-execution.md) | Bounded autonomous pipeline execution: typed failure model + authority provenance + consequence-ceilinged driver | Accepted |
+| [004](004-role-tool-budgets.md) | Role tool budgets: host-native tool pinning via ROLE_FRONTMATTER, capability-level degradation, MCP vocabulary deferred | Proposed |
