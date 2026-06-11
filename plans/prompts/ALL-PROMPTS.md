@@ -10,7 +10,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | Phase | Theme | Status |
 |---|---|---|
 | 1 | Trust consolidation | ✅ complete (PRs #63–#69) |
-| 2 | Consistency, docs sweep, release | 2.1 ✅ #71 · 2.2 ✅ #72 · 2.3–2.5 🔲 |
+| 2 | Consistency, docs sweep, release | ✅ complete (PRs #71 · #72 · #75 · #76 · release/v0.6.0) |
 | 3 | Structural debt | 🔲 after Phase 2 |
 | 4 | Capability roadmap (ADR-first) | ⏸ after Phases 1–2 |
 | D | Documentation system | ⏸ D1 = Phase 2; D2+ after |
@@ -257,7 +257,7 @@ merged gate → dispatch refused.
 
 ## Phase 2 — Consistency, Docs Sweep, Release
 
-Order: 2.1 ✅ → 2.2 ✅ → 2.3 → 2.4 → 2.5 (strictly sequential — 2.3/2.4 both touch
+Order: 2.1 ✅ → 2.2 ✅ → 2.3 ✅ → 2.4 ✅ → 2.5 ✅ (strictly sequential — 2.3/2.4 both touch
 CHANGELOG/CONTRIBUTING; 2.5 exercises 2.4's assemble step).
 
 ### 2.1 Consistency checker: prose-vs-code classes ✅ #71
@@ -311,7 +311,7 @@ Report: per-sub-item files+hash; baseline burndown proof; pinned-prose tests upd
 prose-better-than-code flags.
 ```
 
-### 2.3 Split rules/gates.md per stage 🔲 (requires #72 merged)
+### 2.3 Split rules/gates.md per stage ✅ #75
 
 ```
 PRECONDITION CHECK (STOP and report if any fails):
@@ -352,7 +352,7 @@ Report additionally: REFERENCE AUDIT — the grep results and how each referer w
 handled.
 ```
 
-### 2.4 CHANGELOG fragments (backlog C8) 🔲 (requires 2.3 merged)
+### 2.4 CHANGELOG fragments (backlog C8) ✅ #76
 
 ```
 PRECONDITION CHECK (STOP and report if any fails):
@@ -397,7 +397,7 @@ step (use the script's dry-run/skip flags — read it), paste the resulting sect
 Report additionally: CI-GUARD DESIGN — chosen home, why, opt-out mechanics.
 ```
 
-### 2.5 Cut release v0.6.0 🔲 (requires 2.3 + 2.4 merged)
+### 2.5 Cut release v0.6.0 ✅ release/v0.6.0
 
 ```
 PRECONDITION CHECK (STOP and report if any fails):
@@ -876,7 +876,7 @@ recurring failure classes per ADR-003. Write its prompt only when that evidence 
 
 ## Documentation Plan (D2–D6)
 
-D1 = Phase 2 (✅ 2.1/2.2; 2.3–2.5 above). Order: D2 → D4 → D3a → D3b (after 3.1a) →
+D1 = Phase 2 (✅ complete — 2.1–2.5 all merged). Order: D2 → D4 → D3a → D3b (after 3.1a) →
 D5 (after 2.3) → D6 (after 2.5).
 
 **Add this line to the preamble for every D prompt:**
