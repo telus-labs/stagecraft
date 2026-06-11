@@ -154,6 +154,27 @@ The `generic` adapter declares `prompt-only` enforcement: violations are discour
 
 `writeViolations[]` appears in the orchestrator's result when violations are found; it is merged into the gate `blockers[]` so `devteam next` reports `fix-and-retry`.
 
+### Role tool budgets — per-role tool-surface restriction
+
+Each role has a declared tool budget — the list of tools it may use during its workstream. The budget is declared in `ROLE_FRONTMATTER` in `hosts/claude-code/adapter.js` and propagated through the dispatch descriptor so every host can apply it.
+
+Enforcement method depends on the host:
+
+- **claude-code** (`enforces.tool_budget: "native"`): the subagent `tools:` YAML line limits the tool surface at the tool-call boundary. The model cannot call undeclared tools; no prompt instruction needed.
+- **codex, gemini-cli, generic** (`enforces.tool_budget: "prompt-only"`): the tool budget is injected as an advisory section in the stage prompt. The model is told which tools to prefer and which to avoid; violations are not technically blocked.
+
+At dispatch time, the orchestrator warns (not blocks) when a budget-carrying role is routed to a prompt-only host, so operators can see the enforcement gap in `devteam plan` output. Gate files carry a `dispatched_tool_budget` field (orchestrator-stamped for headless runs; auto-injected by the validator for user-driven runs) recording what the role was *permitted* to do — extending the audit trail beyond *what it wrote*.
+
+Current budgets by role (higher-trust roles get broader surfaces):
+
+| Role | Tools |
+|---|---|
+| pm | Read, Write, Glob |
+| reviewer | Read, Write, Glob, Grep |
+| principal | Read, Write, Glob, Grep, Bash |
+| backend / frontend / platform / qa | Read, Write, Edit, Glob, Grep, Bash |
+| auditor / red-team / migrations / verifier | Read, Glob, Grep, Bash, Write |
+
 ### Capability-required permissions — stages declare what they need; adapters declare what they have
 
 Four stages require shell execution to do their work: pre-review (stage-04a), qa (stage-06), verification-beyond-tests (stage-06d), and deploy (stage-08), plus the new performance-budget (stage-06e). Each declares `requiredCapabilities: { shell: true }` in `stages.js`.

@@ -14,6 +14,7 @@
     "allowed_writes": "prompt-only",
     "stoplist": "prompt-only",
     "shell": false,
-    "network": false
+    "network": false,
+    "tool_budget": "prompt-only"
   }
 }

@@ -129,7 +129,7 @@ function renderStagePrompt(descriptor, ctx) {
   // generic, and codex via renderPatchBlock in render-helpers.js.
   // NOTE: gemini-cli and codex adapters are ~95% identical (~158 LOC each);
   // a shared base-class refactor is deferred to plans/phase-3-structural-debt.md.
-  const { renderPatchBlock, allowedWritesCaption, appendGateFooter } = require("../../core/adapters/render-helpers");
+  const { renderPatchBlock, allowedWritesCaption, appendGateFooter, toolBudgetSection } = require("../../core/adapters/render-helpers");
   renderPatchBlock(ctx, lines);
   lines.push("");
   lines.push(`Read the role prompt at \`${rolePromptPath}\` before acting on this stage.`);
@@ -143,6 +143,8 @@ function renderStagePrompt(descriptor, ctx) {
   lines.push(allowedWritesCaption(capabilities.enforces.allowed_writes, capabilities.displayName || "gemini-cli"));
   for (const f of descriptor.allowedWrites) lines.push(`- ${f}`);
   lines.push("");
+  const budgetSection = toolBudgetSection(descriptor.toolBudget, capabilities.enforces.tool_budget);
+  if (budgetSection) { lines.push(budgetSection); lines.push(""); }
   lines.push(`## Artifact`);
   lines.push(`Produce \`${descriptor.artifact}\` using \`templates/${descriptor.template}\`.`);
   lines.push("");

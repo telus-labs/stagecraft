@@ -74,6 +74,37 @@ function assertCapabilities(stageDef, role, hostName, adapter) {
   }
 }
 
+// G10: warn (not throw) when a budget-carrying role is dispatched to a host
+// that can only enforce via prompt, not at the tool-call boundary. Unlike
+// shell/network (hard blocks — the stage can't run without them), a
+// prompt-only budget is a degraded but valid configuration: the model sees
+// the restriction and may comply; violations are advisory. Operators who
+// route to codex/gemini-cli knowingly accept the tradeoff.
+function warnIfToolBudgetDegraded(toolBudget, role, hostName, adapter) {
+  if (!toolBudget || toolBudget.length === 0) return;
+  const level = adapter.capabilities?.enforces?.tool_budget;
+  if (level && level !== "native") {
+    process.stderr.write(
+      `[devteam] note: role "${role}" has a declared tool budget [${toolBudget.join(", ")}] ` +
+      `but host "${hostName}" enforces it as ${level} (not at the tool-call boundary). ` +
+      `The model will be instructed to stay within the budget; violations cannot be prevented. ` +
+      `Route to claude-code for native tool-call enforcement.\n`,
+    );
+  }
+}
+
+// G10: patch a gate file to add dispatched_tool_budget. Called in the
+// headless path after invoke() writes the gate — gives the audit trail an
+// orchestrator-stamped (not model-written) record of what tools were declared.
+function patchGateForToolBudget(gatePath, toolBudget) {
+  if (!fs.existsSync(gatePath)) return;
+  const { gate, error } = loadGateSafe(gatePath);
+  if (error || !gate) return;
+  if ("dispatched_tool_budget" in gate) return; // already stamped; don't overwrite
+  const patched = { ...gate, dispatched_tool_budget: toolBudget };
+  fs.writeFileSync(gatePath, JSON.stringify(patched, null, 2) + "\n", "utf8");
+}
+
 // Compute the full dispatch plan for a stage: which (role, host) pairs
 // the orchestrator should invoke, with their workstream ids and gate
 // filenames. Normally there's one entry per role; for peer-review with
@@ -133,6 +164,9 @@ function buildDescriptor(stageDef, role, opts = {}) {
       : null,
     expectedGate: stageDef.gate,
     changeId,
+    // G10: per-role tool budget declared by the adapter (e.g. ["Read","Glob","Grep"]).
+    // null means the adapter declared no budget (full host surface applies).
+    toolBudget: opts.toolBudget ?? null,
     // When set, all workstreams of this stage dispatch to the same
     // subagent regardless of role (used by peer-review where the
     // workstreams are areas being reviewed but the dispatched agent
@@ -231,7 +265,13 @@ function runStage(stageName, opts = {}) {
         adapter = resolved.adapter;
       }
       assertCapabilities(stageDef, entry.role, hostName, adapter);
-      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId, changeId: ctx.changeId });
+      // G10: resolve per-role tool budget from the adapter (only claude-code
+      // exports toolBudgetFor; others return undefined → null budget).
+      const toolBudget = typeof adapter.toolBudgetFor === "function"
+        ? adapter.toolBudgetFor(entry.role)
+        : null;
+      warnIfToolBudgetDegraded(toolBudget, entry.role, hostName, adapter);
+      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId, changeId: ctx.changeId, toolBudget });
       const prompt = withSpan("adapter.renderStagePrompt", {
         "devteam.host": hostName,
         "devteam.stage": stageDef.stage,
@@ -301,6 +341,13 @@ async function runStageHeadless(stageName, opts = {}) {
         }
       }
       process.stderr.write(`[devteam] dispatching ${ws.role} → ${ws.host} (headless)\n`);
+      // G10: snapshot mtime before invoke so we can tell whether the headless
+      // command actually wrote the gate (vs. a pre-existing gate that the
+      // command left untouched — e.g. `devteam replay` with a no-op command).
+      const wsGatePathExpected = path.join(gatesDir, `${ws.descriptor.workstreamId}.json`);
+      let preInvokeMtime = null;
+      try { preInvokeMtime = fs.statSync(wsGatePathExpected).mtimeMs; } catch { preInvokeMtime = null; }
+
       const r = await withSpan("adapter.invoke", {
         "devteam.host": ws.host,
         "devteam.workstream.role": ws.role,
@@ -321,8 +368,23 @@ async function runStageHeadless(stageName, opts = {}) {
       });
       // C1: if write violations were detected, patch the gate to FAIL.
       if (r.writeViolations && r.writeViolations.length > 0) {
-        const wsGatePath = r.gatePath || path.join(gatesDir, `${ws.descriptor.workstreamId}.json`);
+        const wsGatePath = r.gatePath || wsGatePathExpected;
         patchGateForWriteViolations(wsGatePath, r.writeViolations);
+      }
+      // G10: stamp dispatched_tool_budget only when the headless command
+      // actually wrote (or rewrote) the gate — detected by mtime advancing
+      // past the pre-invoke snapshot. This prevents patching a pre-existing
+      // gate left untouched by the command (e.g. `devteam replay` with a
+      // no-op command), which would otherwise corrupt the mtime-based
+      // "gate was written" detection in the replay flow.
+      if (ws.descriptor.toolBudget !== null) {
+        const budgetGatePath = r.gatePath || wsGatePathExpected;
+        let postMtime = null;
+        try { postMtime = fs.statSync(budgetGatePath).mtimeMs; } catch { postMtime = null; }
+        const gateWasWrittenThisRun = postMtime !== null && (preInvokeMtime === null || postMtime > preInvokeMtime);
+        if (gateWasWrittenThisRun) {
+          patchGateForToolBudget(budgetGatePath, ws.descriptor.toolBudget);
+        }
       }
       return { role: ws.role, host: ws.host, descriptor: ws.descriptor, ...r };
     }));

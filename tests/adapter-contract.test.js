@@ -69,13 +69,17 @@ describe("adapter contract", () => {
         assert.equal(adapter.capabilities.name, host);
       });
 
-      it("declares an enforces map (allowed_writes + stoplist)", () => {
+      it("declares an enforces map (allowed_writes + stoplist + tool_budget)", () => {
         assert.ok(adapter.capabilities.enforces, `${host}: missing enforces`);
         const valid = new Set(["tool-call-time", "post-hoc-audit", "prompt-only"]);
         assert.ok(valid.has(adapter.capabilities.enforces.allowed_writes),
           `${host}.enforces.allowed_writes must be one of ${[...valid].join(", ")}; got ${adapter.capabilities.enforces.allowed_writes}`);
         assert.ok(valid.has(adapter.capabilities.enforces.stoplist),
           `${host}.enforces.stoplist must be one of ${[...valid].join(", ")}; got ${adapter.capabilities.enforces.stoplist}`);
+        // G10: every adapter must declare a tool_budget enforcement level.
+        const validBudget = new Set(["native", "prompt-only"]);
+        assert.ok(validBudget.has(adapter.capabilities.enforces.tool_budget),
+          `${host}.enforces.tool_budget must be one of ${[...validBudget].join(", ")}; got ${adapter.capabilities.enforces.tool_budget}`);
       });
 
       for (const m of REQUIRED_METHODS) {
@@ -353,5 +357,97 @@ describe("adapter contract: PATCH MODE rendering", () => {
         `${host}: absent vs empty patchItems must produce identical output`,
       );
     }
+  });
+});
+
+// G10: claude-code adapter must export toolBudgetFor() returning the
+// per-role tool list. This is the extraction point the orchestrator uses
+// to populate descriptor.toolBudget for all hosts.
+describe("adapter contract: claude-code toolBudgetFor", () => {
+  const adapter = loadAdapter("claude-code");
+
+  it("exports toolBudgetFor as a function", () => {
+    assert.equal(typeof adapter.toolBudgetFor, "function",
+      "claude-code adapter must export toolBudgetFor()");
+  });
+
+  it("returns an array of strings for every known role", () => {
+    // All roles in ROLE_FRONTMATTER have a tools: field — none should return null.
+    const knownRoles = ["pm", "principal", "reviewer", "security", "backend", "frontend",
+      "platform", "qa", "auditor", "red-team", "migrations", "verifier"];
+    for (const role of knownRoles) {
+      const budget = adapter.toolBudgetFor(role);
+      assert.ok(Array.isArray(budget),
+        `toolBudgetFor("${role}") must return an array; got ${JSON.stringify(budget)}`);
+      assert.ok(budget.length > 0,
+        `toolBudgetFor("${role}") must return a non-empty array`);
+      for (const t of budget) {
+        assert.equal(typeof t, "string",
+          `toolBudgetFor("${role}") array items must be strings; got ${typeof t}`);
+      }
+    }
+  });
+
+  it("returns null for an unknown role", () => {
+    assert.equal(adapter.toolBudgetFor("nonexistent-role"), null,
+      "toolBudgetFor for an unknown role must return null");
+  });
+
+  it("reviewer budget does not include Bash (read-only constraint)", () => {
+    const budget = adapter.toolBudgetFor("reviewer");
+    assert.ok(Array.isArray(budget), "reviewer budget must be an array");
+    assert.ok(!budget.includes("Bash"),
+      `reviewer budget must not include Bash; got [${budget.join(", ")}]`);
+  });
+
+  it("pm budget does not include Bash (non-technical role)", () => {
+    const budget = adapter.toolBudgetFor("pm");
+    assert.ok(!budget.includes("Bash"),
+      `pm budget must not include Bash; got [${budget.join(", ")}]`);
+  });
+});
+
+// G10: prompt-only adapters must inject the tool budget advisory section
+// when descriptor.toolBudget is set, and must NOT inject it when absent.
+describe("adapter contract: tool budget section rendering", () => {
+  const PROMPT_ONLY_HOSTS = ["codex", "gemini-cli", "generic"];
+  const TOOL_BUDGET = ["Read", "Glob", "Grep"];
+
+  function descriptorWithBudget() {
+    return { ...fixtureDescriptor(), toolBudget: TOOL_BUDGET };
+  }
+
+  function descriptorNoBudget() {
+    return { ...fixtureDescriptor(), toolBudget: null };
+  }
+
+  for (const host of PROMPT_ONLY_HOSTS) {
+    const adapter = loadAdapter(host);
+
+    it(`${host}: prompt WITH toolBudget includes the tool surface advisory section`, () => {
+      const d = tmpdir();
+      const prompt = adapter.renderStagePrompt(descriptorWithBudget(), fixtureContext(d));
+      assert.ok(prompt.includes("Tool surface"),
+        `${host}: prompt with toolBudget must include "Tool surface" heading`);
+      for (const tool of TOOL_BUDGET) {
+        assert.ok(prompt.includes(tool),
+          `${host}: prompt must mention declared tool "${tool}" in budget section`);
+      }
+    });
+
+    it(`${host}: prompt WITHOUT toolBudget does NOT include the tool surface section`, () => {
+      const d = tmpdir();
+      const prompt = adapter.renderStagePrompt(descriptorNoBudget(), fixtureContext(d));
+      assert.ok(!prompt.includes("Tool surface"),
+        `${host}: prompt without toolBudget must NOT include "Tool surface" heading`);
+    });
+  }
+
+  it("claude-code prompt does NOT include tool surface advisory (native enforcement — no redundant instruction)", () => {
+    const d = tmpdir();
+    const adapter = loadAdapter("claude-code");
+    const prompt = adapter.renderStagePrompt(descriptorWithBudget(), fixtureContext(d));
+    assert.ok(!prompt.includes("Tool surface"),
+      "claude-code prompt must not inject advisory section (tools enforced natively by host)");
   });
 });
