@@ -344,3 +344,56 @@ pipeline:
     assert.equal(r.workstreams[0].descriptor.workstreamId, "stage-04.platform");
   });
 });
+
+describe("orchestrator: mergeWorkstreamGates unpriced model warning (Fix 3.7.7)", () => {
+  const roles = ["backend", "frontend", "platform", "qa"];
+
+  function seedBuild(cwd, overrides = {}) {
+    roles.forEach((role) => {
+      seedGate(cwd, `stage-04.${role}`, {
+        stage: "stage-04",
+        workstream: role,
+        host: "future-host",
+        status: "PASS",
+        ...overrides,
+      });
+    });
+  }
+
+  it("gate with tokens for unknown model → warning present in merged gate", () => {
+    const cwd = track(makeTargetProject());
+    seedBuild(cwd, { model: "future-model-9", tokens_in: 5000, tokens_out: 2000 });
+    const r = mergeWorkstreamGates("build", { cwd });
+    assert.equal(r.merged, true);
+    // At least one warning per unpriced workstream
+    assert.ok(r.gate.warnings.some((w) => w.includes("unpriced model future-model-9")));
+    assert.ok(r.gate.warnings.some((w) => w.includes("budget enforcement incomplete")));
+  });
+
+  it("gate with tokens for unknown model → totals unchanged (not silently zeroed)", () => {
+    const cwd = track(makeTargetProject());
+    seedBuild(cwd, { model: "future-model-9", tokens_in: 5000, tokens_out: 2000 });
+    const r = mergeWorkstreamGates("build", { cwd });
+    // Token totals are still summed correctly
+    assert.equal(r.gate.tokens_in, 5000 * roles.length);
+    assert.equal(r.gate.tokens_out, 2000 * roles.length);
+    // No cost_usd emitted when model is unpriced (not silently zero)
+    assert.equal(r.gate.cost_usd, undefined);
+  });
+
+  it("gate with tokens for known model → no unpriced warning", () => {
+    const cwd = track(makeTargetProject());
+    seedBuild(cwd, { model: "claude-sonnet-4-6", tokens_in: 5000, tokens_out: 2000, cost_usd: 0.05 });
+    const r = mergeWorkstreamGates("build", { cwd });
+    const unpricedWarnings = r.gate.warnings.filter((w) => w.includes("unpriced model"));
+    assert.equal(unpricedWarnings.length, 0);
+  });
+
+  it("gate with no model field → no warning (only model-named tokens are flagged)", () => {
+    const cwd = track(makeTargetProject());
+    seedBuild(cwd, { tokens_in: 5000, tokens_out: 2000 });
+    const r = mergeWorkstreamGates("build", { cwd });
+    const unpricedWarnings = r.gate.warnings.filter((w) => w.includes("unpriced model"));
+    assert.equal(unpricedWarnings.length, 0);
+  });
+});

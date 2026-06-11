@@ -18,6 +18,7 @@ const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
 const { loadGateSafe } = require("./gates/load-gate");
 const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
+const { pricingFor } = require("./pricing");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -427,6 +428,18 @@ function mergeWorkstreamGates(stageName, opts = {}) {
     }
 
     const mergedWarnings = wsGates.flatMap((w) => w.gate.warnings || []);
+    // D7: when a workstream gate reports token usage for an unpriced model,
+    // budget totals silently under-count. Surface a visible warning so the
+    // operator knows enforcement is incomplete for this stage.
+    for (const w of wsGates) {
+      if (
+        typeof w.gate.tokens_in === "number" &&
+        typeof w.gate.model === "string" &&
+        !pricingFor(w.gate.model)
+      ) {
+        mergedWarnings.push(`unpriced model ${w.gate.model} — budget enforcement incomplete`);
+      }
+    }
     const mergedChangesRequested = wsGates.flatMap((w) => {
       const cr = w.gate.changes_requested || [];
       return cr.map((entry) => ({ ...entry, workstream: w.role }));
