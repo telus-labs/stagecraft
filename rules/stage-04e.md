@@ -34,11 +34,25 @@ Reads `pipeline/gates/stage-04c.json` `noted_for_followup[]` and counts items. N
 
 **Why**: Red-team agents classify some findings as `noted_for_followup` rather than `must_address_before_peer_review`. Peer reviewers independently find the same issues and flag them as BLOCKERs, causing an avoidable round-trip. The warning gives the stage manager a chance to address them before dispatching reviewers.
 
-## Gate file
+## Gate
 
-`pipeline/gates/stage-04e.json` — written by `runPreflight()` in `core/preflight.js`.
+Gate file: `pipeline/gates/stage-04e.json` — written by `runPreflight()` in `core/preflight.js`.
+Schema: `core/gates/schemas/stage-04e.schema.json`.
 
-Fields: `status` (PASS/FAIL), `blockers[]`, `warnings[]`, `git_hygiene_pass`, `import_path_pass`, `deferred_items_count`. Schema: `core/gates/schemas/stage-04e.schema.json`.
+```json
+{
+  "stage": "stage-04e",
+  "status": "PASS | FAIL",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "blockers": [],
+  "warnings": [],
+  "git_hygiene_pass": true,
+  "import_path_pass": true,
+  "deferred_items_count": 0
+}
+```
 
 ## Stage manager commands
 

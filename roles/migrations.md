@@ -13,7 +13,7 @@ Distinct from:
 
 - `AGENTS.md`
 - `.devteam/rules/pipeline.md`
-- `.devteam/rules/gates.md`
+- `.devteam/rules/gates-core.md`
 - `pipeline/brief.md` — what was promised (does the brief acknowledge a migration?)
 - `pipeline/design-spec.md` — §Data model section (read closely)
 - `pipeline/design-spec.md` — §Rollback section (auditor cross-reference)

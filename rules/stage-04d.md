@@ -8,19 +8,35 @@ migration files.
 Input: `pipeline/brief.md`, `pipeline/design-spec.md`, `pipeline/pre-review.md`,
 `pipeline/pr-*.md`.
 Output: `pipeline/migration-safety.md`.
-Gate file: `pipeline/gates/stage-04d.json`. Required keys:
-- `migration_files`: list of changed migration/schema file paths
-- `schema_changes_summary`: one-paragraph description of the schema delta
-- `breaking_change`: boolean — does the change break existing consumers?
-- `backfill_required`: boolean
-- `backfill_strategy`: string (empty when not required)
-- `dual_write_required`: boolean
-- `dual_write_strategy`: string (empty when not required)
-- `rollback_plan`: string — the tested rollback procedure
-- `rollback_tested`: boolean — was the rollback actually verified?
-- `migration_approved`: boolean
-- `veto`: boolean — set to `true` if rollback is untested or blast radius is unbounded
-- `triggering_conditions`: list of matching heuristic conditions
+## Gate
+
+Gate file: `pipeline/gates/stage-04d.json`. Written only when the heuristic fires.
+
+```json
+{
+  "stage": "stage-04d",
+  "status": "PASS | FAIL",
+  "track": "full",
+  "timestamp": "<ISO 8601>",
+  "orchestrator": "devteam@<version>",
+  "workstream": "migrations",
+  "host": "claude-code",
+  "blockers": [],
+  "warnings": [],
+  "migration_files": ["db/migrate/20240101_add_users.sql"],
+  "schema_changes_summary": "Adds users.email column (NOT NULL, no default).",
+  "breaking_change": false,
+  "backfill_required": true,
+  "backfill_strategy": "Populate from auth.email before applying NOT NULL constraint.",
+  "dual_write_required": false,
+  "dual_write_strategy": "",
+  "rollback_plan": "DROP COLUMN users.email; revert application code.",
+  "rollback_tested": true,
+  "migration_approved": true,
+  "veto": false,
+  "triggering_conditions": ["schema-file", "migration-dir"]
+}
+```
 
 **Veto power.** A migration without a tested rollback halts the pipeline regardless
 of other approvals. `veto: true` also sets `status: FAIL`. The migrations agent must

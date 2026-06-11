@@ -245,7 +245,7 @@ The prompt still prints (in case you want to read it), but feeding it to a model
 `devteam next` will keep reporting `run-stage` (or `continue-stage` for multi-role stages with partial completion). Three options:
 
 1. **Re-run the stage.** Most common cause is the model lost context or skipped the gate step. Re-running overwrites cleanly.
-2. **Hand-write the gate.** Look at `rules/gates.md` for the required fields. Write a JSON file at the expected path. Stagecraft doesn't care how the gate got there.
+2. **Hand-write the gate.** Look at `rules/gates-core.md` for the universal required fields and the per-stage `rules/stage-NN.md` for extra fields. Write a JSON file at the expected path. Stagecraft doesn't care how the gate got there.
 3. **Escalate.** Write the gate with `status: "ESCALATE"` and a reason in `escalation_reason`. Stagecraft halts cleanly and surfaces the situation.
 
 ---
@@ -278,7 +278,7 @@ Turn the feature request into requirements, acceptance criteria, and scope bound
 ## Read first
 - AGENTS.md
 - .devteam/rules/pipeline.md
-- .devteam/rules/gates.md
+- .devteam/rules/gates-core.md
 - pipeline/context.md
 
 ## Allowed writes (enforced by Claude Code hooks at tool-call time)
@@ -507,7 +507,7 @@ After a fourth reviewer covers qa and the platform blocker is addressed (a secon
 Same shape as the others; nothing structurally new.
 
 - **Stage 6 (QA)** writes `pipeline/test-report.md` and a gate carrying `all_acceptance_criteria_met` and the 1:1 criterion-to-test mapping.
-- **Stage 7 (PM + Platform)** is the sign-off stage. The orchestrator can auto-fold this gate when Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 mapping — see `rules/gates.md` §Stage 07.
+- **Stage 7 (PM + Platform)** is the sign-off stage. The orchestrator can auto-fold this gate when Stage 6 reports `all_acceptance_criteria_met: true` AND a 1:1 mapping — see `rules/stage-07.md` §Gate.
 - **Stage 8 (Platform)** runs the deploy adapter. The adapter (`core/deploy/<name>.md`) names the deploy procedure; gate carries `deploy_adapter`, `smoke_test_passed`, `runbook_referenced`. Do **not** auto-rollback on FAIL — the runbook names the rollback and a human decides.
 - **Stage 9 (Principal)** synthesizes the retrospective. Harvests `PATTERN:` lines from Stage 5 reviews; promotes ≤2 rules into `pipeline/lessons-learned.md`; auto-ages out rules that haven't been reinforced in 10 runs.
 

@@ -92,7 +92,7 @@ Add `pipeline/memory/` to `.gitignore` (memory store, large blobs) but commit `p
 
 ### Can I author the gate JSON by hand instead of via the LLM?
 
-Yes. The orchestrator doesn't care how the gate file got written — it only validates the JSON and advances based on `status`. For trivial stages or when an agent fails, hand-writing the gate is fine. See `rules/gates.md` for the required-fields shape.
+Yes. The orchestrator doesn't care how the gate file got written — it only validates the JSON and advances based on `status`. For trivial stages or when an agent fails, hand-writing the gate is fine. See `rules/gates-core.md` for the required-fields shape.
 
 ### What is a workstream? When do I have multiple?
 
@@ -434,7 +434,7 @@ Check in order:
 Two recovery options:
 
 - **Re-invoke the subagent** with a clearer instruction. The most common cause is the model lost context mid-task or misread the prompt. Re-running the stage is safe — the orchestrator overwrites the workstream's previous (incomplete) gate when a new one is written.
-- **Hand-write the gate.** If the model produced the artifact but not the gate, you can write the gate JSON yourself. See `rules/gates.md` for the required-fields shape per stage. The orchestrator doesn't care how the gate got there.
+- **Hand-write the gate.** If the model produced the artifact but not the gate, you can write the gate JSON yourself. See `rules/gates-core.md` for the universal fields and the per-stage `rules/stage-NN.md` for extra fields. The orchestrator doesn't care how the gate got there.
 
 If neither works: write the gate with `status: "ESCALATE"`, fill `escalation_reason` with what happened, and run `devteam next` — it'll route you to `resolve-escalation` and the pipeline halts cleanly until you decide.
 

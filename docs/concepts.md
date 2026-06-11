@@ -120,7 +120,7 @@ See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety 
 | Path | What lives there |
 |---|---|
 | `roles/<role>.md` | Single source of truth for what each role does, reads, writes. |
-| `rules/<topic>.md` | Pipeline rules — `gates.md`, `pipeline.md`, `escalation.md`, `retrospective.md`, etc. |
+| `rules/<topic>.md` | Pipeline rules — `gates-core.md` (universal gate contract), `pipeline.md`, `escalation.md`, `retrospective.md`, per-stage `stage-NN.md`, etc. |
 | `skills/<skill>/SKILL.md` | Task helpers — `implement`, `review-rubric`, `security-checklist`, `accessibility-audit`, `observability-verification`. |
 | `templates/<artifact>-template.md` | Artifact templates (brief, design-spec, runbook, retrospective, etc.). See also: per-template *annotation guides* (the "why each section matters" docs) at `docs/brief-template.md`, `docs/design-spec-template.md`, `docs/runbook-template.md` — but **only for the three load-bearing artifacts a human actually reads end-to-end**. The other 9 templates (build, clarification, pr-summary, pre-review, retrospective, review, test-report, adr, audit/) are agent-facing and don't have separate annotation guides; the role brief that produces each template carries the context. This asymmetry is deliberate — annotating every template would produce ~500 lines of mostly-redundant content nobody reads. |
 | `hosts/<host>/` | Per-host adapter: `adapter.js`, `capabilities.json`, `install/` payload. |

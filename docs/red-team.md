@@ -44,7 +44,7 @@ Each finding is triaged by severity × likelihood × scope.
 | `affected_workstreams` | string[] | Deduplicated sorted list of `assigned_to` values from `must_address_before_peer_review` findings; used by `devteam next` to name which gates to clear |
 | `blockers` | object[] | Must-fix findings in gate-standard shape: `id`, `assigned_to` (required), `file`, `line`, `summary`; `devteam next` reads `assigned_to` here to generate targeted fix steps |
 | `must_address_before_peer_review` | object[] | Blocking findings in red-team shape: `id`, `assigned_to` (required), `file`, `severity`, `scenario`, `reproducer`, `fix_suggestion`; non-empty → FAIL |
-| `noted_for_followup` | object[] | Non-blocking findings with `id`, `assigned_to`, `text`, `track_for`, `file`, `effort` (see `rules/gates.md §noted_for_followup[]`) |
+| `noted_for_followup` | object[] | Non-blocking findings with `id`, `assigned_to`, `text`, `track_for`, `file`, `effort` (see `rules/gates-core.md §noted_for_followup[]`) |
 
 `surfaces_walked` and `surfaces_skipped` together must account for all 10 attack surfaces. A gate missing coverage for any surface emits a validator advisory. Operators can see which surfaces the agent exercised and which it declared out of scope, keeping a fast PASS auditable.
 

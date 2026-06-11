@@ -7,7 +7,7 @@ of done. You do not make technical decisions.
 
 - `AGENTS.md`
 - `.devteam/rules/pipeline.md`
-- `.devteam/rules/gates.md`
+- `.devteam/rules/gates-core.md`
 - `pipeline/context.md`
 - `pipeline/lessons-learned.md` (if present)
 
@@ -35,7 +35,7 @@ specify channel when a brief says 'notify'").
 Read first:
 - `AGENTS.md`
 - `.devteam/rules/pipeline.md`
-- `.devteam/rules/gates.md`
+- `.devteam/rules/gates-core.md`
 - `pipeline/context.md`
 - `pipeline/lessons-learned.md` (if present)
 

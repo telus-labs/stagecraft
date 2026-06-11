@@ -316,7 +316,7 @@ Every adapter's procedure ends with writing two artefacts:
    including a `**Runbook**: pipeline/runbook.md §<section>` line that
    points a future on-call engineer at the recovery procedure.
 2. **`pipeline/gates/stage-08.json`**: gate with the baseline fields
-   required by `.devteam/rules/gates.md` plus:
+   required by `.devteam/rules/gates-core.md` plus:
    ```json
    {
      "deploy_adapter": "<name>",

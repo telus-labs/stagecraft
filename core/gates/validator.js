@@ -549,7 +549,7 @@ function main() {
       `[gate-validator] ERROR: Could not parse ${latest.name}: ${error}`,
     );
     console.error(
-      `[gate-validator] Gate files must be valid JSON. See .devteam/rules/gates.md`,
+      `[gate-validator] Gate files must be valid JSON. See .devteam/rules/gates-core.md`,
     );
     process.exit(1);
   }
@@ -576,7 +576,7 @@ function main() {
   if (retryErr) {
     console.error(`[gate-validator] INVALID GATE ${latest.name}: ${retryErr}`);
     console.error(
-      `[gate-validator] See .devteam/rules/gates.md §Retry Protocol`,
+      `[gate-validator] See .devteam/rules/gates-core.md §Retry Protocol`,
     );
     process.exit(1);
   }

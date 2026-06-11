@@ -23,7 +23,7 @@ possible (`stage-05.md`, not `pipeline.md §Stage 5`).
 
 ## Related rules
 
-- `.devteam/rules/gates.md` — JSON schema for every gate file
+- `.devteam/rules/gates-core.md` — universal gate contract (required fields, status, retry, chain, validator)
 - `.devteam/rules/orchestrator.md` — orchestrator startup and routing
 - `.devteam/rules/escalation.md` — escalation protocol
 - `.devteam/rules/coding-principles.md` — four binding dev principles

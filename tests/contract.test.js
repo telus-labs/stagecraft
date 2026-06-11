@@ -161,7 +161,7 @@ describe("contract: adapters ↔ hosts/ directory", () => {
 
 describe("contract: rules ↔ skills ↔ templates exist", () => {
   it("required rules docs are present", () => {
-    const required = ["gates.md", "pipeline.md", "escalation.md", "retrospective.md", "orchestrator.md"];
+    const required = ["gates.md", "gates-core.md", "pipeline.md", "escalation.md", "retrospective.md", "orchestrator.md"];
     for (const r of required) {
       assert.ok(fs.existsSync(path.join(REPO_ROOT, "rules", r)), `rules/${r} missing`);
     }
@@ -179,6 +179,41 @@ describe("contract: rules ↔ skills ↔ templates exist", () => {
       if (!def || !def.template) continue;
       const tpl = path.join(REPO_ROOT, "templates", def.template);
       assert.ok(fs.existsSync(tpl), `template ${def.template} missing in templates/`);
+    }
+  });
+});
+
+describe("contract: gates split — gates-core.md and per-stage gate sections", () => {
+  it("every stage readFirst includes gates-core.md (not the old gates.md)", () => {
+    for (const [name, def] of Object.entries(STAGES)) {
+      if (!def || !Array.isArray(def.readFirst) || def.readFirst.length === 0) continue;
+      assert.ok(
+        def.readFirst.includes(".devteam/rules/gates-core.md"),
+        `stage "${name}" readFirst missing ".devteam/rules/gates-core.md"`,
+      );
+      assert.ok(
+        !def.readFirst.includes(".devteam/rules/gates.md"),
+        `stage "${name}" readFirst still points at the old ".devteam/rules/gates.md" — update to gates-core.md`,
+      );
+    }
+  });
+
+  it("every rules/stage-NN.md that exists contains a ## Gate section with fields matching its gate skeleton", () => {
+    for (const [name, def] of Object.entries(STAGES)) {
+      if (!def || !def.gate || Object.keys(def.gate).length === 0) continue;
+      const stageFile = path.join(REPO_ROOT, "rules", `${def.stage}.md`);
+      if (!fs.existsSync(stageFile)) continue; // only check files that exist
+      const content = fs.readFileSync(stageFile, "utf8");
+      assert.ok(
+        content.includes("## Gate"),
+        `rules/${def.stage}.md exists but has no "## Gate" section`,
+      );
+      for (const field of Object.keys(def.gate)) {
+        assert.ok(
+          content.includes(`"${field}"`),
+          `rules/${def.stage}.md ## Gate section missing field "${field}" (from stages.js gate skeleton for stage "${name}")`,
+        );
+      }
     }
   });
 });

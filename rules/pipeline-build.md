@@ -8,7 +8,7 @@ specific stage) can load only what it needs.
 Stages 1–3 + 9 + durations live in `pipeline-core.md`. Track routing
 and the safety stoplist live in `pipeline-tracks.md`. The full index is
 in `pipeline.md`. Gate schemas (required fields, validator behavior,
-retry protocol) live in `gates.md`.
+retry protocol) live in `gates-core.md`.
 
 ## Stage index
 
@@ -39,4 +39,4 @@ retry protocol) live in `gates.md`.
   than this index. The role briefs do — see e.g.
   `roles/qa.md` § "On a Test-Execution Task".
 - **Reviewers / auditors:** read the relevant stage file plus
-  `gates.md` for the gate-field reference.
+  `gates-core.md` for the universal gate-field reference, and each `stage-NN.md` for per-stage fields.

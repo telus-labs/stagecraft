@@ -35,7 +35,7 @@ Full pipeline definition:
   you do not need to load all nine build stages at startup.
 
 Index and rationale: `.devteam/rules/pipeline.md`.
-Gate schema: see `.devteam/rules/gates.md`
+Gate contract (universal): see `.devteam/rules/gates-core.md`; per-stage fields: each `stage-NN.md`
 Escalation rules: see `.devteam/rules/escalation.md`
 Coding principles (binding on all devs): see `.devteam/rules/coding-principles.md`
 Retrospective (Stage 9): see `.devteam/rules/retrospective.md`
