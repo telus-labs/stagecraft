@@ -1146,10 +1146,18 @@ function computeFixSteps(gate, stageDef, gatesDir) {
       });
       steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
     } else {
+      // Workstream not identified from blocker text — clear all build gates and dispatch
+      // build globally so the agent can locate and patch the flagged file from the
+      // verification findings in pipeline/context.md.
       steps.push({
-        description: "Apply the fix described in each blocker above",
-        commands: [],
+        description: "Re-run build with verification findings as context — build agent applies the fix",
+        commands: _rmBuildGates(["backend", "frontend", "platform", "qa"]),
       });
+      steps.push({
+        description: "Dispatch build",
+        commands: ["devteam stage build --patch --from verification-beyond-tests --headless"],
+      });
+      steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
     }
     steps.push({
       description: "Re-run verification",
