@@ -36,9 +36,5 @@
   "stage-id:docs/walkthroughs/soc2-evidence-collector.md:stage-6c",
   "stage-id:docs/walkthroughs/soc2-evidence-collector.md:stage-6d",
   "stage-id:skills/red-team/SKILL.md:stage-4",
-  "stage-rule-file:stage-04c",
-  "stage-rule-file:stage-04d",
-  "stage-rule-file:stage-06d",
-  "stage-rule-file:stage-06e",
   "track-list:rules/gates.md:missing-nano+dep-update+hotfix:L480"
 ]

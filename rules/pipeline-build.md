@@ -14,15 +14,20 @@ retry protocol) live in `gates.md`.
 
 | Stage | File | Role | Summary |
 |---|---|---|---|
-| 4 | [`stage-04.md`](stage-04.md) | dev-backend, dev-frontend, dev-platform | Parallel build across three worktrees. Each dev writes a per-area PR summary + gate. |
-| 4.5a | [`stage-04a.md`](stage-04a.md) | dev-platform | Pre-review: lint + type-check + SCA. Toolchain catches what reviewers shouldn't have to. |
-| 4.5b | [`stage-04b.md`](stage-04b.md) | security-engineer | Security review — conditional on the security-trigger heuristic. Has veto. |
+| 4 | [`stage-04.md`](stage-04.md) | backend, frontend, platform, qa | Parallel build across workstreams. Each role writes a per-area PR summary + gate. |
+| 4a | [`stage-04a.md`](stage-04a.md) | platform | Pre-review: lint + dep review + SCA + security/migration-safety trigger heuristics. |
+| 4b | [`stage-04b.md`](stage-04b.md) | security | Security review — conditional on stage-04a's `security_review_required`. Has veto. |
+| 4c | [`stage-04c.md`](stage-04c.md) | red-team | Adversarial review. Unconditional on full + hotfix. Blocking findings must be addressed before Stage 5. |
+| 4d | [`stage-04d.md`](stage-04d.md) | migrations | Migration safety — conditional on stage-04a's `migration_safety_required`. Has veto. |
+| 4e | [`stage-04e.md`](stage-04e.md) | (script) | Mechanical pre-peer-review preflight: git hygiene, import paths, deferred red-team count. |
 | 5 | [`stage-05.md`](stage-05.md) | reviewer × 4 areas | Peer code review. Matrix or scoped shape; per-area gates merged by the orchestrator. |
-| 6 | [`stage-06.md`](stage-06.md) | dev-qa | Test execution. Every acceptance criterion maps 1:1 to a test. |
-| 6b | [`stage-06b.md`](stage-06b.md) | dev-qa | Accessibility audit. Conditional on UI changes; tracks: full, quick, hotfix. |
-| 6c | [`stage-06c.md`](stage-06c.md) | dev-platform | Observability gate — verify brief §9 signals actually emit. Tracks: full, hotfix. |
-| 7 | [`stage-07.md`](stage-07.md) | pm | Sign-off. Auto-folds from Stage 6 when the AC→test contract is satisfied. |
-| 8 | [`stage-08.md`](stage-08.md) | dev-platform | Deploy. Adapter-driven (docker-compose / kubernetes / terraform / custom). |
+| 6 | [`stage-06.md`](stage-06.md) | qa | Test execution. Every acceptance criterion maps 1:1 to a test. |
+| 6b | [`stage-06b.md`](stage-06b.md) | qa | Accessibility audit. Tracks: full, quick, hotfix. |
+| 6c | [`stage-06c.md`](stage-06c.md) | platform | Observability gate — verify brief §9 signals actually emit. Tracks: full, hotfix. |
+| 6d | [`stage-06d.md`](stage-06d.md) | verifier | Verification beyond tests: property-based, mutation, formal. Tracks: full. |
+| 6e | [`stage-06e.md`](stage-06e.md) | qa | Performance budget: Lighthouse, bundle size, load test. Tracks: full, quick, hotfix. |
+| 7 | [`stage-07.md`](stage-07.md) | pm, platform | Sign-off. Auto-folds from Stage 6 when the AC→test contract is satisfied. |
+| 8 | [`stage-08.md`](stage-08.md) | platform | Deploy. Adapter-driven (docker-compose / kubernetes / terraform / custom). |
 
 ## How to use these files
 
