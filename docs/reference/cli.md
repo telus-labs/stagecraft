@@ -1,0 +1,327 @@
+<!-- generated: do not hand-edit -->
+<!-- To regenerate: npm run docs:generate (source: core/cli/commands/*.js) -->
+
+# CLI Reference
+
+Full `devteam` command reference. 31 commands.
+Derived from the per-command flag schemas in `core/cli/commands/`.
+Run `npm run docs:generate` to regenerate after adding or changing flags.
+
+All flags are optional unless marked otherwise. `--help` is available on every command.
+
+---
+
+### `devteam stage <name> [options]`
+
+Render stage prompt(s) for <name>, or drive the host CLI non-interactively with --headless.
+
+| Flag             | Type   | Description                                         |
+| ---------------- | ------ | --------------------------------------------------- |
+| --feature        | string | Feature description passed to the prompt            |
+| --track          | string | Override the pipeline track                         |
+| --cwd            | string | Target project directory                            |
+| --headless       | bool   | Drive host CLI non-interactively                    |
+| --timeout-ms     | number | Per-workstream wall-clock cap (default 600000)      |
+| --patch          | bool   | Scope build agents to patch items from a prior gate |
+| --from           | string | Stage to read patch items from (default: red-team)  |
+| --skip-completed | bool   | Skip workstreams whose gate file already exists     |
+| --workstream     | list   | Dispatch only this workstream (repeatable)          |
+| --force          | bool   | Bypass stoplist guard                               |
+| --json           | bool   | JSON output                                         |
+| --skip-preflight | bool   | Skip automatic preflight check before peer-review   |
+
+### `devteam next [options]`
+
+Inspect pipeline/gates/ and report what to do next: run a stage, merge, fix a FAIL, resolve an ESCALATE, or done.
+
+| Flag          | Type   | Description                                    |
+| ------------- | ------ | ---------------------------------------------- |
+| --cwd         | string | Target project directory                       |
+| --json        | bool   | JSON output                                    |
+| --skip-advise | bool   | Suppress unresolved follow-up advisory warning |
+
+### `devteam run [options]`
+
+Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human.
+
+| Flag             | Type   | Description                                                     |
+| ---------------- | ------ | --------------------------------------------------------------- |
+| --cwd            | string | Target project directory                                        |
+| --feature        | string | Feature description                                             |
+| --track          | string | Override the pipeline track                                     |
+| --until          | string | Stop before this stage                                          |
+| --max-iterations | number | Iteration cap                                                   |
+| --budget-usd     | number | Cost cap in USD                                                 |
+| --timeout-ms     | number | Per-dispatch timeout (ms)                                       |
+| --retry-delay-ms | number | Backoff delay between transient retries (ms)                    |
+| --auto-rule      | list   | Auto-apply Principal rulings of these classes (comma-separated) |
+| --allow-stage    | list   | Grant consequence-ceiling approval for this stage (repeatable)  |
+| --resume         | bool   | Resume an interrupted run                                       |
+| --force          | bool   | Force-unlock a stale run.lock                                   |
+| --json           | bool   | JSON summary on stdout                                          |
+
+### `devteam validate [options]`
+
+Validate the most recent gate in pipeline/gates/. Exit codes: 0 PASS/WARN, 1 malformed, 2 FAIL, 3 ESCALATE.
+
+| Flag  | Type   | Description              |
+| ----- | ------ | ------------------------ |
+| --cwd | string | Target project directory |
+
+### `devteam verify-chain [options]`
+
+Verify the tamper-evident gate chain — each stage gate commits to a hash of its predecessor.
+
+| Flag    | Type   | Description                 |
+| ------- | ------ | --------------------------- |
+| --cwd   | string | Target project directory    |
+| --track | string | Override the pipeline track |
+| --json  | bool   | JSON output                 |
+
+### `devteam stamp-chain [options]`
+
+(Re)stamp the chain on all stage gates, in order. Use after a deliberate earlier-stage re-run.
+
+| Flag    | Type   | Description                 |
+| ------- | ------ | --------------------------- |
+| --cwd   | string | Target project directory    |
+| --track | string | Override the pipeline track |
+
+### `devteam merge <stage-name> [options]`
+
+Merge per-workstream gates into the stage gate.
+
+| Flag    | Type   | Description                 |
+| ------- | ------ | --------------------------- |
+| --cwd   | string | Target project directory    |
+| --track | string | Override the pipeline track |
+
+### `devteam derive-approvals [<file>] [options]`
+
+Re-run the approval-derivation hook on pipeline/code-review/by-*.md and rewrite per-area stage-05 gates.
+
+| Flag   | Type   | Description              |
+| ------ | ------ | ------------------------ |
+| --cwd  | string | Target project directory |
+| --json | bool   | JSON output              |
+
+### `devteam restart <stage> [options]`
+
+Clear a stage's gate(s) so the pipeline can re-run it. With --cascade, also clears every subsequent stage.
+
+| Flag           | Type   | Description                                      |
+| -------------- | ------ | ------------------------------------------------ |
+| --cwd          | string | Target project directory                         |
+| --cascade      | bool   | Also clear every stage after this one            |
+| --keep-context | bool   | Preserve injected blocker sections in context.md |
+| --dry-run      | bool   | Print what would be deleted without acting       |
+| --track        | string | Override the pipeline track (for cascade)        |
+
+### `devteam ruling [options]`
+
+Dispatch the Principal subagent for an ad-hoc ruling. The ruling lands in pipeline/context.md.
+
+| Flag          | Type   | Description                              |
+| ------------- | ------ | ---------------------------------------- |
+| --cwd         | string | Target project directory                 |
+| --topic       | string | Ruling topic (auto-derived when omitted) |
+| --context     | string | Comma-separated extra context paths      |
+| --target-gate | string | Path to the escalating gate              |
+| --headless    | bool   | Dispatch via host CLI non-interactively  |
+
+### `devteam fix-escalation [options]`
+
+Implement the Principal ruling written by devteam ruling. Dispatches an applicator agent that reads PRINCIPAL-RULING entries.
+
+| Flag       | Type   | Description                             |
+| ---------- | ------ | --------------------------------------- |
+| --cwd      | string | Target project directory                |
+| --headless | bool   | Dispatch via host CLI non-interactively |
+
+### `devteam preflight [options]`
+
+Run mechanical pre-peer-review checks (stage-04e): committed-but-ignored files, broken test imports, deferred red-team items.
+
+| Flag         | Type   | Description                                |
+| ------------ | ------ | ------------------------------------------ |
+| --cwd        | string | Target project directory                   |
+| --skip-write | bool   | Run checks but do not write stage-04e.json |
+
+### `devteam advise [options]`
+
+Inspect and triage follow-up items (DEFERRED, KNOWN-FLAKY, BRIEF-AMEND-NEEDED) before peer-review.
+
+| Flag         | Type   | Description                            |
+| ------------ | ------ | -------------------------------------- |
+| --cwd        | string | Target project directory               |
+| --apply      | string | Apply selections, e.g. AC-11=A,AC-12=B |
+| --json       | bool   | JSON output                            |
+| --timeout-ms | number | Timeout for a11y-fixer dispatch (ms)   |
+
+### `devteam init --host <list> [options]`
+
+Install host adapter(s) into the current project. Writes .devteam/config.yml and creates pipeline/gates/ workspace.
+
+| Flag    | Type   | Description                      |
+| ------- | ------ | -------------------------------- |
+| --host  | string | Host adapter(s), comma-separated |
+| --force | bool   | Overwrite existing config/files  |
+| --cwd   | string | Target project directory         |
+
+### `devteam doctor [options]`
+
+Pre-flight check: install integrity, target layout, config validity, adapter status, and host CLIs on PATH.
+
+| Flag  | Type   | Description              |
+| ----- | ------ | ------------------------ |
+| --cwd | string | Target project directory |
+
+### `devteam summary [options]`
+
+One-screen pipeline state report.
+
+| Flag   | Type   | Description              |
+| ------ | ------ | ------------------------ |
+| --cwd  | string | Target project directory |
+| --json | bool   | JSON output              |
+
+### `devteam log [options]`
+
+Chronological event timeline: every gate and artifact write in mtime order. --follow tails at 1-second poll.
+
+| Flag     | Type   | Description                       |
+| -------- | ------ | --------------------------------- |
+| --cwd    | string | Target project directory          |
+| --json   | bool   | JSON output (one object per line) |
+| --follow | bool   | Tail pipeline/ at 1s poll         |
+
+### `devteam ui [options]`
+
+Start a local web UI at http://127.0.0.1:3737/ showing pipeline state with live updates via SSE.
+
+| Flag   | Type   | Description                       |
+| ------ | ------ | --------------------------------- |
+| --cwd  | string | Target project directory          |
+| --port | number | Port to listen on (default: 3737) |
+| --open | bool   | Open browser automatically        |
+
+### `devteam memory <subcommand> [options]`
+
+Persistent project memory. Subcommands: ingest, query, stats, clear, reindex, promote.
+
+| Flag    | Type   | Description              |
+| ------- | ------ | ------------------------ |
+| --cwd   | string | Target project directory |
+| --limit | string | Max results to return    |
+| --kind  | string | Filter by artifact kind  |
+| --org   | bool   | Target org-shared store  |
+| --json  | bool   | JSON output              |
+
+### `devteam architecture <subcommand> [options]`
+
+Query the org-shared store for prior ADRs and lessons learned. Principal consults this before designing.
+
+| Flag    | Type   | Description                  |
+| ------- | ------ | ---------------------------- |
+| --cwd   | string | Target project directory     |
+| --limit | string | Max results to return        |
+| --kind  | string | Artifact kind (default: adr) |
+| --json  | bool   | JSON output                  |
+
+### `devteam reproduce <stage-id> [options]`
+
+Report what was recorded for a stage (model version, temperature, seed, prompt hash) for replay.
+
+| Flag   | Type   | Description              |
+| ------ | ------ | ------------------------ |
+| --cwd  | string | Target project directory |
+| --json | bool   | JSON output              |
+
+### `devteam verify <stage-id> [options]`
+
+Orchestrator-stamped verification: run configured commands and rewrite gate fields with observed reality.
+
+| Flag   | Type   | Description              |
+| ------ | ------ | ------------------------ |
+| --cwd  | string | Target project directory |
+| --json | bool   | JSON output              |
+
+### `devteam replay <stage-id> [options]`
+
+Re-run a recorded stage with current config and diff the result against the original gate.
+
+| Flag      | Type   | Description                      |
+| --------- | ------ | -------------------------------- |
+| --cwd     | string | Target project directory         |
+| --json    | bool   | JSON output                      |
+| --dry-run | bool   | Print plan without invoking host |
+
+### `devteam ci <install|show> [options]`
+
+Drop a CI workflow template into the target project (install), or print it to stdout (show).
+
+| Flag    | Type   | Description                         |
+| ------- | ------ | ----------------------------------- |
+| --cwd   | string | Target project directory            |
+| --ci    | string | CI system (default: github-actions) |
+| --out   | string | Output directory for install        |
+| --force | bool   | Overwrite existing workflow file    |
+
+### `devteam spec <verify|generate> [options]`
+
+Drift-check brief.md ↔ spec.feature ↔ test-report.md (verify), or scaffold a spec.feature from brief ACs (generate).
+
+| Flag      | Type   | Description                     |
+| --------- | ------ | ------------------------------- |
+| --cwd     | string | Target project directory        |
+| --strict  | bool   | Also fail on multi-mapped ACs   |
+| --json    | bool   | JSON output                     |
+| --force   | bool   | Overwrite existing spec.feature |
+| --feature | string | Feature name for scaffold       |
+
+### `devteam consistency analyze [options]`
+
+Cross-artifact drift check: brief → spec → reviews → red-team → test-report → gate field reality.
+
+| Flag     | Type   | Description              |
+| -------- | ------ | ------------------------ |
+| --cwd    | string | Target project directory |
+| --strict | bool   | Stricter drift checks    |
+| --json   | bool   | JSON output              |
+
+### `devteam assess [options] [files...]`
+
+Infer the best pipeline track for the current change from file paths, content, and description heuristics.
+
+| Flag          | Type   | Description                                 |
+| ------------- | ------ | ------------------------------------------- |
+| --cwd         | string | Target project directory                    |
+| --description | string | Change description for heuristics           |
+| --json        | bool   | JSON output                                 |
+| --apply       | bool   | Write inferred track to .devteam/config.yml |
+| --no-content  | bool   | Skip file content scan                      |
+
+### `devteam standards discover [options]`
+
+Scan the project codebase and produce docs/project-conventions.md with detected tech stack, style, and tooling.
+
+| Flag      | Type   | Description                                    |
+| --------- | ------ | ---------------------------------------------- |
+| --cwd     | string | Target project directory                       |
+| --json    | bool   | JSON output                                    |
+| --dry-run | bool   | Print report without writing                   |
+| --force   | bool   | Overwrite existing docs/project-conventions.md |
+
+### `devteam stages`
+
+List known stage names.
+
+### `devteam hosts`
+
+List installed host adapters.
+
+### `devteam help`
+
+Show command list and quickstart.
+
+<!-- /generated -->
