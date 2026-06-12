@@ -590,6 +590,66 @@ test("hosts-ref: hand-edit to generated content would be caught", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Check cli-ref: docs/reference/cli.md sync
+// (runs against the real repo — generate-cli-ref.js reads core/cli/commands/*)
+// ---------------------------------------------------------------------------
+
+test("cli-ref: docs/reference/cli.md matches generator output", () => {
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-cli-ref.js"));
+  const cliPath = path.join(REPO_ROOT, "docs", "reference", "cli.md");
+  const committed = fs.readFileSync(cliPath, "utf8").trimEnd();
+  const fresh = gen.generateBlock();
+  assert.equal(committed, fresh,
+    "docs/reference/cli.md is stale — re-run: npm run docs:generate");
+});
+
+test("cli-ref: generator is importable without CLI side-effects", () => {
+  const mod = require(path.join(REPO_ROOT, "scripts", "generate-cli-ref.js"));
+  assert.equal(typeof mod.generateBlock, "function", "generateBlock must be exported");
+  assert.equal(typeof mod.FENCE_OPEN, "string", "FENCE_OPEN must be exported");
+  assert.equal(typeof mod.FENCE_CLOSE, "string", "FENCE_CLOSE must be exported");
+  assert.equal(typeof mod.CMD_COUNT, "number", "CMD_COUNT must be exported");
+  assert.ok(Array.isArray(mod.COMMANDS), "COMMANDS must be exported as an array");
+});
+
+test("cli-ref: hand-edit to generated content would be caught", () => {
+  // Prove that a hand-edit changes the content, which the consistency checker's
+  // committed === fresh comparison would then fail (exit 1).
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-cli-ref.js"));
+  const fresh = gen.generateBlock();
+  const handEdited = fresh.replace(
+    gen.FENCE_OPEN,
+    gen.FENCE_OPEN + "\n<!-- HAND-EDITED LINE — this would be caught -->"
+  );
+  assert.notEqual(handEdited, fresh,
+    "hand-edit must produce content that differs from generator output; " +
+    "if this assertion fails the consistency check cannot detect the edit");
+});
+
+test("cli-ref: sampled command --help flags all appear in generated doc", () => {
+  // Both --help output and the generated doc derive from the same flag schema,
+  // so this test proves they agree by construction. We sample `devteam run`
+  // (a rich schema) and `devteam next` (a simpler one).
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-cli-ref.js"));
+  const generatedDoc = gen.generateBlock();
+
+  // Commands to sample — rich schema + a simpler one
+  const sampleCommands = ["run", "next"];
+
+  for (const cmdName of sampleCommands) {
+    const cmdModule = require(path.join(REPO_ROOT, "core", "cli", "commands", cmdName + ".js"));
+    const schemaFlags = Object.keys(cmdModule.flags).filter(f => f !== "help");
+
+    for (const flagName of schemaFlags) {
+      assert.ok(
+        generatedDoc.includes(`--${flagName}`),
+        `generated cli.md must contain --${flagName} from ${cmdName} schema`
+      );
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Baseline integration tests
 // ---------------------------------------------------------------------------
 

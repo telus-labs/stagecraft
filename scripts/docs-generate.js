@@ -5,6 +5,7 @@
 //   1. scripts/generate-tracks-matrix.js  → docs/tracks.md (embedded block)
 //   2. scripts/generate-stages-ref.js     → docs/reference/stages.md
 //   3. scripts/generate-hosts-ref.js      → docs/reference/hosts.md
+//   4. scripts/generate-cli-ref.js        → docs/reference/cli.md
 //
 // Usage:
 //   npm run docs:generate
@@ -66,6 +67,17 @@ const generators = [
       fs.mkdirSync(path.dirname(outPath), { recursive: true });
       fs.writeFileSync(outPath, mod.generateBlock() + "\n");
       console.log("  ✓ docs/reference/hosts.md");
+    },
+  },
+  {
+    name: "CLI reference",
+    script: path.join(ROOT, "scripts", "generate-cli-ref.js"),
+    run(mod) {
+      const fs = require("node:fs");
+      const outPath = path.join(ROOT, "docs", "reference", "cli.md");
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, mod.generateBlock() + "\n");
+      console.log("  ✓ docs/reference/cli.md");
     },
   },
 ];
