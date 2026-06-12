@@ -80,6 +80,17 @@ const generators = [
       console.log("  ✓ docs/reference/cli.md");
     },
   },
+  {
+    name: "prompt budget",
+    script: path.join(ROOT, "scripts", "prompt-budget.js"),
+    run(mod) {
+      const fs = require("node:fs");
+      const outPath = path.join(ROOT, "docs", "reference", "prompt-budget.md");
+      fs.mkdirSync(path.dirname(outPath), { recursive: true });
+      fs.writeFileSync(outPath, mod.generateBlock() + "\n");
+      console.log("  ✓ docs/reference/prompt-budget.md");
+    },
+  },
 ];
 
 console.log("docs:generate — writing reference output...");

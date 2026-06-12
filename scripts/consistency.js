@@ -43,9 +43,12 @@ const passes = [];
 const proseViolations = [];
 // Baselined violations reported as informational
 const baselined = [];
+// Advisories — non-blocking; printed but do not increment failure count.
+const advisories = [];
 
 function pass(name) { passes.push(name); }
 function fail(name, detail) { failures.push({ name, detail }); }
+function advisory(name, detail) { advisories.push({ name, detail }); }
 
 // Record a prose-vs-code violation.
 // checkClass: string identifying the check (e.g. "gate-filename").
@@ -867,6 +870,128 @@ function checkCliRefSync() {
   }
 }
 
+// --- Advisory: docs/reference/prompt-budget.md sync and budget-growth check ---
+//
+// Entirely advisory (non-blocking per D5 spec). Two advisory classes:
+//
+//  1. Staleness advisory — committed file ≠ fresh generator output.
+//     (Unlike stages-ref/hosts-ref/cli-ref which are blocking failures, the
+//     prompt-budget is informational; staleness is warned, not failed.)
+//
+//  2. Budget-growth advisory — any stage's fresh max-dispatch bytes are >10%
+//     larger than the numbers stored in the committed file. Fires when rules/
+//     or roles/ grew since the last `npm run docs:generate` run.
+//     Useful in PRs where a reviewer sees "stage-04 grew 15%" before merge.
+//
+// Only runs in full-repo mode — the generator imports core/pipeline/stages.js
+// and reads rules/ + roles/ from the live repo.
+function checkPromptBudgetSync() {
+  const budgetPath = path.join(REPO_ROOT, "docs", "reference", "prompt-budget.md");
+  if (!fs.existsSync(budgetPath)) {
+    advisory("prompt-budget", "docs/reference/prompt-budget.md not found — run: npm run docs:generate");
+    return;
+  }
+
+  let generator;
+  try {
+    generator = require(path.join(REPO_ROOT, "scripts", "prompt-budget.js"));
+  } catch (err) {
+    advisory("prompt-budget", `could not load prompt-budget.js: ${err.message}`);
+    return;
+  }
+
+  const committed = fs.readFileSync(budgetPath, "utf8");
+  const fresh = generator.generateBlock();
+
+  // 1. Staleness advisory (non-blocking — note the difference from stages-ref
+  // which uses fail()). The growth check below still runs on the committed
+  // numbers so reviewers get the "grew >10%" signal even before regenerating.
+  if (committed.trimEnd() !== fresh) {
+    advisory("prompt-budget",
+      "docs/reference/prompt-budget.md is stale — re-run: npm run docs:generate");
+  } else {
+    pass("prompt-budget: docs/reference/prompt-budget.md is up to date");
+  }
+
+  // 2. Budget-growth advisory: compare committed baseline against fresh numbers.
+  // "Committed" here is whatever is stored in the file (possibly stale, giving
+  // the growth signal relative to the last regeneration baseline).
+  const committedMap = generator.parseCommittedBudget(committed);
+  if (committedMap.size === 0) return;
+
+  const freshStats = generator.computeStageStats();
+  for (const s of freshStats) {
+    const baseline = committedMap.get(s.stageId);
+    if (baseline == null || baseline === 0) continue;
+    if (s.maxDispatchBytes > baseline * 1.10) {
+      advisory("prompt-budget",
+        `${s.stageId} (${s.stageName}) max-dispatch grew >10%: ${baseline} B → ${s.maxDispatchBytes} B ` +
+        `(${Math.round((s.maxDispatchBytes / baseline - 1) * 100)}% increase) — ` +
+        `consider trimming rules/ or roles/ before merging`);
+    }
+  }
+}
+
+// --- Advisory: per-file size ceilings ---
+//
+// Emits non-blocking advisories when files exceed their size ceilings:
+//   role brief  ≤ 16 KB (chosen from current healthy files; platform.md at 15.6 KB is largest)
+//   stage rule  ≤  8 KB (stage-05.md at ~9.9 KB already exceeds this — recorded, not edited)
+//   AGENTS.md   ≤ 10 KB (currently 4.1 KB — comfortable headroom)
+//
+// Never edits the files. Violations are advisory only.
+//
+// Only runs in full-repo mode.
+function checkFileSizeCeilings() {
+  const ROLE_CEILING   = 16 * 1024; // 16 KB
+  const STAGE_CEILING  =  8 * 1024; //  8 KB
+  const AGENTS_CEILING = 10 * 1024; // 10 KB
+
+  // Check AGENTS.md
+  const agentsPath = path.join(REPO_ROOT, "AGENTS.md");
+  if (fs.existsSync(agentsPath)) {
+    const bytes = fs.statSync(agentsPath).size;
+    if (bytes > AGENTS_CEILING) {
+      advisory("file-size-ceiling",
+        `AGENTS.md is ${bytes} B — exceeds ${AGENTS_CEILING} B (10 KB) advisory ceiling`);
+    } else {
+      pass(`file-size-ceiling: AGENTS.md ${bytes} B ≤ ${AGENTS_CEILING} B`);
+    }
+  }
+
+  // Check roles/*.md
+  const rolesDir = path.join(REPO_ROOT, "roles");
+  if (fs.existsSync(rolesDir)) {
+    for (const f of fs.readdirSync(rolesDir)) {
+      if (!f.endsWith(".md")) continue;
+      const abs  = path.join(rolesDir, f);
+      const bytes = fs.statSync(abs).size;
+      if (bytes > ROLE_CEILING) {
+        advisory("file-size-ceiling",
+          `roles/${f} is ${bytes} B — exceeds ${ROLE_CEILING} B (16 KB) role-brief advisory ceiling`);
+      } else {
+        pass(`file-size-ceiling: roles/${f} ${bytes} B ≤ ${ROLE_CEILING} B`);
+      }
+    }
+  }
+
+  // Check rules/stage-*.md
+  const rulesDir = path.join(REPO_ROOT, "rules");
+  if (fs.existsSync(rulesDir)) {
+    for (const f of fs.readdirSync(rulesDir)) {
+      if (!f.startsWith("stage-") || !f.endsWith(".md")) continue;
+      const abs  = path.join(rulesDir, f);
+      const bytes = fs.statSync(abs).size;
+      if (bytes > STAGE_CEILING) {
+        advisory("file-size-ceiling",
+          `rules/${f} is ${bytes} B — exceeds ${STAGE_CEILING} B (8 KB) stage-rule advisory ceiling`);
+      } else {
+        pass(`file-size-ceiling: rules/${f} ${bytes} B ≤ ${STAGE_CEILING} B`);
+      }
+    }
+  }
+}
+
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -1062,6 +1187,8 @@ function main(opts) {
     checkHostsRefSync();
     checkCliRefSync();
     checkCiTemplateRefVersion();
+    checkPromptBudgetSync();
+    checkFileSizeCeilings();
     runProseChecks(null);
   }
 
@@ -1089,19 +1216,28 @@ function main(opts) {
     console.log(JSON.stringify({
       passes: passes.length,
       failures: allFails,
+      advisories,
       baselined: baselined.length,
       proseViolations: noBaseline ? proseViolations : newViolations,
     }, null, 2));
   } else {
-    if (totalFails === 0 && baselined.length === 0) {
+    if (totalFails === 0 && baselined.length === 0 && advisories.length === 0) {
       console.log(`✅ consistency: ${passes.length} checks passed`);
     } else if (totalFails === 0) {
-      console.log(`✅ consistency: ${passes.length} checks passed, ${baselined.length} baselined`);
+      const suffix = [
+        baselined.length > 0 ? `${baselined.length} baselined` : "",
+        advisories.length > 0 ? `${advisories.length} advisory` : "",
+      ].filter(Boolean).join(", ");
+      console.log(`✅ consistency: ${passes.length} checks passed${suffix ? `, ${suffix}` : ""}`);
       for (const v of baselined) {
         console.log(`  ⏭ [baselined] ${v.file}:${v.line}: (${v.checkClass}) ${v.detail}`);
       }
+      for (const a of advisories) {
+        console.log(`  ⚠ [advisory] ${a.name}: ${a.detail}`);
+      }
     } else {
-      console.log(`❌ consistency: ${totalFails} failure(s), ${passes.length} pass(es)${baselined.length > 0 ? `, ${baselined.length} baselined` : ""}`);
+      const suffix = advisories.length > 0 ? `, ${advisories.length} advisory` : "";
+      console.log(`❌ consistency: ${totalFails} failure(s), ${passes.length} pass(es)${baselined.length > 0 ? `, ${baselined.length} baselined` : ""}${suffix}`);
       for (const f of failures) {
         console.log(`  ✗ ${f.name}: ${f.detail}`);
       }
@@ -1114,6 +1250,9 @@ function main(opts) {
           console.log(`    ⏭ ${v.file}:${v.line}: (${v.checkClass}) ${v.detail}`);
         }
       }
+      for (const a of advisories) {
+        console.log(`  ⚠ [advisory] ${a.name}: ${a.detail}`);
+      }
     }
   }
 
@@ -1122,6 +1261,6 @@ function main(opts) {
   return exitCode;
 }
 
-module.exports = { main };
+module.exports = { main, advisory, advisories };
 
 if (require.main === module) main();
