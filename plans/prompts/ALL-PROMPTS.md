@@ -14,6 +14,11 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 3 | Structural debt | ✅ complete (PRs #79–#89) |
 | 4 | Capability roadmap (ADR-first) | ✅ complete (PRs #90–#97) |
 | D | Documentation system | ✅ complete (PRs #99 · #102 · #103 · #104 · #105 · #107) |
+| 5 | State integrity (round-2 review) | 🔲 ready — start here |
+| 6 | Promise integrity | 🔲 ready (6.2 needs 6.1) |
+| 7 | Test & CI harness | 🔲 ready |
+| 8 | Release v0.7.0 + semantic sync | ⏸ 8.2(a–c) need 6.4; 8.3 needs 7.1 |
+| 9 | Evidence-gated capabilities | ⏸ Phases 5–6 merged; ADR-first |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -53,7 +58,9 @@ Hard rules:
    the code under test reads (especially CI). Tests must never read or write repo-root
    state — per-test mkdtempSync tempdirs with the devteam-test- guard
    (tests/_helpers.js). The stoplist scans git changed-files of its cwd; never point
-   test cwd at the real repo.
+   test cwd at the real repo. Meta-tests must never assert exact state of the live
+   repo tree (sizes, file lists, advisory counts) — use fixture trees, --only
+   filters, and env overrides; one canonical full-repo smoke maximum.
 8. SOURCE OF TRUTH: core/pipeline/stages.js is canonical for stages/gates/tracks
    (stage gates are plain `stage-NN[letter].json`; workstream gates are dotted
    `stage-NN.<role>.json` per core/hooks/approval-derivation.js). Prose follows code,
@@ -1021,4 +1028,459 @@ TASK: Implement workstream D6 of plans/documentation-plan.md. Branch: docs/onboa
    (operational questions only; facts linked, not restated; entries restating
    feature state get deleted). Apply once: convert/delete entries that restate
    feature state (cross-check 3-5 against FEATURES.md). List every entry touched.
+```
+
+---
+
+## Phase 5 — State Integrity
+
+Round-2 review (2026-06-12, main @ 2a1d985) findings: state outliving its run and
+upstream re-runs not invalidating downstream attestations. Order: 5.1+5.2 (coordinate —
+shared choke point) → 5.3 → 5.4. Plan file: plans/phase-5-state-integrity.md.
+
+### 5.1 DAG-derived gate invalidation 🔲
+
+```
+TASK: Implement plans/phase-5-state-integrity.md, item 5.1. Read that section, then
+core/pipeline/fix-recipes.js in full and how next() walks the stage order when a
+mid-pipeline gate is missing but later PASS gates exist ([verify-first] — confirm the
+skip behavior before building on it). Branch: fix/derived-gate-invalidation
+
+The #109 class generalized: recipes hand-list clear_gates; clearing stage-04 via the
+stage-06d recipe leaves stage-05 (peer-review) and stage-06 (QA) PASS gates standing, so
+rewritten code re-enters the pipeline without re-review or re-QA.
+
+Implement: (1) core/pipeline/invalidation.js — given a cleared root stage + the active
+ordered stage list (track or custom_stages), return every EXISTING downstream stage gate
+up to and including the failing stage; (2) recipes declare only root stage(s); derived
+clear_gates replaces hand-listed downstream entries (delete them); (3) snapshot-test
+equivalence for every existing recipe's current correct behavior including the #109
+stage-04a case; (4) [verify-first] confirm chain re-stamping after recipe-driven clears
+and document the invariant in the helper header. Build the helper changeId-aware
+(prefixPipelineRelative) — Phase 5.4 depends on it.
+
+Required tests: full-track scenario — PASS through stage-06, stage-06d FAILs, derived
+set includes stage-04+04a+05+06; after rebuild next() demands re-review and re-QA (this
+test must FAIL on today's main); registry meta-test: no recipe carries a hand-listed
+downstream gate.
+```
+
+### 5.2 Archive lifecycle owner 🔲
+
+```
+TASK: Implement plans/phase-5-state-integrity.md, item 5.2. Read core/gates/archive.js,
+core/gates/convergence.js, the driver's archive call in core/driver.js, and restart's
+deletion (the #106 fix) first. Branch: fix/archive-lifecycle
+If 5.1 is in flight, coordinate: re-entry pruning belongs in the same operation as gate
+clearing.
+
+Invariant to implement: archives never outlive the failure sequence they describe.
+(1) Prune a stage's archives when its merged/stamped gate reaches PASS — [verify-first]
+find BOTH finalization call sites (merge path and single-role stamp path); (2) prune on
+re-entry: clearing a stage's gates (5.1 helper or restart) deletes its archives in the
+same operation; restart.js delegates to the shared code instead of carrying its own
+deletion; (3) defense-in-depth guard in convergence.js ignoring archives that predate
+the current gate's first attempt, with a comment.
+
+Required regression tests (both must FAIL on today's main): (a) stage failed twice,
+recovered to PASS, later re-entered via a downstream recipe → no instant
+convergence-exhausted; (b) fresh non-resume run with stale attempt-2/3 archives → no
+false no-progress halt. Existing #106 restart tests stay green via the shared path.
+```
+
+### 5.3 Interactive convergence ceiling 🔲 (after 5.2)
+
+```
+TASK: Implement plans/phase-5-state-integrity.md, item 5.3. Read the driver's
+pre-archive call and runStage/runStageHeadless dispatch paths first ([verify-first]:
+place the archive-before-overwrite ONCE, not twice). Branch: fix/interactive-ceiling
+
+The gap: only the driver archives, so countArchivedAttempts never trips for interactive
+devteam next / devteam stage loops — that path currently has NO convergence ceiling.
+
+Implement: archive-before-overwrite inside the shared dispatch path — when about to
+dispatch a stage whose existing gate (stage or workstream) has status FAIL, archiveGate
+it first; make the driver's own pre-archive use the same path (remove duplication).
+Manual hook-driven gate overwrites are out of scope — document the boundary in the
+convergence module header.
+
+Required tests: interactive headless loop (DEVTEAM_HEADLESS_COMMAND fakes) failing the
+same stage maxRetries+1 times → next() returns convergence-exhausted with
+no_progress_evidence (FAILS on today's main); no double-archiving per attempt (count
+archive files); all existing run/driver tests unchanged.
+```
+
+### 5.4 Bounded isolation: fence, then finish 🔲
+
+```
+TASK: Implement plans/phase-5-state-integrity.md, item 5.4, as TWO commits.
+Branch: fix/b9-cli-layer
+
+Commit 1 — the fence (small, honest): loadConfig rejects isolation:bounded with an
+error enumerating the unwired commands, unless isolation_acknowledge_partial: true.
+A meta-test derives the unwired list (grep for changeId support across
+core/cli/commands/) so the fence message cannot go stale.
+
+Commit 2 — the wiring: (a) shared resolveChangeId(flags, config) helper in core/cli/;
+add --feature to next; wire restart, log, advise, replay, derive-approvals, spec
+([verify-first] each command's pipeline/ path usage first — some may be exempt with a
+justification comment, e.g. genuinely global state); (b) recipe/driver gate paths
+through prefixPipelineRelative with the run's changeId (composes with 5.1's helper);
+(c) lift the fence per wired command.
+
+Required tests: bounded-mode driver auto-fix e2e — recipe clears the right PREFIXED
+gates and the run proceeds (FAILS misleadingly on today's main with "fix steps contain
+no gate clears"); per-command bounded test for each wired command; fence error matches
+the derived list.
+```
+
+---
+
+## Phase 6 — Promise Integrity
+
+Make shipped claims true. Order: 6.1 → 6.2 → 6.4 → 6.3 → 6.5. Plan file:
+plans/phase-6-promise-integrity.md.
+
+### 6.1 Host-neutral tool budgets 🔲
+
+```
+TASK: Implement plans/phase-6-promise-integrity.md, item 6.1. Read core/roles.js,
+hosts/claude-code/adapter.js ROLE_FRONTMATTER + toolBudgetFor, the orchestrator's
+budget resolution and warnIfToolBudgetDegraded, and render-helpers' toolBudgetSection
+first. Branch: fix/host-neutral-tool-budgets
+
+Verified dead code: the budget only resolves when the ROUTED adapter exports
+toolBudgetFor (claude-code only) — so the prompt-only advisory never renders, the
+degradation warning never fires, and dispatched_tool_budget is never stamped on
+codex/gemini/generic, while changelog.d/feat-g10-role-tool-budgets.md claims all three.
+
+Implement: (1) role→tools table moves to core/roles.js exporting toolBudgetFor(role);
+claude-code adapter consumes it for subagent frontmatter (native enforcement
+byte-unchanged — snapshot the frontmatter before/after); (2) orchestrator resolves the
+budget host-neutrally for every dispatch: advisory section renders on prompt-only
+hosts, degradation warning fires per enforces.tool_budget, dispatched_tool_budget
+stamped (keep the mtime guard); (3) adapter-contract tests exercise the REAL resolution
+(remove injected descriptor.toolBudget) and fix the stale comment near
+tests/adapter-contract.test.js:363; (4) APPEND one honest line to the G10 fragment
+noting the prompt-only path landed here (do not rewrite its history).
+
+Required tests: per non-claude host — advisory rendered + budget stamped; warning fires
+exactly for prompt-only; claude-code frontmatter byte-identical.
+```
+
+### 6.2 pm budget vs brief + checker rule 🔲 (after 6.1)
+
+```
+TASK: Implement plans/phase-6-promise-integrity.md, item 6.2. [verify-first] read how
+stage-03b's gate fields are produced today and what devteam spec verify exits with.
+Branch: fix/pm-spec-orchestrator-stamped
+
+The contradiction: roles/pm.md's stage-03b procedure requires devteam spec
+generate/verify (shell); pm's budget is Read, Write, Glob; stage-03b declares no shell
+capability — under native enforcement the pm cannot follow its own brief.
+
+Decided design (verification belongs to the orchestrator): (1) spec generate/verify
+execution moves into the orchestrator stamping layer (core/verify/stamp.js pattern —
+model-said vs observed recorded on the stage-03b gate); (2) roles/pm.md stage-03b
+rewritten: pm authors ACs and reviews the generated spec; the pipeline runs
+generation/verification (note the rejected grant-pm-Bash alternative in the commit
+message); (3) new consistency-checker rule: every devteam/shell command in a role
+brief's procedure must be compatible with that role's tool budget from core/roles.js —
+plus a meta-test with a fixture brief that violates it.
+
+Required tests: stage-03b e2e with stamped spec fields; checker rule fires on the
+fixture and passes on the real roles/ after the rewrite.
+```
+
+### 6.3 C3 license gate: verify or relabel 🔲
+
+```
+TASK: Implement plans/phase-6-promise-integrity.md, item 6.3. [verify-first] read
+changelog.d/feat-c3-license-gate.md, rules/stage-04a.md, and wherever the license
+policy lists live, BEFORE designing the runner. Branch: feat/license-gate-runner
+
+The doctrine exception: license_check_passed and dependency_review_passed are purely
+model-asserted. Implement: (1) orchestrator-side Node runner — offline walk of the
+target project's installed dependency license metadata (node_modules/*/package.json or
+lockfile), evaluated against policy, stamped with model-said vs observed; (2) non-Node
+projects: tri-state "unverified-by-orchestrator" + WARN; schema + rules/stage-04a.md
+updated; (3) dependency_review_passed: mechanical check if feasible, otherwise relabel
+in schema/rules as model-asserted-by-design with one sentence of rationale — report
+which.
+
+Required tests: denied-license fixture → stamped FAIL regardless of model claim; clean
+fixture → pass; non-Node fixture → WARN + tri-state; schema tests.
+```
+
+### 6.4 De-overfit the fix recipes 🔲
+
+```
+TASK: Implement plans/phase-6-promise-integrity.md, item 6.4. Read
+core/pipeline/fix-recipes.js in full (esp. _wsFromText and the stage-06b recipe) and
+how mergeWorkstreamGates handles blockers ([verify-first]: do merged blockers retain
+their source workstream? If not, making the merge preserve {blocker, workstream} pairs
+is the real fix). Branch: fix/recipe-provenance
+
+Implement: (1) provenance-based blocker→workstream attribution replacing _wsFromText
+regex (regex stays only as last-resort fallback with a WARN); (2) both hardcoded
+["backend","frontend","platform","qa"] arrays → ctx.stageDef.roles; (3) stage-06b
+recipe: remove the demo-project filename ("html-reporter.js renderCSS") and the
+backend assumption; route by provenance, preserving the three-path behavior — #106
+regression tests must pass WITHOUT the project-specific strings; (4) recipe-hygiene
+meta-test: no recipe source contains a filename that exists only under examples/.
+
+Required tests: frontend-owned a11y blocker in a non-demo fixture routes to frontend;
+multi-workstream FAIL attribution; #106 and #109 regressions green.
+```
+
+### 6.5 Small parity basket 🔲
+
+```
+TASK: Implement plans/phase-6-promise-integrity.md, item 6.5 — three fixes, one commit
+each. Branch: fix/phase6-parity
+
+Fix 1 [verify-first]: the unpriced-model WARN lives only in mergeWorkstreamGates;
+single-role stages stamp without merging and under-count silently — emit the same WARN
+on the single-role stamp path. Test: single-role gate with tokens for an unpriced
+model → warning, totals unchanged.
+
+Fix 2: hosts/generic/capabilities.json omits goalLoop — add "goalLoop": false with the
+gemini-style comment; extend the adapter-contract test to REQUIRE the key on every
+host.
+
+Fix 3 (third deferral — do it): extract the ~95%-identical codex/gemini adapters'
+shared logic into a core/adapters/ base consumed by both; delete the in-file NOTE
+pointing at plans/phase-3-structural-debt.md. Adapter-contract byte-equivalence tests
+are the net — rendered output for both hosts must be byte-identical before/after.
+```
+
+---
+
+## Phase 7 — Test & CI Harness Hardening
+
+Kill the repo-state-sensitivity class (third recurrence) structurally. Order: 7.1 → 7.2.
+Plan file: plans/phase-7-test-harness.md. The preamble's TEST HYGIENE rule already
+carries the new meta-test line — verify it, don't re-add it.
+
+### 7.1 Git-aware consistency + meta-test isolation 🔲
+
+```
+TASK: Implement plans/phase-7-test-harness.md, item 7.1. Read scripts/consistency.js's
+enumeration (checkDocsIndexCoverage, the prose scanner) and
+tests/prompt-budget.test.js's real-file mutation + "known exceedance" pin first.
+Branch: fix/git-aware-consistency
+
+Live reproduction available: `echo x > docs/SCRATCH.md` makes 5 tests fail while CI
+stays green.
+
+Implement (one PR, five parts): (1) repo-root scans enumerate via git ls-files -z
+(tracked = blocking); untracked-but-not-ignored → ADVISORY ("would violate X when
+committed"); --root fixture mode keeps readdir; (2) --only <check-class> filter; the
+prompt-budget and file-size meta-tests invoke only their class; exactly ONE canonical
+full-repo smoke remains; (3) PROMPT_BUDGET_FILE env override (mirror
+CONSISTENCY_BASELINE_FILE) — delete the in-place rewrite-and-restore of
+docs/reference/prompt-budget.md; (4) the stage-05.md "known exceedance" test becomes
+fixture-based so improving the real file no longer breaks the suite; (5) permanent CI
+probe step: create docs/SCRATCH-ci-probe.md before npm test, delete after — this step
+is RED on today's main and GREEN after (state that verification in your report).
+
+Required tests: tracked-vs-untracked fixture git repos in tempdirs; --only filtering;
+the env override; advisory-vs-blocking behavior.
+```
+
+### 7.2 CI signal quality 🔲
+
+```
+TASK: Implement plans/phase-7-test-harness.md, item 7.2 — four items, one commit each.
+Branch: fix/ci-signal
+
+1 [verify-first] Onboarding smoke (.github/workflows/test.yml): the || true on the
+headless stage step is correct, but the step's own health is unasserted. Capture the
+stage step's output and assert the rendered prompt content appears (requirements-role
+header); pin the expected next action to run-stage/continue-stage. Verify by breaking
+devteam stage in a scratch branch and observing the step fail (describe in the report;
+do not commit the breakage).
+2 Coverage surfacing: summary to $GITHUB_STEP_SUMMARY + artifact upload; baseline moves
+from a YAML comment into a small JSON the workflow reads. Still non-blocking.
+3 a11y-fixer success path: dispatch → re-validation (the reason the module exists) is
+untested at 69.7% lines — add success-path tests via DEVTEAM_HEADLESS_COMMAND mocks.
+4 [verify-first] Preflight git-hygiene dead code: tests document the blocker path is
+unreachable on git ≥2.27 (ls-files --ignored --exclude-standard exits 128 without
+-c/-o). Fix the invocation in core/preflight.js; convert the documenting test into a
+behavioral one (fixture repo with an offender → blocker fires).
+```
+
+---
+
+## Phase 8 — Release v0.7.0 + Semantic Sync
+
+Order: 8.3 → 8.2 → 8.1 (release last — it folds this phase's own fragments).
+8.2(a–c) need Phase 6.4 merged; 8.3 needs 7.1 merged. Plan file:
+plans/phase-8-release-and-sync.md.
+
+### 8.3 Execute D5 step 3 (token work) ⏸ needs 7.1
+
+```
+PRECONDITION: Phase 7.1 merged (the stage-05.md exceedance test is fixture-based; the
+prompt-budget test no longer pins real-file sizes). STOP if not.
+
+TASK: Implement plans/phase-8-release-and-sync.md, item 8.3. [verify-first] read the
+D5 fragment's step-4 proposal for the qa/platform brief audit first.
+Branch: docs/d5-step3-token-trim
+
+Implement: (1) move the identified stage-conditional sections from roles/platform.md
+(15,617 B, 97.6% of ceiling) and roles/qa.md (12,878 B) into the corresponding
+skills/*/SKILL.md files; briefs keep role identity + handoff + gate rules; preserve
+every caveat moved; (2) trim rules/stage-05.md under 8 KB — the approval-derivation
+hook contract detail moves to docs/conventions.md, model-facing essentials stay;
+(3) regenerate docs/reference/prompt-budget.md; record before/after per-dispatch bytes
+for platform and qa dispatches in the report.
+
+Done means: npm run consistency — ZERO advisories; docs:generate idempotent; contract
+tests green (pinned-prose updates enumerated).
+```
+
+### 8.2 Runbook and reference sync ⏸ needs 6.4
+
+```
+PRECONDITION: Phase 6.4 merged (Case 7 must document the post-6.4 recipe behavior).
+
+TASK: Implement plans/phase-8-release-and-sync.md, item 8.2 — six numbered edits, one
+commit each. Branch: docs/semantic-sync
+
+(1) escalation.md: rewrite §4c from retry_number-jq instructions to the archive-based
+reality (no_progress_evidence, archive-diff post-mortem; ceiling default is 2); fix the
+two dead #4b anchors (TOC + §0) to the renumbered §4c heading. (2) fix-and-retry.md:
+convergence framing budget-or-no-progress; NEW license-gate FAIL case (policy fix, not
+--patch) + index row in runbooks/README.md; rewrite Case 7 to the shipped three-path
+a11y recipe (it currently claims "always frontend"); add the #109 stage-04a note to
+Cases 4/5 manual-recovery; short tool-budget-denial entry + index row.
+(3) autonomous-run.md: stale-archive symptom paragraph (restart clears archives;
+pre-Phase-5 leftovers could trip the breaker). (4) docs/adr/README.md: add ADR-006 to
+the index; ADR-004 status → Accepted; "Deferred" subsection for ADR-005/007/008 with
+pointers to plans/phase-4-capability-roadmap.md §4.4; [verify-first] a small
+consistency rule that every docs/adr/*.md appears in the index with matching status —
+skip with justification if it doesn't fit the checker's classes. (5) docs/tracks.md:
+one sentence + link for devteam assess. (6) rules/stage-02.md: rename the fictional
+example ADR numbers (ADR-007/ADR-012 collide with the real framework namespace) to
+PADR-style with a clarifying half-sentence.
+
+Done means: consistency green; fixed anchors resolve; grep shows no runbook instructing
+operators to consult retry_number.
+```
+
+### 8.1 Fragment triage + cut v0.7.0 ⏸ last in phase
+
+```
+PRECONDITION: 8.2 and 8.3 merged (the release folds their fragments too).
+
+TASK: Implement plans/phase-8-release-and-sync.md, item 8.1. Branch: release/v0.7.0
+Release-commit discipline applies (see the 2.5 prompt): verbatim folds, date -u +%F,
+NO tag in-session (post-merge tag commands in the report), [skip-changelog] note for
+the PR opener.
+
+Implement: (1) the EIGHT backfill fragments (B2, B9, B10, C1, C3, C5, E7, G6 — verify
+the set via git tag --contains on their implementing commits) move into the existing
+[0.6.0] CHANGELOG section annotated "(entry backfilled post-release)"; delete those
+fragment files; fix docs/BACKLOG.md's B9 "(Unreleased)" row and the eight #unreleased
+links. (2) assemble remaining fragments + [Unreleased] entries into a dated [0.7.0];
+bump package.json + lockfile (npm install --package-lock-only). (3) EXAMPLE.md
+re-capture per the D6.1 release-checklist step (the freshness advisory fires at
+v0.7.0); update the stamp. (4) refresh examples/sms-opt-in gates to current schema:
+orchestrator stamp (currently devteam@0.1.0), stage-04a C3 fields,
+dispatched_tool_budget where applicable — the example is the canonical reference and
+must not rot.
+
+Done means: consistency green (freshness + template-ref checks); release.js check
+clean; init+doctor smoke; the 0.6.0 section contains the annotated backfills.
+```
+
+---
+
+## Phase 9 — Evidence-Gated Capabilities (ADR-first)
+
+Workflow per item: draft/ground-truth → HUMAN approval → implement. Never implement
+against an unapproved ADR. Order: 9.1 draft + 9.2a in parallel → approvals → 9.3 → 9.4.
+Plan file: plans/phase-9-evidence-gated-capabilities.md.
+
+### 9.1a Draft ADR-007: liveness/heartbeat ⏸ Phases 5–6 merged
+
+```
+TASK: DRAFT (do not implement) docs/adr/007-liveness-heartbeat.md per
+plans/phase-9-evidence-gated-capabilities.md item 9.1. Read the driver loop, the
+headless timeout machinery (core/adapters/headless.js SIGTERM→SIGKILL), and
+run-log.jsonl event shapes first. Branch: docs/adr-007-heartbeat
+
+The ADR must define: stall (host alive + output flowing, no gate progress) as distinct
+from wall-clock timeout; the heartbeat event the driver emits per iteration + a
+dispatch-progress probe (log growth vs gate mtime); the operator surface (devteam run
+--watch or status reading run-state + last-heartbeat age); stall response (classify via
+the existing transient/structural vocabulary). Match docs/adr/ structure; Status:
+Proposed; include Alternatives and honest Consequences; end the report with the
+questions a human must rule on. NO implementation.
+```
+
+### 9.2a H3 ground-truth: the failure corpus 🔲 (read-and-report, runs in parallel)
+
+```
+TASK: Execute plans/phase-9-evidence-gated-capabilities.md item 9.2a. READ-AND-REPORT:
+you write exactly one file, plans/h3-ground-truth.md. No code changes.
+Branch: docs/h3-ground-truth
+
+ADR-003 gated the recipe factory (H3) on "evidence of recurring-failure volume." The
+post-release fix fragments (#106, #108/#109, stale-log, 06d-no-dispatch,
+no-source-change) suggest the evidence exists. Inventory the actual corpus: run-logs
+and gate archives available across real runs to date; distinct failure classes and
+recurrence counts; what fraction of fix-retry cycles an existing recipe handled vs
+halted for a human; which recurring failures are DERIVABLE (mechanical resolution) vs
+judgment-shaped. Be ruthless about sample size: if the honest answer is "one project,
+too few runs," say H3 STAYS GATED and stop — the BACKLOG caveat ("a learned recipe is
+a cached judgment… or it amplifies stale judgment") stands until the data says
+otherwise. Output structure: ## Corpus inventory / ## Failure classes & recurrence /
+## Recipe coverage today / ## Verdict: gate opens or stays shut, with the threshold
+that would change it.
+```
+
+### 9.2b Draft ADR-009: recipe suggestion ⏸ only if 9.2a opens the gate
+
+```
+PRECONDITION: plans/h3-ground-truth.md exists with a verdict that the gate opens. STOP
+otherwise.
+
+TASK: DRAFT (do not implement) docs/adr/009-recipe-suggestion.md per item 9.2b.
+Branch: docs/adr-009-recipe-suggestion
+The shape that honors the caveat: devteam recipes suggest — an analyzer mining
+run-logs + archives for recurring (failure-class, resolution) pairs, emitting a
+PROPOSED DIFF to core/pipeline/fix-recipes.js for human PR review. Never auto-applied,
+never runtime-learned. The ADR defines: mining heuristics, the evidence threshold per
+proposal, and why suggestion-not-application is the permanent boundary (or argues
+otherwise in Alternatives). Status: Proposed; end with the human ruling questions.
+```
+
+### 9.3 Draft ADRs 005 + 008 ⏸ as review bandwidth allows
+
+```
+TASK: DRAFT (do not implement) ONE of the two deferred ADRs, using its preserved brief
+in plans/phase-4-capability-roadmap.md §4.4 and the Phase-4 §4.4 prompt template in
+this file, with one update each:
+[ADR-005 standing grants: must now ALSO cover persistent tool-budget overrides (G10
+ landed after the brief was written) — the same chain-bound auditability problem as a
+ standing --auto-rule class. Branch: docs/adr-005-standing-grants]
+[ADR-008 exit semantics: [verify-first] re-confirm devteam run still exits 0 on
+ pipeline-complete with pending advise blockers, then decide the contract and its CI
+ implications. One page. Branch: docs/adr-008-exit-semantics]
+Status: Proposed; end with the human ruling questions. NO implementation.
+```
+
+### 9.4 D5 maturation: adaptive routing evidence review ⏸ needs ADR-007 implemented + run volume
+
+```
+TASK: Execute plans/phase-9-evidence-gated-capabilities.md item 9.4. READ-AND-REPORT
+first deliverable — NOT code: run devteam routing:suggest (and read its inputs) against
+the accumulated real-run telemetry and write plans/adaptive-routing-evidence.md
+answering ONE question: do the recommendations match what a human concludes in
+hindsight, or is the sample still noise? Include per-(role,host) sample counts. The
+framework's own stated uncertainty ("converges with small samples or just chases
+noise") is the acceptance bar. End with a verdict: continuous routing gets an ADR, or
+stays gated with the data threshold that would change it.
 ```
