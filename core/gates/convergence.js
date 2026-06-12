@@ -13,6 +13,8 @@
 //   files instead of trusting the model-written gate.retry_number.
 
 const fs = require("node:fs");
+const path = require("node:path");
+const crypto = require("node:crypto");
 const { listArchives } = require("./archive");
 
 // Normalize a gate's blocker list to a stable fingerprint for comparison.
@@ -104,4 +106,83 @@ function noProgressEvidence(stuckBlockers, attempts) {
   return `${stuckBlockers.length} blockers identical across attempts ${attStr}: ${preview}${tail}`;
 }
 
-module.exports = { detectNoProgress, countArchivedAttempts, noProgressEvidence };
+/**
+ * Detect whether the auto-fix build made no content changes to the files
+ * named in the most recent archived failure's blockers.
+ *
+ * Call this once per fix-and-retry iteration. On the first call (no prior
+ * fingerprint in runState) it stores a baseline and returns { noSourceChange: false }.
+ * On subsequent calls it compares against the stored baseline; if the file
+ * content is identical the breaker trips.
+ *
+ * Returns { noSourceChange: false } in all safe-fallback cases:
+ *   - fewer than 1 archive exists
+ *   - no blocker in the archive has a `file` field
+ *   - any unexpected I/O error
+ *
+ * @param {string} cwd        project root
+ * @param {string} gatesDir   absolute path to pipeline/gates
+ * @param {string} stageId    e.g. "stage-04"
+ * @param {object} runState   driver's mutable run-state; must have srcFingerprints: {}
+ * @returns {{ noSourceChange: boolean, lastAttempt?: number, files?: string[] }}
+ */
+function detectNoSourceChange(cwd, gatesDir, stageId, runState) {
+  try {
+    const archives = listArchives(gatesDir, stageId);
+    if (archives.length < 1) return { noSourceChange: false };
+
+    const lastArchive = archives[archives.length - 1];
+    let lastGate;
+    try {
+      lastGate = JSON.parse(fs.readFileSync(lastArchive.file, "utf8"));
+    } catch {
+      return { noSourceChange: false };
+    }
+
+    // Collect unique file paths from blocker `file` fields (sorted for stability).
+    const fileSet = new Set();
+    if (Array.isArray(lastGate.blockers)) {
+      for (const b of lastGate.blockers) {
+        if (b && typeof b === "object" && typeof b.file === "string" && b.file) {
+          fileSet.add(b.file);
+        }
+      }
+    }
+    if (fileSet.size === 0) return { noSourceChange: false };
+
+    const sortedFiles = [...fileSet].sort();
+
+    // Hash the current content of each blocker-referenced file.
+    // Missing/unreadable files contribute an empty string (best-effort).
+    const parts = sortedFiles.map((rel) => {
+      let content = "";
+      try { content = fs.readFileSync(path.join(cwd, rel), "utf8"); } catch { /* absent → "" */ }
+      return `${rel}:${crypto.createHash("sha256").update(content).digest("hex")}`;
+    });
+    const fingerprint = parts.join("\n");
+
+    const prior = runState.srcFingerprints[stageId];
+    runState.srcFingerprints[stageId] = fingerprint;
+
+    if (prior !== undefined && prior === fingerprint) {
+      return { noSourceChange: true, lastAttempt: lastArchive.attempt, files: sortedFiles };
+    }
+    return { noSourceChange: false };
+  } catch {
+    return { noSourceChange: false };
+  }
+}
+
+/**
+ * Build the human-readable no-source-change evidence string for halt output.
+ *
+ * @param {number}   lastAttempt  attempt number of the archive that triggered the check
+ * @param {string[]} files        blocker-referenced file paths that were unchanged
+ * @returns {string}
+ */
+function noSourceChangeEvidence(lastAttempt, files) {
+  const fileList = Array.isArray(files) && files.length > 0 ? ` [${files.join(", ")}]` : "";
+  return `build agent made no content changes to defect files${fileList} after attempt ${lastAttempt} — blocker likely requires a config-level edit outside the lint/test surface`;
+}
+
+module.exports = { detectNoProgress, countArchivedAttempts, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence };

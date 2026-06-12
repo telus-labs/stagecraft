@@ -339,6 +339,62 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.equal(s.halt_failure_class, "convergence-exhausted");
     assert.ok(fs.existsSync(victim), "fix_steps alone does not clear gates; clear_gates must be present");
   });
+
+  it("halts (convergence-exhausted) after one auto-fix attempt when blocker file content is unchanged", async () => {
+    // Simulates the hello-world case: red-team names Dockerfile as the blocker file.
+    // The build agent re-runs (run-stage) without modifying Dockerfile.
+    //
+    // Sequence:  fix-and-retry (failure 1)
+    //            → run-stage  (auto-fix build dispatched)
+    //            → fix-and-retry (failure 2, different blocker text so detectNoProgress
+    //                             does not fire — this specifically exercises detectNoSourceChange)
+    //
+    // Archive 1 is written from the seeded gate (failure 1 text).
+    // Archive 2 is written from the gate the mock agent writes (failure 2 text).
+    // detectNoProgress: different text across archives → does not fire.
+    // detectNoSourceChange: Dockerfile hash identical → fires → halt.
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+
+    const gatePath = seedGate(cwd, "stage-04", {
+      status: "FAIL",
+      blockers: [{ text: "EOL base image (failure 1)", file: "Dockerfile" }],
+    });
+
+    const nextSeq = [
+      // Failure 1: archive written from seeded gate, srcFingerprints baseline stored.
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "EOL base image (failure 1)", file: "Dockerfile" }],
+        clear_gates: [],
+      },
+      // Auto-fix build dispatched.
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      // Failure 2: different blocker text → detectNoProgress does not fire.
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "EOL base image (failure 2)", file: "Dockerfile" }],
+        clear_gates: [],
+      },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      // Mock agent: rewrites gate with new blocker text but leaves Dockerfile untouched.
+      runStageHeadless: async () => {
+        fs.writeFileSync(gatePath, JSON.stringify({
+          stage: "stage-04", status: "FAIL",
+          blockers: [{ text: "EOL base image (failure 2)", file: "Dockerfile" }],
+        }));
+        return [{ role: "platform", gatePath, exitCode: 0, durationMs: 1 }];
+      },
+    });
+
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+    assert.match(s.halt_reason, /no-source-change/);
+    assert.match(s.halt_reason, /Dockerfile/);
+  });
 });
 
 describe("driver: auto-rule escalation (Phase 2 PR-C2)", () => {
