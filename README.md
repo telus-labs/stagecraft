@@ -103,17 +103,13 @@ The vocabulary extends naturally: a *run* is one pipeline invocation, *dress reh
 
 A coordinated team of role-specific subagents running a structured software-development pipeline end-to-end:
 
-- **18 stages** — requirements (PM) → design (Principal) → clarification → executable-spec (PM, Gherkin) → build (Backend|Frontend|Platform|QA) → pre-review (Platform) → security review (conditional) → red-team (always-on full+hotfix) → migration-safety (conditional, veto) → preflight (mechanical, auto-run) → peer-review (Reviewer × 4) → qa → accessibility → observability → verification-beyond-tests (full only) → sign-off (PM+Platform) → deploy → retrospective.
-- **6 tracks** — `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Pick by change size.
-- **Per-workstream gate JSON** — every stage writes a machine-readable gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
-- **Per-stage host routing** — `.devteam/config.yml` picks which host runs which role. Single-host install is the same code path as multi-host.
-- **Conditional dispatch** — security review fires only when pre-review's heuristic flags it. Migration-safety fires on data-layer diffs.
-- **Veto stages** — security and migration-safety can halt the pipeline regardless of peer-review approval.
-- **Hooks** (Claude Code) — auto-validate gates on `Stop`/`SubagentStop`; auto-derive Stage 5 approvals from per-area `REVIEW:` markers via PostToolUse.
-- **Headless invocation** — `devteam stage <name> --headless` drives each workstream's host CLI (`claude --print`, `codex exec`) non-interactively.
-- **Reproducibility + replay** — every gate can record `model_version`, `temperature`, `seed`, `system_prompt_hash`, `tools_hash`. `devteam replay <stage>` re-runs and diffs.
-- **Routing learns from data** — `npm run routing:suggest` reads cost + first-try pass rates per (role, host) and proposes config swaps.
-- **Advisory triage** — `devteam advise` surfaces `noted_for_followup[]` items from any completed gate, classifies their downstream risk (QA blocker, peer-review risk, noise), and applies operator decisions (defer with ticket, scaffold test, amend brief, do nothing) to `pipeline/context.md` so QA and peer-review see the outcome.
+- **18-stage gated pipeline** — requirements (PM) → design (Principal) → build (specialist workstreams) → peer-review (Reviewer × 4) → QA → deploy → retrospective. Each stage writes a machine-readable gate; the next stage cannot start until the gate passes.
+- **6 tracks** — `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Pick by change size; `devteam assess` infers the right track from description keywords and file heuristics.
+- **Per-workstream gate JSON** — every stage writes a gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
+- **Multi-host routing** — `.devteam/config.yml` picks which host runs which role. Claude for design, Codex for backend, Gemini for QA — the gate JSON is the stable seam.
+- **Bounded autonomous driver** — `devteam run` loops `next → dispatch → merge` until `pipeline-complete`; `devteam stage <name> --headless` drives a single stage non-interactively.
+
+Full feature catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
 ## Prerequisites
 

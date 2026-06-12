@@ -15,6 +15,9 @@ Before starting: read [`AGENTS.md`](AGENTS.md) for the load-bearing contracts. E
 - [Style guidance](#style-guidance)
 - [Testing your change](#testing-your-change)
 - [Commit & PR style](#commit--pr-style)
+- [Documentation principles](#documentation-principles)
+- [Doc-update checklist](#doc-update-checklist)
+- [Archive policy](#archive-policy)
 - [Where to ask](#where-to-ask)
 - [Two anti-patterns](#two-anti-patterns)
 
@@ -214,6 +217,33 @@ If your change touches a load-bearing contract from `AGENTS.md`, add the test in
 - Sign off with `Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>` if Claude helped.
 - Don't `git add -A` or `git add .`. Stage by name to avoid accidentally committing `node_modules/` artifacts or scratch files.
 - Any PR touching `core/`, `bin/`, `hosts/`, `rules/`, `roles/`, or `skills/` must include a `changelog.d/<slug>.md` entry. See [Recipe 5](#recipe-5--adding-a-changelog-fragment).
+
+## Documentation principles
+
+These govern where facts live and how they stay true. Write them into every doc change.
+
+1. **One owner per fact.** Every class of fact has exactly one canonical home (see §3 of [`plans/documentation-plan.md`](plans/documentation-plan.md)); everywhere else links, never restates. A restatement is a bug.
+2. **Generate, don't transcribe.** Any content derivable from code (stage tables, CLI flags, capability grids) is emitted by a script and fenced with `<!-- generated: do not hand-edit -->` markers that the consistency checker enforces.
+3. **Docs are routed by audience, not topic.** Four named reader paths (Evaluator / Operator / Contributor / Model); every doc belongs to exactly one primary path.
+4. **Model-facing prose is code.** `rules/`, `roles/`, `skills/` have a token budget per dispatch. A doc that bloats an agent's context is a performance regression.
+5. **Drift fails CI.** `npm run consistency` is the enforcement arm of principles 1–4. A documentation rule without a check is a wish.
+
+## Doc-update checklist
+
+When you change code, update the docs that own the affected facts. A restatement anywhere else needs a corresponding link update, not a content change.
+
+| If you changed… | Update… |
+|---|---|
+| `core/pipeline/stages.js` | Run `npm run docs:generate` (generates reference tables); update `rules/pipeline*.md` if stage behavior changed |
+| A CLI flag or subcommand | Schema description *is* the doc — update the flag schema and help text; do not hand-edit `README.md` CLI table |
+| A new feature | Add a row to [`docs/FEATURES.md`](docs/FEATURES.md) + add a `changelog.d/<slug>.md` fragment (CI-enforced for guarded paths) |
+| A design decision | Add or update an ADR in [`docs/adr/`](docs/adr/) and reference the decision number in `ARCHITECTURE.md` |
+| `hosts/*/capabilities.json` | Run `npm run docs:generate` to regenerate the host-capability matrix |
+| A BACKLOG item (landed) | Add a one-liner to [`docs/BACKLOG.md`](docs/BACKLOG.md) with a CHANGELOG link; remove the detailed strikethrough row |
+
+## Archive policy
+
+Anything superseded moves to `docs/historical/` rather than being half-updated in place. The consistency checker excludes `docs/historical/` from its prose-vs-code checks, so archived docs do not generate false drift alerts. Name archived files with a datestamp prefix (`YYYY-MM-DD-original-name.md`) so the archive is self-documenting. The [`docs/historical/`](docs/historical/) directory already uses this convention for the self-audit archive.
 
 ## Where to ask
 
