@@ -68,6 +68,29 @@ jobs:
           ./bin/devteam init --host claude-code --cwd "$TARGET"
           ./bin/devteam doctor --cwd "$TARGET"
 
+      - name: First-30-minutes onboarding smoke
+        # Executes the README's "First 30 minutes" onboarding steps so the
+        # instructions are run, not just proofread.
+        # DEVTEAM_HEADLESS_COMMAND=cat renders the prompt to stdout without
+        # invoking a model (offline-safe). The stage command exits non-zero
+        # because cat doesn't write a gate — that's expected and intentional.
+        # The || true lets the step continue; the assertion is on devteam next,
+        # which must return a valid pipeline action without crashing.
+        run: |
+          TARGET=$(mktemp -d)
+          ./bin/devteam init --host claude-code --cwd "$TARGET"
+          ./bin/devteam doctor --cwd "$TARGET"
+          DEVTEAM_HEADLESS_COMMAND=cat ./bin/devteam stage requirements \
+            --feature "smoke test feature" --headless --cwd "$TARGET" || true
+          ACTION=$(./bin/devteam next --json --cwd "$TARGET" | jq -r '.action')
+          echo "devteam next action: $ACTION"
+          case "$ACTION" in
+            run-stage|continue-stage|merge|fix-and-retry|resolve-escalation|pipeline-complete)
+              echo "✓ valid pipeline action: $ACTION" ;;
+            *)
+              echo "✗ unexpected action from devteam next: $ACTION" && exit 1 ;;
+          esac
+
       - name: Changelog fragment guard
         if: github.event_name == 'pull_request'
         env:

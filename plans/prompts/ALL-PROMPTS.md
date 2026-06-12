@@ -13,7 +13,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 2 | Consistency, docs sweep, release | ✅ complete (PRs #71 · #72 · #75 · #76 · release/v0.6.0) |
 | 3 | Structural debt | ✅ complete (PRs #79–#89) |
 | 4 | Capability roadmap (ADR-first) | ✅ complete (PRs #90–#97) |
-| D | Documentation system | ⏸ D1 = Phase 2; D2+ after |
+| D | Documentation system | ✅ complete (PRs #99 · #102 · #103 · #104 · #105 · #107) |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -867,10 +867,9 @@ recurring failure classes per ADR-003. Write its prompt only when that evidence 
 
 ---
 
-## Documentation Plan (D2–D6)
+## Documentation Plan (D2–D6) ✅ complete
 
-D1 = Phase 2 (✅ complete — 2.1–2.5 all merged). Order: D2 → D4 → D3a → D3b (after 3.1a) →
-D5 (after 2.3) → D6 (after 2.5).
+All six workstreams executed and merged: D1 = Phase 2; D2 = [#99](https://github.com/telus-labs/stagecraft/pull/99); D4 = [#102](https://github.com/telus-labs/stagecraft/pull/102); D3a = [#103](https://github.com/telus-labs/stagecraft/pull/103); D3b = [#104](https://github.com/telus-labs/stagecraft/pull/104); D5 = [#105](https://github.com/telus-labs/stagecraft/pull/105); D6 = [#107](https://github.com/telus-labs/stagecraft/pull/107). Prompts preserved for reference; if re-running any, re-verify the claims first — the codebase has changed.
 
 **Add this line to the preamble for every D prompt:**
 "You are editing documentation read by humans and, in some cases, by models
@@ -878,7 +877,7 @@ mid-pipeline. Preserve the candid house style; never delete a limitation or cave
 while moving content. When you move content, leave a link at the old location only
 if external references are plausible; otherwise move cleanly."
 
-### D2 Audience-based information architecture 🔲
+### D2 Audience-based information architecture ✅ #99
 
 ```
 TASK: Implement workstream D2 of plans/documentation-plan.md. Read that section and
@@ -904,7 +903,7 @@ Do NOT rewrite the documents themselves — this item changes the map + two smal
 index files. Report lists each doc → assigned path.
 ```
 
-### D4 Dedup and lifecycle 🔲
+### D4 Dedup and lifecycle ✅ #102
 
 ```
 TASK: Implement workstream D4 of plans/documentation-plan.md (sub-items 1, 2, 3, 5;
@@ -928,7 +927,7 @@ Report: before/after line counts for BACKLOG/README/AGENTS + every fact moved
 (from → to).
 ```
 
-### D3a Generated reference: stages + hosts matrices 🔲
+### D3a Generated reference: stages + hosts matrices ✅ #103
 
 ```
 TASK: Implement workstream D3 sub-items 1, 3, 4 of plans/documentation-plan.md (the
@@ -951,7 +950,7 @@ generate-commit-verify pattern. Branch: docs/generated-reference
 Done: docs:generate idempotent (second run = no diff).
 ```
 
-### D3b Generated CLI reference 🔲 (Phase 3.1a merged — PR #83)
+### D3b Generated CLI reference ✅ #104
 
 ```
 PRECONDITION: core/cli/flags.js and per-command flag schemas exist (Phase 3.1a).
@@ -973,7 +972,7 @@ Branch: docs/generated-cli-reference
 Report: kept-vs-linked decisions from step 2.
 ```
 
-### D5 Model-facing token budget program 🔲 (2.3 merged — PR #75)
+### D5 Model-facing token budget program ✅ #105
 
 ```
 PRECONDITION: the gates.md split is merged (rules/gates-core.md exists and
@@ -1001,7 +1000,7 @@ Done: prompt-budget.md committed + idempotent; advisories fire on synthetic
 violations (meta-test); the step-4 proposal in the report.
 ```
 
-### D6 Onboarding flow upkeep 🔲 (2.5 merged — release/v0.6.0)
+### D6 Onboarding flow upkeep ✅ #107
 
 ```
 TASK: Implement workstream D6 of plans/documentation-plan.md. Branch: docs/onboarding-upkeep

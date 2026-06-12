@@ -932,6 +932,50 @@ function checkPromptBudgetSync() {
   }
 }
 
+// --- Advisory: EXAMPLE.md freshness stamp ---
+//
+// EXAMPLE.md is a captured pipeline run — it silently rots as the pipeline
+// evolves. This check reads the "captured at vX.Y" stamp near the top and
+// warns when the stamp is more than one minor behind package.json (D6.1).
+//
+// Only an advisory (non-blocking) because the doc is still correct for most
+// readers; the intent is to prompt re-capture at each minor release.
+//
+// Only runs in full-repo mode.
+function checkExampleMdFreshnessStamp() {
+  const examplePath = path.join(REPO_ROOT, "EXAMPLE.md");
+  if (!fs.existsSync(examplePath)) {
+    advisory("example-freshness", "EXAMPLE.md not found");
+    return;
+  }
+  const content = fs.readFileSync(examplePath, "utf8");
+  const stampMatch = content.match(/captured at v(\d+)\.(\d+)/i);
+  if (!stampMatch) {
+    advisory("example-freshness",
+      "EXAMPLE.md has no freshness stamp — add \"captured at vX.Y\" near the top (D6.1)");
+    return;
+  }
+
+  const pkg = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "package.json"), "utf8"));
+  const pkgMatch = pkg.version.match(/^(\d+)\.(\d+)/);
+  if (!pkgMatch) return; // malformed version — skip advisory
+
+  const stampMajor = parseInt(stampMatch[1], 10);
+  const stampMinor = parseInt(stampMatch[2], 10);
+  const pkgMajor   = parseInt(pkgMatch[1], 10);
+  const pkgMinor   = parseInt(pkgMatch[2], 10);
+
+  const minorsBehind = (pkgMajor === stampMajor) ? (pkgMinor - stampMinor) : Infinity;
+
+  if (minorsBehind > 1) {
+    advisory("example-freshness",
+      `EXAMPLE.md stamp is v${stampMajor}.${stampMinor} but package.json is ${pkg.version} ` +
+      `(>1 minor behind) — re-capture the example run and update the stamp`);
+  } else {
+    pass(`example-freshness: EXAMPLE.md stamp v${stampMajor}.${stampMinor} is current (≤1 minor behind ${pkg.version})`);
+  }
+}
+
 // --- Advisory: per-file size ceilings ---
 //
 // Emits non-blocking advisories when files exceed their size ceilings:
@@ -1188,6 +1232,7 @@ function main(opts) {
     checkCliRefSync();
     checkCiTemplateRefVersion();
     checkPromptBudgetSync();
+    checkExampleMdFreshnessStamp();
     checkFileSizeCeilings();
     runProseChecks(null);
   }

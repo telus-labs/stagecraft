@@ -77,6 +77,20 @@ function check() {
     console.log(`  ✓ package.json version: ${pkg.version}`);
   }
 
+  // 7. EXAMPLE.md re-capture reminder (D6.1)
+  // EXAMPLE.md is a captured pipeline run that rots as the pipeline evolves.
+  // Remind the release engineer to update the stamp and re-capture at each minor.
+  const examplePath = path.join(REPO_ROOT, "EXAMPLE.md");
+  if (fs.existsSync(examplePath)) {
+    const exampleContent = fs.readFileSync(examplePath, "utf8");
+    const stampMatch = exampleContent.match(/captured at v(\d+)\.(\d+)/i);
+    if (!stampMatch) {
+      warnings.push("EXAMPLE.md has no freshness stamp — add \"captured at vX.Y\" near the top");
+    } else {
+      warnings.push(`EXAMPLE.md re-capture: stamp is v${stampMatch[1]}.${stampMatch[2]} — if pipeline behavior changed since that release, re-run the traced pipeline and update the stamp`);
+    }
+  }
+
   console.log("");
   if (failures.length > 0) {
     console.log(`❌ ${failures.length} failure(s):`);

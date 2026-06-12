@@ -324,6 +324,22 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Produces 11 output files in `docs/audit/`; resume-aware via `docs/audit/status.json`
 - `/audit-quick` runs phases 1–2 only for a faster assessment
 
+### Generated reference documentation
+
+Machine-derived docs stay in sync with the codebase by construction — a CI advisory fires when committed output diverges from a fresh generation.
+
+**`npm run docs:generate`** regenerates three reference files:
+
+- **[`docs/reference/stages.md`](reference/stages.md)** — full stage table (ID, roles, conditionalOn, gate files, artifacts, grouped by phase). Source of truth: `core/pipeline/stages.js`.
+- **[`docs/reference/hosts.md`](reference/hosts.md)** — capability and enforcement matrix across all four adapters. Source of truth: `hosts/*/capabilities.json`.
+- **[`docs/reference/cli.md`](reference/cli.md)** — full CLI reference per command: synopsis, flag table (name, type, description), and registry order. Source of truth: the per-command flag schemas in `core/cli/commands/`.
+
+**`npm run prompt:budget`** regenerates:
+
+- **[`docs/reference/prompt-budget.md`](reference/prompt-budget.md)** — per-stage framework context size in bytes and estimated tokens (bytes ÷ 4), plus the top-5 heaviest files per stage. Used to track readFirst weight over time; a CI advisory fires when any stage grows >10% from its committed baseline.
+
+**`npm run consistency`** — cross-artifact consistency checker (313+ checks). Catches prose-vs-code drift across stage names, track lists, command surface, referenced-file existence, file-size ceiling violations, and EXAMPLE.md freshness. Runs in CI; advisory-only checks print without failing the build; hard checks exit non-zero.
+
 ---
 
 ## Integrations
