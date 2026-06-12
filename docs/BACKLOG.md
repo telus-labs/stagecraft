@@ -22,7 +22,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| A1 | ~~Gemini CLI adapter~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
+| A1 | ~~Gemini CLI adapter~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
 | A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs the stage on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). |
 | A4 | **Pluggable adapter discovery** | 3 | 2 | `npm install @devteam/host-foo` and the orchestrator auto-loads. Makes the ecosystem extensible without forking. |
@@ -33,92 +33,92 @@ A living list of work beyond the initial migration, organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| B1 | ~~Accessibility audit stage~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
-| B2 | ~~Performance budget stage~~ | 4 | 3 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
+| B1 | ~~Accessibility audit stage~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| B2 | ~~Performance budget stage~~ | 4 | 3 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | B3 | **Cost gate at deploy** | 4 | 2 | Estimate cloud cost delta from the deploy plan. Block deploys that 10× cost without explicit override. |
-| B4 | ~~Observability gate~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
-| B5 | ~~Migration safety stage~~ | 5 | 3 | ✅ v0.4.0 · [CHANGELOG](CHANGELOG.md#040--2026-05-28) |
+| B4 | ~~Observability gate~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| B5 | ~~Migration safety stage~~ | 5 | 3 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | B6 | **Documentation gate** | 3 | 2 | Public API changed → README/CHANGELOG must reflect it. Mechanical but catches a common drift. |
 | B7 | **Multi-language QA** | 4 | 4 | Stage 6 currently assumes one test framework. Real projects have JS + Python + Go. Per-language test runners with a merged report. |
-| B8 | ~~Cross-artifact consistency analyze~~ `[cmp-E-1]` | 4 | 2 | ✅ v0.6.0 · [CHANGELOG](CHANGELOG.md#060--2026-06-11) |
-| B9 | ~~Bounded workspace deltas~~ `[cmp-E-2]` | 4 | 3 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
-| B10 | ~~Discover Standards preprocessing~~ `[cmp-E-5]` | 3 | 3 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
+| B8 | ~~Cross-artifact consistency analyze~~ `[cmp-E-1]` | 4 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| B9 | ~~Bounded workspace deltas~~ `[cmp-E-2]` | 4 | 3 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| B10 | ~~Discover Standards preprocessing~~ `[cmp-E-5]` | 3 | 3 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
 
 ## C. Quality & safety — enforcement, sandboxing, scanning
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| C1 | ~~Filesystem-level `allowedWrites` enforcement~~ | 4 | 4 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
-| C2 | ~~Secret scanning hook~~ | 4 | 1 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
-| C3 | ~~License compatibility gate~~ | 3 | 1 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
-| C4 | ~~Reproducible runs (recording half)~~ | 4 | 4 | ✅ v0.4.0 · [CHANGELOG](CHANGELOG.md#040--2026-05-28) |
-| C5 | ~~Capability-required permissions~~ | 3 | 2 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
-| C6 | ~~Tamper-evident gate chain~~ | 3 | 3 | ✅ v0.6.0 · [CHANGELOG](CHANGELOG.md#060--2026-06-11) |
-| C7 | ~~`eslint-plugin-security`~~ `[hist-a]` | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](CHANGELOG.md#060--2026-06-11) |
-| C8 | ~~CHANGELOG-per-PR fragments~~ `[hist-b]` | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](CHANGELOG.md#060--2026-06-11) |
+| C1 | ~~Filesystem-level `allowedWrites` enforcement~~ | 4 | 4 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| C2 | ~~Secret scanning hook~~ | 4 | 1 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| C3 | ~~License compatibility gate~~ | 3 | 1 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| C4 | ~~Reproducible runs (recording half)~~ | 4 | 4 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
+| C5 | ~~Capability-required permissions~~ | 3 | 2 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| C6 | ~~Tamper-evident gate chain~~ | 3 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C7 | ~~`eslint-plugin-security`~~ `[hist-a]` | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C8 | ~~CHANGELOG-per-PR fragments~~ `[hist-b]` | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C9 | **Verify-before-promoting enforcement in audit skill** `[hist-c]` | 3 | 2 | The 2026-05-28 audit codified a "verify before promoting" rule (after S5); the 2026-06-03 audit failed to apply it (the C-1 retraction in PR #32). Codifying the rule once textually isn't enough. Add a `verified_by` field requirement to each finding in `skills/audit/SKILL.md` Phase 1/2 — must include the grep/code-inspection command that confirmed the cited symbol exists. Structural enforcement, not textual guidance. |
 
 ## D. Observability & learning — telemetry, metrics, persistent learning
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| D1 | ~~OpenTelemetry tracing per stage~~ | 5 | 3 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
-| D2 | ~~Gate-pass-rate dashboards~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
-| D3 | ~~Lessons-learned across projects (org-shared)~~ | 5 | 4 | ✅ v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29) |
-| D4 | ~~Per-role per-model performance scores~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29) |
-| D5 | ~~Adaptive routing~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29) |
-| D6 | ~~Cost telemetry~~ | 4 | 2 | ✅ v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29) |
-| D7 | ~~Persistent project memory (embeddings index)~~ | 5 | 4 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
+| D1 | ~~OpenTelemetry tracing per stage~~ | 5 | 3 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| D2 | ~~Gate-pass-rate dashboards~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| D3 | ~~Lessons-learned across projects (org-shared)~~ | 5 | 4 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
+| D4 | ~~Per-role per-model performance scores~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
+| D5 | ~~Adaptive routing~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
+| D6 | ~~Cost telemetry~~ | 4 | 2 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
+| D7 | ~~Persistent project memory (embeddings index)~~ | 5 | 4 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 
 ## E. Developer experience
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| E1 | ~~`devteam status` rich CLI output~~ | 3 | 1 | ✅ v0.1.0 (shipped as `devteam summary`) · [CHANGELOG](CHANGELOG.md#010--2026-05-26) |
-| E2 | ~~Web UI for pipeline runs~~ | 4 | 4 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
+| E1 | ~~`devteam status` rich CLI output~~ | 3 | 1 | ✅ v0.1.0 (shipped as `devteam summary`) · [CHANGELOG](../CHANGELOG.md#010--2026-05-26) |
+| E2 | ~~Web UI for pipeline runs~~ | 4 | 4 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | E3 | **VS Code extension** | 3 | 3 | Sidebar with stage status, "run next stage" button, gate viewer. |
 | E4 | **Live streaming output** | 3 | 2 | Currently `--headless` waits for the host CLI to finish. Stream the LLM's output to the user's terminal as it happens. |
-| E5 | ~~Pre-flight check (`devteam doctor`)~~ | 3 | 1 | ✅ v0.1.0 · [CHANGELOG](CHANGELOG.md#010--2026-05-26) |
-| E6 | ~~`devteam replay <stage-id>`~~ | 3 | 3 | ✅ v0.4.0 · [CHANGELOG](CHANGELOG.md#040--2026-05-28) |
-| E7 | ~~`/goal` integration for convergence-shaped stages~~ | 3 | 2 | ✅ landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased) |
-| E8 | ~~Codebase audit feature~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29) |
+| E5 | ~~Pre-flight check (`devteam doctor`)~~ | 3 | 1 | ✅ v0.1.0 · [CHANGELOG](../CHANGELOG.md#010--2026-05-26) |
+| E6 | ~~`devteam replay <stage-id>`~~ | 3 | 3 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
+| E7 | ~~`/goal` integration for convergence-shaped stages~~ | 3 | 2 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| E8 | ~~Codebase audit feature~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
 | E9 | **Conversational stage mode** `[cmp-E-4]` | 3 | 3 | `devteam stage requirements --interactive` opens a conversation with the PM subagent to refine the brief through Q&A before producing the artifact. Useful specifically for upstream stages (requirements, design, clarification) where the artifact benefits from refinement before being rendered. Architecture supports it (adapters could expose streaming-conversation alongside one-shot render). Implement if user feedback indicates the gate-driven loop is too rigid for upstream stages. Related to E7 but different mechanism: E7 is host-loops-until-condition; E9 is stage-manager-converses-with-agent. |
 
 ## F. Integrations — where the team plugs in
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| F1 | ~~GitHub PR integration~~ | 4 | 3 | ✅ v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27) |
+| F1 | ~~GitHub PR integration~~ | 4 | 3 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | F2 | **Jira/Linear ticket integration** | 3 | 2 | `devteam stage requirements --ticket FOO-123` pulls the ticket as the feature brief input. Gates link back to the ticket. |
 | F3 | **Slack/Discord notifications** | 3 | 1 | Pipeline events (stage start, fail, escalate) post to a channel. Triggers for human checkpoints. |
-| F4 | ~~CI runner integration~~ | 4 | 3 | ✅ v0.4.0 (GitHub Actions only) · [CHANGELOG](CHANGELOG.md#040--2026-05-28) |
+| F4 | ~~CI runner integration~~ | 4 | 3 | ✅ v0.4.0 (GitHub Actions only) · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | F5 | **Pre-commit hook integration** | 3 | 1 | Optional pre-commit hook that runs the relevant track for the change (nano if config-only, full if otherwise). |
 
 ## G. Innovation bets — speculative, future-oriented
 
 These don't fit neatly in impact/effort because their value depends on how the field evolves. They are the items that would most meaningfully differentiate this tool.
 
-### G1. ~~Multi-model peer review~~ — v0.2.0 · [CHANGELOG](CHANGELOG.md#020--2026-05-27)
+### G1. ~~Multi-model peer review~~ — v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27)
 
-### G2. ~~Closed-loop acceptance criteria → exec spec → tests~~ — v0.4.0 · [CHANGELOG](CHANGELOG.md#040--2026-05-28)
+### G2. ~~Closed-loop acceptance criteria → exec spec → tests~~ — v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28)
 
-### G3. ~~Production feedback loop~~ — landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased)
+### G3. ~~Production feedback loop~~ — landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased)
 
-### G4. ~~Red-team role between build and peer-review~~ — v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29)
+### G4. ~~Red-team role between build and peer-review~~ — v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29)
 
 ### G5. Multi-modal stages
 Design specs include architecture diagrams (images). Stage 2 (design) and Stage 5 (review) accept image inputs. Principal can output a system diagram, not just prose. Visual reasoning is no longer a separate workflow.
 
-### G6. ~~Stage shopping (AI-inferred tracks)~~ — landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased)
+### G6. ~~Stage shopping (AI-inferred tracks)~~ — landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased)
 
-### G7. ~~Verification beyond tests~~ — v0.4.0 · [CHANGELOG](CHANGELOG.md#040--2026-05-28)
+### G7. ~~Verification beyond tests~~ — v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28)
 
-### G8. ~~Long-context architecture continuity~~ — v0.3.0 · [CHANGELOG](CHANGELOG.md#030--2026-05-29)
+### G8. ~~Long-context architecture continuity~~ — v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29)
 
 ### G9. Self-modifying pipeline
 Retrospective stage proposes changes to `stages.js` / `roles/` / `rules/` based on what worked. Proposals queue for human approval. The pipeline learns its own shape from operation.
 
-### G10. ~~Role tool budgets~~ — landed (Unreleased) · [CHANGELOG](CHANGELOG.md#unreleased)
+### G10. ~~Role tool budgets~~ — landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased)
 
 ---
 
