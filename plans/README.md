@@ -11,6 +11,11 @@ written to be executed by Claude (Sonnet) one item at a time.
 | 3 | [phase-3-structural-debt.md](phase-3-structural-debt.md) | [prompts](prompts/ALL-PROMPTS.md) | bin/devteam split, fix-steps registry, dependency & portability decisions | Phase 2 item 2.1 merged (consistency checker protects the refactor) |
 | 4 | [phase-4-capability-roadmap.md](phase-4-capability-roadmap.md) | [prompts](prompts/ALL-PROMPTS.md) | Resume planned capability work (G10, convergence, G3, H3 pre-work) | Phases 1–2 complete |
 | Docs | [documentation-plan.md](documentation-plan.md) | [prompts](prompts/ALL-PROMPTS.md) | Documentation system: audience paths, generated reference, token budgets | D1 (= Phase 2) done; see its sequencing table |
+| 5 | [phase-5-state-integrity.md](phase-5-state-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | State lifecycle: derived gate invalidation, archive ownership, interactive ceiling, B9 fence | none — start here (round-2 review, 2026-06-12) |
+| 6 | [phase-6-promise-integrity.md](phase-6-promise-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | Make shipped claims true: G10 prompt-only path, pm budget, C3 runner, recipe de-overfit | none (6.2 needs 6.1) |
+| 7 | [phase-7-test-harness.md](phase-7-test-harness.md) | [prompts](prompts/ALL-PROMPTS.md) | Kill the repo-state test class structurally; CI signal quality | none |
+| 8 | [phase-8-release-and-sync.md](phase-8-release-and-sync.md) | [prompts](prompts/ALL-PROMPTS.md) | v0.7.0 with honest attribution; semantic runbook sync; D5 token work | 8.2 needs 6.4 · 8.3 needs 7.1 |
+| 9 | [phase-9-evidence-gated-capabilities.md](phase-9-evidence-gated-capabilities.md) | [prompts](prompts/ALL-PROMPTS.md) | ADR-007 heartbeat, H3 ground-truth, ADRs 005/008, adaptive-routing evidence | Phases 5–6 merged; ADR-first |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status
