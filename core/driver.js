@@ -33,7 +33,7 @@ const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate } = require("./gates/archive");
-const { detectNoProgress, noProgressEvidence } = require("./gates/convergence");
+const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 const { upsertSection } = require("./markers");
 
@@ -287,9 +287,10 @@ async function run(opts = {}) {
     started_at: nowIso(),
   };
   // PR-B counters (resilient to a resumed state that predates them).
-  state.fixRetries = state.fixRetries || {}; // code-defect re-dispatches per stage
-  state.autoRule = state.autoRule || {};     // auto-rule attempts per stage
-  state.transient = state.transient || {};   // no-gate transient retries per stage
+  state.fixRetries = state.fixRetries || {};      // code-defect re-dispatches per stage
+  state.autoRule = state.autoRule || {};          // auto-rule attempts per stage
+  state.transient = state.transient || {};        // no-gate transient retries per stage
+  state.srcFingerprints = state.srcFingerprints || {}; // content hashes for no-source-change detection
 
   const summary = {
     completed: false,
@@ -406,6 +407,24 @@ async function run(opts = {}) {
           summary.no_progress_evidence = evidence;
           logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_progress_evidence: evidence, archived: archived || null });
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_progress_evidence: evidence });
+          break;
+        }
+
+        // No-source-change check: if blockers name specific files and those files'
+        // content is identical to the baseline captured on the previous iteration,
+        // the build agent made no actionable edits. Halt before dispatching another
+        // wasted build — the defect requires a config-level fix the agent cannot apply.
+        const srcCheck = detectNoSourceChange(cwd, gatesDir(cwd, changeId), r.stage, state);
+        if (srcCheck.noSourceChange) {
+          const evidence = noSourceChangeEvidence(srcCheck.lastAttempt, srcCheck.files);
+          summary.halted = true;
+          summary.halt_action = "resolve-escalation";
+          summary.halt_failure_class = "convergence-exhausted";
+          summary.halt_reason = `no-source-change convergence for "${r.name}": ${evidence}; escalating for a ruling`;
+          summary.blockers = r.blockers || [];
+          summary.no_source_change_evidence = evidence;
+          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_source_change_evidence: evidence, archived: archived || null });
+          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_source_change_evidence: evidence });
           break;
         }
 

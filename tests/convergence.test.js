@@ -13,6 +13,8 @@ const {
   detectNoProgress,
   countArchivedAttempts,
   noProgressEvidence,
+  detectNoSourceChange,
+  noSourceChangeEvidence,
 } = require(path.join(REPO_ROOT, "core", "gates", "convergence"));
 
 let _dirs = [];
@@ -133,6 +135,128 @@ describe("countArchivedAttempts", () => {
     archiveGate(gd(cwd), "stage-04", 1);
     archiveGate(gd(cwd), "stage-04", 2);
     assert.equal(countArchivedAttempts(gd(cwd), "stage-04"), 2);
+  });
+});
+
+// ─── detectNoSourceChange ─────────────────────────────────────────────────────
+
+describe("detectNoSourceChange: safe-fallback cases", () => {
+  it("no archives → { noSourceChange: false } without crashing", () => {
+    const cwd = track(makeTargetProject());
+    const state = { srcFingerprints: {} };
+    assert.deepEqual(detectNoSourceChange(cwd, gd(cwd), "stage-04", state), { noSourceChange: false });
+  });
+
+  it("blockers with no file fields → { noSourceChange: false } regardless of content", () => {
+    const cwd = track(makeTargetProject());
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "lint error" }, "plain string"] });
+    const state = { srcFingerprints: {} };
+    assert.deepEqual(detectNoSourceChange(cwd, gd(cwd), "stage-04", state), { noSourceChange: false });
+  });
+
+  it("blocker references a missing file → no crash, first call stores baseline and returns false", () => {
+    const cwd = track(makeTargetProject());
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "missing", file: "nonexistent.txt" }] });
+    const state = { srcFingerprints: {} };
+    let r;
+    assert.doesNotThrow(() => { r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state); });
+    assert.equal(r.noSourceChange, false, "first call stores baseline; returns false regardless");
+    assert.ok(state.srcFingerprints["stage-04"], "fingerprint still stored even for a missing file");
+  });
+});
+
+describe("detectNoSourceChange: baseline capture and comparison", () => {
+  it("first call stores baseline and returns { noSourceChange: false }", () => {
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "EOL image", file: "Dockerfile" }] });
+    const state = { srcFingerprints: {} };
+    const r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    assert.equal(r.noSourceChange, false);
+    assert.ok(state.srcFingerprints["stage-04"], "fingerprint stored in runState after first call");
+  });
+
+  it("second call with unchanged file content → { noSourceChange: true }", () => {
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "EOL image", file: "Dockerfile" }] });
+    const state = { srcFingerprints: {} };
+    detectNoSourceChange(cwd, gd(cwd), "stage-04", state); // first call: store baseline
+    // File is not modified between calls (simulates agent that didn't touch Dockerfile)
+    const r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    assert.equal(r.noSourceChange, true);
+    assert.equal(r.lastAttempt, 1);
+    assert.deepEqual(r.files, ["Dockerfile"]);
+  });
+
+  it("second call with changed file content → { noSourceChange: false }", () => {
+    const cwd = track(makeTargetProject());
+    const dockerfile = path.join(cwd, "Dockerfile");
+    fs.writeFileSync(dockerfile, "FROM node:18-alpine\n");
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "EOL image", file: "Dockerfile" }] });
+    const state = { srcFingerprints: {} };
+    detectNoSourceChange(cwd, gd(cwd), "stage-04", state); // first call: store baseline
+    fs.writeFileSync(dockerfile, "FROM node:22-alpine\n"); // agent fixed the file
+    const r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    assert.equal(r.noSourceChange, false, "file content changed → not stuck");
+  });
+
+  it("multiple blocker files: fires only when ALL named files are unchanged", () => {
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+    fs.writeFileSync(path.join(cwd, "package.json"), '{"version":"1.0.0"}\n');
+    seedArchive(cwd, "stage-04", 1, {
+      blockers: [
+        { text: "EOL image", file: "Dockerfile" },
+        { text: "outdated dep", file: "package.json" },
+      ],
+    });
+    const state = { srcFingerprints: {} };
+    detectNoSourceChange(cwd, gd(cwd), "stage-04", state); // store baseline
+    // Agent only updated package.json, not Dockerfile
+    fs.writeFileSync(path.join(cwd, "package.json"), '{"version":"1.0.1"}\n');
+    const r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    assert.equal(r.noSourceChange, false, "fingerprint changed because package.json changed");
+  });
+
+  it("uses the LAST archive's blocker files (not an earlier archive's)", () => {
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+    fs.writeFileSync(path.join(cwd, "package.json"), '{"version":"1.0.0"}\n');
+    // Archive 1 names Dockerfile; archive 2 names package.json only.
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "old", file: "Dockerfile" }] });
+    seedArchive(cwd, "stage-04", 2, { blockers: [{ text: "new", file: "package.json" }] });
+    const state = { srcFingerprints: {} };
+    detectNoSourceChange(cwd, gd(cwd), "stage-04", state); // store baseline (watches package.json per archive 2)
+    // Update package.json — the file archive 2 references — change must be detected.
+    // If the function incorrectly used archive 1's list (Dockerfile) it would not
+    // detect this change and would wrongly return noSourceChange: true.
+    fs.writeFileSync(path.join(cwd, "package.json"), '{"version":"1.0.1"}\n');
+    const r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    assert.equal(r.noSourceChange, false, "archive 2's file (package.json) changed → change detected correctly");
+  });
+});
+
+// ─── noSourceChangeEvidence ───────────────────────────────────────────────────
+
+describe("noSourceChangeEvidence", () => {
+  it("includes file names and attempt number", () => {
+    const s = noSourceChangeEvidence(1, ["Dockerfile"]);
+    assert.match(s, /Dockerfile/);
+    assert.match(s, /attempt 1/);
+  });
+
+  it("lists multiple files", () => {
+    const s = noSourceChangeEvidence(2, ["Dockerfile", "package.json"]);
+    assert.match(s, /Dockerfile/);
+    assert.match(s, /package\.json/);
+    assert.match(s, /attempt 2/);
+  });
+
+  it("handles empty file list gracefully", () => {
+    const s = noSourceChangeEvidence(1, []);
+    assert.ok(typeof s === "string" && s.length > 0);
+    assert.match(s, /attempt 1/);
   });
 });
 
