@@ -58,11 +58,15 @@ function formatGateClear(clearGates) {
 }
 
 // Build the standard set of clear_gates paths for a stage-04 (build) retry:
-// one per workstream gate + the merged stage-04.json.
+// one per workstream gate + the merged stage-04.json + stage-04a (pre-review
+// lint/test gate). stage-04a must be cleared alongside the build gates so the
+// driver re-runs the lint check after the agent writes new code — omitting it
+// allows lint errors introduced during a re-dispatch to bypass pre-review.
 function buildGatePaths(workstreams) {
   return [
     ...workstreams.map(w => `pipeline/gates/stage-04.${w}.json`),
     "pipeline/gates/stage-04.json",
+    "pipeline/gates/stage-04a.json",
   ];
 }
 
