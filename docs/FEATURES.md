@@ -16,30 +16,9 @@ Stagecraft is an orchestrator that runs your AI coding tool through a structured
 
 Stagecraft is model-agnostic. It runs on whichever AI CLI you already have — Claude Code, Codex, Gemini CLI, or any other tool that can accept a prompt and write files.
 
-### Claude Code — full integration with hooks and slash commands
+Four adapters ship: `claude-code` (primary, with hooks and slash commands), `codex`, `gemini-cli`, and `generic`. Each declares its capabilities — headless support, hooks, subagents, enforcement levels — in `hosts/<host>/capabilities.json`.
 
-The primary host. Installs the full integration payload on `devteam init`.
-
-- Role briefs land in `.claude/agents/`, rules in `.devteam/rules/`, skills in `.claude/skills/`
-- `PreToolUse` hooks wire in secret scanning and filesystem enforcement automatically
-- Slash command `/devteam` is laid down so you can run stages from inside a Claude Code session
-- Headless mode runs via `claude --print`
-
-### Codex CLI — headless, symmetric to Gemini
-
-- Installs roles into `.codex/roles/`, skills into `.codex/skills/`
-- No hooks, no slash commands — runs headless via `codex`
-
-### Gemini CLI — headless, third model family for diversity
-
-Running peer-review on a different model family than the one that built the code catches blind spots single-family review misses.
-
-- Installs roles into `.gemini/prompts/roles/`, skills into `.gemini/skills/`
-- No hooks, no slash commands — runs headless via `gemini`
-
-### Generic adapter — any other host
-
-Auto-discovers roles and skills with no host-specific install payload. Use this as a fallback for tools not listed above.
+See **[`docs/reference/hosts.md`](reference/hosts.md)** for the full capability and enforcement matrix across all four hosts.
 
 ---
 
@@ -49,42 +28,13 @@ The pipeline is 18 stages from requirements to retrospective. Every stage render
 
 ### A structured SDLC in the right order
 
-Stage sequence for the `full` track:
+The pipeline is 18 stages from requirements to retrospective, grouped into five phases (Planning, Build, Peer Review, Verification, Delivery). Conditional stages (security-review, migration-safety) only run when a prior gate field triggers them; the mechanical preflight (stage-04e) is auto-run before peer-review, not dispatched to an LLM.
 
-| Stage | Role |
-|---|---|
-| requirements | PM |
-| design | Principal |
-| clarification | PM |
-| executable-spec | PM |
-| build | Backend / Frontend / Platform / QA |
-| pre-review | Platform |
-| security-review *(conditional)* | Security |
-| red-team | Red-team |
-| migration-safety *(conditional, has veto)* | Migrations |
-| preflight *(mechanical, auto-run before peer-review)* | Platform |
-| peer-review | Reviewer |
-| qa | QA |
-| accessibility-audit | QA |
-| observability-gate | Platform |
-| verification-beyond-tests | Verifier |
-| performance-budget | QA |
-| sign-off | PM + Platform |
-| deploy | Platform |
-| retrospective | Principal |
+See **[`docs/reference/stages.md`](reference/stages.md)** for the full stage table: ID, roles, conditionalOn, gate files, artifacts, and templates, grouped by phase.
 
 ### Tracks — right-size the pipeline to the change
 
-Three main tracks, plus variants for specific change types:
-
-| Track | Stages | Best for |
-|---|---|---|
-| `full` | 18 | New features, production changes |
-| `quick` | 9 | Bug fixes, small enhancements |
-| `nano` | 3 | Trivial code change; build + scoped peer-review (1 reviewer, 1 approval) + qa |
-| `hotfix` | 12 | Emergency fixes with safety gates preserved |
-| `config-only` | 7 | Infrastructure and config changes |
-| `dep-update` | 5 | Dependency bumps |
+Six tracks control which stages run. `full` runs all 18 stages; lighter tracks skip phases not relevant to the change type. See **[`docs/tracks.md`](tracks.md)** for the per-track stage matrix.
 
 Pick at `devteam stage requirements --feature "..." --track full`.
 

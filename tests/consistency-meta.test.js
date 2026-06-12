@@ -519,6 +519,77 @@ test("check 6a tracks-matrix: generator is importable without CLI side-effects",
 });
 
 // ---------------------------------------------------------------------------
+// Check stages-ref: docs/reference/stages.md sync
+// (runs against the real repo — generate-stages-ref.js needs live stages.js)
+// ---------------------------------------------------------------------------
+
+test("stages-ref: docs/reference/stages.md matches generator output", () => {
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-stages-ref.js"));
+  const stagesPath = path.join(REPO_ROOT, "docs", "reference", "stages.md");
+  const committed = fs.readFileSync(stagesPath, "utf8").trimEnd();
+  const fresh = gen.generateBlock();
+  assert.equal(committed, fresh,
+    "docs/reference/stages.md is stale — re-run: npm run docs:generate");
+});
+
+test("stages-ref: generator is importable without CLI side-effects", () => {
+  const mod = require(path.join(REPO_ROOT, "scripts", "generate-stages-ref.js"));
+  assert.equal(typeof mod.generateBlock, "function", "generateBlock must be exported");
+  assert.equal(typeof mod.FENCE_OPEN, "string", "FENCE_OPEN must be exported");
+  assert.equal(typeof mod.FENCE_CLOSE, "string", "FENCE_CLOSE must be exported");
+  assert.equal(typeof mod.STAGE_COUNT, "number", "STAGE_COUNT must be exported");
+});
+
+test("stages-ref: hand-edit to generated content would be caught", () => {
+  // Prove that a hand-edit changes the content, which the consistency checker's
+  // committed === fresh comparison would then fail (exit 1).
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-stages-ref.js"));
+  const fresh = gen.generateBlock();
+  const handEdited = fresh.replace(
+    gen.FENCE_OPEN,
+    gen.FENCE_OPEN + "\n<!-- HAND-EDITED LINE — this would be caught -->"
+  );
+  assert.notEqual(handEdited, fresh,
+    "hand-edit must produce content that differs from generator output; " +
+    "if this assertion fails the consistency check cannot detect the edit");
+});
+
+// ---------------------------------------------------------------------------
+// Check hosts-ref: docs/reference/hosts.md sync
+// (runs against the real repo — generate-hosts-ref.js reads hosts/*/capabilities.json)
+// ---------------------------------------------------------------------------
+
+test("hosts-ref: docs/reference/hosts.md matches generator output", () => {
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-hosts-ref.js"));
+  const hostsPath = path.join(REPO_ROOT, "docs", "reference", "hosts.md");
+  const committed = fs.readFileSync(hostsPath, "utf8").trimEnd();
+  const fresh = gen.generateBlock();
+  assert.equal(committed, fresh,
+    "docs/reference/hosts.md is stale — re-run: npm run docs:generate");
+});
+
+test("hosts-ref: generator is importable without CLI side-effects", () => {
+  const mod = require(path.join(REPO_ROOT, "scripts", "generate-hosts-ref.js"));
+  assert.equal(typeof mod.generateBlock, "function", "generateBlock must be exported");
+  assert.equal(typeof mod.FENCE_OPEN, "string", "FENCE_OPEN must be exported");
+  assert.equal(typeof mod.FENCE_CLOSE, "string", "FENCE_CLOSE must be exported");
+});
+
+test("hosts-ref: hand-edit to generated content would be caught", () => {
+  // Prove that a hand-edit changes the content, which the consistency checker's
+  // committed === fresh comparison would then fail (exit 1).
+  const gen = require(path.join(REPO_ROOT, "scripts", "generate-hosts-ref.js"));
+  const fresh = gen.generateBlock();
+  const handEdited = fresh.replace(
+    gen.FENCE_OPEN,
+    gen.FENCE_OPEN + "\n<!-- HAND-EDITED LINE — this would be caught -->"
+  );
+  assert.notEqual(handEdited, fresh,
+    "hand-edit must produce content that differs from generator output; " +
+    "if this assertion fails the consistency check cannot detect the edit");
+});
+
+// ---------------------------------------------------------------------------
 // Baseline integration tests
 // ---------------------------------------------------------------------------
 

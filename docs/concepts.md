@@ -105,16 +105,9 @@ These come up frequently but build on the primitives above:
 
 ## Tracks at a glance
 
-| Track | Stages | When to pick |
-|---|---|---|
-| `full` | All 17 (requirements → retrospective) | Multi-area features, anything touching auth / PII / payments / migrations. |
-| `quick` | requirements, build, peer-review, qa, accessibility-audit, sign-off, deploy, retrospective | Single-area changes with non-trivial scope but no design complexity. |
-| `nano` | build, peer-review (scoped: 1 reviewer, 1 approval), qa | Typo fixes, comment changes, one-line tweaks. Even trivial changes get one pair of eyes. |
-| `config-only` | build, pre-review, security-review, qa, sign-off, deploy | Config / infrastructure changes with no application code. |
-| `dep-update` | build, peer-review, qa, sign-off, deploy | Dependency bumps. Security-review fires if the diff touches sensitive paths. |
-| `hotfix` | build, pre-review, security-review, red-team, peer-review, qa, accessibility-audit, observability-gate, sign-off, deploy, retrospective | Production outages. Skips requirements / design / clarification — you already know what's broken — but keeps all the safety stages. |
+Six tracks control which stages run: `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Each is a subset of the full 18-stage pipeline tuned to a change size and risk level. `full` runs everything; `nano` runs just build + a scoped peer-review + qa.
 
-See [`docs/tracks.md`](tracks.md) for full per-track stage lists and the safety logic behind track gating.
+For the complete per-track stage matrix see **[`docs/tracks.md`](tracks.md)**; for each stage's roles and gate files see **[`docs/reference/stages.md`](reference/stages.md)**.
 
 ## Files at a glance
 
