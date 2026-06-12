@@ -819,8 +819,99 @@ function checkStageRuleFileCoverage(scanRoot) {
   }
 }
 
+// --- Check 7: docs/README.md orphan detection (D2) ---
+//
+// Every .md file under docs/ (excluding historical/, audit-archive/, reference/,
+// and audit/ which holds generated output) must be reachable from docs/README.md.
+// A file is "reachable" if:
+//   (a) docs/README.md contains a markdown link whose target matches its relative
+//       path from docs/, OR
+//   (b) the file lives in a subdirectory that has a README.md which IS directly
+//       linked from docs/README.md (directory-index coverage).
+//
+// The check is a no-op when docs/ does not exist or has no non-excluded .md
+// files, so it is safe to run against fixture trees that have no docs/ at all.
+function checkDocsIndexCoverage(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const docsDir = path.join(root, "docs");
+  if (!fs.existsSync(docsDir)) return;
+
+  // Subdirectory names (direct children of docs/) that are fully excluded.
+  const EXCLUDED_TOP_DIRS = ["historical", "audit-archive", "reference", "audit"];
+
+  // Collect all .md files under docs/, excluding the above dirs and docs/README.md itself.
+  const docFiles = []; // paths relative to docsDir, using "/" separators
+  function scanDocs(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const abs = path.join(dir, e.name);
+      const relFromDocs = path.relative(docsDir, abs).replace(/\\/g, "/");
+      const topDir = relFromDocs.split("/")[0];
+      if (EXCLUDED_TOP_DIRS.includes(topDir)) continue;
+      if (e.isDirectory()) { scanDocs(abs); continue; }
+      if (!e.name.endsWith(".md")) continue;
+      if (relFromDocs === "README.md") continue; // index doesn't need to list itself
+      docFiles.push(relFromDocs);
+    }
+  }
+  scanDocs(docsDir);
+
+  if (docFiles.length === 0) return; // nothing to check
+
+  // Read docs/README.md.
+  const docsReadmePath = path.join(docsDir, "README.md");
+  if (!fs.existsSync(docsReadmePath)) {
+    fail("docs-index", "docs/README.md does not exist but docs/ contains .md files");
+    return;
+  }
+  const docsReadmeContent = fs.readFileSync(docsReadmePath, "utf8");
+
+  // Extract relative link targets from docs/README.md.
+  // Strip URL fragments (#...) and title strings ("...") from the target.
+  const linkedTargets = new Set();
+  const linkRe = /\]\(([^)]+)\)/g;
+  let m;
+  while ((m = linkRe.exec(docsReadmeContent)) !== null) {
+    let target = m[1].trim();
+    const hashIdx = target.indexOf("#");
+    if (hashIdx >= 0) target = target.substring(0, hashIdx).trim();
+    const spaceIdx = target.indexOf(" ");
+    if (spaceIdx >= 0) target = target.substring(0, spaceIdx).trim();
+    if (!target || target.startsWith("http") || target.startsWith("../") || target.startsWith("#")) continue;
+    linkedTargets.add(target);
+  }
+
+  for (const relFile of docFiles) {
+    // (a) Direct link.
+    if (linkedTargets.has(relFile)) {
+      pass(`docs/README.md links to docs/${relFile}`);
+      continue;
+    }
+
+    // (b) Parent-directory README.md is linked (directory-index coverage).
+    const parts = relFile.split("/");
+    if (parts.length > 1) {
+      const parentDir = parts[0];
+      const parentReadmeLink = `${parentDir}/README.md`;
+      if (linkedTargets.has(parentReadmeLink)) {
+        pass(`docs/README.md covers docs/${relFile} via directory index ${parentReadmeLink}`);
+        continue;
+      }
+    }
+
+    proseViolation(
+      "docs-index",
+      "docs/README.md",
+      0,
+      `docs/${relFile} is not linked from docs/README.md (orphan doc — add it to the appropriate reader-path section)`,
+      `docs-index:${relFile}`
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Prose-vs-code dispatch — run all six scannable checks.
+// Prose-vs-code dispatch — run all checks that work against fixture trees.
 // checkTracksMatrixSync() is NOT here; it only runs in full-repo mode
 // (it requires core/pipeline/stages.js and scripts/generate-tracks-matrix.js
 // from the repo root, so it cannot work against a fixture tree).
@@ -833,6 +924,7 @@ function runProseChecks(scanRoot) {
   checkReferencedFileExistence(scanRoot);
   checkCommandSurface(scanRoot);
   checkStageRuleFileCoverage(scanRoot);
+  checkDocsIndexCoverage(scanRoot);
 }
 
 // ---------------------------------------------------------------------------

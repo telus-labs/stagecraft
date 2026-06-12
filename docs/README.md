@@ -1,0 +1,52 @@
+# docs/
+
+Navigation index for the `docs/` directory. Nothing here is load-bearing for a pipeline run — models read `AGENTS.md`, `rules/`, `roles/`, and `skills/` only.
+
+## Evaluator — should we adopt?
+
+- [comparative-analysis.md](comparative-analysis.md) — Stagecraft vs BMAD, GitHub Spec Kit, Agent OS, Kiro: four-school taxonomy and three defensible claims
+- [adoption-guide.md](adoption-guide.md) — pilot script, common objections, success criteria for the 2-week trial
+- [presentation-notes.md](presentation-notes.md) — slide deck + speaker notes for pitching to a team or stakeholder
+- [walkthroughs/soc2-evidence-collector.md](walkthroughs/soc2-evidence-collector.md) — end-to-end showcase: building a SOC 2 evidence collector through the full 18-stage pipeline
+- [walkthroughs/stage-04-split-host.md](walkthroughs/stage-04-split-host.md) — multi-host contract stress-test trace
+
+## Operator — I run pipelines daily
+
+- [user-guide.md](user-guide.md) — daily-use reference: running stages, multi-host setups, headless mode
+- [tracks.md](tracks.md) — which of the six tracks to pick for a given change
+- [conventions.md](conventions.md) — pipeline markers operators read and write (`QUESTION:`, `BLOCKER:`, magic comments)
+- [runbooks/README.md](runbooks/README.md) — troubleshooting index: symptom → runbook section
+- [cost.md](cost.md) — cost tracking, pricing table, and budget workflow
+- [faq.md](faq.md) — operational questions and common gotchas
+- [git-workflow.md](git-workflow.md) — branch setup and PR timing for a Stagecraft pipeline run
+- [ci.md](ci.md) — GitHub Actions workflow template and environment variables
+- [memory.md](memory.md) — persistent project memory: embedder options and shared store
+- [observability.md](observability.md) — OpenTelemetry span schema and collector setup
+- [reproducibility.md](reproducibility.md) — gate fingerprint fields, replay readiness, drift detection
+- [runbooks/escalation.md](runbooks/escalation.md) — what to read and decide when `devteam next` says `resolve-escalation`
+- [runbooks/fix-and-retry.md](runbooks/fix-and-retry.md) — fix-and-retry halt: red-team, QA, pre-review, peer-review (11 cases)
+- [runbooks/open-followups.md](runbooks/open-followups.md) — extract ticket stubs from `open_followups[]` after a run
+- [runbooks/deploy-failure.md](runbooks/deploy-failure.md) — Stage 8 failure: classify, diagnose, rollback, retry
+- [runbooks/autonomous-run.md](runbooks/autonomous-run.md) — `devteam run`: bounded autonomous driver reference
+- [runbook-template.md](runbook-template.md) — template and guide for writing new runbooks
+
+## Contributor — I change Stagecraft
+
+- [concepts.md](concepts.md) — six pipeline primitives (stage, role, workstream, host, gate, track) in one table
+- [methodology.md](methodology.md) — ATDD loop, phase-gate progression, adversarial layer, four coding principles
+- [FEATURES.md](FEATURES.md) — every shipped feature organized by area
+- [BACKLOG.md](BACKLOG.md) — prioritized open ideas by bucket
+- [TESTING.md](TESTING.md) — test structure and guidance
+- [adr/README.md](adr/README.md) — architecture decision records index
+- [autonomous-execution-design.md](autonomous-execution-design.md) — design notes for the bounded autonomous driver (companion to ADR-003)
+- [spec-authoring.md](spec-authoring.md) — writing AC-N criteria and scaffolding the spec file
+- [migration-safety.md](migration-safety.md) — veto criteria, gate fields, and the migration heuristic
+- [red-team.md](red-team.md) — 10 attack surfaces, gate fields, routing, and how it differs from security review
+- [verification-beyond-tests.md](verification-beyond-tests.md) — property-based, mutation, and formal verification: candidates and skip policy
+- [brief-template.md](brief-template.md) — section-by-section guide to filling out `pipeline/brief.md`
+- [design-spec-template.md](design-spec-template.md) — section-by-section guide to filling out `pipeline/design-spec.md`
+- [GAP-ANALYSIS.md](GAP-ANALYSIS.md) — archived gap analysis (redirect); active gaps tracked in BACKLOG.md
+
+## Model — never reads docs/
+
+Models read `AGENTS.md` + `rules/` + `roles/` + `skills/` only. Nothing in this directory is loaded during a pipeline run.

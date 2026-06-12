@@ -51,42 +51,47 @@ If after 30 minutes you can see how this would help your team, run a 2-week pilo
 
 ## Documentation map
 
-New here? Read in this order:
+Four reader paths. Every doc belongs to exactly one. ([docs/README.md](docs/README.md) is the docs-only index.)
 
-1. **[EXAMPLE.md](EXAMPLE.md)** — one full pipeline run traced end-to-end. The single best onboarding artifact.
-2. **[docs/concepts.md](docs/concepts.md)** — six primitives (stage, role, workstream, host, gate, track) in one table.
-3. **[docs/methodology.md](docs/methodology.md)** — the development methodology Stagecraft enforces: ATDD loop, phase-gate progression, the adversarial red-team layer, multi-role peer review, and the four coding principles.
-4. **[docs/user-guide.md](docs/user-guide.md)** — daily-use reference: running stages, multi-host setups, headless mode, troubleshooting.
-5. **[docs/adoption-guide.md](docs/adoption-guide.md)** — for team leads deciding whether to adopt. Covers pilot, objections, success criteria.
-6. **[docs/presentation-notes.md](docs/presentation-notes.md)** — slide deck + speaker notes for pitching this to a team or stakeholder.
-7. **[docs/tracks.md](docs/tracks.md)** — which of the six tracks to pick.
-8. **[docs/faq.md](docs/faq.md)** — operational questions, common gotchas, comparisons to other tools.
+### Evaluator — should we adopt?
 
-Reference / extension:
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — 12 locked design decisions. Read when you want to know *why*.
-- **[CONTRIBUTING.md](CONTRIBUTING.md)** — recipes for adding a host, role, stage, or skill.
-- **[core/adapters/host-adapter.md](core/adapters/host-adapter.md)** — the host-adapter contract. ~150 lines; defines everything an adapter must implement.
-- **[docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)** — multi-workstream contract stress-test trace.
-- **[docs/walkthroughs/soc2-evidence-collector.md](docs/walkthroughs/soc2-evidence-collector.md)** — end-to-end showcase: building a SOC 2 evidence collector through the full 18-stage pipeline.
-- **[docs/runbooks/escalation.md](docs/runbooks/escalation.md)** — procedural playbook: what to read, how to decide, and how to encode the result when `devteam next` says `resolve-escalation`.
-- **[docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md)** — procedural playbook for `fix-and-retry` halts: red-team FAIL, QA-within-build FAIL, pre-review FAIL, peer-review CHANGES_REQUESTED. Covers the `--patch --from <stage>` flow with a worked example.
-- **[docs/runbooks/open-followups.md](docs/runbooks/open-followups.md)** — how to extract ticket-ready stubs from `open_followups[]` in the stage-07 and stage-09 gates after a pipeline run completes. Includes field mapping to JIRA, Linear, and GitHub Issues.
-- **[docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md)** — Stage 8 failure playbook: classify the failure shape, adapter-specific diagnostics, rollback procedure, and retry sequences for code vs. infrastructure fixes.
-- **[docs/conventions.md](docs/conventions.md)** — operator-facing catalogue of pipeline markers (`QUESTION:`/`PM-ANSWER:`, `BLOCKER:`/`SUGGESTION:`/`PATTERN:`, `## Brief Changes`, `## Verify`, magic comments, …) — where each lives, who writes it, what reads it.
-- **[docs/comparative-analysis.md](docs/comparative-analysis.md)** — Stagecraft vs adjacent AI-dev frameworks (BMAD-METHOD, GitHub Spec Kit, Agent OS, OpenSpec, AWS Kiro, AI-DLC). Four-school taxonomy, comparison matrix, three defensible claims, three cases where Stagecraft *isn't* the best fit, evolution opportunities with effort estimates.
+Goal: decision-ready in 30 minutes.
 
-Feature deep-dives:
-- **[docs/FEATURES.md](docs/FEATURES.md)** — every shipped feature, organized by area. Start here to see what Stagecraft does.
-- **[docs/cost.md](docs/cost.md)** — cost tracking, the pricing table, and the budget workflow.
-- **[docs/memory.md](docs/memory.md)** — persistent project memory: embedder options, `.gitignore` note, org-shared store.
-- **[docs/observability.md](docs/observability.md)** — OpenTelemetry span schema and collector setup.
-- **[docs/reproducibility.md](docs/reproducibility.md)** — audit trail: gate fingerprint fields, replay readiness, drift detection.
-- **[docs/ci.md](docs/ci.md)** — GitHub Actions workflow: template, environment variables, PR check runs.
-- **[docs/git-workflow.md](docs/git-workflow.md)** — end-to-end git practice for a Stagecraft pipeline run: branch setup, what to commit and when, Stage 4 worktrees, when to open the PR, and how the final branch history should look.
-- **[docs/migration-safety.md](docs/migration-safety.md)** — veto criteria, gate fields, and what triggers the migration heuristic.
-- **[docs/red-team.md](docs/red-team.md)** — 10 attack surfaces, gate fields, routing, and how it differs from security review.
-- **[docs/spec-authoring.md](docs/spec-authoring.md)** — writing AC-N criteria, scaffolding the spec file, drift detection.
-- **[docs/verification-beyond-tests.md](docs/verification-beyond-tests.md)** — property-based, mutation, and formal verification: candidates, gate fields, skip policy.
+| Step | Doc | Purpose |
+|---|---|---|
+| 1 | [EXAMPLE.md](EXAMPLE.md) | One feature traced through all 18 stages — the fastest reality check |
+| 2 | [docs/comparative-analysis.md](docs/comparative-analysis.md) | Stagecraft vs BMAD, GitHub Spec Kit, Agent OS, Kiro — four-school taxonomy and three defensible claims |
+| 3 | [docs/adoption-guide.md](docs/adoption-guide.md) | Pilot script, common objections, and success criteria for the 2-week trial |
+
+Evaluating further (long-form): [docs/presentation-notes.md](docs/presentation-notes.md) · [docs/walkthroughs/soc2-evidence-collector.md](docs/walkthroughs/soc2-evidence-collector.md) · [docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)
+
+### Operator — I run pipelines daily
+
+| Step | Doc | Purpose |
+|---|---|---|
+| 1 | [docs/user-guide.md](docs/user-guide.md) | Daily-use reference: running stages, multi-host setups, headless mode |
+| 2 | [docs/tracks.md](docs/tracks.md) | Which of the six tracks to pick for a given change |
+| 3 | [docs/conventions.md](docs/conventions.md) | Pipeline markers operators read and write (`QUESTION:`, `BLOCKER:`, magic comments) |
+| 4 | [docs/runbooks/README.md](docs/runbooks/README.md) | Troubleshooting index: symptom → runbook section |
+| 5 | [docs/cost.md](docs/cost.md) | Cost tracking, pricing table, and budget workflow |
+
+Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
+
+### Contributor — I change Stagecraft
+
+| Step | Doc | Purpose |
+|---|---|---|
+| 1 | [CONTRIBUTING.md](CONTRIBUTING.md) | Recipes for adding a host, role, stage, or skill |
+| 2 | [ARCHITECTURE.md](ARCHITECTURE.md) | 12 locked design decisions — read when you want to know *why* |
+| 3 | [docs/TESTING.md](docs/TESTING.md) | Test structure and guidance |
+| 4 | [core/adapters/host-adapter.md](core/adapters/host-adapter.md) | The host-adapter contract (~150 lines) |
+| 5 | [docs/adr/README.md](docs/adr/README.md) | Architecture decision records |
+
+Reference: [docs/concepts.md](docs/concepts.md) · [docs/methodology.md](docs/methodology.md) · [docs/FEATURES.md](docs/FEATURES.md) · [docs/BACKLOG.md](docs/BACKLOG.md) · [docs/autonomous-execution-design.md](docs/autonomous-execution-design.md) · [docs/spec-authoring.md](docs/spec-authoring.md) · [docs/migration-safety.md](docs/migration-safety.md) · [docs/red-team.md](docs/red-team.md) · [docs/verification-beyond-tests.md](docs/verification-beyond-tests.md) · [docs/brief-template.md](docs/brief-template.md) · [docs/design-spec-template.md](docs/design-spec-template.md) · [docs/GAP-ANALYSIS.md](docs/GAP-ANALYSIS.md)
+
+### Model — never reads docs/
+
+Nothing under `docs/` is load-bearing for a pipeline run. Models read [AGENTS.md](AGENTS.md) · [rules/](rules/) · [roles/](roles/) · [skills/](skills/) only.
 
 ## Why "Stagecraft"?
 
