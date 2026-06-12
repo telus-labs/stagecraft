@@ -1,0 +1,1 @@
+- **docs:** Mark Phase 4 complete in plans/prompts/ALL-PROMPTS.md (PRs #90–#97); update BACKLOG.md to mark G3, G10, and H2 progress-based convergence as landed with accurate implementation descriptions; add progress-based convergence bullet to FEATURES.md autonomous execution section.
