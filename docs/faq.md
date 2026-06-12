@@ -1,5 +1,9 @@
 # FAQ
 
+**How this FAQ is maintained:** entries answer operational questions only.
+Facts are linked, not restated, from their canonical home (FEATURES.md, BACKLOG.md, concepts.md).
+Entries that restate feature state — what Stagecraft does, what's planned — are deleted rather than kept in sync.
+
 Common questions about Stagecraft, grouped by topic.
 
 If you can't find what you need: check [`docs/user-guide.md`](user-guide.md)'s "When things go wrong" section, [`docs/concepts.md`](concepts.md) for vocabulary, or open an issue.
@@ -415,11 +419,7 @@ Both read fields that gates already record (the C4 reproducibility set). Host-le
 
 ### What's planned next?
 
-See [`docs/BACKLOG.md`](BACKLOG.md) for the full list. Items currently in progress or near the top of the queue include autonomous pipeline loop (`devteam run`), per-invocation model-pin overrides for reproducibility, and broader host adapter coverage. The BACKLOG is the authoritative source — this answer goes stale faster than the file does.
-
-### When will this hit 1.0?
-
-1.0 is reserved for when the public surface (gate JSON shape, host adapter contract, CLI subcommands, `.devteam/config.yml` schema) is stable enough to commit to semver. The project is currently in 0.x because those surfaces may still change. The pace of breaking changes has slowed considerably; expect 1.0 within a few months if nothing major surfaces.
+See [`docs/BACKLOG.md`](BACKLOG.md). The BACKLOG is the authoritative source; any item list here goes stale faster than the file does.
 
 ## Stuck pipelines and recovery
 
