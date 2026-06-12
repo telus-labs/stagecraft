@@ -8,6 +8,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Added
+
+- **Audience-based documentation map** (D2 of documentation-plan.md). Replaced the flat 30-doc list in README's "Documentation map" with four reader-path tables (Evaluator / Operator / Contributor / Model), each with an ordered 3–5 doc core trail and a one-line purpose per doc. Every previously-mapped doc is assigned to exactly one path; 8 docs not previously in the map (BACKLOG.md, TESTING.md, adr/README.md, autonomous-execution-design.md, brief-template.md, design-spec-template.md, GAP-ANALYSIS.md, runbook-template.md) are now included. Created `docs/README.md` with the same four paths restricted to files under `docs/`. Created `docs/runbooks/README.md`: a 24-row troubleshooting index mapping symptom → runbook section (with deep-link anchors) sourced from all five runbooks. Extended `scripts/consistency.js` with check 7 (`docs-index`): every `.md` file under `docs/` (excluding `historical/`, `audit-archive/`, `reference/`, and `audit/`) must be linked from `docs/README.md` — directly or via a parent directory's `README.md` — so orphan docs fail CI. Added 8 meta-tests for the new check in `tests/consistency-meta.test.js`.
+
+  Honest scope note: `docs/audit/` is excluded from the orphan check (generated output); `docs/adr/*.md` individual files are covered by the `adr/README.md` directory-index link rather than individually linked entries. The "~30 lines" target for `docs/README.md` was not achievable while covering all 40 docs — the file is ~55 lines.
+
 ---
 
 ## [0.6.0] — 2026-06-11

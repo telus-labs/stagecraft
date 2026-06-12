@@ -607,3 +607,130 @@ test("check ci-template-ref: detection logic catches major.minor mismatch", () =
   assert.ok(!refMatchesMajorMinor("v0.7.0", "0.6.0"), "future minor ref fails");
   assert.ok(!refMatchesMajorMinor("v1.0.0", "0.6.0"), "next major fails");
 });
+
+// ---------------------------------------------------------------------------
+// Check 7: docs/README.md orphan detection
+// ---------------------------------------------------------------------------
+
+test("check 7 docs-index: unlinked doc in docs/ is detected as orphan", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeFile(root, "docs/README.md", "# docs/\n\nNo links here.\n");
+    writeFile(root, "docs/user-guide.md", "# User Guide\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 1,
+      `expected exit 1 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /docs-index/, "expected docs-index violation");
+    assert.match(r.stdout, /user-guide\.md/, "expected orphan filename in output");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: directly linked doc exits 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeFile(root, "docs/README.md",
+      "# docs/\n\n- [user-guide.md](user-guide.md) — daily use\n");
+    writeFile(root, "docs/user-guide.md", "# User Guide\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: file in subdirectory covered by parent README.md exits 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    // docs/README.md links adr/README.md — that covers all files under adr/
+    writeFile(root, "docs/README.md",
+      "# docs/\n\n- [adr/README.md](adr/README.md) — decision records\n");
+    writeFile(root, "docs/adr/README.md", "# ADR Index\n");
+    writeFile(root, "docs/adr/001-first-decision.md", "# ADR 001\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: file under excluded dir (historical/) is not required", () => {
+  const root = mkFixtureRoot();
+  try {
+    // docs/README.md has no links; docs/historical/old.md is excluded
+    writeFile(root, "docs/README.md", "# docs/\n\nNo links.\n");
+    writeFile(root, "docs/historical/old.md", "# Old doc\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: missing docs/README.md with docs present fails", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeFile(root, "docs/user-guide.md", "# User Guide\n");
+    // docs/README.md intentionally absent
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 1,
+      `expected exit 1 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /docs-index/, "expected docs-index failure");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: no docs/ directory at all exits 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    // Fixture has no docs/ dir — check is a no-op
+    writeFile(root, "rules/clean.md", "# Clean\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: subdirectory file without parent README.md is an orphan", () => {
+  const root = mkFixtureRoot();
+  try {
+    // walkthroughs/soc2.md is under walkthroughs/ which has no README.md
+    // and docs/README.md does not directly link it
+    writeFile(root, "docs/README.md",
+      "# docs/\n\n- [user-guide.md](user-guide.md) — daily use\n");
+    writeFile(root, "docs/user-guide.md", "# User Guide\n");
+    writeFile(root, "docs/walkthroughs/soc2.md", "# SOC 2 walkthrough\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 1,
+      `expected exit 1 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /docs-index/, "expected docs-index violation");
+    assert.match(r.stdout, /soc2\.md/, "expected the orphan walkthrough in output");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 7 docs-index: real repo docs/ has no orphan docs (regression guard)", () => {
+  // Prose-only run against the real repo: confirms docs/README.md covers
+  // every .md file in docs/ that the orphan checker requires to be linked.
+  // Using --root so only prose checks (including check 7) run — avoids
+  // duplicating the full core-contract check already in the first test.
+  // Exit 0 is the assertion; individual pass messages are not printed in summary mode.
+  const r = runChecker(REPO_ROOT);
+  assert.equal(r.status, 0,
+    `docs/README.md has orphan docs:\n${r.stdout}\n${r.stderr}`);
+});
