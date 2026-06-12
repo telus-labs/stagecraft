@@ -386,12 +386,7 @@ devteam merge build
 
 ### Conditional stages
 
-Some stages only run when a preceding stage's gate sets a specific flag. The orchestrator checks these automatically; `devteam next` silently skips a conditional stage whose condition is not met.
-
-| Stage | Condition |
-|---|---|
-| 4b — Security review | `stage-04a.security_review_required: true` (set by pre-review heuristic when auth/crypto/PII/secret/infra patterns are found) |
-| 4d — Migration safety | `stage-04a.migration_safety_required: true` (set when the diff touches schema files, migration directories, or DDL fragments) |
+Some stages only run when a preceding stage's gate sets a specific flag. The orchestrator checks these automatically; `devteam next` silently skips a conditional stage whose condition is not met. See **[`docs/reference/stages.md`](reference/stages.md)** §Phase 2 for the full `conditionalOn` column (currently: stage-04b security-review and stage-04d migration-safety both gate on stage-04a fields).
 
 All other stages run unconditionally on their track. If you want to verify whether a conditional stage will run for your current diff, inspect the pre-review (stage-04a) gate after it's written.
 

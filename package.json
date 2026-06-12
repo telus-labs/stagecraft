@@ -19,7 +19,8 @@
     "routing:suggest": "node scripts/routing-suggest.js",
     "budget": "node scripts/budget.js",
     "release:check": "node scripts/release.js check",
-    "release:notes": "node scripts/release.js notes"
+    "release:notes": "node scripts/release.js notes",
+    "docs:generate": "node scripts/docs-generate.js"
   },
   "dependencies": {
     "@opentelemetry/api": "~1.9.0",
