@@ -12,7 +12,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 1 | Trust consolidation | ✅ complete (PRs #63–#69) |
 | 2 | Consistency, docs sweep, release | ✅ complete (PRs #71 · #72 · #75 · #76 · release/v0.6.0) |
 | 3 | Structural debt | ✅ complete (PRs #79–#89) |
-| 4 | Capability roadmap (ADR-first) | 🔲 ready (Phases 1–3 complete) |
+| 4 | Capability roadmap (ADR-first) | ✅ complete (PRs #90–#97) |
 | D | Documentation system | ⏸ D1 = Phase 2; D2+ after |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -697,13 +697,13 @@ TASK: Implement plans/phase-3-structural-debt.md, item 3.6. Branch: test/unteste
 
 ---
 
-## Phase 4 — Capability Roadmap (ADR-first)
+## Phase 4 — Capability Roadmap (ADR-first) ✅ complete
 
-Workflow per capability: (a) ground-truth/ADR prompt → (b) HUMAN reviews and approves
-the ADR → (c) implementation prompt. Never run an implementation prompt against an
-unapproved ADR. Order: 4.0 → 4.2 → 4.1a → (human review) → 4.1c → 4.3 → 4.4.
+All items executed and merged (PRs [#90](https://github.com/telus-labs/stagecraft/pull/90)–[#97](https://github.com/telus-labs/stagecraft/pull/97)). Prompts preserved for reference; if re-running any, re-verify the claims first — the code has changed.
 
-### 4.0 Ground truth check 🔲 (run first; feeds every other Phase 4 item)
+Order executed: 4.0 → 4.2 → 4.1a → 4.1c → 4.3 → 4.4-ADR-006.
+
+### 4.0 Ground truth check ✅ #90
 
 ```
 TASK: Execute plans/phase-4-capability-roadmap.md, item 4.0. READ-AND-REPORT only:
@@ -729,7 +729,7 @@ Output structure: ## Convergence: implemented vs spec (file:line) / ## Backlog
 deltas / ## Open questions status / ## Corrections to phase-4 plan items.
 ```
 
-### 4.2 Progress-based convergence (completion) 🔲 (requires 4.0)
+### 4.2 Progress-based convergence (completion) ✅ #92
 
 ```
 TASK: Implement plans/phase-4-capability-roadmap.md, item 4.2, SCOPED BY
@@ -755,7 +755,7 @@ state and the autonomous-run runbook limitations. Targeted fanout retry stays
 deferred — do not implement it.
 ```
 
-### 4.1a Draft ADR-004: role tool budgets (G10) 🔲
+### 4.1a Draft ADR-004: role tool budgets (G10) ✅ #93
 
 ```
 TASK: DRAFT (do not implement) docs/adr/004-role-tool-budgets.md per
@@ -781,7 +781,7 @@ Implementation sketch (files touched). Status: Proposed. NO code. End your repor
 with the 3 questions a human reviewer most needs to rule on.
 ```
 
-### 4.1c Implement ADR-004 ⏸ (only after the ADR is Accepted)
+### 4.1c Implement ADR-004 ✅ #93/#95
 
 ```
 PRECONDITION: docs/adr/004-role-tool-budgets.md exists with Status: Accepted. If not
@@ -803,7 +803,7 @@ STOP and report — never improvise around an approved design. Report maps each 
 decision point to the code realizing it.
 ```
 
-### 4.3 G3 production feedback seam 🔲
+### 4.3 G3 production feedback seam ✅ #96
 
 ```
 TASK: Implement plans/phase-4-capability-roadmap.md, item 4.3. Check
@@ -830,7 +830,9 @@ Tests: template registered (extend contract tests); gate field validates;
 pipeline-complete output line present/absent correctly.
 ```
 
-### 4.4 Draft ADRs 005–008 🔲 (four separate sessions)
+### 4.4 Draft ADRs 005–008 ✅ ADR-006 #97 (one session executed)
+
+ADR-006 (track inference under autonomy) executed and merged as PR #97. ADRs 005/007/008 deferred — phase declared complete; draft those when Phase 5 autonomy work begins. Template below preserved for that future session:
 
 Use this template once per ADR, with the bracketed slot filled:
 
