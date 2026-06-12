@@ -470,19 +470,33 @@ register("stage-06", (gate, _ctx) => {
 
 // ── stage-06b: accessibility-audit ───────────────────────────────────────────
 //
-// IDs come from noted_for_followup across gate files (the same source devteam
-// advise reads), NOT from stage-06b.blockers — the blocker IDs (e.g. "A11Y-01")
-// differ from the noted_for_followup IDs that advise can resolve (e.g. "QA-A11Y-01").
-// advise handles gate reset and re-run internally — no rm commands needed.
+// Three fix paths, tried in order:
+//
+// 1. Prior-stage noted_for_followup IDs — when an upstream agent (e.g. QA build)
+//    pre-identified an A11Y issue and recorded a resolvable ID, devteam advise
+//    can apply the fix and re-run the audit internally (no clear_gates needed).
+//    stage-06b.json itself is excluded from the search: its own noted_for_followup
+//    items are advisory observations by the auditor, not pre-staged fix IDs.
+//
+// 2. A11Y blockers in the gate with no prior-stage fix IDs — typically CSS color-
+//    contrast violations where the source edit belongs to the backend workstream.
+//    Clear backend build gate + merged gate + audit gate so the driver re-dispatches
+//    backend (which reads blockers from context.md) then re-runs the audit.
+//
+// 3. No A11Y blockers at all — fall back to the interactive devteam advise panel.
 
 register("stage-06b", (gate, ctx) => {
   const A11Y_RE = /a11y|accessibility|aria|wcag/i;
   const a11yIds = [];
   const seen = new Set();
 
+  // Path 1: search prior stages' noted_for_followup for A11Y items that advise
+  // can resolve. Exclude stage-06b.json — its noted_for_followup items are the
+  // auditor's own advisory observations, not pre-staged IDs advise knows about.
   if (ctx.gatesDir) {
     try {
-      const gateFiles = fs.readdirSync(ctx.gatesDir).filter((f) => f.endsWith(".json"));
+      const gateFiles = fs.readdirSync(ctx.gatesDir)
+        .filter((f) => f.endsWith(".json") && f !== "stage-06b.json");
       for (const f of gateFiles) {
         let g;
         try { g = JSON.parse(fs.readFileSync(path.join(ctx.gatesDir, f), "utf8")); } catch { continue; }
@@ -509,7 +523,41 @@ register("stage-06b", (gate, ctx) => {
       }],
     };
   }
-  // No A11Y items found in noted_for_followup — show the panel so the operator can confirm.
+
+  // Path 2: gate has A11Y blockers but no prior-stage fix IDs. The source edit
+  // belongs to the backend workstream (html-reporter.js renderCSS). Clear the
+  // backend build gate + merged gate + audit gate so the driver re-dispatches
+  // backend with the blocker context, then advances to re-run the audit.
+  const hasA11yBlockers = (gate.blockers || []).some((b) => {
+    const t = typeof b === "string" ? b
+      : (b && (b.text || b.summary || b.description || JSON.stringify(b)));
+    return A11Y_RE.test(t || "");
+  });
+
+  if (hasA11yBlockers) {
+    const clear_gates = [
+      "pipeline/gates/stage-04.backend.json",
+      "pipeline/gates/stage-04.json",
+      "pipeline/gates/stage-06b.json",
+    ];
+    return {
+      clear_gates,
+      steps: [
+        {
+          description: "Clear stale build and audit gates",
+          commands: formatGateClear(clear_gates),
+        },
+        {
+          description: "Re-run backend build with accessibility fix context",
+          commands: ["devteam stage build --patch --from backend --skip-completed --headless"],
+        },
+        { description: "Merge workstream gates", commands: ["devteam merge build"] },
+        { description: "Re-run accessibility audit", commands: ["devteam stage accessibility-audit --headless"] },
+      ],
+    };
+  }
+
+  // Path 3: no A11Y blockers — show the panel so the operator can confirm.
   return {
     clear_gates: [],
     steps: [{

@@ -209,3 +209,73 @@ describe("restart: --dry-run", () => {
     assert.ok(fs.existsSync(gatePath(cwd, "stage-04.backend")), "dry-run must NOT delete");
   });
 });
+
+describe("restart: archive cleanup", () => {
+  function archivePath(cwd, stageId, attempt) {
+    return path.join(cwd, "pipeline", "gates", "archive", `${stageId}.attempt-${attempt}.json`);
+  }
+  function seedArchive(cwd, stageId, attempt, gate = {}) {
+    const dir = path.join(cwd, "pipeline", "gates", "archive");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(archivePath(cwd, stageId, attempt), JSON.stringify({ stage: stageId, blockers: [], ...gate }, null, 2));
+  }
+
+  it("removes archive files for the restarted stage", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "FAIL", blockers: ["lint"] });
+    seedArchive(cwd, "stage-04", 1, { blockers: ["original blocker"] });
+    seedArchive(cwd, "stage-04", 2, { blockers: ["lint"] });
+
+    const r = run(["restart", "build"], { cwd });
+    assert.equal(r.status, 0);
+
+    assert.ok(!fs.existsSync(archivePath(cwd, "stage-04", 1)), "attempt-1 archive must be removed");
+    assert.ok(!fs.existsSync(archivePath(cwd, "stage-04", 2)), "attempt-2 archive must be removed");
+  });
+
+  it("does NOT remove archives for unrelated stages", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "FAIL" });
+    seedArchive(cwd, "stage-04", 1, { blockers: ["build blocker"] });
+    seedArchive(cwd, "stage-06b", 1, { blockers: ["a11y violation"] });
+
+    run(["restart", "build"], { cwd });
+
+    assert.ok(!fs.existsSync(archivePath(cwd, "stage-04", 1)), "build archive removed");
+    assert.ok(fs.existsSync(archivePath(cwd, "stage-06b", 1)), "stage-06b archive must survive");
+  });
+
+  it("succeeds cleanly when no archives exist (idempotent)", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "PASS" });
+    const r = run(["restart", "build"], { cwd });
+    assert.equal(r.status, 0);
+    // No crash, just removes the gate file
+    assert.ok(!fs.existsSync(gatePath(cwd, "stage-04")));
+  });
+
+  it("--cascade also removes archives for all downstream stages", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "PASS" });
+    seedGate(cwd, "stage-05", { stage: "stage-05", status: "PASS" });
+    seedArchive(cwd, "stage-04", 1, { blockers: ["build"] });
+    seedArchive(cwd, "stage-05", 1, { blockers: ["peer-review"] });
+
+    const r = run(["restart", "build", "--cascade"], { cwd });
+    assert.equal(r.status, 0);
+
+    assert.ok(!fs.existsSync(archivePath(cwd, "stage-04", 1)), "build archive removed by cascade");
+    assert.ok(!fs.existsSync(archivePath(cwd, "stage-05", 1)), "peer-review archive removed by cascade");
+  });
+
+  it("--dry-run lists archives that would be removed without deleting them", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "FAIL" });
+    seedArchive(cwd, "stage-04", 1, { blockers: ["blocker"] });
+
+    const r = run(["restart", "build", "--dry-run"], { cwd });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /attempt-1\.json/, "dry-run must list archive file");
+    assert.ok(fs.existsSync(archivePath(cwd, "stage-04", 1)), "dry-run must NOT delete archive");
+  });
+});
