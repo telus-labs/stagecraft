@@ -81,6 +81,8 @@ function run(positional, _flags) {
     ? trackStages.slice(startIdx).map((n) => getStage(n))
     : [stageDef];
 
+  const { listArchives } = require(path.join(__dirname, "..", "..", "gates", "archive"));
+
   const toDelete = [];
   for (const def of stagesToClear) {
     const merged = path.join(gatesDir, `${def.stage}.json`);
@@ -88,6 +90,12 @@ function run(positional, _flags) {
     for (const role of def.roles) {
       const ws = path.join(gatesDir, `${def.stage}.${role}.json`);
       if (fs.existsSync(ws)) toDelete.push(ws);
+    }
+    // Also clear any archived attempts so stale blocker fingerprints from a
+    // previous run don't confuse detectNoProgress / detectNoSourceChange on
+    // the next auto-fix loop.
+    for (const { file } of listArchives(gatesDir, def.stage)) {
+      toDelete.push(file);
     }
   }
 

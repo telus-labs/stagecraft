@@ -741,20 +741,73 @@ describe("next: stage-06b (accessibility-audit) fix steps", () => {
       "no separate re-run");
   });
 
-  it("no A11Y items in noted_for_followup → falls back to plain devteam advise", () => {
+  it("A11Y blockers but no prior-stage noted_for_followup → clear backend + audit gates and re-dispatch", () => {
     const cwd = track(makeTargetProject());
     seedThroughBuild(cwd);
     seedGate(cwd, "stage-06b", {
       status: "FAIL",
       blockers: [{ id: "A11Y-01", description: "Missing aria-live.", assigned_to: "frontend" }],
     });
-    // No noted_for_followup with A11Y keywords anywhere
+    // No noted_for_followup with A11Y keywords in any prior stage
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    // clear_gates must include the backend build gate and the audit gate
+    assert.ok(Array.isArray(r.clear_gates) && r.clear_gates.length > 0, "clear_gates is non-empty");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-04.backend")), "clears backend build gate");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-06b")), "clears the audit gate itself");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(allCmds.some(c => c.includes("--from backend")), "re-dispatches backend workstream");
+    assert.ok(allCmds.some(c => c.includes("accessibility-audit")), "re-runs the audit");
+    assert.ok(!allCmds.some(c => c === "devteam advise"), "does not fall back to interactive advise");
+  });
+
+  it("cosmetic noted_for_followup in stage-06b itself but not in prior stages → clear-and-redispatch (soc2 scenario)", () => {
+    // The accessibility auditor wrote advisory A11Y-NOTE-* items into stage-06b's
+    // own noted_for_followup. The actual blockers are color-contrast violations.
+    // The recipe must exclude the failing gate's own noted_for_followup (which
+    // would match the A11Y regex but cannot be resolved by devteam advise).
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-06b", {
+      status: "FAIL",
+      blockers: [
+        "[A11Y-01] Color contrast: .badge-pass — white (#fff) on green (#2d9e45) = 3.45:1, requires 4.5:1 (WCAG 1.4.3 AA).",
+        "[A11Y-02] Color contrast: .jn JSON number token — orange (#e06c00) on code background (#f8f8f8) = 3.13:1.",
+      ],
+      noted_for_followup: [
+        { id: "A11Y-NOTE-01", text: "Series disclosure triangles hidden via CSS — consider a ::before affordance.", effort: "XS" },
+        { id: "A11Y-NOTE-02", text: "Source status icon spans could use aria-hidden='true'.", effort: "XS" },
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    // Must NOT use the auditor's own advisory IDs via devteam advise
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    assert.ok(!allCmds.some(c => c.includes("A11Y-NOTE-01=A")), "does not apply cosmetic advisory item");
+    assert.ok(!allCmds.some(c => c.includes("A11Y-NOTE-02=A")), "does not apply cosmetic advisory item");
+    // Must use clear-and-redispatch for the color-contrast blockers
+    assert.ok(r.clear_gates.some(g => g.includes("stage-04.backend")), "clears backend build gate");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-06b")), "clears the audit gate");
+    assert.ok(allCmds.some(c => c.includes("--from backend")), "re-dispatches backend");
+  });
+
+  it("no A11Y blockers at all → falls back to plain devteam advise", () => {
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    // Gate has a non-A11Y blocker (e.g. audit tooling error) and no noted_for_followup
+    seedGate(cwd, "stage-06b", {
+      status: "FAIL",
+      blockers: ["audit tool failed to generate HTML report — check output directory permissions"],
+    });
 
     const r = next({ cwd });
     assert.equal(r.action, "fix-and-retry");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(allCmds.some(c => c === "devteam advise"), "falls back to plain devteam advise");
     assert.ok(!allCmds.some(c => c.includes("--apply")), "no --apply without noted_for_followup ids");
+    assert.ok(!r.clear_gates || r.clear_gates.length === 0, "no clear_gates for non-A11Y failures");
   });
 });
 
