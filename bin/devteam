@@ -49,6 +49,7 @@ const _specCmd          = require(path.join(__dirname, "..", "core", "cli", "com
 const _consistencyCmd   = require(path.join(__dirname, "..", "core", "cli", "commands", "consistency"));
 const _assessCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "assess"));
 const _standardsCmd     = require(path.join(__dirname, "..", "core", "cli", "commands", "standards"));
+const _hookCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "hook"));
 
 
 const _registry = Object.create(null);
@@ -59,7 +60,7 @@ for (const cmd of [
   _deriveApprovalsCmd, _restartCmd, _rulingCmd, _fixEscalationCmd,
   _initCmd, _uiCmd, _memoryCmd, _architectureCmd, _reproduceCmd,
   _verifyCmd, _replayCmd, _ciCmd, _specCmd, _consistencyCmd,
-  _assessCmd, _standardsCmd,
+  _assessCmd, _standardsCmd, _hookCmd,
 ]) {
   _registry[cmd.name] = cmd;
 }
