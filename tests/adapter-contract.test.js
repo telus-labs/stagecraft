@@ -407,6 +407,40 @@ describe("adapter contract: claude-code toolBudgetFor", () => {
   });
 });
 
+// G11: claude-code renderSettingsLocal() must produce portable hook commands.
+// settings.local.json is written by `devteam init` and must work on any machine
+// that has devteam installed — no baked-in absolute paths.
+describe("adapter contract: claude-code renderSettingsLocal portable hooks", () => {
+  const adapter = loadAdapter("claude-code");
+
+  it("exports renderSettingsLocal as a function", () => {
+    assert.equal(typeof adapter.renderSettingsLocal, "function",
+      "claude-code adapter must export renderSettingsLocal()");
+  });
+
+  it("hook commands use devteam hook <name> (no absolute paths)", () => {
+    const settings = adapter.renderSettingsLocal();
+    const allCmds = JSON.stringify(settings.hooks);
+    assert.ok(!allCmds.includes(path.sep + "Users" + path.sep),
+      "hook commands must not contain /Users/ absolute paths");
+    assert.ok(!allCmds.includes(path.sep + "home" + path.sep),
+      "hook commands must not contain /home/ absolute paths");
+    assert.ok(allCmds.includes("devteam hook"),
+      "hook commands must use 'devteam hook <name>' form");
+  });
+
+  it("all four hook event types are present and wired to devteam hook", () => {
+    const settings = adapter.renderSettingsLocal();
+    const { hooks } = settings;
+    assert.ok(Array.isArray(hooks.Stop) && hooks.Stop.length > 0, "Stop hook missing");
+    assert.ok(Array.isArray(hooks.SubagentStop) && hooks.SubagentStop.length > 0, "SubagentStop hook missing");
+    assert.ok(Array.isArray(hooks.PreToolUse) && hooks.PreToolUse.length > 0, "PreToolUse hook missing");
+    assert.ok(Array.isArray(hooks.PostToolUse) && hooks.PostToolUse.length > 0, "PostToolUse hook missing");
+    const stopCmd = hooks.Stop[0].hooks[0].command;
+    assert.ok(stopCmd.startsWith("devteam hook"), `Stop command must use devteam hook; got: ${stopCmd}`);
+  });
+});
+
 // G10: prompt-only adapters must inject the tool budget advisory section
 // when descriptor.toolBudget is set, and must NOT inject it when absent.
 describe("adapter contract: tool budget section rendering", () => {

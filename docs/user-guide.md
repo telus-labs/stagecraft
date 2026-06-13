@@ -112,7 +112,7 @@ my-app/
 │   ├── agents/                 ← 12 role subagents
 │   ├── skills/                 ← 13 task helpers (implement, review-rubric, …)
 │   ├── commands/               ← /devteam, /audit, /audit-quick (claude-code only)
-│   └── settings.local.json     ← Stop / SubagentStop / PostToolUse / PreToolUse hooks
+│   └── settings.local.json     ← Stop / SubagentStop / PostToolUse / PreToolUse hooks (portable — safe to commit)
 └── pipeline/
     └── gates/                  ← empty; gates land here as stages run
 ```
@@ -990,6 +990,8 @@ cat .claude/settings.local.json | jq .hooks
 ```
 
 If the file is missing or doesn't have the expected blocks (Stop, SubagentStop, PostToolUse, PreToolUse), re-run `devteam init --host claude-code --force` to overwrite.
+
+**`.gitignore` note:** `settings.local.json` hook commands use `devteam hook <name>` and are fully portable — they resolve via the installed `devteam` binary at runtime, not via a path baked in at init time. The file is safe to commit or omit from `.gitignore`. If you have an older project whose `settings.local.json` contains absolute paths (e.g. `node "/abs/path/core/gates/validator.js"`), re-run `devteam init --host claude-code --force` to regenerate it with the portable form.
 
 ### A multi-role stage workstream is stuck
 

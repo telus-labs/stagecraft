@@ -225,12 +225,12 @@ function installCommands(targetDir, opts) {
 }
 
 function renderSettingsLocal() {
-  const validatorPath = path.join(REPO_ROOT, "core", "gates", "validator.js");
-  const approvalDerivationPath = path.join(REPO_ROOT, "core", "hooks", "approval-derivation.js");
-  const secretScanPath = path.join(REPO_ROOT, "core", "hooks", "secret-scan.js");
-  const validateCmd = `node ${JSON.stringify(validatorPath)}`;
-  const approvalCmd = `node ${JSON.stringify(approvalDerivationPath)}`;
-  const secretScanCmd = `node ${JSON.stringify(secretScanPath)}`;
+  // Use "devteam hook <name>" so the command resolves at execution time via
+  // the installed devteam binary — not the absolute path baked in at init time.
+  // This makes settings.local.json portable across machines and clones.
+  const validateCmd = "devteam hook validate";
+  const approvalCmd = "devteam hook approval-derivation";
+  const secretScanCmd = "devteam hook secret-scan";
   return {
     hooks: {
       Stop: [{ hooks: [{ type: "command", command: validateCmd }] }],
@@ -387,4 +387,5 @@ module.exports = {
   renderStagePrompt,
   invoke,
   toolBudgetFor,
+  renderSettingsLocal,
 };
