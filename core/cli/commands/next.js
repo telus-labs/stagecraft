@@ -25,6 +25,8 @@ function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam next [options]", flags)); process.exit(0); }
   const { next } = getOrchestrator();
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  checkBoundedFence(loadConfig(cwd), "next");
 
   // Advisory check — non-blocking; warn when unresolved BLOCKER-risk follow-up items exist
   if (!_flags.json && !_flags.skipAdvise) {

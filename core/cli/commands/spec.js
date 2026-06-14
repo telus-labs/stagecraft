@@ -22,6 +22,8 @@ function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam spec <verify|generate> [options]", flags)); process.exit(0); }
   const sub = positional[0];
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  checkBoundedFence(loadConfig(cwd), "spec");
   const FRAMEWORK_ROOT = path.join(__dirname, "..", "..", "..");
 
   if (sub === "verify") {

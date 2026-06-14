@@ -68,6 +68,7 @@ function loadConfig(cwd = process.cwd()) {
       pipeline: {
         default_track: parsed.pipeline?.default_track ?? DEFAULTS.pipeline.default_track,
         isolation: parsed.pipeline?.isolation ?? DEFAULTS.pipeline.isolation,
+        isolation_acknowledge_partial: parsed.pipeline?.isolation_acknowledge_partial === true,
         skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
         verify: (parsed.pipeline && typeof parsed.pipeline.verify === "object" && parsed.pipeline.verify !== null) ? parsed.pipeline.verify : {},
         custom_stages: Array.isArray(parsed.pipeline?.custom_stages) ? parsed.pipeline.custom_stages : null,
@@ -149,4 +150,37 @@ function changeIdFromFeature(feature) {
   return slug || null;
 }
 
-module.exports = { loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig, writeConfigIfAbsent, changeIdFromFeature, DEFAULTS };
+// B9 fence (item 5.4): CLI commands that have not yet been wired to pass
+// changeId through their pipeline/ path calls. The meta-test in
+// tests/bounded-fence.test.js greps core/cli/commands/ for resolveChangeId
+// usage and asserts this list matches reality — so the fence cannot silently
+// go stale when a command is wired.
+//
+// Shrinks in commit 2 as each command is wired; the meta-test enforces parity.
+const BOUNDED_UNWIRED_COMMANDS = [
+  "next", "restart", "log", "advise", "replay", "derive-approvals", "spec",
+];
+
+// Throw if isolation:bounded is active for an unwired command and the
+// operator has not acknowledged partial support via isolation_acknowledge_partial.
+// Silent-wrong is the only unacceptable outcome; this makes the current state
+// honest. Set isolation_acknowledge_partial: true in .devteam/config.yml to
+// use only the driver path (which is fully wired) while the CLI catches up.
+function checkBoundedFence(config, commandName) {
+  if (config.pipeline.isolation !== "bounded") return;
+  if (config.pipeline.isolation_acknowledge_partial) return;
+  if (!BOUNDED_UNWIRED_COMMANDS.includes(commandName)) return;
+  throw new Error(
+    `isolation: bounded is not yet fully wired in the CLI layer.\n` +
+    `Commands with no changeId support: ${BOUNDED_UNWIRED_COMMANDS.join(", ")}\n` +
+    `Set isolation_acknowledge_partial: true in .devteam/config.yml to bypass ` +
+    `this check (driver path is fully wired; CLI read-side commands will silently ` +
+    `read the wrong directory without this guard).`,
+  );
+}
+
+module.exports = {
+  loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig,
+  writeConfigIfAbsent, changeIdFromFeature, DEFAULTS,
+  BOUNDED_UNWIRED_COMMANDS, checkBoundedFence,
+};

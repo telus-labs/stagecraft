@@ -53,7 +53,9 @@ function run(positional, _flags) {
   // name ('peer-review') or the gate-id ('stage-05'); errored input is
   // user-actionable.
   const { STAGES, getStage, orderedStageNamesForTrack } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
-  const { loadConfig } = require(path.join(__dirname, "..", "..", "config"));
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "restart");
   let stageName = stageInput;
   let stageDef = getStage(stageInput);
   if (!stageDef) {
@@ -70,7 +72,6 @@ function run(positional, _flags) {
 
   // Collect files to delete. The named stage's merged gate + any
   // per-workstream gates. With --cascade, also every later stage's gates.
-  const config = loadConfig(cwd);
   const track = _flags.track || config.pipeline.default_track || "full";
   const trackStages = orderedStageNamesForTrack(track);
   const startIdx = trackStages.indexOf(stageName);

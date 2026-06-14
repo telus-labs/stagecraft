@@ -27,6 +27,8 @@ const flags = {
 async function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam advise [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  checkBoundedFence(loadConfig(cwd), "advise");
   const { runAdvise } = require(path.join(__dirname, "..", "..", "advise"));
 
   // Parse --apply selections into Map<itemId, { action, ticketId }>

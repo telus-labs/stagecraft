@@ -26,6 +26,8 @@ const flags = {
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam replay <stage-id> [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  checkBoundedFence(loadConfig(cwd), "replay");
   const stageId = positional[0];
   if (!stageId) {
     console.error("Usage: devteam replay <stage-id> [--dry-run] [--json]");

@@ -29,6 +29,8 @@ const flags = {
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam derive-approvals [<file>] [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd ? path.resolve(_flags.cwd) : process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  checkBoundedFence(loadConfig(cwd), "derive-approvals");
   const hookPath = path.join(__dirname, "..", "..", "hooks", "approval-derivation.js");
   const reviewDir = path.join(cwd, "pipeline", "code-review");
 
