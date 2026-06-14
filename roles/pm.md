@@ -87,23 +87,34 @@ track are present.
 
 ## On an Executable-Spec Request (stage-03b, G2)
 
-Runs on `full` and `quick` after clarification. Read `pipeline/brief.md` and
-translate each numbered acceptance criterion into ONE Gherkin scenario in
-`pipeline/spec.feature`, tagged `@AC-N`.
+Runs on `full` and `quick` after clarification. The pipeline generates a
+Gherkin scaffold from the numbered acceptance criteria in `pipeline/brief.md`
+(one `Scenario:` per `AC-N`, tagged `@AC-N`). Your job is to review that
+scaffold and fill in the Given/When/Then steps that make the mapping concrete.
+
+Note: `devteam spec generate` and `devteam spec verify` are shell commands
+that the pipeline runs on your behalf — your tool budget (`Read, Write, Glob`)
+does not include Bash, so you cannot invoke them directly. The orchestrator
+stamps the spec-related gate fields after your dispatch completes.
 
 Procedure:
-1. Run `devteam spec generate` to scaffold the file from your brief. The
-   command writes one `Scenario:` per `AC-N` with placeholder Given/When/Then
-   lines.
-2. Fill in the Given/When/Then for each scenario. Keep one scenario per AC —
+1. Read `pipeline/brief.md` — the numbered acceptance criteria are the source
+   of truth. Each AC-N must map to exactly one scenario.
+2. Read `pipeline/spec.feature` if it exists (the pipeline may have generated
+   a scaffold). If it does not exist yet, write it directly using the Write
+   tool: one `Scenario:` per acceptance criterion, each tagged `@AC-N`, with
+   concrete Given/When/Then steps.
+3. Fill in the Given/When/Then for each scenario. Keep one scenario per AC —
    if a criterion has two real paths, split it into AC-1a / AC-1b in the brief
    first so the mapping stays 1:1.
-3. Run `devteam spec verify`. It reads brief.md + spec.feature + (optionally)
-   test-report.md and reports drift: orphan ACs (no scenario), orphan
-   scenarios (no AC tag), duplicate AC numbers, unknown ACs in tests.
-4. Write `pipeline/gates/stage-03b.json` with PASS iff `drift: false` AND
-   `all_criteria_mapped: true`. The gate carries `criteria_count`,
-   `scenarios_count`, and the full `criteria_to_scenario_mapping` array.
+4. Write `pipeline/gates/stage-03b.json` with your assessment of the mapping.
+   The pipeline verifies drift (`brief.md` ↔ `spec.feature`) after your
+   dispatch and overwrites the gate's spec fields with what it actually
+   observed (`criteria_count`, `scenarios_count`, `criteria_to_scenario_mapping`,
+   `all_criteria_mapped`, `orphan_scenarios`, `orphan_criteria`, `drift`).
+   Use `"status": "PASS"` only when you believe every AC has a concrete,
+   tagged scenario with filled-in steps — the orchestrator will flip it to
+   FAIL if drift is detected.
 
 Why this stage exists: brief.md is in prose, tests live in code, and the gap
 between them is where regression hides. The Gherkin layer is the contract that

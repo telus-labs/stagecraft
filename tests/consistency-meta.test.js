@@ -865,3 +865,70 @@ test("check 7 docs-index: real repo docs/ has no orphan docs (regression guard)"
   assert.equal(r.status, 0,
     `docs/README.md has orphan docs:\n${r.stdout}\n${r.stderr}`);
 });
+
+// ---------------------------------------------------------------------------
+// Check 8: Role-brief / tool-budget compatibility (6.2)
+// ---------------------------------------------------------------------------
+
+test("check 8 role-budget-brief: 'Run devteam cmd' in budget-less role brief is detected", () => {
+  const root = mkFixtureRoot();
+  try {
+    // pm has no Bash budget; "Run `devteam spec generate`" in its brief is a violation —
+    // the old pm.md had exactly this pattern before the 6.2 rewrite.
+    writeFile(root, "roles/pm.md",
+      "## Procedure\n1. Run `devteam spec generate` to scaffold the file.\n" +
+      "3. Run `devteam spec verify` to check drift.\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 1,
+      `expected exit 1 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /role-budget-brief/,
+      "expected role-budget-brief violation in output");
+    assert.match(r.stdout, /devteam spec generate/,
+      "expected the offending command in output");
+    assert.match(r.stdout, /pm/,
+      "expected role name in output");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 8 role-budget-brief: 'Run devteam cmd' for role WITH Bash exits 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    // qa has Bash — "Run `devteam spec verify`" in qa's brief is fine.
+    writeFile(root, "roles/qa.md",
+      "## Procedure\n1. Run `devteam spec verify` to check drift.\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 8 role-budget-brief: informational devteam reference (no 'Run') exits 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    // pm has no Bash, but merely naming the command in a note is not an instruction.
+    // The checker only fires on "Run `devteam ...`" patterns, not bare references.
+    writeFile(root, "roles/pm.md",
+      "## Note\n`devteam spec generate` and `devteam spec verify` are run by the pipeline.\n" +
+      "## Procedure\n1. Read `pipeline/brief.md`.\n2. Write `pipeline/spec.feature`.\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 8 role-budget-brief: real roles/ pass after pm.md rewrite (regression guard)", () => {
+  // Confirms that the pm.md rewrite in item 6.2 eliminated all role-budget-brief
+  // violations from the live roles/ directory.
+  const r = runChecker(REPO_ROOT, { noBaseline: true });
+  assert.equal(r.status, 0,
+    `real roles/ has role-budget-brief violations after pm.md rewrite:\n${r.stdout}\n${r.stderr}`);
+});

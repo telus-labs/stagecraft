@@ -1,9 +1,9 @@
 // Orchestrator-stamped gate fields. Closes the gap between agent
 // self-report ("tests_passed: true") and orchestrator verification
 // (the orchestrator actually runs the test command and observes exit
-// code 0). For stage-04a (pre-review) and stage-06 (qa), the
-// orchestrator runs the configured lint/test commands and overwrites
-// the gate's verification fields with what it actually observed.
+// code 0). For stage-04a (pre-review), stage-06 (qa), and stage-03b
+// (executable-spec), the orchestrator runs the relevant commands and
+// overwrites the gate's verification fields with what it observed.
 //
 // When the orchestrator's verification disagrees with what the model
 // wrote, the orchestrator wins: status flips to FAIL, blockers gain
@@ -13,12 +13,17 @@
 // Audit finding (2026-06-02 audit, CRITICAL): every Stage 04a gate
 // field is currently model-self-reported. The validator only
 // enforces shape, not truth. This module is the fix.
+//
+// 6.2: stage-03b stamping moves spec generate/verify out of the pm
+// agent (no Bash budget) into the orchestrator — model-said vs
+// observed recorded on every spec-related gate field.
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { loadConfig } = require("../config");
 const { runCommand, resolveCommands } = require("./runner");
 const { loadGateSafe } = require("../gates/load-gate");
+const { verify: specVerify, generateScaffold } = require("../spec/verify");
 
 const STAMPER_VERSION = "1";
 
@@ -218,6 +223,114 @@ function extractAcsFromReport(text) {
   return Array.from(seen);
 }
 
+// Stage-03b (Executable Spec): orchestrator stamps the spec-related gate
+// fields by running verify() from core/spec/verify. This moves spec
+// generation/verification out of the pm agent (budget: Read, Write, Glob —
+// no Bash) into the orchestrator. If spec.feature is absent but brief.md
+// is present, generates a scaffold first so the gate records observed state.
+//
+// Rejected alternative: granting pm Bash capability. Verification belongs
+// to the orchestrator — the trust model requires the orchestrator to check
+// the agent's work, not for the agent to self-certify (6.2 rationale).
+async function stampStage03b(cwd, gatePath) {
+  const { gate, error } = loadGateSafe(gatePath);
+  if (error) return { ok: false, error };
+
+  const pipelineDir = path.join(cwd, "pipeline");
+  const briefPath = path.join(pipelineDir, "brief.md");
+  const specPath  = path.join(pipelineDir, "spec.feature");
+
+  const stamp = {
+    stamper_version: STAMPER_VERSION,
+    at: new Date().toISOString(),
+    fields: [],
+    runs: {},
+  };
+  const blockers = Array.isArray(gate.blockers) ? gate.blockers.slice() : [];
+
+  if (!fs.existsSync(briefPath)) {
+    stamp.runs.spec_generate = { skipped: "pipeline/brief.md not found — track without requirements stage?" };
+    stamp.runs.spec_verify   = { skipped: "pipeline/brief.md not found" };
+    return finalizeStamp(gate, gatePath, blockers, stamp);
+  }
+
+  const briefText = fs.readFileSync(briefPath, "utf8");
+
+  // Generate scaffold if spec.feature is absent (corresponds to devteam spec generate).
+  if (!fs.existsSync(specPath)) {
+    try {
+      const scaffold = generateScaffold(briefText);
+      fs.mkdirSync(path.dirname(specPath), { recursive: true });
+      fs.writeFileSync(specPath, scaffold, "utf8");
+      stamp.runs.spec_generate = { generated: true, path: path.relative(cwd, specPath) };
+    } catch (err) {
+      stamp.runs.spec_generate = { error: err.message };
+    }
+  } else {
+    stamp.runs.spec_generate = { skipped: "spec.feature already exists" };
+  }
+
+  // Run verify (corresponds to devteam spec verify).
+  const report = specVerify(cwd, { pipelineDir });
+  stamp.runs.spec_verify = {
+    drift: report.drift,
+    criteria_count: report.criteria.length,
+    scenarios_count: report.scenarios.length,
+    orphan_criteria_count: report.orphan_criteria.length,
+    orphan_scenarios_count: report.orphan_scenarios.length,
+    duplicate_criteria_count: report.duplicate_criteria.length,
+  };
+
+  // Build criteria_to_scenario_mapping from the report's scenario objects.
+  const scenariosByAc = new Map();
+  for (const sc of report.scenarios) {
+    for (const id of sc.ac_ids || []) {
+      if (!scenariosByAc.has(id)) scenariosByAc.set(id, []);
+      scenariosByAc.get(id).push(sc.name);
+    }
+  }
+  const orchMapping = report.criteria.map((id) => ({
+    criterion_id: id,
+    scenarios: scenariosByAc.get(id) || [],
+  }));
+
+  const orchCriteriaCount   = report.criteria.length;
+  const orchScenariosCount  = report.scenarios.length;
+  const orchAllMapped       = report.orphan_criteria.length === 0 &&
+                              report.duplicate_criteria.length === 0;
+  const orchOrphanScenarios = report.orphan_scenarios.map((o) => o.name);
+  const orchOrphanCriteria  = report.orphan_criteria.map((o) => o.id);
+  const orchDrift           = report.drift;
+
+  function stampField(field, orchVal) {
+    const modelVal = gate[field];
+    const entry = { field, orchestrator: orchVal };
+    if (JSON.stringify(modelVal) !== JSON.stringify(orchVal)) {
+      entry.model_said = modelVal;
+    }
+    stamp.fields.push(entry);
+    gate[field] = orchVal;
+  }
+
+  stampField("criteria_count",            orchCriteriaCount);
+  stampField("scenarios_count",           orchScenariosCount);
+  stampField("criteria_to_scenario_mapping", orchMapping);
+  stampField("all_criteria_mapped",       orchAllMapped);
+  stampField("orphan_scenarios",          orchOrphanScenarios);
+  stampField("orphan_criteria",           orchOrphanCriteria);
+  stampField("drift",                     orchDrift);
+
+  if (!orchAllMapped || orchDrift) {
+    const orphCritStr = orchOrphanCriteria.join(", ") || "none";
+    const orphScenCount = report.orphan_scenarios.length;
+    blockers.push(
+      `spec drift: orphan_criteria=[${orphCritStr}], orphan_scenarios=${orphScenCount}`
+    );
+  }
+
+  return finalizeStamp(gate, gatePath, blockers, stamp);
+}
+
 function finalizeStamp(gate, gatePath, blockers, stamp) {
   // If the orchestrator detected failures, force gate status to FAIL.
   // The model may have written PASS optimistically; orchestrator's truth
@@ -253,6 +366,7 @@ async function stamp(cwd, stageId) {
     return { ok: false, error: `gate not found: ${gatePath}` };
   }
   switch (stageId) {
+    case "stage-03b": return stampStage03b(cwd, gatePath);
     case "stage-04a": return stampStage04a(cwd, gatePath);
     case "stage-06":  return stampStage06(cwd, gatePath);
     default:          return { ok: false, error: `no orchestrator stamping defined for ${stageId}` };
@@ -261,10 +375,11 @@ async function stamp(cwd, stageId) {
 
 // Stages this module knows how to verify. Callers can use this to
 // decide whether to invoke stamp() at all.
-const STAMPABLE_STAGES = new Set(["stage-04a", "stage-06"]);
+const STAMPABLE_STAGES = new Set(["stage-03b", "stage-04a", "stage-06"]);
 
 module.exports = {
   stamp,
+  stampStage03b,
   stampStage04a,
   stampStage06,
   STAMPABLE_STAGES,
