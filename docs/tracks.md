@@ -131,6 +131,8 @@ This is an escape hatch, not a block.
 
 ## Choosing a track
 
+`devteam assess` automates this decision: given a change description and a file list it returns a `recommendedTrack`, a `confidence` level (`high | medium | low`), and the reasons. Run `devteam assess --apply` to write the result to `pipeline/track.json` so `devteam run` picks it up automatically (see [`ADR-006`](adr/006-track-inference-under-autonomy.md) for the full track-record design).
+
 Decision tree:
 
 1. **Is this a hotfix for a live incident?** → `hotfix`. Pre-review and peer-review are mandatory; urgency is not a reason to skip them.
