@@ -14,11 +14,11 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 3 | Structural debt | ✅ complete (PRs #79–#89) |
 | 4 | Capability roadmap (ADR-first) | ✅ complete (PRs #90–#97) |
 | D | Documentation system | ✅ complete (PRs #99 · #102 · #103 · #104 · #105 · #107) |
-| 5 | State integrity (round-2 review) | 🔲 ready — start here |
-| 6 | Promise integrity | 🔲 ready (6.2 needs 6.1) |
+| 5 | State integrity (round-2 review) | ✅ complete (PRs #114–#117) |
+| 6 | Promise integrity | ✅ 6.1–6.4 complete (PRs #118–#121); 6.5 🔲 ready |
 | 7 | Test & CI harness | 🔲 ready |
-| 8 | Release v0.7.0 + semantic sync | ⏸ 8.2(a–c) need 6.4; 8.3 needs 7.1 |
-| 9 | Evidence-gated capabilities | ⏸ Phases 5–6 merged; ADR-first |
+| 8 | Release v0.7.0 + semantic sync | ⏸ 8.3 needs 7.1 |
+| 9 | Evidence-gated capabilities | ⏸ Phase 6.5 pending; ADR-first |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1038,7 +1038,7 @@ Round-2 review (2026-06-12, main @ 2a1d985) findings: state outliving its run an
 upstream re-runs not invalidating downstream attestations. Order: 5.1+5.2 (coordinate —
 shared choke point) → 5.3 → 5.4. Plan file: plans/phase-5-state-integrity.md.
 
-### 5.1 DAG-derived gate invalidation 🔲
+### 5.1 DAG-derived gate invalidation ✅ #114
 
 ```
 TASK: Implement plans/phase-5-state-integrity.md, item 5.1. Read that section, then
@@ -1065,7 +1065,7 @@ test must FAIL on today's main); registry meta-test: no recipe carries a hand-li
 downstream gate.
 ```
 
-### 5.2 Archive lifecycle owner 🔲
+### 5.2 Archive lifecycle owner ✅ #115
 
 ```
 TASK: Implement plans/phase-5-state-integrity.md, item 5.2. Read core/gates/archive.js,
@@ -1088,7 +1088,7 @@ convergence-exhausted; (b) fresh non-resume run with stale attempt-2/3 archives 
 false no-progress halt. Existing #106 restart tests stay green via the shared path.
 ```
 
-### 5.3 Interactive convergence ceiling 🔲 (after 5.2)
+### 5.3 Interactive convergence ceiling ✅ #116 (after 5.2)
 
 ```
 TASK: Implement plans/phase-5-state-integrity.md, item 5.3. Read the driver's
@@ -1110,7 +1110,7 @@ no_progress_evidence (FAILS on today's main); no double-archiving per attempt (c
 archive files); all existing run/driver tests unchanged.
 ```
 
-### 5.4 Bounded isolation: fence, then finish 🔲
+### 5.4 Bounded isolation: fence, then finish ✅ #117
 
 ```
 TASK: Implement plans/phase-5-state-integrity.md, item 5.4, as TWO commits.
@@ -1141,7 +1141,7 @@ the derived list.
 Make shipped claims true. Order: 6.1 → 6.2 → 6.4 → 6.3 → 6.5. Plan file:
 plans/phase-6-promise-integrity.md.
 
-### 6.1 Host-neutral tool budgets 🔲
+### 6.1 Host-neutral tool budgets ✅ #118
 
 ```
 TASK: Implement plans/phase-6-promise-integrity.md, item 6.1. Read core/roles.js,
@@ -1168,7 +1168,7 @@ Required tests: per non-claude host — advisory rendered + budget stamped; warn
 exactly for prompt-only; claude-code frontmatter byte-identical.
 ```
 
-### 6.2 pm budget vs brief + checker rule 🔲 (after 6.1)
+### 6.2 pm budget vs brief + checker rule ✅ #119 (after 6.1)
 
 ```
 TASK: Implement plans/phase-6-promise-integrity.md, item 6.2. [verify-first] read how
@@ -1192,7 +1192,7 @@ Required tests: stage-03b e2e with stamped spec fields; checker rule fires on th
 fixture and passes on the real roles/ after the rewrite.
 ```
 
-### 6.3 C3 license gate: verify or relabel 🔲
+### 6.3 C3 license gate: verify or relabel ✅ #120
 
 ```
 TASK: Implement plans/phase-6-promise-integrity.md, item 6.3. [verify-first] read
@@ -1212,7 +1212,7 @@ Required tests: denied-license fixture → stamped FAIL regardless of model clai
 fixture → pass; non-Node fixture → WARN + tri-state; schema tests.
 ```
 
-### 6.4 De-overfit the fix recipes 🔲
+### 6.4 De-overfit the fix recipes ✅ #121
 
 ```
 TASK: Implement plans/phase-6-promise-integrity.md, item 6.4. Read
