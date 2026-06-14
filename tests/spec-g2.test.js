@@ -428,8 +428,9 @@ test("roles/pm.md describes the executable-spec stage", () => {
   assert.match(text, /spec\.feature/);
 });
 
-test("roles/qa.md mentions spec.feature as the canonical behaviour list", () => {
-  const text = fs.readFileSync(path.join(REPO_ROOT, "roles", "qa.md"), "utf8");
+test("qa-test-authoring skill mentions spec.feature as the canonical behaviour list", () => {
+  // spec.feature instructions moved from roles/qa.md to skills/qa-test-authoring/SKILL.md (8.3)
+  const text = fs.readFileSync(path.join(REPO_ROOT, "skills", "qa-test-authoring", "SKILL.md"), "utf8");
   assert.match(text, /spec\.feature/);
 });
 

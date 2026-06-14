@@ -264,6 +264,78 @@ metrics; this file records what production actually showed.
 
 See `docs/runbooks/open-followups.md` for how the open-followups runbook cross-references this file.
 
+## Stage 5 approval-derivation hook contract
+
+This section is operator/tooling reference. Model agents need only the review
+file format and the `BLOCKER:` line convention — both are in
+`rules/stage-05.md`. Come here when debugging the hook or extending it.
+
+### How `approval-derivation.js` processes review files
+
+The hook (registered as PostToolUse on Write/Edit in `.devteam/settings.json`)
+fires whenever a reviewer writes or edits `pipeline/code-review/by-<role>.md`.
+It parses the file for `## Review of <area>` sections and the `REVIEW:` marker
+that closes each section, then upserts `pipeline/gates/stage-05.<area>.json`.
+
+For each `## Review of <area>` section:
+- If `REVIEW: APPROVED` — adds `reviewer` to `approvals[]`.
+- If `REVIEW: CHANGES REQUESTED` — adds an entry to `changes_requested[]`
+  and resets `blockers[]` to the extracted `BLOCKER: <text>` lines from
+  that section.
+- Self-reviews (area == reviewer's own workstream) are skipped with a WARN log.
+
+`blockers[]` structure after extraction:
+
+```json
+{
+  "stage": "stage-05", "workstream": "backend",
+  "status": "FAIL",
+  "changes_requested": [{ "reviewer": "dev-platform", "timestamp": "…" }],
+  "blockers": [
+    { "reviewer": "dev-platform", "text": "Missing pagination on ListUsersCommand — truncates at 100" },
+    { "reviewer": "dev-platform", "text": "iam_admin_users stub unconditionally emits PASS — remove or mark always_insufficient" }
+  ]
+}
+```
+
+Each entry carries `reviewer` (who wrote it) and `text` (raw `BLOCKER:` line
+with prefix stripped). `blockers` is reset on each hook run for that area, so
+a re-review that flips to `REVIEW: APPROVED` clears the array.
+
+### Gate merge — `affected_workstreams[]` derivation
+
+When `devteam merge peer-review` writes `pipeline/gates/stage-05.json`, it
+derives `affected_workstreams` from the per-area gates: any area whose gate
+has `changes_requested` non-empty contributes its area name. Area names map
+1:1 to build workstreams (`backend` → `dev-backend`, etc.):
+
+```json
+{
+  "stage": "stage-05", "status": "FAIL",
+  "affected_workstreams": ["backend"],
+  "workstreams": [
+    { "workstream": "backend",  "status": "FAIL" },
+    { "workstream": "frontend", "status": "PASS" },
+    { "workstream": "platform", "status": "PASS" }
+  ]
+}
+```
+
+Per-area gates do not carry `affected_workstreams` — the area name itself is
+the attribution. Use the merged gate for stage-manager-facing queries.
+
+### Concurrency
+
+The hook uses per-gate file locks (`.stage-05-<area>.lock`) plus atomic
+rename writes. Safe for concurrent reviewer writes in agent-teams mode.
+
+### Conservative error handling
+
+Any parse or IO failure in the hook exits 0 with a WARN log — it never
+halts the host session on a hook bug. If a gate is not updating after a
+review file write, run `devteam derive-approvals` manually to re-process
+all existing `by-*.md` files.
+
 ## See also
 
 - [`docs/runbooks/escalation.md`](runbooks/escalation.md) — full procedure when a gate hits `ESCALATE`

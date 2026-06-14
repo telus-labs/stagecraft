@@ -178,4 +178,45 @@ If the gap is non-empty:
 
 - Don't accept a "we'll add it later" verbal commitment. The gate is the contract; if a signal is required but missing, FAIL the gate.
 - Don't FAIL on logs that exist with slightly different wording — match by event name / substring, not literal string equality.
+
+---
+
+## Platform gate detail (Stage 6c, `dev-platform` role)
+
+For each gap (required but not verified): identify which build workstream owns
+the code that should emit the signal. Match the signal to the area:
+- HTTP/API signals → `backend` (or `frontend` for client-side)
+- Deploy/infra signals → `platform`
+- Test/coverage signals → `qa`
+- Cross-cutting signals (e.g. request tracing) → whichever area handles the entry point
+
+Derive `affected_workstreams` as the deduplicated list of `assigned_to` values from
+gap items. Set `assigned_to` on every gap item — required; stage managers query this
+field first to know which build agents to re-run.
+
+Write `pipeline/observability-report.md` — human-readable version of the gate.
+
+Full FAIL gate example:
+
+```json
+{
+  "stage": "stage-06c", "status": "FAIL",
+  "workstream": "platform",
+  "affected_workstreams": ["backend"],
+  "metrics": {
+    "required": ["http_requests_total"],
+    "verified": [],
+    "gap": [{ "signal": "http_requests_total", "assigned_to": "backend", "note": "No prom-client emit in src/backend/routes/" }]
+  },
+  "logs": { "required": [], "verified": [], "gap": [] },
+  "traces": { "required": [], "verified": [], "gap": [] },
+  "verification_method": "code-grep",
+  "blockers": [
+    { "signal": "http_requests_total", "assigned_to": "backend", "ref": "design-spec §9.1" }
+  ],
+  "warnings": ["weak verification method: code-grep — recommend runtime-probe post-deploy"]
+}
+```
+
+On PASS: `affected_workstreams: []`, all `gap[]` arrays empty.
 - Don't accept `verification_method: "manual"` as PASS when the same code path is exercised by tests; bump to `code-grep` minimum.
