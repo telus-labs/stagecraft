@@ -24,6 +24,7 @@ const { loadConfig } = require("../config");
 const { runCommand, resolveCommands } = require("./runner");
 const { loadGateSafe } = require("../gates/load-gate");
 const { verify: specVerify, generateScaffold } = require("../spec/verify");
+const { runLicenseCheck } = require("./license-runner");
 
 const STAMPER_VERSION = "1";
 
@@ -89,6 +90,45 @@ async function stampStage04a(cwd, gatePath) {
     }
   } else {
     stamp.runs.test = { skipped: "no test command configured or discovered" };
+  }
+
+  // license_check_passed: orchestrator-verified for Node projects; tri-state
+  // "unverified-by-orchestrator" for non-Node or when node_modules is absent.
+  // Closes C3's doctrine exception — model can no longer self-certify a scan
+  // that never ran.  dependency_review_passed is left as model-asserted by design
+  // (see schema description) because npm audit requires live advisory DB access.
+  const licenseResult = runLicenseCheck(cwd, config);
+  if (!licenseResult.nodeProject || licenseResult.unverified) {
+    const prevLicense = gate.license_check_passed;
+    const entry = { field: "license_check_passed", orchestrator: "unverified-by-orchestrator", reason: licenseResult.reason };
+    if (prevLicense !== "unverified-by-orchestrator") entry.model_said = prevLicense;
+    stamp.fields.push(entry);
+    gate.license_check_passed = "unverified-by-orchestrator";
+    gate.warnings = Array.isArray(gate.warnings) ? gate.warnings : [];
+    gate.warnings.push(`license check unverified by orchestrator: ${licenseResult.reason}`);
+    stamp.runs.license = { skipped: licenseResult.reason };
+  } else {
+    const orchestratorPassed = licenseResult.passed;
+    const prevLicense = gate.license_check_passed;
+    if (prevLicense !== orchestratorPassed) {
+      stamp.fields.push({ field: "license_check_passed", model_said: prevLicense, orchestrator: orchestratorPassed });
+    } else {
+      stamp.fields.push({ field: "license_check_passed", orchestrator: orchestratorPassed });
+    }
+    gate.license_check_passed = orchestratorPassed;
+    gate.license_findings = licenseResult.findings;
+    stamp.runs.license = {
+      packages_scanned: licenseResult.totalScanned,
+      findings_count: licenseResult.findings.length,
+      denied_count: licenseResult.findings.filter((f) => f.policy === "denied").length,
+      warned_count: licenseResult.findings.filter((f) => f.policy === "warned").length,
+    };
+    if (!orchestratorPassed) {
+      const denied = licenseResult.findings.filter((f) => f.policy === "denied");
+      blockers.push(
+        `license check failed: ${denied.length} denied license(s) — ${denied.map((d) => `${d.package} (${d.license})`).join(", ")}`,
+      );
+    }
   }
 
   return finalizeStamp(gate, gatePath, blockers, stamp);

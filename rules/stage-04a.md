@@ -39,8 +39,23 @@ Gate file: `pipeline/gates/stage-04a.json`.
 }
 ```
 
-`license_check_passed` is `false` when any `license_findings` entry has
-`policy: "denied"` (strong copyleft). `policy: "warned"` entries do not block —
-they appear as `warnings[]`. `license_findings` only includes non-allowed packages;
-packages on the default permissive list (MIT, Apache-2.0, BSD-*, ISC, CC0,
-Unlicense) are not recorded.
+`license_check_passed` is orchestrator-stamped for Node projects (C3):
+- `true` — no denied licenses found across installed `node_modules/`.
+- `false` — at least one package carries a strong-copyleft license (GPL-*, LGPL-*, AGPL-*);
+  a `blockers[]` entry names the offending packages. The model's claim is overridden.
+- `"unverified-by-orchestrator"` — the project has no `package.json` (non-Node stack)
+  or `node_modules/` is not installed; the orchestrator cannot verify the scan
+  mechanically. A `warnings[]` entry explains why. The model's assertion stands but
+  is explicitly labeled unverified.
+
+`policy: "warned"` entries (UNLICENSED, SSPL, BUSL, unknown) do not block — they
+appear in `warnings[]`. `license_findings` only records non-allowed packages.
+Packages on the default permissive list (MIT, Apache-2.0, BSD-*, ISC, CC0-1.0,
+0BSD, Unlicense) are omitted. Projects may extend the allowed list via
+`.devteam/config.yml` `license.extra_allowed[]`.
+
+`dependency_review_passed` is **model-asserted by design**: vulnerability scanning
+(npm audit, pip-audit, cargo-audit) requires toolchain availability and a current
+advisory database that the orchestrator cannot access offline. The orchestrator
+verifies license compliance mechanically; CVE scan results are reported by the
+platform agent and confirmed in human review at Stage 5.

@@ -22,11 +22,14 @@
     },
     "dependency_review_passed": {
       "type": "boolean",
-      "description": "SCA (vulnerability scan) found no high or critical findings in new/changed dependencies. Separate from license_check_passed."
+      "description": "Model-asserted by design: vulnerability scanning (npm audit, pip-audit, cargo-audit) requires toolchain availability and a current advisory database that the orchestrator cannot access offline, so the orchestrator defers CVE scan results to the platform agent and human review at Stage 5. See license_check_passed for the mechanically-verified counterpart."
     },
     "license_check_passed": {
-      "type": "boolean",
-      "description": "No denied licenses found in new or changed direct dependencies. See license_findings[] for per-package detail. True when license_findings contains no 'denied' entries (warned entries are acceptable — record as warnings)."
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "enum": ["unverified-by-orchestrator"] }
+      ],
+      "description": "Orchestrator-stamped for Node projects: true when no denied licenses found in installed dependencies; false when at least one denied (strong-copyleft) license is detected. 'unverified-by-orchestrator' when the project is non-Node or node_modules is not installed — the orchestrator cannot verify the claim mechanically and the model's assertion stands; a warnings[] entry explains why. See license_findings[] for per-package detail."
     },
     "license_findings": {
       "type": "array",
