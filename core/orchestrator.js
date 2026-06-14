@@ -416,9 +416,9 @@ async function runStageHeadless(stageName, opts = {}) {
     if (opts.stamp !== false) {
       const { STAMPABLE_STAGES, stamp } = require("./verify/stamp");
       // Single-role stages produce one gate at stage-XX.json (no role
-      // suffix). For now, stamping only applies to single-role stages
-      // (stage-04a, stage-06). Multi-role stages would need per-role
-      // stamping, which isn't in scope here.
+      // suffix). Stamping applies to: stage-03b (spec drift), stage-04a
+      // (lint+tests), stage-06 (tests + AC mapping). Multi-role stages
+      // would need per-role stamping, which isn't in scope here.
       if (STAMPABLE_STAGES.has(plan.stage) && plan.workstreams.length === 1) {
         try {
           const stampResult = await stamp(plan.ctx.cwd, plan.stage);

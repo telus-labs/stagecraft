@@ -20,10 +20,10 @@ Multi-role stages appear once per dispatched role. The CI advisory
 
 | Stage     | Name                      | Role       | Framework B | Role brief B | Dispatch B | Tokens~ |
 | --------- | ------------------------- | ---------- | ----------- | ------------ | ---------- | ------- |
-| stage-01  | requirements              | pm         | 11,785      | 8,050        | 19,835     | 4959    |
+| stage-01  | requirements              | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-02  | design                    | principal  | 11,785      | 12,736       | 24,521     | 6131    |
-| stage-03  | clarification             | pm         | 11,785      | 8,050        | 19,835     | 4959    |
-| stage-03b | executable-spec           | pm         | 11,785      | 8,050        | 19,835     | 4959    |
+| stage-03  | clarification             | pm         | 11,785      | 8,832        | 20,617     | 5155    |
+| stage-03b | executable-spec           | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-04  | build                     | backend    | 11,785      | 7,530        | 19,315     | 4829    |
 | stage-04  | build                     | frontend   | 11,785      | 6,295        | 18,080     | 4520    |
 | stage-04  | build                     | platform   | 11,785      | 15,617       | 27,402     | 6851    |
@@ -38,7 +38,7 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-06c | observability-gate        | platform   | 11,785      | 15,617       | 27,402     | 6851    |
 | stage-06d | verification-beyond-tests | verifier   | 11,785      | 9,089        | 20,874     | 5219    |
 | stage-06e | performance-budget        | qa         | 11,785      | 12,878       | 24,663     | 6166    |
-| stage-07  | sign-off                  | pm         | 11,785      | 8,050        | 19,835     | 4959    |
+| stage-07  | sign-off                  | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-07  | sign-off                  | platform   | 11,785      | 15,617       | 27,402     | 6851    |
 | stage-08  | deploy                    | platform   | 11,785      | 15,617       | 27,402     | 6851    |
 | stage-09  | retrospective             | principal  | 11,785      | 12,736       | 24,521     | 6131    |
@@ -65,10 +65,10 @@ Advisories are non-blocking (they print but do not fail CI).
 | AGENTS.md          | 10 KB   |
 
 <!-- budget-data
-stage-01,19835
+stage-01,20617
 stage-02,24521
-stage-03,19835
-stage-03b,19835
+stage-03,20617
+stage-03b,20617
 stage-04,27402
 stage-04a,27402
 stage-04b,19088

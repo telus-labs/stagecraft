@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { makeTargetProject, cleanup } = require("./_helpers");
-const { stamp, stampStage04a, stampStage06, extractAcsFromBrief } =
+const { stamp, stampStage03b, stampStage04a, stampStage06, extractAcsFromBrief } =
   require("../core/verify/stamp");
 
 let _dirs = [];
@@ -223,6 +223,130 @@ describe("verify/stamp: stampStage06 — AC mapping", () => {
     const r = await stampStage06(cwd, gatePath);
     assert.equal(r.gate.status, "PASS");
     assert.match(r.gate._orchestrator_stamped.runs.ac_mapping.skipped, /brief\.md not found/);
+  });
+});
+
+describe("verify/stamp: stampStage03b — spec drift detection", () => {
+  function seedBrief(cwd, content) {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "brief.md"), content);
+  }
+  function seedSpec(cwd, content) {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "spec.feature"), content);
+  }
+  function seedGate03b(cwd, extra = {}) {
+    return seedGateRaw(cwd, "stage-03b", {
+      stage: "stage-03b", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "full", timestamp: "2026-06-13T12:00:00Z",
+      blockers: [], warnings: [],
+      criteria_count: 0,
+      scenarios_count: 0,
+      criteria_to_scenario_mapping: [],
+      all_criteria_mapped: false,
+      orphan_scenarios: [],
+      orphan_criteria: [],
+      drift: false,
+      ...extra,
+    });
+  }
+  const BRIEF_2ACS = "## ACs\n- AC-1: user can sign in\n- AC-2: user can reset password\n";
+  const SPEC_2ACS  =
+    "Feature: auth\n  @AC-1\n  Scenario: AC-1 — sign in\n    Given a user exists\n    When they sign in\n    Then session created\n" +
+    "  @AC-2\n  Scenario: AC-2 — reset password\n    Given a user exists\n    When they reset\n    Then email sent\n";
+
+  it("stamps all gate fields from actual brief + spec (happy path)", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, BRIEF_2ACS);
+    seedSpec(cwd, SPEC_2ACS);
+    const gatePath = seedGate03b(cwd);
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    assert.equal(r.gate.criteria_count, 2);
+    assert.equal(r.gate.scenarios_count, 2);
+    assert.equal(r.gate.all_criteria_mapped, true);
+    assert.equal(r.gate.drift, false);
+    assert.deepEqual(r.gate.orphan_criteria, []);
+    assert.deepEqual(r.gate.orphan_scenarios, []);
+    assert.equal(r.gate.criteria_to_scenario_mapping.length, 2);
+    const ac1 = r.gate.criteria_to_scenario_mapping.find((m) => m.criterion_id === "AC-1");
+    assert.ok(ac1, "AC-1 mapping present");
+    assert.ok(ac1.scenarios.some((s) => /sign in/.test(s)), "AC-1 scenario name present");
+    assert.ok(r.gate._orchestrator_stamped);
+    assert.equal(r.gate._orchestrator_stamped.runs.spec_verify.drift, false);
+  });
+
+  it("flips status to FAIL and records model_said when drift detected (model claimed PASS)", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, "## ACs\n- AC-1: a\n- AC-2: b\n");
+    seedSpec(cwd, "Feature: x\n  @AC-1\n  Scenario: AC-1\n    Then ok\n"); // AC-2 missing
+    const gatePath = seedGate03b(cwd, {
+      status: "PASS",
+      all_criteria_mapped: true, // model claimed mapped
+      drift: false,              // model claimed no drift
+    });
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.gate.status, "FAIL", "status must flip to FAIL when drift found");
+    assert.equal(r.gate.drift, true);
+    assert.equal(r.gate.all_criteria_mapped, false);
+    assert.ok(r.gate.orphan_criteria.includes("AC-2"), "AC-2 is orphan");
+    const driftField = r.gate._orchestrator_stamped.fields.find((f) => f.field === "drift");
+    assert.equal(driftField.model_said, false, "model_said=false recorded");
+    assert.equal(driftField.orchestrator, true, "orchestrator=true recorded");
+    assert.ok(r.gate._orchestrator_stamped.status_overridden, "status_overridden audit present");
+    assert.ok(r.gate.blockers.some((b) => /spec drift/.test(b)), "drift blocker added");
+  });
+
+  it("generates scaffold and records it when spec.feature is absent", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, "## ACs\n- AC-1: sign in\n");
+    // No spec.feature — stamper should generate one
+    const gatePath = seedGate03b(cwd);
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    // Scaffold was generated
+    assert.ok(r.gate._orchestrator_stamped.runs.spec_generate.generated, "scaffold generated");
+    // Even a generated scaffold has all_criteria_mapped=false (Given/When/Then are TODOs)
+    // but criteria_count should reflect the brief
+    assert.equal(r.gate.criteria_count, 1);
+    // The spec.feature should now exist on disk
+    assert.ok(fs.existsSync(path.join(cwd, "pipeline", "spec.feature")));
+  });
+
+  it("skips brief-dependent logic when pipeline/brief.md is absent", async () => {
+    const cwd = track(makeTargetProject());
+    // No brief.md, no spec.feature
+    const gatePath = seedGate03b(cwd);
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    assert.match(r.gate._orchestrator_stamped.runs.spec_verify.skipped, /brief\.md not found/);
+    // No status flip — stamper degrades gracefully
+    assert.equal(r.gate.status, "PASS");
+  });
+
+  it("records model_said vs orchestrator when gate counts disagree", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, BRIEF_2ACS);
+    seedSpec(cwd, SPEC_2ACS);
+    const gatePath = seedGate03b(cwd, {
+      criteria_count: 99,  // wrong model value
+      scenarios_count: 99,
+    });
+    const r = await stampStage03b(cwd, gatePath);
+    const ccField = r.gate._orchestrator_stamped.fields.find((f) => f.field === "criteria_count");
+    assert.equal(ccField.model_said, 99, "model_said captured");
+    assert.equal(ccField.orchestrator, 2, "orchestrator observed 2");
+    assert.equal(r.gate.criteria_count, 2, "gate overwritten with orchestrator value");
+  });
+
+  it("dispatch: stage-03b is stampable and round-trips through stamp()", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, BRIEF_2ACS);
+    seedSpec(cwd, SPEC_2ACS);
+    seedGate03b(cwd);
+    const r = await stamp(cwd, "stage-03b");
+    assert.equal(r.ok, true, r.error);
+    assert.equal(r.gate.drift, false);
   });
 });
 

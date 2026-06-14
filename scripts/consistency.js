@@ -1178,6 +1178,66 @@ function checkDocsIndexCoverage(scanRoot) {
   }
 }
 
+// --- Check 8: Role-brief / tool-budget compatibility ---
+//
+// Every `devteam`/shell command in a role brief's procedure must be
+// compatible with that role's declared tool budget from core/roles.js.
+// A role that lacks Bash cannot run shell commands — any backtick-quoted
+// `devteam <subcommand>` in the brief is an incompatibility that will
+// silently fail under native enforcement (e.g. claude-code subagents).
+//
+// The source of truth for budgets is core/roles.js (ROLE_TOOLS), moved
+// there in item 6.1 to make budgets host-neutral and checkable here.
+//
+// Scan: roles/*.md (only role briefs, not rules/ — rules describe the
+// pipeline, not what a specific role is asked to do).
+function checkRoleBriefToolBudgetCompatibility(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
+  const { toolBudgetFor } = require(path.join(REPO_ROOT, "core", "roles"));
+  const rolesDir = path.join(root, "roles");
+  if (!fs.existsSync(rolesDir)) return;
+
+  // Match imperative instructions to run devteam subcommands: "Run `devteam ...`"
+  // (case-insensitive "run"). Informational references like
+  // "Note: `devteam spec verify` is run by the pipeline" do NOT match — they
+  // lack the leading verb and therefore don't instruct the role to invoke the
+  // command. This precision prevents false positives on context notes.
+  const shellCmdRe = /\brun\s+`(devteam\s+\S[^`]*)`/gi;
+
+  for (const file of fs.readdirSync(rolesDir)) {
+    if (!file.endsWith(".md") || file === "README.md") continue;
+    const roleName = file.replace(/\.md$/, "");
+    const budget = toolBudgetFor(roleName);
+    // Unknown role or role with Bash — nothing to flag.
+    if (!budget || budget.includes("Bash")) continue;
+
+    const content = fs.readFileSync(path.join(rolesDir, file), "utf8");
+    const lines = content.split(/\r?\n/);
+    const seen = new Set();
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      let m;
+      shellCmdRe.lastIndex = 0;
+      while ((m = shellCmdRe.exec(line)) !== null) {
+        const cmd = m[1].trim();
+        // Stable key: role + first two tokens of command (subcommand name).
+        const tokens = cmd.split(/\s+/).slice(0, 2).join("-");
+        const key = `role-budget-brief:roles/${file}:${tokens}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          proseViolation(
+            "role-budget-brief",
+            path.join("roles", file),
+            i + 1,
+            `role "${roleName}" (budget: ${budget.join(", ")}) instructs running \`${cmd}\` but has no Bash capability — move execution to the orchestrator or remove the instruction`,
+            key
+          );
+        }
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Prose-vs-code dispatch — run all checks that work against fixture trees.
 // checkTracksMatrixSync() is NOT here; it only runs in full-repo mode
@@ -1193,6 +1253,7 @@ function runProseChecks(scanRoot) {
   checkCommandSurface(scanRoot);
   checkStageRuleFileCoverage(scanRoot);
   checkDocsIndexCoverage(scanRoot);
+  checkRoleBriefToolBudgetCompatibility(scanRoot);
 }
 
 // ---------------------------------------------------------------------------
