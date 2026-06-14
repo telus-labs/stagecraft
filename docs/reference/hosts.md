@@ -13,7 +13,7 @@ Run `npm run docs:generate` to regenerate after editing capabilities files.
 | claude-code | Claude Code                       | yes      | yes   | yes       | yes           | yes       | yes      |
 | codex       | Codex CLI                         | yes      | no    | no        | no            | yes       | yes      |
 | gemini-cli  | Gemini CLI                        | yes      | no    | no        | no            | yes       | no       |
-| generic     | Generic CLI (no host integration) | no       | no    | no        | no            | no        | —        |
+| generic     | Generic CLI (no host integration) | no       | no    | no        | no            | no        | no       |
 
 ### Enforcement levels
 
