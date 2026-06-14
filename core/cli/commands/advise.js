@@ -8,6 +8,7 @@ const name = "advise";
 
 const flags = {
   cwd:          { type: "string",  description: "Target project directory" },
+  feature:      { type: "string",  description: "Feature name (bounded isolation mode)" },
   apply:        { type: "string",  description: "Apply selections, e.g. AC-11=A,AC-12=B" },
   json:         { type: "boolean", description: "JSON output" },
   "timeout-ms": { type: "number",  description: "Timeout for a11y-fixer dispatch (ms)" },
@@ -27,6 +28,15 @@ const flags = {
 async function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam advise [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "advise");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
+  const { gatesDir: getGatesDir, pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
+  const adviseOpts = changeId
+    ? { gatesDir: getGatesDir(cwd, changeId), contextFile: path.join(pipelineRoot(cwd, changeId), "context.md") }
+    : {};
   const { runAdvise } = require(path.join(__dirname, "..", "..", "advise"));
 
   // Parse --apply selections into Map<itemId, { action, ticketId }>
@@ -43,7 +53,7 @@ async function run(positional, _flags) {
     }
   }
 
-  const result = runAdvise(cwd, { checkOnly: applyMap.size === 0 && !_flags.apply });
+  const result = runAdvise(cwd, { ...adviseOpts, checkOnly: applyMap.size === 0 && !_flags.apply });
 
   // If --apply was given, resolve option letters to actions using the item's generated options
   if (applyMap.size > 0) {
@@ -68,7 +78,7 @@ async function run(positional, _flags) {
     const fixItems = [...resolvedMap.entries()].filter(([, { action }]) => action === "fix");
     if (fixItems.length > 0) {
       const { fixA11yBlockers } = require(path.join(__dirname, "..", "..", "a11y-fixer"));
-      const gatesDir = path.join(cwd, "pipeline", "gates");
+      const gatesDir = getGatesDir(cwd, changeId);
       const a11yGatePath = path.join(gatesDir, "stage-06b.json");
       let a11yBlockers = [];
       try {
@@ -95,7 +105,7 @@ async function run(positional, _flags) {
     }
 
     if (resolvedMap.size > 0) {
-      const applied = runAdvise(cwd, { apply: resolvedMap });
+      const applied = runAdvise(cwd, { ...adviseOpts, apply: resolvedMap });
       if (_flags.json) { console.log(JSON.stringify(applied, null, 2)); return; }
       // Fix items may disappear from gates after the re-run replaces the gate;
       // print their ✓ lines directly from the fixItems list rather than relying
@@ -132,7 +142,7 @@ async function run(positional, _flags) {
   // stage manager sees the full picture, not just the noted_for_followup slice.
   try {
     const { next } = getOrchestrator();
-    const nr = next({ cwd });
+    const nr = next({ cwd, changeId });
     if (nr.action === "fix-and-retry" || nr.action === "resolve-escalation") {
       const icon = nr.action === "resolve-escalation" ? "🚨" : "❌";
       console.log(`${icon} Active pipeline blocker: ${nr.action} — ${nr.name || ""} (${nr.stage || ""})`);

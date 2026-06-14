@@ -16,6 +16,7 @@ const name = "next";
 
 const flags = {
   cwd:           { type: "string",  description: "Target project directory" },
+  feature:       { type: "string",  description: "Feature name (bounded isolation mode)" },
   json:          { type: "boolean", description: "JSON output" },
   "skip-advise": { type: "boolean", description: "Suppress unresolved follow-up advisory warning" },
   help:          { type: "boolean", description: "Show this help" },
@@ -25,6 +26,11 @@ function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam next [options]", flags)); process.exit(0); }
   const { next } = getOrchestrator();
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "next");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
 
   // Advisory check — non-blocking; warn when unresolved BLOCKER-risk follow-up items exist
   if (!_flags.json && !_flags.skipAdvise) {
@@ -45,7 +51,7 @@ function run(positional, _flags) {
     }
   }
 
-  let result = next({ cwd: _flags.cwd });
+  let result = next({ cwd, changeId });
 
   // fold-sign-off: orchestrator detected a clean AC→test mapping; write the
   // gate here (caller's responsibility) then re-run next() so the user sees
@@ -64,7 +70,7 @@ function run(positional, _flags) {
       return;
     }
     // Re-run next() so the user sees what comes after sign-off in one command.
-    result = next({ cwd: _flags.cwd });
+    result = next({ cwd, changeId });
   }
 
   if (_flags.json) {
@@ -107,7 +113,8 @@ function run(positional, _flags) {
   // production-feedback file yet, mention it once as an optional follow-up.
   if (result.action === "pipeline-complete") {
     const fs = require("node:fs");
-    const feedbackFile = require("node:path").join(cwd, "pipeline", "production-feedback.md");
+    const { pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
+    const feedbackFile = require("node:path").join(pipelineRoot(cwd, changeId), "production-feedback.md");
     if (!fs.existsSync(feedbackFile)) {
       console.log(`   Tip: copy templates/production-feedback-template.md → pipeline/production-feedback.md after deploy to close the brief→production SLO loop (optional).`);
     }

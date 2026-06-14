@@ -22,11 +22,18 @@ function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam spec <verify|generate> [options]", flags)); process.exit(0); }
   const sub = positional[0];
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "spec");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
+  const { pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
+  const pipelineDir = pipelineRoot(cwd, changeId);
   const FRAMEWORK_ROOT = path.join(__dirname, "..", "..", "..");
 
   if (sub === "verify") {
     const { verify } = require(path.join(FRAMEWORK_ROOT, "core", "spec", "verify"));
-    const report = verify(cwd, { strictMapping: !!_flags.strict });
+    const report = verify(cwd, { strictMapping: !!_flags.strict, pipelineDir });
 
     if (_flags.json) {
       console.log(JSON.stringify(report, null, 2));
@@ -106,8 +113,8 @@ function run(positional, _flags) {
 
   if (sub === "generate") {
     const { generateScaffold, extractAcsFromBrief } = require(path.join(FRAMEWORK_ROOT, "core", "spec", "verify"));
-    const briefPath = path.join(cwd, "pipeline", "brief.md");
-    const specPath  = path.join(cwd, "pipeline", "spec.feature");
+    const briefPath = path.join(pipelineDir, "brief.md");
+    const specPath  = path.join(pipelineDir, "spec.feature");
     if (!fs.existsSync(briefPath)) {
       console.error(`No brief at ${path.relative(cwd, briefPath)}. Run stage-01 (requirements) first.`);
       process.exit(1);

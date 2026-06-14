@@ -15,6 +15,7 @@ const name = "replay";
 
 const flags = {
   cwd:       { type: "string",  description: "Target project directory" },
+  feature:   { type: "string",  description: "Feature name (bounded isolation mode)" },
   json:      { type: "boolean", description: "JSON output" },
   "dry-run": { type: "boolean", description: "Print plan without invoking host" },
   help:      { type: "boolean", description: "Show this help" },
@@ -26,6 +27,12 @@ const flags = {
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam replay <stage-id> [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd || process.cwd();
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "replay");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
+  const { gatesDir: getGatesDir } = require(path.join(__dirname, "..", "..", "paths"));
   const stageId = positional[0];
   if (!stageId) {
     console.error("Usage: devteam replay <stage-id> [--dry-run] [--json]");
@@ -36,7 +43,7 @@ function run(positional, _flags) {
     process.exit(2);
   }
 
-  const gatesDir = path.join(cwd, "pipeline", "gates");
+  const gatesDir = getGatesDir(cwd, changeId);
 
   // On startup, warn if a previous replay left an unfinished backup (crash
   // between dispatch and restore). Offer to restore before proceeding.

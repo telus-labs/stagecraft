@@ -8,6 +8,7 @@ const name = "restart";
 
 const flags = {
   cwd:            { type: "string",  description: "Target project directory" },
+  feature:        { type: "string",  description: "Feature name (bounded isolation mode)" },
   cascade:        { type: "boolean", description: "Also clear every stage after this one" },
   "keep-context": { type: "boolean", description: "Preserve injected blocker sections in context.md" },
   "dry-run":      { type: "boolean", description: "Print what would be deleted without acting" },
@@ -43,7 +44,13 @@ function run(positional, _flags) {
   }
 
   const cwd = _flags.cwd || process.cwd();
-  const gatesDir = path.join(cwd, "pipeline", "gates");
+  const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "restart");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
+  const { gatesDir: getGatesDir, pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
+  const gatesDir = getGatesDir(cwd, changeId);
   if (!fs.existsSync(gatesDir)) {
     console.error(`No pipeline/gates/ at ${cwd} — nothing to restart.`);
     process.exit(1);
@@ -53,7 +60,6 @@ function run(positional, _flags) {
   // name ('peer-review') or the gate-id ('stage-05'); errored input is
   // user-actionable.
   const { STAGES, getStage, orderedStageNamesForTrack } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
-  const { loadConfig } = require(path.join(__dirname, "..", "..", "config"));
   let stageName = stageInput;
   let stageDef = getStage(stageInput);
   if (!stageDef) {
@@ -70,7 +76,6 @@ function run(positional, _flags) {
 
   // Collect files to delete. The named stage's merged gate + any
   // per-workstream gates. With --cascade, also every later stage's gates.
-  const config = loadConfig(cwd);
   const track = _flags.track || config.pipeline.default_track || "full";
   const trackStages = orderedStageNamesForTrack(track);
   const startIdx = trackStages.indexOf(stageName);
@@ -102,8 +107,9 @@ function run(positional, _flags) {
 
   // Decide which injected sections to strip. Each known injection
   // is owned by a specific stage; we only strip when the stage being
-  // restarted owns the section.
-  const contextPath = path.join(cwd, "pipeline", "context.md");
+  // restarted owns the section. context.md lives under pipelineRoot so
+  // bounded runs strip from the right file (same invariant as driver.js).
+  const contextPath = path.join(pipelineRoot(cwd, changeId), "context.md");
   const toStrip = [];
   if (!_flags.keepContext) {
     const stripCandidates = [
