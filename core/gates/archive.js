@@ -69,4 +69,31 @@ function pruneArchives(gatesDir, stageId) {
   }
 }
 
-module.exports = { archiveGate, listArchives, archiveDir, pruneArchives };
+/**
+ * Archive the stage gate if it currently has status FAIL.
+ * Both core/driver.js and runStageHeadless call this so archiving always goes
+ * through the same code path regardless of entry point. Best-effort: never throws.
+ *
+ * Attempt number: if attempt-1 does not yet exist, start at 1 (fresh sequence or
+ * stale archives from a previous run without a sequence anchor). Starting at 1
+ * ensures _currentSequenceArchives can identify the sequence boundary by mtime.
+ * Otherwise use listArchives().length + 1 to continue the current sequence.
+ *
+ * @param {string} gatesDir  absolute path to pipeline/gates
+ * @param {string} stageId   e.g. "stage-04"
+ * @returns {string|null}    archive path if archived, null otherwise
+ */
+function archiveGateIfFail(gatesDir, stageId) {
+  const src = path.join(gatesDir, `${stageId}.json`);
+  if (!fs.existsSync(src)) return null;
+  try {
+    const gate = JSON.parse(fs.readFileSync(src, "utf8"));
+    if (!gate || gate.status !== "FAIL") return null;
+  } catch { return null; }
+  const existing = listArchives(gatesDir, stageId);
+  const hasAttemptOne = existing.some((a) => a.attempt === 1);
+  const attempt = hasAttemptOne ? existing.length + 1 : 1;
+  return archiveGate(gatesDir, stageId, attempt);
+}
+
+module.exports = { archiveGate, archiveGateIfFail, listArchives, archiveDir, pruneArchives };

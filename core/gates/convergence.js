@@ -11,6 +11,14 @@
 //   time), not the current live gate (which the agent may have just written).
 // - Remove agent-falsifiable inputs: countArchivedAttempts() counts archived
 //   files instead of trusting the model-written gate.retry_number.
+//
+// Archive-before-overwrite coverage (Phase 5.3):
+// - archiveGateIfFail (core/gates/archive.js) fires in BOTH entry points:
+//   • runStageHeadless — covers the interactive path (devteam stage / devteam next)
+//   • core/driver.js fix-and-retry branch — covers the autonomous driver path
+// - Manual hook-driven gate overwrites (agents or humans writing gate files directly
+//   outside the normal dispatch flow) are OUT OF SCOPE for this ceiling. The
+//   validator's retry-integrity check covers document honesty on that surface.
 
 const fs = require("node:fs");
 const path = require("node:path");
