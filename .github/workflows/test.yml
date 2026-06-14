@@ -41,10 +41,20 @@ jobs:
       - name: Run lint
         run: npm run lint
 
+      # CI probe: create an untracked scratch file before npm test to verify that
+      # untracked files no longer block the suite (fix/git-aware-consistency, item 7.1).
+      # Red on the pre-fix main; green after. Kept permanently as a regression guard.
+      - name: Create CI probe file (untracked scratch file)
+        run: echo "ci-probe" > docs/SCRATCH-ci-probe.md
+
       - name: Run test suite
         run: npm test
         env:
           DEVTEAM_HEADLESS_COMMAND: cat
+
+      - name: Remove CI probe file
+        if: always()
+        run: rm -f docs/SCRATCH-ci-probe.md
 
       # Coverage report — report-only, never fails the build.
       # Baseline recorded at item 3.6 (2026-06-11):

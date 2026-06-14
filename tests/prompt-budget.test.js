@@ -9,8 +9,12 @@
 //   3. generateBlock is idempotent and contains the expected structural markers.
 //   4. parseCommittedBudget round-trips the budget-data block correctly.
 //   5. Consistency advisory fires on a synthetic >10% growth (meta-test).
+//      Uses PROMPT_BUDGET_FILE env override and --only prompt-budget — no
+//      real file mutation, no full-repo scan fan-out.
 //   6. Consistency advisory is absent when fresh equals committed.
-//   7. File-size ceiling advisory fires for a synthetic oversized role brief.
+//   7. File-size ceiling advisory fires for a synthetic oversized rule file
+//      (fixture-based via --root + --only file-size-ceiling; not pinned to the
+//      real rules/stage-05.md so trimming that file never breaks the suite).
 //   8. File-size ceiling advisory is absent when all files are within limits.
 //   9. docs/reference/prompt-budget.md committed file matches generator output
 //      (regression guard — same pattern as stages-ref, hosts-ref, cli-ref).
@@ -168,24 +172,25 @@ test("prompt-budget: parseCommittedBudget returns empty Map for text without bud
 // 5 & 6. Consistency advisory fires / is absent (meta-tests via spawnSync)
 // ---------------------------------------------------------------------------
 
-// Convenience wrapper: run consistency.js in full-repo mode but with a patched
-// prompt-budget.md that has synthetic numbers injected into budget-data.
-// We temporarily write a modified prompt-budget.md, run consistency, then restore.
+// Convenience wrapper: run consistency.js --only prompt-budget with a synthetic
+// budget file injected via PROMPT_BUDGET_FILE env var.
 //
-// This tests that the advisory detection works end-to-end, not just the
-// parseCommittedBudget function in isolation.
+// This tests that the advisory detection works end-to-end without touching the
+// real docs/reference/prompt-budget.md (no in-place rewrite-and-restore).
 function runConsistencyWithSyntheticBudget(budgetText) {
-  const budgetPath = path.join(REPO_ROOT, "docs", "reference", "prompt-budget.md");
-  const original   = fs.readFileSync(budgetPath, "utf8");
+  const os = require("node:os");
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+  const tmpBudget = path.join(tmpDir, "budget.md");
+  fs.writeFileSync(tmpBudget, budgetText);
   try {
-    fs.writeFileSync(budgetPath, budgetText);
-    return spawnSync("node", [CONSISTENCY_JS], {
+    return spawnSync("node", [CONSISTENCY_JS, "--only", "prompt-budget"], {
       cwd: REPO_ROOT,
       encoding: "utf8",
       timeout: 30000,
+      env: { ...process.env, PROMPT_BUDGET_FILE: tmpBudget },
     });
   } finally {
-    fs.writeFileSync(budgetPath, original);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -222,8 +227,8 @@ test("prompt-budget: consistency advisory fires when a stage's budget grew >10%"
 
 test("prompt-budget: consistency emits no budget-growth advisory when numbers match", () => {
   // When committed numbers equal fresh numbers, no growth advisory fires.
-  // (A staleness advisory may still appear for other checks, but not budget-growth.)
-  const r = spawnSync("node", [CONSISTENCY_JS], {
+  // Uses --only prompt-budget to avoid full-repo scan fan-out.
+  const r = spawnSync("node", [CONSISTENCY_JS, "--only", "prompt-budget"], {
     cwd: REPO_ROOT,
     encoding: "utf8",
     timeout: 30000,
@@ -248,31 +253,39 @@ test("prompt-budget: consistency emits no budget-growth advisory when numbers ma
 });
 
 // ---------------------------------------------------------------------------
-// 7 & 8. File-size ceiling advisory (meta-tests via spawnSync with env var)
+// 7 & 8. File-size ceiling advisory (meta-tests via fixture tree)
 // ---------------------------------------------------------------------------
 
-// To test ceiling advisories synthetically without touching real files we
-// temporarily write an oversized roles/ file into a temp dir. But because
-// checkFileSizeCeilings() reads directly from REPO_ROOT, we can't inject via
-// --root (that path only affects prose checks). Instead we test the advisory
-// indirectly via the real repo state (task 8) and verify the logic unit-tests
-// correctly by checking computeStageStats behavior.
+// checkFileSizeCeilings now accepts a scanRoot so tests can inject a synthetic
+// oversized file via --root + --only file-size-ceiling without pinning to the
+// real rules/stage-05.md size. Trimming stage-05.md (Phase 8) no longer breaks
+// this test.
 
-test("file-size-ceiling: advisory fires in full-repo run for rules/stage-05.md (known exceedance)", () => {
-  // rules/stage-05.md is 9985 B, which exceeds the 8 KB advisory ceiling.
-  // This is a known, expected advisory on this repo — it documents a real overage.
-  const r = spawnSync("node", [CONSISTENCY_JS], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    timeout: 30000,
-  });
+const os = require("node:os");
 
-  assert.equal(r.status, 0,
-    `expected exit 0 (ceiling advisory is non-blocking) but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
-  assert.match(r.stdout, /file-size-ceiling/,
-    "expected file-size-ceiling advisory in output");
-  assert.match(r.stdout, /stage-05\.md/,
-    "expected stage-05.md in the advisory (it exceeds 8 KB)");
+test("file-size-ceiling: advisory fires for synthetic oversized stage rule file", () => {
+  // Create a fixture tree with a rules/stage-05.md that exceeds the 8 KB ceiling.
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+  try {
+    fs.mkdirSync(path.join(tmpDir, "rules"), { recursive: true });
+    // 9 KB > 8 KB ceiling
+    fs.writeFileSync(path.join(tmpDir, "rules", "stage-05.md"),
+      "# stage-05\n" + "x".repeat(9 * 1024));
+
+    const r = spawnSync("node", [CONSISTENCY_JS, "--root", tmpDir, "--only", "file-size-ceiling"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      timeout: 30000,
+    });
+    assert.equal(r.status, 0,
+      `expected exit 0 (ceiling advisory is non-blocking) but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /file-size-ceiling/,
+      "expected file-size-ceiling advisory in output");
+    assert.match(r.stdout, /stage-05\.md/,
+      "expected stage-05.md in the advisory");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });
 
 test("file-size-ceiling: all current role briefs are under 16 KB ceiling", () => {
