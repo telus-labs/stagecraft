@@ -13,13 +13,11 @@ one of `src/backend/`, `src/frontend/`, `src/infra/`, or `src/tests/`,
 with no cross-area edits. One reviewer from a different area is
 sufficient. The pairing uses the same cross-area convention as the `quick` track.
 
-**Gate pre-creation (required for scoped reviews).** Before invoking the
-reviewer, the orchestrator must write `pipeline/gates/stage-05.{area}.json`
-with `"required_approvals": 1` and `"review_shape": "scoped"`. The
-`approval-derivation.js` hook defaults newly-created gates to
-`required_approvals: 2`. If the gate doesn't pre-exist with the correct
-value, the hook creates a matrix gate and a single approval never flips the
-status to PASS.
+**Gate pre-creation (required for scoped reviews).** The orchestrator must
+write `pipeline/gates/stage-05.{area}.json` with `"required_approvals": 1`
+and `"review_shape": "scoped"` before invoking the reviewer. The hook
+defaults new gates to `required_approvals: 2`; if the gate doesn't pre-exist
+with the correct value, a single approval never flips the status to PASS.
 
 | Owning area    | Default reviewer     |
 |----------------|----------------------|
@@ -53,11 +51,7 @@ Coverage: every workstream receives exactly 2 approvals from distinct reviewers:
 - `qa`:       dev-backend + dev-frontend
 
 **Self-review is invalid.** A reviewer MUST NOT write a `## Review of <area>`
-section for the workstream they own. The `approval-derivation.js` hook
-skips and warns on self-reviews; the gate will not count them.
-
-Each area's stage-05 gate accumulates two approvals from reviewers
-whose own area is different.
+section for the workstream they own — the hook skips and warns on self-reviews.
 
 **Stage manager guidance — FAIL with no `changes_requested`.** When a gate shows
 `status: "FAIL"` and `changes_requested` is empty, it means quorum has not
@@ -74,7 +68,7 @@ been reached — no one has blocked the change. Steps:
 
 ### Review file format
 
-Reviewers now write per-area sections inside their review file, each
+Reviewers write per-area sections inside their review file, each
 ending with a `REVIEW: APPROVED` or `REVIEW: CHANGES REQUESTED` marker
 on its own line:
 
@@ -93,42 +87,25 @@ REVIEW: CHANGES REQUESTED
 BLOCKER: <text>
 ```
 
-The `approval-derivation.js` hook (registered as PostToolUse on
-Write/Edit in `.devteam/settings.json`) parses these sections after the
-reviewer writes the file and updates `pipeline/gates/stage-05.<area>.json`
-accordingly. **Agents no longer author the `approvals` or
-`changes_requested` fields directly** — that path was how v1/v2 let
-reviewers effectively approve themselves. The hook is the single
-writer.
+The `approval-derivation.js` hook (PostToolUse on Write/Edit) parses these
+sections and updates `pipeline/gates/stage-05.<area>.json` accordingly.
+**Do not author `approvals` or `changes_requested` fields directly** — the
+hook is the single writer; direct edits are overwritten on the next file save.
 
-**`blockers[]` extraction (hook-written).** When parsing a section that
-ends with `REVIEW: CHANGES REQUESTED`, the hook also extracts every
-`BLOCKER: <text>` line from that section and writes them into the
-per-area gate as a `blockers` array. This lets stage managers read blocker
-text directly from the gate without grepping review files:
+Every `BLOCKER: <text>` line in a `CHANGES REQUESTED` section is automatically
+extracted by the hook into the gate's `blockers[]` array so stage managers can
+read blocker text without grepping review files. The `blockers` array is reset
+on each hook run for that area, so a re-review that flips to `APPROVED` clears it.
 
-```json
-{
-  "stage": "stage-05", "workstream": "backend",
-  "status": "FAIL",
-  "changes_requested": [{ "reviewer": "dev-platform", "timestamp": "…" }],
-  "blockers": [
-    { "reviewer": "dev-platform", "text": "Missing pagination on ListUsersCommand — truncates at 100" },
-    { "reviewer": "dev-platform", "text": "iam_admin_users stub unconditionally emits PASS — remove or mark always_insufficient" }
-  ]
-}
-```
-
-Each entry carries `reviewer` (who wrote it) and `text` (the raw
-`BLOCKER:` line with the prefix stripped). `blockers` is reset on each
-hook run for that area so re-review that flips to `REVIEW: APPROVED`
-clears the array.
+For the full hook contract (how approval-derivation.js parses sections,
+`blockers[]` JSON schema, and `affected_workstreams` derivation on the merged
+gate) see `docs/conventions.md §Stage 5 approval-derivation hook contract`.
 
 ### READ-ONLY Reviewer Rule (strictly enforced)
 
 During a Stage 5 review invocation, a reviewer agent writes ONLY to:
   - `pipeline/code-review/by-{reviewer}.md` (their review file)
-  - `pipeline/gates/stage-05.{area}.json` (append-only approval gate)
+  - `pipeline/gates/stage-05.{area}.json` (approval gate — hook-managed fields only)
 
 A reviewer agent MUST NOT:
   - Use `Write` or `Edit` on any file under `src/`
@@ -146,41 +123,13 @@ the patched lines, and leave no audit trail tying the patch to a
 CHANGES-REQUESTED → addressed loop. If the one-line patch has a second
 bug, no reviewer is assigned to catch it.
 
-### Gate merge strategy (hook-derived)
+### Gate merge (hook-derived)
 
-Each area gate (`pipeline/gates/stage-05.{area}.json`) accumulates
-approvals via `approval-derivation.js`, not via agent self-write. The
-gate reaches `"status": "PASS"` when:
-
-- `approvals.length >= required_approvals` (1 for scoped, 2 for matrix)
-- `changes_requested` is empty
-
-An agent that manually edits the `approvals` array is running around
-the integrity model. The hook runs on every Write/Edit and reconciles
-the gate to the review file; any direct edit will be overwritten on
-the next reviewer's file save. Don't fight it.
-
-**`affected_workstreams[]` on the merged gate.** When `devteam merge
-peer-review` writes `pipeline/gates/stage-05.json`, it derives
-`affected_workstreams` from the per-area gates: any area whose gate has
-`changes_requested` non-empty contributes its area name. Since area names
-map 1:1 to build workstreams (`backend` → `dev-backend`, etc.), this tells
-stage managers exactly which agents to re-run:
-
-```json
-{
-  "stage": "stage-05", "status": "FAIL",
-  "affected_workstreams": ["backend"],
-  "workstreams": [
-    { "workstream": "backend",  "status": "FAIL" },
-    { "workstream": "frontend", "status": "PASS" },
-    { "workstream": "platform", "status": "PASS" }
-  ]
-}
-```
-
-Per-area gates do not carry `affected_workstreams` — the area name itself
-is the attribution. Use the merged gate for the stage-manager-facing query.
+Each area gate accumulates approvals via `approval-derivation.js`. The gate
+reaches `"status": "PASS"` when `approvals.length >= required_approvals` AND
+`changes_requested` is empty. Do not manually edit the `approvals` array —
+the hook reconciles the gate on every reviewer file save and overwrites any
+direct edit.
 
 Pre-read requirement (pass to each reviewer agent):
   - `pipeline/brief.md`

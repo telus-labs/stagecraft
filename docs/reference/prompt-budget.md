@@ -26,32 +26,32 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-03b | executable-spec           | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-04  | build                     | backend    | 11,785      | 7,530        | 19,315     | 4829    |
 | stage-04  | build                     | frontend   | 11,785      | 6,295        | 18,080     | 4520    |
-| stage-04  | build                     | platform   | 11,785      | 15,617       | 27,402     | 6851    |
-| stage-04  | build                     | qa         | 11,785      | 12,878       | 24,663     | 6166    |
-| stage-04a | pre-review                | platform   | 11,785      | 15,617       | 27,402     | 6851    |
+| stage-04  | build                     | platform   | 11,785      | 2,400        | 14,185     | 3547    |
+| stage-04  | build                     | qa         | 11,785      | 2,718        | 14,503     | 3626    |
+| stage-04a | pre-review                | platform   | 11,785      | 2,400        | 14,185     | 3547    |
 | stage-04b | security-review           | security   | 11,785      | 7,303        | 19,088     | 4772    |
 | stage-04c | red-team                  | red-team   | 11,785      | 12,726       | 24,511     | 6128    |
 | stage-04d | migration-safety          | migrations | 11,785      | 8,272        | 20,057     | 5015    |
 | stage-05  | peer-review               | reviewer   | 11,785      | 6,330        | 18,115     | 4529    |
-| stage-06  | qa                        | qa         | 11,785      | 12,878       | 24,663     | 6166    |
-| stage-06b | accessibility-audit       | qa         | 11,785      | 12,878       | 24,663     | 6166    |
-| stage-06c | observability-gate        | platform   | 11,785      | 15,617       | 27,402     | 6851    |
+| stage-06  | qa                        | qa         | 11,785      | 2,718        | 14,503     | 3626    |
+| stage-06b | accessibility-audit       | qa         | 11,785      | 2,718        | 14,503     | 3626    |
+| stage-06c | observability-gate        | platform   | 11,785      | 2,400        | 14,185     | 3547    |
 | stage-06d | verification-beyond-tests | verifier   | 11,785      | 9,089        | 20,874     | 5219    |
-| stage-06e | performance-budget        | qa         | 11,785      | 12,878       | 24,663     | 6166    |
+| stage-06e | performance-budget        | qa         | 11,785      | 2,718        | 14,503     | 3626    |
 | stage-07  | sign-off                  | pm         | 11,785      | 8,832        | 20,617     | 5155    |
-| stage-07  | sign-off                  | platform   | 11,785      | 15,617       | 27,402     | 6851    |
-| stage-08  | deploy                    | platform   | 11,785      | 15,617       | 27,402     | 6851    |
+| stage-07  | sign-off                  | platform   | 11,785      | 2,400        | 14,185     | 3547    |
+| stage-08  | deploy                    | platform   | 11,785      | 2,400        | 14,185     | 3547    |
 | stage-09  | retrospective             | principal  | 11,785      | 12,736       | 24,521     | 6131    |
 
 ## Top 5 heaviest framework files
 
-| File               | Bytes  | Tokens~ |
-| ------------------ | ------ | ------- |
-| roles/platform.md  | 15,617 | 3905    |
-| roles/qa.md        | 12,878 | 3220    |
-| roles/principal.md | 12,736 | 3184    |
-| roles/red-team.md  | 12,726 | 3182    |
-| roles/verifier.md  | 9,089  | 2273    |
+| File                | Bytes  | Tokens~ |
+| ------------------- | ------ | ------- |
+| roles/principal.md  | 12,736 | 3184    |
+| roles/red-team.md   | 12,726 | 3182    |
+| roles/verifier.md   | 9,089  | 2273    |
+| roles/pm.md         | 8,832  | 2208    |
+| roles/migrations.md | 8,272  | 2068    |
 
 ## Advisory file-size ceilings
 
@@ -69,19 +69,19 @@ stage-01,20617
 stage-02,24521
 stage-03,20617
 stage-03b,20617
-stage-04,27402
-stage-04a,27402
+stage-04,19315
+stage-04a,14185
 stage-04b,19088
 stage-04c,24511
 stage-04d,20057
 stage-05,18115
-stage-06,24663
-stage-06b,24663
-stage-06c,27402
+stage-06,14503
+stage-06b,14503
+stage-06c,14185
 stage-06d,20874
-stage-06e,24663
-stage-07,27402
-stage-08,27402
+stage-06e,14503
+stage-07,20617
+stage-08,14185
 stage-09,24521
 -->
 <!-- /generated -->
