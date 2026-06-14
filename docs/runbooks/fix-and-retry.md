@@ -11,7 +11,7 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 - **`code-defect`** — the normal case this runbook covers: change code, re-run the stage.
 - **`state-corruption`** — the gate file is unreadable/malformed. **Do not re-run the stage** — that won't fix a corrupt file. Repair or rewrite the gate JSON (the blocker text names the parse error), then re-run `devteam next`.
 - **`external-blocked`** — every fix step is a human/external action with no command (e.g. obtain a sign-off). Do that thing; the pipeline can't self-advance.
-- **`convergence-exhausted`** — the retry budget (`autonomy.max_retries`, default 2) is spent, so `next` returns `resolve-escalation` instead. See [`escalation.md` § 4c](escalation.md#4c-retry-loop-exhaustion--a-distinct-escalation-shape).
+- **`convergence-exhausted`** — the retry budget (`autonomy.max_retries`, default 2) is spent **or** the no-progress breaker fired (blockers identical across the last two archived attempts), so `next` returns `resolve-escalation` instead. See [`escalation.md` § 4c](escalation.md#4c-retry-loop-exhaustion--a-distinct-escalation-shape).
 
 ---
 
@@ -27,6 +27,8 @@ For escalations (`status: ESCALATE`, `decision_needed`), see [`escalation.md`](e
 - [Case 9: Verification-beyond-tests FAIL](#case-9-verification-beyond-tests-stage-06d-fail--blocking_findings-non-empty)
 - [Case 10: Preflight FAIL](#case-10-preflight-stage-04e-fail--committed-ignored-files-or-broken-import-path)
 - [Case 11: Advisory triage — noted\_for\_followup before downstream stages](#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages)
+- [Case 12: License-gate FAIL](#case-12-license-gate-stage-04a-fail--license_check_passed-false)
+- [Case 13: Tool-budget denial](#case-13-tool-budget-denial)
 - [Common gotchas](#common-gotchas)
 - [After resolution](#after-resolution)
 
@@ -315,6 +317,8 @@ devteam next   # expect: ▶️ run-stage qa (stage-06) or next track stage
 
 > **Cross-stage flag.** The merged `stage-05.json` `warnings[]` may contain an entry like `[cross-stage] N red-team item(s) were noted_for_followup at stage-04c`. This means the peer-review blockers were pre-flagged by red-team as deferred items. Consult `stage-04c.json` `noted_for_followup[]` — each item has a `fix` field with the exact resolution. Addressing them there typically resolves the peer-review objection in the same pass.
 
+> **Manual gate clear (Cases 4/5).** If you hand-clear build gate files to force a re-run, you must also delete `pipeline/gates/stage-04a.json`. Stage 4a is the orchestrator-stamped pre-review (lint + tests); without clearing it, the derived invalidation chain (#109 class in `plans/phase-5-state-integrity.md`) treats pre-review as still-passing and the next `devteam next` skips it — which means a code change that re-introduces a lint error silently bypasses the lint gate.
+
 If two rounds of reviews still disagree, that's an [escalation](escalation.md) — `REVIEW-ESCALATED:` lands in context.md and Principal rules.
 
 ---
@@ -453,6 +457,8 @@ devteam validate   # gate is still valid; WARN advances
 devteam next
 ```
 
+> **Manual gate clear (Cases 4/5).** If you hand-clear build gate files to force a re-run (e.g. for the code-changes path in a quorum-miss fix), you must also delete `pipeline/gates/stage-04a.json`. Stage 4a is the orchestrator-stamped pre-review; without clearing it, the derived invalidation chain (#109 class) treats pre-review as still-passing and the next run silently skips the lint gate.
+
 **Critical caveat with the override path.** If you (or any process) later runs `devteam merge peer-review`, the merge re-derives FAIL from the still-FAILing per-area gate and your override is lost. The hook does NOT overwrite the merged gate (it only writes per-area gates), so as long as nobody re-merges, the WARN sticks. If you want the override to survive a re-merge, you must also hand-edit the per-area gate's status (and accept that the hook will overwrite it the next time anyone saves a review file).
 
 ### Worked example: qa area, 1-of-2 approvals, no objections
@@ -503,6 +509,71 @@ time). The gate flipped to PASS; `devteam merge peer-review` rebuilt the merged 
 The SUGGESTION items in `warnings[]` carried through to the merged gate as warnings,
 where the retrospective will see them. SUGGESTIONs are deferred follow-ups, not
 merge-blockers — that's the convention (see [`conventions.md`](../conventions.md)).
+
+---
+
+## Case 12: License-gate (stage-04a) FAIL — `license_check_passed: false`
+
+Stage 4a records `license_check_passed: false` when the SCA/license runner finds a dependency
+whose license is not on the project allowlist. This is **not** a code-defect fix — the build
+agent cannot write code to change a dependency's license.
+
+```bash
+# 1. Read the findings
+cat pipeline/gates/stage-04a.json | jq '.license_findings[]'
+# → { "package": "some-lib@2.3.0", "license": "GPL-3.0", "severity": "critical",
+#     "reason": "GPL-3.0 is not on the SPDX allowlist" }
+```
+
+**Two resolution paths — neither is `--patch`:**
+
+**Path A — replace the dependency.** Find an alternative library with a compatible license.
+Update the build manifests (e.g. `package.json`, `requirements.txt`) to use the replacement,
+then re-run build and pre-review normally.
+
+**Path B — update the allowlist policy.** If the dependency's license is acceptable for the
+project, a human with policy authority must add it to the allowlist (the allowlist location is
+host-specific; check `.devteam/config.yml` or `rules/stage-04a.md` for the path). This is an
+org-level decision — not a `--patch` code fix and not something the build agent can do.
+
+```bash
+# After taking Path A or Path B:
+devteam stage build --workstream <owning-area> --headless   # if code changed (Path A)
+devteam merge build
+devteam stage pre-review --headless
+devteam next
+```
+
+---
+
+## Case 13: Tool-budget denial
+
+The build agent was denied a tool call it attempted. Two distinct shapes:
+
+**Shape A — native tool-budget denial (claude-code host).** The host enforced the role's
+declared `tools:` budget (from `ROLE_FRONTMATTER` in `hosts/claude-code/adapter.js`). Claude
+Code refused the tool call at the boundary; the workstream gate records `dispatched_tool_budget`
+showing what was permitted. The agent's reasoning or a task in `pipeline/logs/` may reference a
+permission error.
+
+You'll see this in `devteam log` as a tool refusal, not a FAIL gate — the workstream may exit
+cleanly with a PASS gate that under-delivers, or with a WARN that names the skipped action.
+
+→ Read `pipeline/logs/<workstream>.log` and the `dispatched_tool_budget` field. If the denied
+tool is legitimately needed for the role, the budget is misconfigured — open a discussion (or
+ADR) rather than hacking around the constraint.
+
+**Shape B — advisory non-compliance (non-native host, prompt-only budget).** For codex,
+gemini-cli, or generic hosts, tool budgets are declared in the dispatch prompt but not
+enforced at the tool-call boundary. A non-compliant model that ignores the instruction still
+executes the call. Evidence in the gate: `dispatched_tool_budget` lists the budget; the
+workstream may have written to a path outside `allowedWrites` (caught by the C1 write-audit
+post-hoc check).
+
+→ The write-audit (`devteam consistency analyze` or the validator) will surface the violation.
+If the out-of-scope write is harmful, revert it and re-run the workstream. The longer-term fix
+is routing the role to a native-budget host (claude-code) or accepting the enforcement
+degradation (see `ADR-004 §2 Cross-host degradation`).
 
 ---
 
@@ -572,30 +643,81 @@ Until then, read the items and identify the owning workstream manually.
 
 ## Case 7: Accessibility audit (stage-06b) FAIL — `blockers[]` non-empty
 
-Stage 6b (`pipeline/gates/stage-06b.json`) runs the accessibility audit against the
-frontend. Blockers carry an `A11Y-*` ID, a WCAG criterion reference, the severity
-(`critical`, `serious`, `moderate`, `minor`), and the specific HTML element or
-interaction pattern at fault. All WCAG criterion references in the gate cite a
-specific success criterion (e.g. `WCAG 4.1.3`, `WCAG 1.3.1`).
+Stage 6b (`pipeline/gates/stage-06b.json`) runs the accessibility audit. The fix-recipe
+(`core/pipeline/fix-recipes.js`) routes the fix across **three paths**, tried in order.
+**Read the recipe output from `devteam next` before deciding how to proceed** — it tells
+you which path applies.
 
 ```bash
-# 1. Read the blockers — they name the element and the missing attribute.
+# See which path devteam next is recommending
+devteam next
+# Also read the gate to understand the blockers
 cat pipeline/gates/stage-06b.json | jq '{status, blockers, affected_workstreams}'
-# e.g.:
-# blockers: [
-#   "A11Y-S-01: #error element lacks role=\"alert\" or aria-live — WCAG 4.1.3 (serious)",
-#   "A11Y-S-02: #results section lacks aria-live=\"polite\" — WCAG 4.1.3 (serious)"
-# ]
-# affected_workstreams: ["frontend"]
 ```
 
-Blockers always attribute `affected_workstreams: ["frontend"]` — accessibility
-violations are properties of the rendered HTML, which lives in `src/frontend/`.
+---
 
-### Fix the HTML
+### Path 1 — Prior-stage pre-staged A11Y fix IDs
 
-Open `src/frontend/index.html` and apply the attribute named in each blocker. Common
-patterns:
+If an upstream gate (e.g. a QA build gate) has a `noted_for_followup[]` entry with an
+`A11Y-*` or `a11y`/`aria`/`wcag`-matching ID, `devteam advise` already knows about the
+fix. The recipe dispatches it directly:
+
+```bash
+devteam advise --apply A11Y-S-01=A,A11Y-S-02=A
+# Stagecraft applies the ARIA/HTML fix and re-runs the audit internally.
+```
+
+`devteam next` will print the exact `--apply` argument. You do not need to clear any
+gate — the advise dispatch handles it.
+
+---
+
+### Path 2 — A11Y blockers in the gate, no prior-stage fix IDs
+
+The audit found violations but no upstream gate pre-staged a fix. The recipe clears the
+responsible build workstream gate(s) and rebuilds. Workstream attribution comes from
+`assigned_to`/`workstream` fields on the blockers (provenance-first); falls back to
+file-path regex if those fields are absent.
+
+```bash
+# devteam next prints the exact sequence; manually it is:
+# 1. Clear stale build gate(s) and audit gate (recipe-derived list)
+rm pipeline/gates/stage-04.<ws>.json pipeline/gates/stage-04.json
+rm pipeline/gates/stage-06b.json
+
+# 2. Re-run build with accessibility fix context
+devteam stage build --workstream <ws> --patch --from accessibility-audit --skip-completed --headless
+# (or without --workstream if multiple workstreams are implicated)
+devteam merge build
+
+# 3. Re-run accessibility audit
+devteam stage accessibility-audit --headless
+
+# 4. Advance
+devteam next
+```
+
+> **Re-review required.** Because source code changed, the derived invalidation chain
+> also clears `stage-04a.json` (pre-review), `stage-05.json` (peer-review), and any
+> attestation stages between build and 6b that exist on disk. `devteam next` will step
+> through them before reaching the audit again.
+
+---
+
+### Path 3 — No A11Y blockers in the gate
+
+The gate is FAIL but has no blockers matching the A11Y pattern — unusual; typically means
+the audit runner encountered an error or the gate was partially written. Show the panel:
+
+```bash
+devteam advise
+# Select option A for each A11Y_FIX item to dispatch the automated fixer.
+```
+
+---
+
+### ARIA attribute reference (for Path 2 manual fixes)
 
 | Blocker text | Fix |
 |---|---|
@@ -604,56 +726,11 @@ patterns:
 | `lacks aria-label or aria-labelledby` | Add a visible `<label>` element associated via `for`/`id`, or add `aria-label="…"` directly to the element. |
 | `missing role on interactive element` | Add the named ARIA role to the element, or replace the element with its native semantic HTML equivalent (a `<button>` instead of a `<div role="button">`). |
 
-**ARIA attributes are non-functional changes** — they don't affect Python backend logic,
-test assertions, or JavaScript behavior. You do not need to re-run the backend build
-workstream or update the test suite unless a blocker requires structural HTML changes
-(adding new elements, changing IDs, or altering form structure).
-
-### Re-run sequence
-
-```bash
-# 1. After editing src/frontend/index.html, clear the failing gate.
-rm pipeline/gates/stage-06b.json
-
-# 2. Re-run the accessibility audit.
-devteam stage accessibility-audit --headless
-
-# 3. Confirm it passed.
-cat pipeline/gates/stage-06b.json | jq '{status, violations}'
-# Expect: status "PASS", all violation counts 0 (or non-zero for known deferred items)
-
-# 4. Advance.
-devteam next
-```
-
-> **Do not re-run the full build chain for ARIA-only fixes.** If the only change is
-> adding `role="alert"`, `aria-live`, `aria-label`, or similar attributes to existing
-> elements, the existing QA test suite and pre-review checks remain valid. Re-running
-> `devteam stage build --headless` is unnecessary overhead and risks invalidating gates
-> that are already passing.
-
-### When you DO need to rebuild
-
-Re-run the frontend build workstream and downstream stages when the fix requires:
-
-- **New HTML elements** — e.g. the audit requires a visible `<label>` where none
-  existed, or a skip-navigation link. Tests that assert HTML structure may need
-  updating.
-- **Changed element IDs** — the JavaScript and/or tests reference element IDs; if the
-  fix renames or adds IDs, update those references too.
-- **Changed interaction model** — e.g. replacing a `<div>` with a `<button>` to fix
-  keyboard accessibility changes the element's semantics in ways tests may have
-  assumed.
-
-In those cases, use the same scoped re-run pattern as Case 2:
-
-```bash
-devteam stage build --patch --from stage-06b --workstream frontend --headless
-devteam merge build
-devteam stage pre-review --headless
-devteam stage accessibility-audit --headless
-devteam next
-```
+> **ARIA attributes vs structural changes.** Pure ARIA attribute additions (`role="alert"`,
+> `aria-live`, `aria-label`) don't affect backend logic or test assertions — Path 2's scoped
+> re-run (frontend workstream only) is sufficient. If the fix requires new HTML elements,
+> changed IDs, or a changed interaction model (e.g. `<div>` → `<button>`), the recipe's
+> derived invalidation will already include those downstream gates.
 
 ---
 
