@@ -741,7 +741,9 @@ describe("next: stage-06b (accessibility-audit) fix steps", () => {
       "no separate re-run");
   });
 
-  it("A11Y blockers but no prior-stage noted_for_followup → clear backend + audit gates and re-dispatch", () => {
+  it("A11Y blockers with assigned_to: frontend → clear frontend build gate, not backend (#106 regression)", () => {
+    // The blocker carries assigned_to: "frontend" — provenance routing must
+    // send the fix to the frontend workstream, not the hardcoded backend.
     const cwd = track(makeTargetProject());
     seedThroughBuild(cwd);
     seedGate(cwd, "stage-06b", {
@@ -752,12 +754,13 @@ describe("next: stage-06b (accessibility-audit) fix steps", () => {
 
     const r = next({ cwd });
     assert.equal(r.action, "fix-and-retry");
-    // clear_gates must include the backend build gate and the audit gate
+    // clear_gates must include the frontend build gate (from provenance) and the audit gate
     assert.ok(Array.isArray(r.clear_gates) && r.clear_gates.length > 0, "clear_gates is non-empty");
-    assert.ok(r.clear_gates.some(g => g.includes("stage-04.backend")), "clears backend build gate");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-04.frontend")), "clears frontend build gate (provenance)");
+    assert.ok(!r.clear_gates.some(g => g.includes("stage-04.backend")), "does not clear backend (wrong workstream)");
     assert.ok(r.clear_gates.some(g => g.includes("stage-06b")), "clears the audit gate itself");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
-    assert.ok(allCmds.some(c => c.includes("--from backend")), "re-dispatches backend workstream");
+    assert.ok(allCmds.some(c => c.includes("--workstream frontend")), "routes to frontend workstream");
     assert.ok(allCmds.some(c => c.includes("accessibility-audit")), "re-runs the audit");
     assert.ok(!allCmds.some(c => c === "devteam advise"), "does not fall back to interactive advise");
   });
@@ -787,10 +790,38 @@ describe("next: stage-06b (accessibility-audit) fix steps", () => {
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(!allCmds.some(c => c.includes("A11Y-NOTE-01=A")), "does not apply cosmetic advisory item");
     assert.ok(!allCmds.some(c => c.includes("A11Y-NOTE-02=A")), "does not apply cosmetic advisory item");
-    // Must use clear-and-redispatch for the color-contrast blockers
-    assert.ok(r.clear_gates.some(g => g.includes("stage-04.backend")), "clears backend build gate");
+    // Must use clear-and-redispatch for the color-contrast blockers.
+    // String blockers carry no workstream provenance so the recipe falls back to
+    // clearing all build workstream gates (the safe last resort).
+    assert.ok(r.clear_gates.some(g => g.includes("stage-04.")), "clears at least one build workstream gate");
     assert.ok(r.clear_gates.some(g => g.includes("stage-06b")), "clears the audit gate");
-    assert.ok(allCmds.some(c => c.includes("--from backend")), "re-dispatches backend");
+    assert.ok(allCmds.some(c => c.includes("accessibility-audit") && c.includes("stage build")),
+      "re-dispatches build with accessibility-audit context");
+  });
+
+  it("multi-workstream A11Y blockers route to each attributed workstream (provenance)", () => {
+    // Two blockers: one frontend-owned, one backend-owned.
+    // The recipe must clear both workstream gates, not just one.
+    const cwd = track(makeTargetProject());
+    seedThroughBuild(cwd);
+    seedGate(cwd, "stage-06b", {
+      status: "FAIL",
+      blockers: [
+        { id: "A11Y-01", description: "Missing aria-live on modal.", assigned_to: "frontend" },
+        { id: "A11Y-02", description: "WCAG contrast: server-rendered badge.", assigned_to: "backend" },
+      ],
+    });
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fix-and-retry");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-04.frontend")), "clears frontend gate");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-04.backend")), "clears backend gate");
+    assert.ok(r.clear_gates.some(g => g.includes("stage-06b")), "clears the audit gate");
+    const allCmds = r.fix_steps.flatMap(s => s.commands);
+    // Multiple workstreams → general build dispatch (no single --workstream flag)
+    assert.ok(allCmds.some(c => c.includes("stage build") && c.includes("accessibility-audit")),
+      "dispatches build with accessibility-audit context");
+    assert.ok(!allCmds.some(c => c === "devteam advise"), "does not fall back to interactive advise");
   });
 
   it("no A11Y blockers at all → falls back to plain devteam advise", () => {

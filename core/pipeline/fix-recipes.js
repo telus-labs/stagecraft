@@ -20,6 +20,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { loadGateSafe } = require("../gates/load-gate");
 const { derivedClearGates } = require("./invalidation");
+const { getStage } = require("./stages");
 
 // ── Workstream-attribution helpers (shared with orchestrator.js during migration) ──
 
@@ -39,8 +40,21 @@ function _wsFromBlockers(gate) {
   return [...set];
 }
 
+// Provenance-based: read workstream attribution directly from blocker fields.
+// Works for object blockers that carry assigned_to or workstream from the
+// original workstream gate (or preserved by mergeWorkstreamGates — Phase 6.4).
+function _wsFromProvenance(blockers) {
+  const ws = new Set();
+  for (const b of blockers) {
+    if (typeof b !== "object" || b === null) continue;
+    if (b.assigned_to) ws.add(b.assigned_to);
+    else if (b.workstream) ws.add(b.workstream);
+  }
+  return [...ws];
+}
+
 // Heuristic: map free-text blocker strings to build workstream roles by
-// file-path patterns.
+// file-path patterns. Last-resort fallback only — prefer _wsFromProvenance.
 function _wsFromText(text) {
   const ws = new Set();
   if (/\.test\.[jt]sx?|\.spec\.[jt]sx?|spec\.feature|__tests__|\/tests?\//i.test(text)) ws.add("qa");
@@ -48,6 +62,14 @@ function _wsFromText(text) {
   if (/src[/\\]frontend[/\\]|\/components?\//i.test(text)) ws.add("frontend");
   if (/src[/\\]infra[/\\]|Dockerfile|docker-compose/i.test(text)) ws.add("platform");
   return [...ws];
+}
+
+// Return all build workstream roles from the build stage definition.
+function _buildRoles() {
+  const buildStage = getStage("build");
+  return (buildStage && Array.isArray(buildStage.roles) && buildStage.roles.length)
+    ? buildStage.roles
+    : ["backend", "frontend", "platform", "qa"];
 }
 
 // ── Formatter ────────────────────────────────────────────────────────────────
@@ -189,8 +211,8 @@ register("stage-04c", (gate, ctx) => {
       });
     } else {
       // No workstream identified from gate data and no gate files found on disk —
-      // clear all known build workstream gates as a safe last resort.
-      buildClearGates = buildGatePaths(["backend", "frontend", "platform", "qa"]);
+      // clear all build workstream gates as a safe last resort.
+      buildClearGates = buildGatePaths(_buildRoles());
       steps.push({
         description: "Clear all build workstream gates (workstream not identified from gate data)",
         commands: formatGateClear(buildClearGates),
@@ -559,10 +581,9 @@ register("stage-06b", (gate, ctx) => {
     };
   }
 
-  // Path 2: gate has A11Y blockers but no prior-stage fix IDs. The source edit
-  // belongs to the backend workstream (html-reporter.js renderCSS). Clear the
-  // backend build gate + merged gate + audit gate so the driver re-dispatches
-  // backend with the blocker context, then advances to re-run the audit.
+  // Path 2: gate has A11Y blockers but no prior-stage fix IDs. Determine which
+  // build workstream owns the fix via provenance (assigned_to/workstream on the
+  // blocker), falling back to file-path regex as a last resort (Phase 6.4).
   const hasA11yBlockers = (gate.blockers || []).some((b) => {
     const t = typeof b === "string" ? b
       : (b && (b.text || b.summary || b.description || JSON.stringify(b)));
@@ -570,7 +591,29 @@ register("stage-06b", (gate, ctx) => {
   });
 
   if (hasA11yBlockers) {
-    const buildPaths = buildGatePaths(["backend"]);
+    // Route by provenance first.
+    let ws = _wsFromProvenance(gate.blockers || []);
+    if (!ws.length) {
+      // Regex fallback — heuristic only; attribution may be wrong.
+      const wsSet = new Set();
+      for (const b of (gate.blockers || [])) {
+        const text = typeof b === "string" ? b : (b && (b.text || b.summary || ""));
+        _wsFromText(text).forEach(w => wsSet.add(w));
+      }
+      ws = [...wsSet];
+      if (ws.length) {
+        process.stderr.write(
+          "[devteam] stage-06b recipe: workstream attribution via regex fallback — " +
+          "add assigned_to to blockers for reliable routing\n"
+        );
+      }
+    }
+    if (!ws.length) {
+      // No provenance and no regex match — clear all build workstream gates.
+      ws = _buildRoles();
+    }
+
+    const buildPaths = buildGatePaths(ws);
     // Derive all attestation gates between stage-04 (root) and stage-06b (failing):
     // stage-04a, stage-04b-d, stage-05, stage-06, stage-06a — any that exist.
     // CSS/ARIA source edits require re-review and re-QA. (Phase 5.1)
@@ -583,16 +626,19 @@ register("stage-06b", (gate, ctx) => {
     // Ensure the audit gate is always cleared even when stageList is absent.
     const auditGate = "pipeline/gates/stage-06b.json";
     if (!clear_gates.includes(auditGate)) clear_gates.push(auditGate);
+    const buildCmd = ws.length === 1
+      ? `devteam stage build --workstream ${ws[0]} --patch --from accessibility-audit --skip-completed --headless`
+      : "devteam stage build --patch --from accessibility-audit --skip-completed --headless";
     return {
       clear_gates,
       steps: [
         {
-          description: "Clear stale build and audit gates",
+          description: `Clear stale build gate${ws.length !== 1 ? "s" : ""} (${ws.join(", ")}) and audit gate`,
           commands: formatGateClear(buildPaths),
         },
         {
-          description: "Re-run backend build with accessibility fix context",
-          commands: ["devteam stage build --patch --from backend --skip-completed --headless"],
+          description: `Re-run build with accessibility fix context`,
+          commands: [buildCmd],
         },
         { description: "Merge workstream gates", commands: ["devteam merge build"] },
         { description: "Re-run accessibility audit", commands: ["devteam stage accessibility-audit --headless"] },
@@ -646,7 +692,7 @@ register("stage-06d", (gate, ctx) => {
     steps.push({ description: "Merge build workstream gates", commands: ["devteam merge build"] });
   } else {
     // Workstream not identified — clear all build gates and dispatch globally.
-    buildClearGates = buildGatePaths(["backend", "frontend", "platform", "qa"]);
+    buildClearGates = buildGatePaths(_buildRoles());
     steps.push({
       description: "Re-run build with verification findings as context — build agent applies the fix",
       commands: formatGateClear(buildClearGates),
