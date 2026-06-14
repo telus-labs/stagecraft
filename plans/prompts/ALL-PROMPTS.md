@@ -17,7 +17,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 5 | State integrity (round-2 review) | ✅ complete (PRs #114–#117) |
 | 6 | Promise integrity | ✅ complete (PRs #118–#121 · #124) |
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
-| 8 | Release v0.7.0 + semantic sync | ⏸ 8.3 needs 7.1 (merged #122) |
+| 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ⏸ ADR-first |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -1340,7 +1340,7 @@ Done means: npm run consistency — ZERO advisories; docs:generate idempotent; c
 tests green (pinned-prose updates enumerated).
 ```
 
-### 8.2 Runbook and reference sync ⏸ needs 6.4
+### 8.2 Runbook and reference sync ✅ (PR #126)
 
 ```
 PRECONDITION: Phase 6.4 merged (Case 7 must document the post-6.4 recipe behavior).
@@ -1369,7 +1369,7 @@ Done means: consistency green; fixed anchors resolve; grep shows no runbook inst
 operators to consult retry_number.
 ```
 
-### 8.1 Fragment triage + cut v0.7.0 ⏸ last in phase
+### 8.1 Fragment triage + cut v0.7.0 ✅ (release/v0.7.0)
 
 ```
 PRECONDITION: 8.2 and 8.3 merged (the release folds their fragments too).
