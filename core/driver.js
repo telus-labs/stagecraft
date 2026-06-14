@@ -28,7 +28,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
 const { loadConfig, changeIdFromFeature } = require("./config");
-const { pipelineRoot, gatesDir: getGatesDir } = require("./paths");
+const { pipelineRoot, gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
@@ -428,7 +428,11 @@ async function run(opts = {}) {
           break;
         }
 
-        const toClear = (r.clear_gates || []).map((rel) => path.join(cwd, rel));
+        // B9 (item 5.4): recipes emit in-place pipeline/ paths; rewrite them
+        // through prefixPipelineRelative so bounded runs clear the right gates.
+        const toClear = (r.clear_gates || []).map((rel) =>
+          path.join(cwd, prefixPipelineRelative(rel, changeId)),
+        );
         const cleared = clearGates(toClear);
         // 5.2: prune archives for every stage whose gates were cleared — re-entry
         // starts a fresh attempt sequence so stale archives must not survive.

@@ -48,7 +48,8 @@ describe("checkBoundedFence — bounded config without escape hatch", () => {
     }
   });
 
-  test("fence message lists ALL unwired commands", () => {
+  test("fence message lists ALL unwired commands (when list is non-empty)", () => {
+    if (BOUNDED_UNWIRED_COMMANDS.length === 0) return; // all wired — fence is transparent
     assert.throws(
       () => checkBoundedFence(boundedConfig, BOUNDED_UNWIRED_COMMANDS[0]),
       (err) => {
@@ -60,9 +61,8 @@ describe("checkBoundedFence — bounded config without escape hatch", () => {
     );
   });
 
-  test("BOUNDED_UNWIRED_COMMANDS is non-empty (fence has something to report)", () => {
+  test("BOUNDED_UNWIRED_COMMANDS is an array (may be empty once all commands are wired)", () => {
     assert.ok(Array.isArray(BOUNDED_UNWIRED_COMMANDS));
-    assert.ok(BOUNDED_UNWIRED_COMMANDS.length > 0, "must have at least one unwired command");
   });
 });
 
@@ -101,6 +101,19 @@ describe("checkBoundedFence — in-place mode", () => {
 
   test("does not throw for default config (isolation defaults to in-place)", () => {
     assert.doesNotThrow(() => checkBoundedFence({ pipeline: { isolation: "in-place" } }, "next"));
+  });
+});
+
+// ── 3b. After commit 2 all commands are wired ─────────────────────────────────
+
+describe("checkBoundedFence — all commands wired (Phase 5.4 commit 2)", () => {
+  test("BOUNDED_UNWIRED_COMMANDS is empty — all seven commands are now wired", () => {
+    assert.deepEqual(
+      BOUNDED_UNWIRED_COMMANDS,
+      [],
+      "Every CLI command in the fence scope now calls resolveChangeId; " +
+      "remove any command from BOUNDED_UNWIRED_COMMANDS when it is wired",
+    );
   });
 });
 

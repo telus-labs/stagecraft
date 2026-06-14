@@ -7,9 +7,10 @@ const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const name = "derive-approvals";
 
 const flags = {
-  cwd:  { type: "string",  description: "Target project directory" },
-  json: { type: "boolean", description: "JSON output" },
-  help: { type: "boolean", description: "Show this help" },
+  cwd:     { type: "string",  description: "Target project directory" },
+  feature: { type: "string",  description: "Feature name (bounded isolation mode)" },
+  json:    { type: "boolean", description: "JSON output" },
+  help:    { type: "boolean", description: "Show this help" },
 };
 
 // `devteam derive-approvals [<review-file>] [--cwd <dir>] [--json]`
@@ -30,9 +31,18 @@ function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam derive-approvals [<file>] [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd ? path.resolve(_flags.cwd) : process.cwd();
   const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
-  checkBoundedFence(loadConfig(cwd), "derive-approvals");
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "derive-approvals");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
+  const { gatesDir: getGatesDir, pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
   const hookPath = path.join(__dirname, "..", "..", "hooks", "approval-derivation.js");
-  const reviewDir = path.join(cwd, "pipeline", "code-review");
+  // In bounded mode, the hook subprocess must read from the per-change code-review
+  // directory and write gates to the per-change gates directory. The hook checks
+  // DEVTEAM_REVIEW_DIR and DEVTEAM_GATES_DIR env vars (B9, item 5.4).
+  const reviewDir = changeId
+    ? path.join(pipelineRoot(cwd, changeId), "code-review")
+    : path.join(cwd, "pipeline", "code-review");
 
   let files;
   if (positional[0]) {
@@ -76,12 +86,22 @@ function run(positional, _flags) {
   }
 
   const { spawnSync } = require("node:child_process");
+  // Build env for the subprocess: in bounded mode pass the per-change paths
+  // so the hook writes gates to the right directory (DEVTEAM_GATES_DIR) and
+  // reads review files from the right place (DEVTEAM_REVIEW_DIR). The hook
+  // checks these env vars as overrides (approval-derivation.js, B9 item 5.4).
+  const hookEnv = { ...process.env };
+  if (changeId) {
+    hookEnv.DEVTEAM_REVIEW_DIR = reviewDir;
+    hookEnv.DEVTEAM_GATES_DIR = getGatesDir(cwd, changeId);
+  }
   const perFile = [];
   let anyFailed = false;
   for (const file of files) {
     const payload = JSON.stringify({ tool_input: { file_path: file } });
     const result = spawnSync(process.execPath, [hookPath], {
       cwd,
+      env: hookEnv,
       input: payload,
       // Stdout/stderr inherit so the hook's [approval-derivation] log
       // lines reach the operator. Empty input → hook short-circuits.

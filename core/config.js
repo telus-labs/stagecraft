@@ -156,10 +156,10 @@ function changeIdFromFeature(feature) {
 // usage and asserts this list matches reality — so the fence cannot silently
 // go stale when a command is wired.
 //
-// Shrinks in commit 2 as each command is wired; the meta-test enforces parity.
-const BOUNDED_UNWIRED_COMMANDS = [
-  "next", "restart", "log", "advise", "replay", "derive-approvals", "spec",
-];
+// All seven commands were wired in commit 2 of Phase 5.4; this list is now
+// empty. It remains exported so the meta-test can assert that parity holds
+// and so that future additions can be caught before they silently misread paths.
+const BOUNDED_UNWIRED_COMMANDS = [];
 
 // Throw if isolation:bounded is active for an unwired command and the
 // operator has not acknowledged partial support via isolation_acknowledge_partial.

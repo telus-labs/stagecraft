@@ -42,8 +42,10 @@ const HOST = "claude-code"; // this hook is wired only into the claude-code adap
 const CWD = (() => {
   try { return fs.realpathSync(process.cwd()); } catch { return process.cwd(); }
 })();
-const REVIEW_DIR = path.join(CWD, "pipeline", "code-review");
-const GATES_DIR = path.join(CWD, "pipeline", "gates");
+// B9 (item 5.4): allow bounded-mode `devteam derive-approvals` to pass the
+// per-change paths via env vars; in-place mode uses the historical defaults.
+const REVIEW_DIR = process.env.DEVTEAM_REVIEW_DIR || path.join(CWD, "pipeline", "code-review");
+const GATES_DIR = process.env.DEVTEAM_GATES_DIR || path.join(CWD, "pipeline", "gates");
 
 const LOCK_RETRIES = 20;
 const LOCK_DELAY_MS = 30;

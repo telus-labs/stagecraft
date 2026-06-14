@@ -37,6 +37,7 @@ Inspect pipeline/gates/ and report what to do next: run a stage, merge, fix a FA
 | Flag          | Type   | Description                                    |
 | ------------- | ------ | ---------------------------------------------- |
 | --cwd         | string | Target project directory                       |
+| --feature     | string | Feature name (bounded isolation mode)          |
 | --json        | bool   | JSON output                                    |
 | --skip-advise | bool   | Suppress unresolved follow-up advisory warning |
 
@@ -100,10 +101,11 @@ Merge per-workstream gates into the stage gate.
 
 Re-run the approval-derivation hook on pipeline/code-review/by-*.md and rewrite per-area stage-05 gates.
 
-| Flag   | Type   | Description              |
-| ------ | ------ | ------------------------ |
-| --cwd  | string | Target project directory |
-| --json | bool   | JSON output              |
+| Flag      | Type   | Description                           |
+| --------- | ------ | ------------------------------------- |
+| --cwd     | string | Target project directory              |
+| --feature | string | Feature name (bounded isolation mode) |
+| --json    | bool   | JSON output                           |
 
 ### `devteam restart <stage> [options]`
 
@@ -112,6 +114,7 @@ Clear a stage's gate(s) so the pipeline can re-run it. With --cascade, also clea
 | Flag           | Type   | Description                                      |
 | -------------- | ------ | ------------------------------------------------ |
 | --cwd          | string | Target project directory                         |
+| --feature      | string | Feature name (bounded isolation mode)            |
 | --cascade      | bool   | Also clear every stage after this one            |
 | --keep-context | bool   | Preserve injected blocker sections in context.md |
 | --dry-run      | bool   | Print what would be deleted without acting       |
@@ -154,6 +157,7 @@ Inspect and triage follow-up items (DEFERRED, KNOWN-FLAKY, BRIEF-AMEND-NEEDED) b
 | Flag         | Type   | Description                            |
 | ------------ | ------ | -------------------------------------- |
 | --cwd        | string | Target project directory               |
+| --feature    | string | Feature name (bounded isolation mode)  |
 | --apply      | string | Apply selections, e.g. AC-11=A,AC-12=B |
 | --json       | bool   | JSON output                            |
 | --timeout-ms | number | Timeout for a11y-fixer dispatch (ms)   |
@@ -189,11 +193,12 @@ One-screen pipeline state report.
 
 Chronological event timeline: every gate and artifact write in mtime order. --follow tails at 1-second poll.
 
-| Flag     | Type   | Description                       |
-| -------- | ------ | --------------------------------- |
-| --cwd    | string | Target project directory          |
-| --json   | bool   | JSON output (one object per line) |
-| --follow | bool   | Tail pipeline/ at 1s poll         |
+| Flag      | Type   | Description                           |
+| --------- | ------ | ------------------------------------- |
+| --cwd     | string | Target project directory              |
+| --feature | string | Feature name (bounded isolation mode) |
+| --json    | bool   | JSON output (one object per line)     |
+| --follow  | bool   | Tail pipeline/ at 1s poll             |
 
 ### `devteam ui [options]`
 
@@ -250,11 +255,12 @@ Orchestrator-stamped verification: run configured commands and rewrite gate fiel
 
 Re-run a recorded stage with current config and diff the result against the original gate.
 
-| Flag      | Type   | Description                      |
-| --------- | ------ | -------------------------------- |
-| --cwd     | string | Target project directory         |
-| --json    | bool   | JSON output                      |
-| --dry-run | bool   | Print plan without invoking host |
+| Flag      | Type   | Description                           |
+| --------- | ------ | ------------------------------------- |
+| --cwd     | string | Target project directory              |
+| --feature | string | Feature name (bounded isolation mode) |
+| --json    | bool   | JSON output                           |
+| --dry-run | bool   | Print plan without invoking host      |
 
 ### `devteam ci <install|show> [options]`
 

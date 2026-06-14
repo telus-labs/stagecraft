@@ -218,13 +218,14 @@ function verifyTexts({ briefText, specText, testText, opts = {} }) {
 // File-path wrapper for the common case. Returns the same drift
 // report shape, with file-not-found promoted to "this artifact is
 // missing" markers in the report.
+//
+// opts.pipelineDir overrides the default `cwd/pipeline` root so that
+// bounded-mode callers (B9, item 5.4) can point at the per-change subtree.
 function verify(cwd, opts = {}) {
-  // B9 exemption: spec/verify.js is a standalone drift-check command; it reads
-  // global pipeline/ artifacts. spec.feature is a project-level artifact regardless
-  // of isolation mode.
-  const briefPath = path.join(cwd, "pipeline", "brief.md");
-  const specPath  = path.join(cwd, "pipeline", "spec.feature");
-  const testPath  = path.join(cwd, "pipeline", "test-report.md");
+  const pipelineDir = opts.pipelineDir || path.join(cwd, "pipeline");
+  const briefPath = path.join(pipelineDir, "brief.md");
+  const specPath  = path.join(pipelineDir, "spec.feature");
+  const testPath  = path.join(pipelineDir, "test-report.md");
 
   const briefText = readArtifact(briefPath);
   const specText  = readArtifact(specPath);

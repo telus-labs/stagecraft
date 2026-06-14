@@ -6,10 +6,11 @@ const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const name = "log";
 
 const flags = {
-  cwd:    { type: "string",  description: "Target project directory" },
-  json:   { type: "boolean", description: "JSON output (one object per line)" },
-  follow: { type: "boolean", description: "Tail pipeline/ at 1s poll" },
-  help:   { type: "boolean", description: "Show this help" },
+  cwd:     { type: "string",  description: "Target project directory" },
+  feature: { type: "string",  description: "Feature name (bounded isolation mode)" },
+  json:    { type: "boolean", description: "JSON output (one object per line)" },
+  follow:  { type: "boolean", description: "Tail pipeline/ at 1s poll" },
+  help:    { type: "boolean", description: "Show this help" },
 };
 
 // Format an event from core/log/journal.js as a single terminal line.
@@ -33,7 +34,10 @@ function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam log [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd || process.cwd();
   const { loadConfig, checkBoundedFence } = require(path.join(__dirname, "..", "..", "config"));
-  checkBoundedFence(loadConfig(cwd), "log");
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, "log");
+  const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+  const changeId = resolveChangeId(_flags, config);
   const { buildEvents } = require(path.join(__dirname, "..", "..", "log", "journal"));
 
   function emit(events) {
@@ -59,7 +63,7 @@ function run(positional, _flags) {
     }
   }
 
-  const initial = buildEvents(cwd);
+  const initial = buildEvents(cwd, changeId);
   emit(initial);
 
   if (!_flags.follow) return;
@@ -72,7 +76,7 @@ function run(positional, _flags) {
   for (const e of initial) seen.add(`${e.kind}:${e.path}:${e.mtime.getTime()}`);
   const interval = setInterval(() => {
     let events;
-    try { events = buildEvents(cwd); } catch { return; }
+    try { events = buildEvents(cwd, changeId); } catch { return; }
     const fresh = [];
     for (const e of events) {
       const key = `${e.kind}:${e.path}:${e.mtime.getTime()}`;

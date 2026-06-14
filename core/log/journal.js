@@ -68,13 +68,14 @@ const STATUS_ICONS = {
  *     gate?: <parsed gate JSON>,      // when kind === "gate"
  *     owner?: <role>, artifactKind?: <kind>,  // when kind === "artifact"
  *   }
+ *
+ * changeId: when set (B9 bounded mode), reads from
+ * pipeline/changes/<changeId>/ instead of pipeline/.
  */
-function buildEvents(cwd) {
+function buildEvents(cwd, changeId) {
   const events = [];
-  // B9 exemption: journal.js builds the activity log for the UI from the
-  // global pipeline/ directory. Bounded-run events live in the change subtree
-  // and are not yet aggregated by the journal (future enhancement).
-  const pipelineDir = path.join(cwd, "pipeline");
+  const { pipelineRoot } = require("../paths");
+  const pipelineDir = pipelineRoot(cwd, changeId || null);
   if (!fs.existsSync(pipelineDir)) return events;
 
   // Epoch: mtime of pipeline/brief.md anchors the current pipeline run.
@@ -110,12 +111,18 @@ function buildEvents(cwd) {
 
   // Artifact events. Walk pipeline/ but skip pipeline/gates/ (already
   // covered) and pipeline/logs/ (would be self-referential noise).
-  walkArtifacts(pipelineDir, cwd, events, epochMs);
+  // Pass pipelineDir as relBase so ARTIFACT_PATTERNS (which all start with
+  // "pipeline/") match correctly in both in-place and bounded mode.
+  walkArtifacts(pipelineDir, pipelineDir, events, epochMs);
 
   return events.sort((a, b) => a.mtime - b.mtime);
 }
 
-function walkArtifacts(dir, cwd, out, epochMs = 0) {
+// relBase: root of the run's pipeline tree. Artifact relative paths are
+// computed as "pipeline/" + path.relative(relBase, file) so ARTIFACT_PATTERNS
+// match in both in-place (relBase = cwd/pipeline) and bounded
+// (relBase = cwd/pipeline/changes/<id>) mode.
+function walkArtifacts(dir, relBase, out, epochMs = 0) {
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
   catch { return; }
@@ -123,10 +130,12 @@ function walkArtifacts(dir, cwd, out, epochMs = 0) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (e.name === "gates" || e.name === "logs") continue;
-      walkArtifacts(full, cwd, out, epochMs);
+      walkArtifacts(full, relBase, out, epochMs);
       continue;
     }
-    const rel = path.relative(cwd, full).replace(/\\/g, "/");
+    // Normalise to "pipeline/<relative-from-pipelineRoot>" so ARTIFACT_PATTERNS
+    // work identically in in-place and bounded mode.
+    const rel = "pipeline/" + path.relative(relBase, full).replace(/\\/g, "/");
     if (SKIP_PATHS.has(rel)) continue;
     const match = ARTIFACT_PATTERNS.find((p) => p.re.test(rel));
     if (!match) continue;
