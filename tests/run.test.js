@@ -759,6 +759,109 @@ describe("driver: progress-based convergence (4.2)", () => {
     assert.match(s.halt_reason, /retry budget exhausted/);
   });
 
+  // ─── 5.2 regression tests ──────────────────────────────────────────────────
+  //
+  // Both tests must FAIL on main (before 5.2 changes) and pass with the fix.
+  // (a) Stage failed twice → recovered → re-entered via downstream recipe → no
+  //     instant convergence-exhausted (archives pruned by prune-on-re-entry).
+  // (b) Fresh non-resume run + stale attempt-2/3 archives with identical blockers
+  //     → no false no-progress halt (stale-archive guard in convergence.js).
+
+  it("(5.2a) re-entry via downstream recipe prunes stale archives — first new failure is fix-and-retry not convergence-exhausted", async () => {
+    const cwd = track(makeTargetProject());
+
+    // Seed stage-04 archives from 2 previous failures with identical blockers.
+    // Without 5.2, these survive a downstream recipe's gate clear and cause
+    // detectNoProgress to trip on the very first new failure (attempt-1 compared
+    // to stale-2 → same blockers → noProgress=true → convergence-exhausted).
+    const archiveDir = path.join(cwd, "pipeline", "gates", "archive");
+    fs.mkdirSync(archiveDir, { recursive: true });
+    for (const n of [1, 2]) {
+      fs.writeFileSync(
+        path.join(archiveDir, `stage-04.attempt-${n}.json`),
+        JSON.stringify({ stage: "stage-04", blockers: ["tests failing"], status: "FAIL" }),
+      );
+    }
+    // Stage-04 gate is PASS (it recovered after those failures).
+    seedGate(cwd, "stage-04", { status: "PASS" });
+
+    // Downstream recipe clears stage-04.json (triggering prune-on-re-entry).
+    // Then stage-04 fails for the first time in the new sequence.
+    const seq = [
+      {
+        action: "fix-and-retry",
+        stage: "stage-06d",
+        name: "verification-beyond-tests",
+        failure_class: "code-defect",
+        blockers: ["e2e failed"],
+        clear_gates: ["pipeline/gates/stage-04.json"],
+      },
+      // Stage-04 fails again (first attempt in the new re-entry sequence).
+      // No clear_gates → driver increments retry counter and loops without halting.
+      {
+        action: "fix-and-retry",
+        stage: "stage-04",
+        name: "build",
+        failure_class: "code-defect",
+        blockers: ["tests failing"], // same text as stale archives!
+      },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let si = 0;
+    const s = await run({ cwd, next: () => seq[si++] });
+
+    // With 5.2: prune-on-re-entry deletes stale archives when stage-04 gate is cleared
+    //   → detectNoProgress sees no archives for stage-04 → noProgress=false → fix-and-retry
+    //   → pipeline completes.
+    // Without 5.2: stale archives survive → detectNoProgress compares old-1 and old-2
+    //   → identical blockers → convergence-exhausted → halt.
+    assert.equal(s.completed, true,
+      "stale archives must be pruned on re-entry — first new failure must not hit convergence-exhausted");
+  });
+
+  it("(5.2b) stale archives from a previous run don't produce a false no-progress halt on a fresh run", async () => {
+    const cwd = track(makeTargetProject());
+
+    // Seed stage-04 with a current FAIL gate.
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["tests failing"] });
+
+    // Seed stale archives from a PREVIOUS run — identical blockers, attempt-2 and
+    // attempt-3 — with mtime set to 1 hour ago to simulate a previous run. A fresh
+    // driver run resets fixRetries to 0 and archives at attempt-1 (new mtime = now),
+    // but the stale 2/3 survive if pruning was missed.
+    const archiveDir = path.join(cwd, "pipeline", "gates", "archive");
+    fs.mkdirSync(archiveDir, { recursive: true });
+    const pastTime = new Date(Date.now() - 3_600_000); // 1 hour ago
+    for (const n of [2, 3]) {
+      const p = path.join(archiveDir, `stage-04.attempt-${n}.json`);
+      fs.writeFileSync(p, JSON.stringify({ stage: "stage-04", blockers: ["tests failing"], status: "FAIL" }));
+      fs.utimesSync(p, pastTime, pastTime);
+    }
+
+    const seq = [
+      // Fresh driver archives attempt-1 (mtime=now), then clears stage-04.json.
+      {
+        action: "fix-and-retry",
+        stage: "stage-04",
+        name: "build",
+        failure_class: "code-defect",
+        blockers: ["tests failing"],
+        clear_gates: ["pipeline/gates/stage-04.json"],
+      },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let si = 0;
+    const s = await run({ cwd, next: () => seq[si++] });
+
+    // With 5.2: _currentSequenceArchives guard filters stale-2 and stale-3 (old mtime)
+    //   → detectNoProgress sees only new attempt-1 → noProgress=false → fix-and-retry loops
+    //   → pipeline completes.
+    // Without 5.2: no guard → detectNoProgress compares stale-2 and stale-3
+    //   → identical blockers → noProgress=true → convergence-exhausted → halt.
+    assert.equal(s.completed, true,
+      "stale archives from a previous run must not produce a false no-progress halt");
+  });
+
   it("no_progress_evidence is absent on a count-based convergence-exhausted halt (max_retries=0)", async () => {
     // With max_retries=0, the count ceiling fires before any archiving occurs,
     // so there are no two archives to compare → no_progress_evidence must be absent.

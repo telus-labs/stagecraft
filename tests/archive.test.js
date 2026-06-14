@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { archiveGate, listArchives } = require(path.join(REPO_ROOT, "core", "gates", "archive"));
+const { archiveGate, listArchives, pruneArchives } = require(path.join(REPO_ROOT, "core", "gates", "archive"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -26,6 +26,31 @@ describe("archiveGate", () => {
   it("returns null when the gate is absent (nothing to archive)", () => {
     const cwd = track(makeTargetProject());
     assert.equal(archiveGate(gd(cwd), "stage-09", 1), null);
+  });
+
+  it("pruneArchives deletes all archived attempts for the stage", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["x"] });
+    archiveGate(gd(cwd), "stage-04", 1);
+    archiveGate(gd(cwd), "stage-04", 2);
+    pruneArchives(gd(cwd), "stage-04");
+    assert.equal(listArchives(gd(cwd), "stage-04").length, 0, "all archives removed");
+  });
+
+  it("pruneArchives does not remove archives for unrelated stages", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { status: "FAIL" });
+    archiveGate(gd(cwd), "stage-04", 1);
+    seedGate(cwd, "stage-05", { status: "FAIL" });
+    archiveGate(gd(cwd), "stage-05", 1);
+    pruneArchives(gd(cwd), "stage-04");
+    assert.equal(listArchives(gd(cwd), "stage-04").length, 0, "stage-04 archives removed");
+    assert.equal(listArchives(gd(cwd), "stage-05").length, 1, "stage-05 archive untouched");
+  });
+
+  it("pruneArchives is idempotent when no archives exist", () => {
+    const cwd = track(makeTargetProject());
+    assert.doesNotThrow(() => pruneArchives(gd(cwd), "stage-04"));
   });
 
   it("listArchives returns attempts sorted ascending", () => {

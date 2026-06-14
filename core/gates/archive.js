@@ -55,4 +55,18 @@ function listArchives(gatesDir, stageId) {
     .sort((a, b) => a.attempt - b.attempt);
 }
 
-module.exports = { archiveGate, listArchives, archiveDir };
+/**
+ * Delete all archived attempts for a stage — used by the clear-on-re-entry and
+ * clear-on-recovery paths so stale archives never outlive their failure sequence.
+ * Best-effort: skips files that are already absent. Never throws.
+ *
+ * @param {string} gatesDir  absolute path to pipeline/gates
+ * @param {string} stageId   e.g. "stage-04"
+ */
+function pruneArchives(gatesDir, stageId) {
+  for (const { file } of listArchives(gatesDir, stageId)) {
+    try { fs.unlinkSync(file); } catch { /* already gone */ }
+  }
+}
+
+module.exports = { archiveGate, listArchives, archiveDir, pruneArchives };

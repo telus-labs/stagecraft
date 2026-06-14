@@ -91,9 +91,10 @@ function run(positional, _flags) {
       const ws = path.join(gatesDir, `${def.stage}.${role}.json`);
       if (fs.existsSync(ws)) toDelete.push(ws);
     }
-    // Also clear any archived attempts so stale blocker fingerprints from a
-    // previous run don't confuse detectNoProgress / detectNoSourceChange on
-    // the next auto-fix loop.
+    // 5.2: collect archived attempts via the shared listArchives path so stale
+    // archives never outlive the failure sequence they describe. Same archive.js
+    // module used by the driver's re-entry (fix-and-retry) and recovery (PASS)
+    // pruning paths — this is the shared choke point the plan requires.
     for (const { file } of listArchives(gatesDir, def.stage)) {
       toDelete.push(file);
     }

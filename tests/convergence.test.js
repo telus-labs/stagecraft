@@ -260,6 +260,76 @@ describe("noSourceChangeEvidence", () => {
   });
 });
 
+// ─── stale-archive guard (_currentSequenceArchives, tested via public API) ────
+//
+// The guard filters archives from previous sequences by comparing mtime of each
+// archive against the mtime of attempt-1 (the "start of the current sequence").
+// Tests use fs.utimesSync to place stale archives in the past.
+
+describe("detectNoProgress: stale archives from a previous sequence are ignored", () => {
+  it("stale attempt-2,3 (old mtime) + fresh attempt-1 → noProgress false (guard fires)", () => {
+    const cwd = track(makeTargetProject());
+    const dir = path.join(gd(cwd), "archive");
+    fs.mkdirSync(dir, { recursive: true });
+
+    const past = new Date(Date.now() - 3_600_000); // 1 hour ago
+    // Stale archives from a previous run — identical blockers
+    for (const n of [2, 3]) {
+      const p = path.join(dir, `stage-04.attempt-${n}.json`);
+      fs.writeFileSync(p, JSON.stringify({ stage: "stage-04", blockers: ["stuck blocker"] }));
+      fs.utimesSync(p, past, past);
+    }
+    // Fresh attempt-1 written NOW (current sequence)
+    seedArchive(cwd, "stage-04", 1, { blockers: ["stuck blocker"] }); // same text, new mtime
+
+    // Without the guard: last two = stale-2 and stale-3 → identical → noProgress true
+    // With the guard: stale-2,3 excluded → only attempt-1 → noProgress false
+    assert.deepEqual(detectNoProgress(gd(cwd), "stage-04"), { noProgress: false });
+  });
+
+  it("all archives from the same run (no old mtimes) → guard is transparent", () => {
+    const cwd = track(makeTargetProject());
+    seedArchive(cwd, "stage-04", 1, { blockers: ["original"] });
+    seedArchive(cwd, "stage-04", 2, { blockers: ["original"] }); // same → should still trip
+    const r = detectNoProgress(gd(cwd), "stage-04");
+    assert.equal(r.noProgress, true, "current-sequence identical blockers still detected");
+  });
+});
+
+describe("countArchivedAttempts: stale archives from a previous sequence are excluded", () => {
+  it("stale attempt-2,3 (old mtime) + fresh attempt-1 → count is 1 not 3", () => {
+    const cwd = track(makeTargetProject());
+    const dir = path.join(gd(cwd), "archive");
+    fs.mkdirSync(dir, { recursive: true });
+
+    const past = new Date(Date.now() - 3_600_000);
+    for (const n of [2, 3]) {
+      const p = path.join(dir, `stage-04.attempt-${n}.json`);
+      fs.writeFileSync(p, JSON.stringify({ stage: "stage-04", blockers: [] }));
+      fs.utimesSync(p, past, past);
+    }
+    seedArchive(cwd, "stage-04", 1, { blockers: [] });
+
+    // Without guard: count=3; with guard: stale-2,3 excluded → count=1
+    assert.equal(countArchivedAttempts(gd(cwd), "stage-04"), 1);
+  });
+
+  it("no attempt-1 present → guard is bypassed (trust all archives)", () => {
+    const cwd = track(makeTargetProject());
+    const dir = path.join(gd(cwd), "archive");
+    fs.mkdirSync(dir, { recursive: true });
+
+    const past = new Date(Date.now() - 3_600_000);
+    for (const n of [2, 3]) {
+      const p = path.join(dir, `stage-04.attempt-${n}.json`);
+      fs.writeFileSync(p, JSON.stringify({ stage: "stage-04", blockers: [] }));
+      fs.utimesSync(p, past, past);
+    }
+    // No attempt-1 → guard cannot determine sequence boundary → trusts all
+    assert.equal(countArchivedAttempts(gd(cwd), "stage-04"), 2);
+  });
+});
+
 // ─── noProgressEvidence ───────────────────────────────────────────────────────
 
 describe("noProgressEvidence", () => {
