@@ -17,6 +17,31 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { listArchives } = require("./archive");
 
+// Defense-in-depth (5.2): filter archives to those that belong to the current
+// failure sequence. Archives from a previous sequence that survived a missed
+// prune-on-PASS or prune-on-re-entry have mtime < the current attempt-1 archive
+// (which is written at the start of each new failure sequence). Excluding them
+// prevents stale fingerprints from producing a false convergence-exhausted halt.
+//
+// In normal operation, prune-on-PASS (mergeWorkstreamGates / runStageHeadless)
+// and prune-on-re-entry (driver fix-and-retry / restart) keep archives clean;
+// this guard is a backstop for edge cases (manual gate resets, race conditions,
+// or mid-upgrade state left by an older devteam version).
+//
+// If attempt-1 is absent we cannot determine the sequence boundary — return all
+// archives unchanged so the caller gets the safest possible data.
+function _currentSequenceArchives(archives) {
+  if (archives.length === 0) return archives;
+  const first = archives.find((a) => a.attempt === 1);
+  if (!first) return archives;
+  try {
+    const firstMtime = fs.statSync(first.file).mtimeMs;
+    return archives.filter((a) => {
+      try { return fs.statSync(a.file).mtimeMs >= firstMtime; } catch { return true; }
+    });
+  } catch { return archives; }
+}
+
 // Normalize a gate's blocker list to a stable fingerprint for comparison.
 // Blockers are model-written, so we sort to remove ordering artifacts.
 function normalizeBlockers(gate) {
@@ -44,7 +69,7 @@ function normalizeBlockers(gate) {
  * @param {string} stageId   e.g. "stage-04"
  */
 function detectNoProgress(gatesDir, stageId) {
-  const archives = listArchives(gatesDir, stageId);
+  const archives = _currentSequenceArchives(listArchives(gatesDir, stageId));
   if (archives.length < 2) return { noProgress: false };
 
   const prev = archives[archives.length - 2];
@@ -77,7 +102,7 @@ function detectNoProgress(gatesDir, stageId) {
  * @returns {number}
  */
 function countArchivedAttempts(gatesDir, stageId) {
-  return listArchives(gatesDir, stageId).length;
+  return _currentSequenceArchives(listArchives(gatesDir, stageId)).length;
 }
 
 /**

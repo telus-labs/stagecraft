@@ -32,7 +32,7 @@ const { pipelineRoot, gatesDir: getGatesDir } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
-const { archiveGate } = require("./gates/archive");
+const { archiveGate, pruneArchives } = require("./gates/archive");
 const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 const { upsertSection } = require("./markers");
@@ -430,6 +430,15 @@ async function run(opts = {}) {
 
         const toClear = (r.clear_gates || []).map((rel) => path.join(cwd, rel));
         const cleared = clearGates(toClear);
+        // 5.2: prune archives for every stage whose gates were cleared — re-entry
+        // starts a fresh attempt sequence so stale archives must not survive.
+        // Best-effort; derive stage IDs from the gate filenames (part before first dot).
+        const clearedStageIds = new Set(
+          toClear.map((p) => path.basename(p).replace(/\..*$/, "")),
+        );
+        for (const sid of clearedStageIds) {
+          try { pruneArchives(gatesDir(cwd, changeId), sid); } catch { /* never block a retry */ }
+        }
         // If a recipe exists but cleared nothing, next() will return the same
         // fix-and-retry unchanged. Halt immediately rather than burning retries.
         // Stages with no recipe (toClear empty) still reach convergence-exhausted —

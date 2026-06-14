@@ -21,6 +21,7 @@ const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
 const { pricingFor } = require("./pricing");
 const { getRecipe } = require("./pipeline/fix-recipes");
 const { detectNoProgress, countArchivedAttempts, noProgressEvidence } = require("./gates/convergence");
+const { pruneArchives } = require("./gates/archive");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -436,6 +437,12 @@ async function runStageHeadless(stageName, opts = {}) {
       const wroteThisRun = postGateMtime !== null && (preGateMtime === null || postGateMtime > preGateMtime);
       if (wroteThisRun) {
         try { require("./gates/chain").stampChain(gatesDir, stageName, plan.ctx.track); } catch { /* */ }
+        // 5.2: prune per-attempt archives when the stage gate recovers to PASS —
+        // archives must not outlive the failure sequence they describe. Best-effort.
+        try {
+          const { gate: g } = require("./gates/load-gate").loadGateSafe(singleRoleGate);
+          if (g && g.status === "PASS") pruneArchives(gatesDir, plan.stage);
+        } catch { /* archiving must never block a run */ }
       }
     }
 
@@ -572,6 +579,11 @@ function mergeWorkstreamGates(stageName, opts = {}) {
     // C6: stamp the tamper-evident chain hash of the predecessor stage gate.
     // Best-effort — a chain-stamp failure must never fail a merge.
     try { require("./gates/chain").stampChain(gatesDir, stageName, track); } catch { /* */ }
+    // 5.2: prune per-attempt archives when the merged gate reaches PASS —
+    // archives must not outlive the failure sequence they describe. Best-effort.
+    if (merged.status === "PASS") {
+      try { pruneArchives(gatesDir, stageDef.stage); } catch { /* archiving must never block a merge */ }
+    }
     setSpanAttributes({
       "devteam.merge.result": "merged",
       "devteam.merge.status": aggregate,

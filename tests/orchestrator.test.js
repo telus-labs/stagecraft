@@ -5,6 +5,7 @@ const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
 const { runStage, mergeWorkstreamGates, buildDescriptor, summary } =
   require(path.join(REPO_ROOT, "core", "orchestrator"));
+const { listArchives } = require(path.join(REPO_ROOT, "core", "gates", "archive"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 
 let _dirs = [];
@@ -395,5 +396,41 @@ describe("orchestrator: mergeWorkstreamGates unpriced model warning (Fix 3.7.7)"
     const r = mergeWorkstreamGates("build", { cwd });
     const unpricedWarnings = r.gate.warnings.filter((w) => w.includes("unpriced model"));
     assert.equal(unpricedWarnings.length, 0);
+  });
+
+  // ─── 5.2: prune-on-PASS via mergeWorkstreamGates ────────────────────────────
+  it("(5.2) mergeWorkstreamGates prunes archives when merged gate reaches PASS", () => {
+    const cwd = track(makeTargetProject());
+    // Seed per-workstream gates that all PASS (simulating recovery after prior failures).
+    seedBuild(cwd);
+    // Seed archives for stage-04 from previous failures.
+    const gd = path.join(cwd, "pipeline", "gates");
+    const archiveDir = path.join(gd, "archive");
+    fs.mkdirSync(archiveDir, { recursive: true });
+    for (const n of [1, 2]) {
+      fs.writeFileSync(
+        path.join(archiveDir, `stage-04.attempt-${n}.json`),
+        JSON.stringify({ stage: "stage-04", blockers: ["tests were failing"], status: "FAIL" }),
+      );
+    }
+    assert.equal(listArchives(gd, "stage-04").length, 2, "archives exist before merge");
+
+    const r = mergeWorkstreamGates("build", { cwd });
+    assert.equal(r.gate.status, "PASS");
+    assert.equal(listArchives(gd, "stage-04").length, 0, "archives pruned after PASS merge");
+  });
+
+  it("(5.2) mergeWorkstreamGates does NOT prune archives when merged gate is FAIL", () => {
+    const cwd = track(makeTargetProject());
+    seedBuild(cwd, { status: "FAIL" });
+    const gd = path.join(cwd, "pipeline", "gates");
+    const archiveDir = path.join(gd, "archive");
+    fs.mkdirSync(archiveDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(archiveDir, "stage-04.attempt-1.json"),
+      JSON.stringify({ stage: "stage-04", blockers: ["x"], status: "FAIL" }),
+    );
+    mergeWorkstreamGates("build", { cwd });
+    assert.equal(listArchives(gd, "stage-04").length, 1, "archives preserved on FAIL merge");
   });
 });
