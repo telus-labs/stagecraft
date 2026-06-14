@@ -33,11 +33,13 @@ function runGitHygieneCheck(cwd) {
   const blockers = [];
   const warnings = [];
 
-  // git ls-files --ignored --exclude-standard lists tracked files that
-  // are now covered by .gitignore rules.  An empty result is clean.
+  // git ls-files -c --ignored --exclude-standard lists tracked (committed)
+  // files that are now covered by .gitignore rules.  -c (--cached) is
+  // required on git ≥ 2.27; without it the command exits 128 immediately.
+  // An empty result is clean.
   const result = spawnSync(
     "git",
-    ["ls-files", "--ignored", "--exclude-standard"],
+    ["ls-files", "-c", "--ignored", "--exclude-standard"],
     { cwd, encoding: "utf8", timeout: 15_000 }
   );
 
