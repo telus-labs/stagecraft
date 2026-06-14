@@ -84,19 +84,28 @@ jobs:
         # DEVTEAM_HEADLESS_COMMAND=cat renders the prompt to stdout without
         # invoking a model (offline-safe). The stage command exits non-zero
         # because cat doesn't write a gate — that's expected and intentional.
-        # The || true lets the step continue; the assertion is on devteam next,
-        # which must return a valid pipeline action without crashing.
+        # The || true lets the step continue; we then assert the rendered prompt
+        # content appeared (proof that devteam stage actually ran and produced
+        # output, not just that it didn't crash) and pin devteam next to the
+        # two actions that mean "stage ran but no gate was written yet".
         run: |
           TARGET=$(mktemp -d)
+          STAGE_OUT=$(mktemp)
           ./bin/devteam init --host claude-code --cwd "$TARGET"
           ./bin/devteam doctor --cwd "$TARGET"
           DEVTEAM_HEADLESS_COMMAND=cat ./bin/devteam stage requirements \
-            --feature "smoke test feature" --headless --cwd "$TARGET" || true
+            --feature "smoke test feature" --headless --cwd "$TARGET" \
+            > "$STAGE_OUT" 2>&1 || true
+          cat "$STAGE_OUT"
+          # Assert the rendered prompt contains the requirements-role header.
+          # If devteam stage crashes before rendering, this grep fails the step.
+          grep -q "Stage stage-01" "$STAGE_OUT" \
+            || { echo "✗ expected 'Stage stage-01' in stage output"; exit 1; }
           ACTION=$(./bin/devteam next --json --cwd "$TARGET" | jq -r '.action')
           echo "devteam next action: $ACTION"
           case "$ACTION" in
-            run-stage|continue-stage|merge|fix-and-retry|resolve-escalation|pipeline-complete)
-              echo "✓ valid pipeline action: $ACTION" ;;
+            run-stage|continue-stage)
+              echo "✓ valid post-headless action: $ACTION" ;;
             *)
               echo "✗ unexpected action from devteam next: $ACTION" && exit 1 ;;
           esac
