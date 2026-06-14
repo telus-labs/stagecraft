@@ -1,0 +1,1 @@
+- **docs(rules):** Rename example ADR IDs in `rules/stage-02.md` gate JSON from `ADR-007`/`ADR-012` to `PADR-1`/`PADR-2` (project ADR namespace) to avoid collision with the Stagecraft framework's own ADR namespace (`docs/adr/`). Add a clarifying half-sentence explaining the PADR-N convention.
