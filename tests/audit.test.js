@@ -88,14 +88,21 @@ test("the canonical role list (core/roles.listRoles) includes 'auditor'", () => 
   const claude = fs.readFileSync(path.join(REPO_ROOT, "hosts/claude-code/adapter.js"), "utf8");
   assert.match(claude, /auditor:\s*\{/, "claude-code/adapter.js must have ROLE_FRONTMATTER entry for auditor");
 
-  // codex + gemini-cli use core/roles.listRoles() — verify the import,
-  // which guarantees they pick up auditor automatically.
+  // codex + gemini-cli delegate to core/adapters/markdown-host which owns
+  // the core/roles import — verify the shared base uses it (guarantees both
+  // adapters pick up auditor automatically after the 6.5.3 dedup).
+  const base = fs.readFileSync(path.join(REPO_ROOT, "core/adapters/markdown-host.js"), "utf8");
+  assert.match(
+    base,
+    /listRoles/,
+    "core/adapters/markdown-host.js must call listRoles() from core/roles instead of a hardcoded ROLES array",
+  );
   for (const rel of ["hosts/codex/adapter.js", "hosts/gemini-cli/adapter.js"]) {
     const text = fs.readFileSync(path.join(REPO_ROOT, rel), "utf8");
     assert.match(
       text,
-      /require\(['"][^'"]*core\/roles['"]\)/,
-      `${rel} must use core/roles.listRoles() instead of a hardcoded ROLES array`,
+      /require\(['"][^'"]*adapters\/markdown-host['"]\)/,
+      `${rel} must delegate to core/adapters/markdown-host (which owns the core/roles import)`,
     );
   }
 });
