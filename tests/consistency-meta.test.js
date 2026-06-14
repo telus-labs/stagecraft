@@ -932,3 +932,153 @@ test("check 8 role-budget-brief: real roles/ pass after pm.md rewrite (regressio
   assert.equal(r.status, 0,
     `real roles/ has role-budget-brief violations after pm.md rewrite:\n${r.stdout}\n${r.stderr}`);
 });
+
+// ---------------------------------------------------------------------------
+// Git-aware mode: tracked-vs-untracked behavior (7.1)
+//
+// When --root points at a directory that has .git, consistency.js uses
+// git ls-files for enumeration: tracked files → blocking checks, untracked
+// non-ignored files → advisory only. Fixture trees without .git keep the
+// original readdir behavior.
+// ---------------------------------------------------------------------------
+
+const { spawnSync: spawnSyncGit } = require("node:child_process");
+
+function mkFixtureGitRoot() {
+  const dir = mkFixtureRoot(); // devteam-test- prefix, cleaned by cleanup()
+  spawnSyncGit("git", ["init"], { cwd: dir });
+  spawnSyncGit("git", ["config", "user.email", "test@test.com"], { cwd: dir });
+  spawnSyncGit("git", ["config", "user.name", "Test"], { cwd: dir });
+  return dir;
+}
+
+function gitAddFile(root, rel) {
+  spawnSyncGit("git", ["add", rel], { cwd: root });
+}
+
+test("git-aware: tracked orphan doc in fixture git repo is a blocking failure", () => {
+  // docs/README.md and docs/orphan.md are both git-added (tracked).
+  // orphan.md has no link in README.md → blocking docs-index failure.
+  const root = mkFixtureGitRoot();
+  try {
+    writeFile(root, "docs/README.md", "# docs\nNo links.\n");
+    writeFile(root, "docs/orphan.md", "# Orphan\n");
+    gitAddFile(root, "docs/README.md");
+    gitAddFile(root, "docs/orphan.md");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 1,
+      `expected exit 1 (tracked orphan is blocking) but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /docs-index/, "expected docs-index failure in output");
+    assert.match(r.stdout, /orphan\.md/, "expected the orphan filename in output");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("git-aware: untracked orphan doc in fixture git repo is advisory (not blocking)", () => {
+  // docs/README.md is tracked; docs/orphan.md is NOT tracked.
+  // Untracked files → advisory, not blocking. Exit 0.
+  const root = mkFixtureGitRoot();
+  try {
+    writeFile(root, "docs/README.md", "# docs\nNo links.\n");
+    writeFile(root, "docs/orphan.md", "# Orphan\n");
+    gitAddFile(root, "docs/README.md");
+    // docs/orphan.md intentionally NOT added
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 0,
+      `expected exit 0 (untracked orphan is advisory) but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /advisory/i,
+      "expected advisory in output for untracked orphan");
+    assert.match(r.stdout, /orphan\.md/,
+      "expected orphan.md in the advisory message");
+    assert.match(r.stdout, /untracked/i,
+      "expected 'untracked' in the advisory message");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("git-aware: fixture tree without .git uses readdir (blocks on orphan)", () => {
+  // Plain fixture trees (no .git) continue to use readdir — backward-compatible.
+  // An orphan doc is a blocking failure as before.
+  const root = mkFixtureRoot();
+  try {
+    writeFile(root, "docs/README.md", "# docs\nNo links.\n");
+    writeFile(root, "docs/orphan.md", "# Orphan\n");
+
+    const r = runChecker(root, { noBaseline: true });
+    assert.equal(r.status, 1,
+      `expected exit 1 (no-git fixture uses readdir → orphan blocks) but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+    assert.match(r.stdout, /docs-index/, "expected docs-index failure");
+  } finally {
+    cleanup(root);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// --only filter (7.1)
+// ---------------------------------------------------------------------------
+
+test("--only docs-index: only docs-index runs; other violations don't appear", () => {
+  const root = mkFixtureRoot();
+  try {
+    // Violation in rules/ (track-list) and in docs/ (orphan)
+    writeFile(root, "rules/pipeline.md", "Four tracks are available.\n");
+    writeFile(root, "docs/README.md", "# docs\nNo links.\n");
+    writeFile(root, "docs/orphan.md", "# Orphan\n");
+
+    const r = spawnSync("node", [CONSISTENCY_JS, "--root", root, "--only", "docs-index"], {
+      cwd: REPO_ROOT, encoding: "utf8", timeout: 30000,
+    });
+    assert.equal(r.status, 1,
+      `expected exit 1 (only docs-index runs, which has orphan) but got ${r.status}:\n${r.stdout}`);
+    assert.match(r.stdout, /docs-index/, "expected docs-index failure");
+    assert.doesNotMatch(r.stdout, /track-list/,
+      "track-list must not appear when --only docs-index");
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("--only gate-filename: only gate-filename runs; docs-index violation doesn't appear", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeFile(root, "docs/README.md", "# docs\nNo links.\n");
+    writeFile(root, "docs/orphan.md", "# Orphan\n");
+    writeFile(root, "roles/backend.md",
+      "Write `pipeline/gates/stage-04-backend.json` with status PASS.\n");
+
+    const r = spawnSync("node", [CONSISTENCY_JS, "--root", root, "--only", "gate-filename"], {
+      cwd: REPO_ROOT, encoding: "utf8", timeout: 30000,
+    });
+    assert.equal(r.status, 1,
+      `expected exit 1 (gate-filename violation) but got ${r.status}:\n${r.stdout}`);
+    assert.match(r.stdout, /gate-filename/, "expected gate-filename failure");
+    assert.doesNotMatch(r.stdout, /docs-index/,
+      "docs-index must not appear when --only gate-filename");
+  } finally {
+    cleanup(root);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// CI probe: untracked scratch file does not block the suite (7.1 part 5)
+//
+// The CI workflow creates docs/SCRATCH-ci-probe.md before npm test to verify
+// that untracked files don't break the suite. This test confirms the same
+// behavior by running --only docs-index against the real repo (.git present).
+// In CI the probe file exists; locally it may not. Either way: exit 0.
+// ---------------------------------------------------------------------------
+
+test("ci-probe: untracked scratch file in real repo does not fail docs-index check", () => {
+  // --only docs-index against the real repo: whether SCRATCH-ci-probe.md exists
+  // (CI) or not (local), exit 0 is required. Before this fix, an untracked file
+  // in docs/ produced a blocking exit 1.
+  const r = spawnSync("node", [CONSISTENCY_JS, "--only", "docs-index"], {
+    cwd: REPO_ROOT, encoding: "utf8", timeout: 30000,
+  });
+  assert.equal(r.status, 0,
+    `expected exit 0 (untracked probe file must not block docs-index) but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+});

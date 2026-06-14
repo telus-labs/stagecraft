@@ -26,6 +26,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const REPO_ROOT = path.resolve(__dirname, "..");
 const { STAGES, TRACKS, STAGES_BY_TRACK, ORDERED_STAGE_NAMES, stageNames } =
@@ -87,6 +88,25 @@ function loadBaseline() {
 }
 
 // ---------------------------------------------------------------------------
+// Git-aware file enumeration (7.1)
+//
+// When a scan root has .git, we use `git ls-files -z` so only committed
+// (tracked) files participate in blocking checks. Untracked-but-not-ignored
+// files produce advisories instead of failures — a scratch file must not
+// fail the lint. When .git is absent (fixture-tree mode), plain readdir is
+// used unchanged.
+// ---------------------------------------------------------------------------
+
+function gitTrackedFiles(root) {
+  if (!fs.existsSync(path.join(root, ".git"))) return null;
+  const r = spawnSync("git", ["ls-files", "-z", "--full-name"], {
+    cwd: root, encoding: "buffer", timeout: 10000,
+  });
+  if (r.status !== 0) return null;
+  return new Set(r.stdout.toString("utf8").split("\0").filter(Boolean));
+}
+
+// ---------------------------------------------------------------------------
 // Scan utilities
 // ---------------------------------------------------------------------------
 
@@ -106,16 +126,18 @@ function isExcluded(absPath, scanRoot) {
 }
 
 // Recursively scan a directory for .md files matching `re`.
+// trackedSet: when non-null (git-aware mode), only process tracked files.
 // Returns array of { file (relative to scanRoot), line, text, match }.
-function scanDirRec(absDir, re, scanRoot, results) {
+function scanDirRec(absDir, re, scanRoot, results, trackedSet) {
   let entries;
   try { entries = fs.readdirSync(absDir, { withFileTypes: true }); } catch { return; }
   for (const e of entries) {
     const abs = path.join(absDir, e.name);
     if (isExcluded(abs, scanRoot)) continue;
-    if (e.isDirectory()) { scanDirRec(abs, re, scanRoot, results); continue; }
+    if (e.isDirectory()) { scanDirRec(abs, re, scanRoot, results, trackedSet); continue; }
     if (!e.name.endsWith(".md")) continue;
-    const rel = path.relative(scanRoot, abs);
+    const rel = path.relative(scanRoot, abs).replace(/\\/g, "/");
+    if (trackedSet !== null && !trackedSet.has(rel)) continue; // skip untracked
     let content;
     try { content = fs.readFileSync(abs, "utf8"); } catch { continue; }
     const lines = content.split(/\r?\n/);
@@ -133,13 +155,14 @@ function scanDirRec(absDir, re, scanRoot, results) {
 
 // Scan relative dir names (joined with scanRoot) for matching .md content.
 // scanRoot defaults to REPO_ROOT. Returns { file, line, text, match } array.
-function scanDirs(relDirs, re, scanRoot) {
+// trackedSet: when non-null (git-aware mode), only process tracked files.
+function scanDirs(relDirs, re, scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const results = [];
   for (const d of relDirs) {
     const absDir = path.join(root, d);
     if (!fs.existsSync(absDir)) continue;
-    scanDirRec(absDir, re, root, results);
+    scanDirRec(absDir, re, root, results, trackedSet !== undefined ? trackedSet : null);
   }
   return results;
 }
@@ -332,7 +355,7 @@ function checkAuditFeatureIntegrity() {
 // or gate names referencing non-canonical stage IDs.
 //
 // Scan: rules/, roles/, docs/runbooks/, skills/
-function checkGateFilenameReferences(scanRoot) {
+function checkGateFilenameReferences(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const scanRelDirs = ["rules", "roles", "docs/runbooks", "skills"];
 
@@ -353,8 +376,8 @@ function checkGateFilenameReferences(scanRoot) {
   // This is a separate simpler scan so we can skip the placeholder check.
   const dashPlaceholderRe = /(stage-\d+[a-z]?)-(?:\{[^}]+\}|<[^>]+>)\.json/gi;
 
-  const hits = scanDirs(scanRelDirs, gateRefRe, root);
-  const placeholderHits = scanDirs(scanRelDirs, dashPlaceholderRe, root);
+  const hits = scanDirs(scanRelDirs, gateRefRe, root, trackedSet);
+  const placeholderHits = scanDirs(scanRelDirs, dashPlaceholderRe, root, trackedSet);
   const seen = new Set();
 
   // Check dash-form with placeholders (stage-05-{area}.json)
@@ -430,7 +453,7 @@ function checkGateFilenameReferences(scanRoot) {
 //
 // Scan: rules/, roles/, docs/, skills/
 // Exclusions: docs/historical/, docs/audit-archive/ (wholesale)
-function checkStageIdAndCountClaims(scanRoot) {
+function checkStageIdAndCountClaims(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const scanRelDirs = ["rules", "roles", "docs", "skills"];
 
@@ -449,8 +472,8 @@ function checkStageIdAndCountClaims(scanRoot) {
   // "N-stage" count claim: "13-stage pipeline", "18-stage workflow", etc.
   const stageCountRe = /\b(\d+)-stage\b/gi;
 
-  const idHits = scanDirs(scanRelDirs, stageIdRe, root);
-  const countHits = scanDirs(scanRelDirs, stageCountRe, root);
+  const idHits = scanDirs(scanRelDirs, stageIdRe, root, trackedSet);
+  const countHits = scanDirs(scanRelDirs, stageCountRe, root, trackedSet);
 
   const seenId = new Set();
   for (const hit of idHits) {
@@ -489,7 +512,7 @@ function checkStageIdAndCountClaims(scanRoot) {
 // (b) Enumerated "Valid values:" lists that mention some tracks but omit others.
 //
 // Scan: rules/, roles/, docs/
-function checkTrackListClaims(scanRoot) {
+function checkTrackListClaims(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const scanRelDirs = ["rules", "roles", "docs"];
   const TRUE_TRACK_COUNT = TRACKS.length; // currently 6
@@ -504,7 +527,7 @@ function checkTrackListClaims(scanRoot) {
   const validValuesRe = /[Vv]alid(?:\s+values?)?[:\s]+([^\n]{5,})/g;
 
   // (a) Count claims
-  const countHits = scanDirs(scanRelDirs, trackCountRe, root);
+  const countHits = scanDirs(scanRelDirs, trackCountRe, root, trackedSet);
   const seenCount = new Set();
   for (const hit of countHits) {
     const raw = hit.match[1];
@@ -527,7 +550,7 @@ function checkTrackListClaims(scanRoot) {
   }
 
   // (b) Valid-values lists that omit tracks
-  const validHits = scanDirs(scanRelDirs, validValuesRe, root);
+  const validHits = scanDirs(scanRelDirs, validValuesRe, root, trackedSet);
   for (const hit of validHits) {
     const valueStr = hit.match[1];
     const mentioned = new Set();
@@ -559,7 +582,7 @@ function checkTrackListClaims(scanRoot) {
 // are excluded — they exist in target projects, not this repo.
 //
 // Scan: rules/, roles/, skills/, docs/runbooks/
-function checkReferencedFileExistence(scanRoot) {
+function checkReferencedFileExistence(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const scanRelDirs = ["rules", "roles", "skills", "docs/runbooks"];
 
@@ -613,10 +636,10 @@ function checkReferencedFileExistence(scanRoot) {
     }
   }
 
-  const btHits = scanDirs(scanRelDirs, backtickRe, root);
+  const btHits = scanDirs(scanRelDirs, backtickRe, root, trackedSet);
   for (const hit of btHits) checkRef(hit.match[1], hit.file, hit.line);
 
-  const mdHits = scanDirs(scanRelDirs, mdLinkRe, root);
+  const mdHits = scanDirs(scanRelDirs, mdLinkRe, root, trackedSet);
   for (const hit of mdHits) checkRef(hit.match[1], hit.file, hit.line);
 }
 
@@ -631,7 +654,7 @@ function checkReferencedFileExistence(scanRoot) {
 //     the stagecraft framework's own commands must exist in package.json.
 //
 // Scan: rules/, roles/, docs/runbooks/
-function checkCommandSurface(scanRoot) {
+function checkCommandSurface(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const scanRelDirs = ["rules", "roles", "docs/runbooks"];
 
@@ -648,7 +671,7 @@ function checkCommandSurface(scanRoot) {
   // Must start with / followed by lowercase letter
   const slashRe = /`(\/[a-z][a-z0-9-]*)(?:\s[^`]*)?`/g;
 
-  const slashHits = scanDirs(scanRelDirs, slashRe, root);
+  const slashHits = scanDirs(scanRelDirs, slashRe, root, trackedSet);
   const seenSlash = new Set();
   for (const hit of slashHits) {
     const cmd = hit.match[1];
@@ -672,7 +695,7 @@ function checkCommandSurface(scanRoot) {
   } catch { /* no package.json — skip */ }
 
   const npmRunRe = /`npm run ([\w:.-]+)`/g;
-  const npmRunHits = scanDirs(scanRelDirs, npmRunRe, root);
+  const npmRunHits = scanDirs(scanRelDirs, npmRunRe, root, trackedSet);
   const seenNpm = new Set();
   for (const hit of npmRunHits) {
     const scriptName = hit.match[1];
@@ -886,7 +909,11 @@ function checkCliRefSync() {
 // Only runs in full-repo mode — the generator imports core/pipeline/stages.js
 // and reads rules/ + roles/ from the live repo.
 function checkPromptBudgetSync() {
-  const budgetPath = path.join(REPO_ROOT, "docs", "reference", "prompt-budget.md");
+  // PROMPT_BUDGET_FILE env var overrides the default path, mirroring the
+  // CONSISTENCY_BASELINE_FILE pattern. Used in meta-tests to supply a synthetic
+  // budget without touching the real docs/reference/prompt-budget.md.
+  const budgetPath = process.env.PROMPT_BUDGET_FILE ||
+    path.join(REPO_ROOT, "docs", "reference", "prompt-budget.md");
   if (!fs.existsSync(budgetPath)) {
     advisory("prompt-budget", "docs/reference/prompt-budget.md not found — run: npm run docs:generate");
     return;
@@ -985,14 +1012,15 @@ function checkExampleMdFreshnessStamp() {
 //
 // Never edits the files. Violations are advisory only.
 //
-// Only runs in full-repo mode.
-function checkFileSizeCeilings() {
+// Accepts optional scanRoot for fixture-tree testing via --root + --only file-size-ceiling.
+function checkFileSizeCeilings(scanRoot) {
+  const root = scanRoot || REPO_ROOT;
   const ROLE_CEILING   = 16 * 1024; // 16 KB
   const STAGE_CEILING  =  8 * 1024; //  8 KB
   const AGENTS_CEILING = 10 * 1024; // 10 KB
 
   // Check AGENTS.md
-  const agentsPath = path.join(REPO_ROOT, "AGENTS.md");
+  const agentsPath = path.join(root, "AGENTS.md");
   if (fs.existsSync(agentsPath)) {
     const bytes = fs.statSync(agentsPath).size;
     if (bytes > AGENTS_CEILING) {
@@ -1004,7 +1032,7 @@ function checkFileSizeCeilings() {
   }
 
   // Check roles/*.md
-  const rolesDir = path.join(REPO_ROOT, "roles");
+  const rolesDir = path.join(root, "roles");
   if (fs.existsSync(rolesDir)) {
     for (const f of fs.readdirSync(rolesDir)) {
       if (!f.endsWith(".md")) continue;
@@ -1020,7 +1048,7 @@ function checkFileSizeCeilings() {
   }
 
   // Check rules/stage-*.md
-  const rulesDir = path.join(REPO_ROOT, "rules");
+  const rulesDir = path.join(root, "rules");
   if (fs.existsSync(rulesDir)) {
     for (const f of fs.readdirSync(rulesDir)) {
       if (!f.startsWith("stage-") || !f.endsWith(".md")) continue;
@@ -1099,15 +1127,19 @@ function checkStageRuleFileCoverage(scanRoot) {
 //
 // The check is a no-op when docs/ does not exist or has no non-excluded .md
 // files, so it is safe to run against fixture trees that have no docs/ at all.
-function checkDocsIndexCoverage(scanRoot) {
+function checkDocsIndexCoverage(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const docsDir = path.join(root, "docs");
   if (!fs.existsSync(docsDir)) return;
 
+  // In git-aware mode, compute tracked set for this root (unless already provided).
+  // trackedSet is passed from runProseChecks so git ls-files runs once per invocation.
+  const ts = trackedSet !== undefined ? trackedSet : gitTrackedFiles(root);
+
   // Subdirectory names (direct children of docs/) that are fully excluded.
   const EXCLUDED_TOP_DIRS = ["historical", "audit-archive", "reference", "audit"];
 
-  // Collect all .md files under docs/, excluding the above dirs and docs/README.md itself.
+  // Collect .md files under docs/: tracked → blocking, untracked non-ignored → advisory.
   const docFiles = []; // paths relative to docsDir, using "/" separators
   function scanDocs(dir) {
     let entries;
@@ -1120,6 +1152,16 @@ function checkDocsIndexCoverage(scanRoot) {
       if (e.isDirectory()) { scanDocs(abs); continue; }
       if (!e.name.endsWith(".md")) continue;
       if (relFromDocs === "README.md") continue; // index doesn't need to list itself
+      if (ts !== null) {
+        const rootRel = path.relative(root, abs).replace(/\\/g, "/");
+        if (!ts.has(rootRel)) {
+          // Untracked: advisory only (commit the file or add it to .gitignore first).
+          advisory("docs-index",
+            `docs/${relFromDocs} is untracked — would violate docs-index if committed ` +
+            `(link it in docs/README.md then git add it, or add it to .gitignore)`);
+          continue;
+        }
+      }
       docFiles.push(relFromDocs);
     }
   }
@@ -1191,7 +1233,7 @@ function checkDocsIndexCoverage(scanRoot) {
 //
 // Scan: roles/*.md (only role briefs, not rules/ — rules describe the
 // pipeline, not what a specific role is asked to do).
-function checkRoleBriefToolBudgetCompatibility(scanRoot) {
+function checkRoleBriefToolBudgetCompatibility(scanRoot, trackedSet) {
   const root = scanRoot || REPO_ROOT;
   const { toolBudgetFor } = require(path.join(REPO_ROOT, "core", "roles"));
   const rolesDir = path.join(root, "roles");
@@ -1206,6 +1248,8 @@ function checkRoleBriefToolBudgetCompatibility(scanRoot) {
 
   for (const file of fs.readdirSync(rolesDir)) {
     if (!file.endsWith(".md") || file === "README.md") continue;
+    const relPath = ("roles/" + file).replace(/\\/g, "/");
+    if (trackedSet !== null && trackedSet !== undefined && !trackedSet.has(relPath)) continue;
     const roleName = file.replace(/\.md$/, "");
     const budget = toolBudgetFor(roleName);
     // Unknown role or role with Bash — nothing to flag.
@@ -1245,15 +1289,23 @@ function checkRoleBriefToolBudgetCompatibility(scanRoot) {
 // from the repo root, so it cannot work against a fixture tree).
 // ---------------------------------------------------------------------------
 
-function runProseChecks(scanRoot) {
-  checkGateFilenameReferences(scanRoot);
-  checkStageIdAndCountClaims(scanRoot);
-  checkTrackListClaims(scanRoot);
-  checkReferencedFileExistence(scanRoot);
-  checkCommandSurface(scanRoot);
-  checkStageRuleFileCoverage(scanRoot);
-  checkDocsIndexCoverage(scanRoot);
-  checkRoleBriefToolBudgetCompatibility(scanRoot);
+function runProseChecks(scanRoot, onlyFilter) {
+  const root = scanRoot || REPO_ROOT;
+  // Compute git-tracked set once so each check doesn't spawn its own git process.
+  const trackedSet = gitTrackedFiles(root);
+  // shouldRun: when --only is set, only the named check class runs.
+  function shouldRun(cls) { return !onlyFilter || onlyFilter === cls; }
+
+  if (shouldRun("gate-filename")) checkGateFilenameReferences(scanRoot, trackedSet);
+  // stage-id and stage-count share one function; run if either class is requested.
+  if (shouldRun("stage-id") || shouldRun("stage-count")) checkStageIdAndCountClaims(scanRoot, trackedSet);
+  if (shouldRun("track-list")) checkTrackListClaims(scanRoot, trackedSet);
+  if (shouldRun("ref-existence")) checkReferencedFileExistence(scanRoot, trackedSet);
+  if (shouldRun("command-surface")) checkCommandSurface(scanRoot, trackedSet);
+  if (shouldRun("stage-rule-file")) checkStageRuleFileCoverage(scanRoot);
+  if (shouldRun("docs-index")) checkDocsIndexCoverage(scanRoot, trackedSet);
+  if (shouldRun("role-budget-brief")) checkRoleBriefToolBudgetCompatibility(scanRoot, trackedSet);
+  if (shouldRun("file-size-ceiling")) checkFileSizeCeilings(scanRoot);
 }
 
 // ---------------------------------------------------------------------------
@@ -1266,36 +1318,46 @@ function main(opts) {
   const json = args.includes("--json");
   const noBaseline = args.includes("--no-baseline");
 
-  // --root <path> allows tests to run the checker against fixture trees
+  // --root <path> allows tests to run the checker against fixture trees or git repos
   const rootIdx = args.indexOf("--root");
   const customRoot = rootIdx >= 0 ? args[rootIdx + 1] : null;
 
+  // --only <check-class> runs a single check class (used by meta-tests to avoid
+  // fan-out: each class test invokes only its own class, not the full suite).
+  const onlyIdx = args.indexOf("--only");
+  const onlyFilter = onlyIdx >= 0 ? args[onlyIdx + 1] : null;
+
+  function shouldRunFullRepo(cls) {
+    return !onlyFilter || onlyFilter === cls;
+  }
+
   if (customRoot) {
-    // Fixture-tree mode: run only prose checks (core checks need the live repo)
-    runProseChecks(customRoot);
+    // Fixture-tree or git-repo mode: run prose checks (core checks need the live repo).
+    runProseChecks(customRoot, onlyFilter);
   } else {
-    // Full run: original core checks + prose checks against real repo
-    checkStagesToSchemas();
-    checkSchemasToStages();
-    checkStagesToRoles();
-    checkRoleWritesValid();
-    checkSubagentOverrides();
-    checkTracksReferenceKnownStages();
-    checkOrderedStageNamesCoversAll();
-    checkAdaptersExportContract();
-    checkRequiredRulesPresent();
-    checkSchemaIdsAndDraft();
-    checkGateBaseSchemaIdentity();
-    checkAuditFeatureIntegrity();
-    checkTracksMatrixSync();
-    checkStagesRefSync();
-    checkHostsRefSync();
-    checkCliRefSync();
-    checkCiTemplateRefVersion();
-    checkPromptBudgetSync();
-    checkExampleMdFreshnessStamp();
-    checkFileSizeCeilings();
-    runProseChecks(null);
+    // Full run: core checks (only when no --only filter) + prose checks against real repo.
+    if (!onlyFilter) {
+      checkStagesToSchemas();
+      checkSchemasToStages();
+      checkStagesToRoles();
+      checkRoleWritesValid();
+      checkSubagentOverrides();
+      checkTracksReferenceKnownStages();
+      checkOrderedStageNamesCoversAll();
+      checkAdaptersExportContract();
+      checkRequiredRulesPresent();
+      checkSchemaIdsAndDraft();
+      checkGateBaseSchemaIdentity();
+      checkAuditFeatureIntegrity();
+      checkTracksMatrixSync();
+      checkStagesRefSync();
+      checkHostsRefSync();
+      checkCliRefSync();
+      checkCiTemplateRefVersion();
+    }
+    if (shouldRunFullRepo("prompt-budget")) checkPromptBudgetSync();
+    if (!onlyFilter) checkExampleMdFreshnessStamp();
+    runProseChecks(null, onlyFilter);
   }
 
   // Apply baseline suppression: baselined keys don't fail the run
