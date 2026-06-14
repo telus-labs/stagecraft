@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { runStage, mergeWorkstreamGates, buildDescriptor, summary } =
+const { runStage, mergeWorkstreamGates, buildDescriptor, summary, patchGateForUnpricedModel } =
   require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { listArchives } = require(path.join(REPO_ROOT, "core", "gates", "archive"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
@@ -399,6 +399,7 @@ describe("orchestrator: mergeWorkstreamGates unpriced model warning (Fix 3.7.7)"
   });
 
   // ─── 5.2: prune-on-PASS via mergeWorkstreamGates ────────────────────────────
+
   it("(5.2) mergeWorkstreamGates prunes archives when merged gate reaches PASS", () => {
     const cwd = track(makeTargetProject());
     // Seed per-workstream gates that all PASS (simulating recovery after prior failures).
@@ -432,5 +433,62 @@ describe("orchestrator: mergeWorkstreamGates unpriced model warning (Fix 3.7.7)"
     );
     mergeWorkstreamGates("build", { cwd });
     assert.equal(listArchives(gd, "stage-04").length, 1, "archives preserved on FAIL merge");
+  });
+});
+
+describe("orchestrator: patchGateForUnpricedModel — single-role path (Fix 6.5.1)", () => {
+  it("unpriced model + tokens_in → warning added to gate", () => {
+    const cwd = track(makeTargetProject());
+    const gateFile = seedGate(cwd, "stage-01", {
+      stage: "stage-01",
+      model: "future-model-x",
+      tokens_in: 3000,
+      tokens_out: 1200,
+      status: "PASS",
+    });
+    patchGateForUnpricedModel(gateFile);
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    assert.ok(gate.warnings.some((w) => w.includes("unpriced model future-model-x")));
+    assert.ok(gate.warnings.some((w) => w.includes("budget enforcement incomplete")));
+    // Totals must be unchanged
+    assert.equal(gate.tokens_in, 3000);
+    assert.equal(gate.tokens_out, 1200);
+  });
+
+  it("known model → no warning added", () => {
+    const cwd = track(makeTargetProject());
+    const gateFile = seedGate(cwd, "stage-01", {
+      model: "claude-sonnet-4-6",
+      tokens_in: 3000,
+      tokens_out: 1200,
+      status: "PASS",
+    });
+    patchGateForUnpricedModel(gateFile);
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    const unpricedWarnings = gate.warnings.filter((w) => w.includes("unpriced model"));
+    assert.equal(unpricedWarnings.length, 0);
+  });
+
+  it("missing model field → no warning (only model-named tokens flagged)", () => {
+    const cwd = track(makeTargetProject());
+    const gateFile = seedGate(cwd, "stage-01", { tokens_in: 3000, status: "PASS" });
+    patchGateForUnpricedModel(gateFile);
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    const unpricedWarnings = gate.warnings.filter((w) => w.includes("unpriced model"));
+    assert.equal(unpricedWarnings.length, 0);
+  });
+
+  it("idempotent — calling twice does not duplicate the warning", () => {
+    const cwd = track(makeTargetProject());
+    const gateFile = seedGate(cwd, "stage-01", {
+      model: "future-model-x",
+      tokens_in: 3000,
+      status: "PASS",
+    });
+    patchGateForUnpricedModel(gateFile);
+    patchGateForUnpricedModel(gateFile);
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    const count = gate.warnings.filter((w) => w.includes("unpriced model future-model-x")).length;
+    assert.equal(count, 1);
   });
 });

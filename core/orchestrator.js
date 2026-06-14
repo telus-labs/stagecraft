@@ -106,6 +106,22 @@ function patchGateForToolBudget(gatePath, toolBudget) {
   fs.writeFileSync(gatePath, JSON.stringify(patched, null, 2) + "\n", "utf8");
 }
 
+// D7: patch a single-role gate to surface the same unpriced-model WARN that
+// mergeWorkstreamGates emits for multi-role stages. Idempotent.
+function patchGateForUnpricedModel(gatePath) {
+  if (!fs.existsSync(gatePath)) return;
+  const { gate, error } = loadGateSafe(gatePath);
+  if (error || !gate) return;
+  if (typeof gate.tokens_in !== "number" || typeof gate.model !== "string") return;
+  if (pricingFor(gate.model)) return;
+  const msg = `unpriced model ${gate.model} — budget enforcement incomplete`;
+  const existing = Array.isArray(gate.warnings) ? gate.warnings : [];
+  if (existing.includes(msg)) return;
+  const patched = { ...gate, warnings: [...existing, msg] };
+  fs.writeFileSync(gatePath, JSON.stringify(patched, null, 2) + "\n", "utf8");
+  process.stderr.write(`[devteam] D7: unpriced model "${gate.model}" — budget enforcement incomplete\n`);
+}
+
 // Compute the full dispatch plan for a stage: which (role, host) pairs
 // the orchestrator should invoke, with their workstream ids and gate
 // filenames. Normally there's one entry per role; for peer-review with
@@ -445,6 +461,9 @@ async function runStageHeadless(stageName, opts = {}) {
       const wroteThisRun = postGateMtime !== null && (preGateMtime === null || postGateMtime > preGateMtime);
       if (wroteThisRun) {
         try { require("./gates/chain").stampChain(gatesDir, stageName, plan.ctx.track); } catch { /* */ }
+        // D7: surface unpriced-model WARN on the single-role path, mirroring
+        // what mergeWorkstreamGates does for multi-role stages.
+        try { patchGateForUnpricedModel(singleRoleGate); } catch { /* */ }
         // 5.2: prune per-attempt archives when the stage gate recovers to PASS —
         // archives must not outlive the failure sequence they describe. Best-effort.
         try {
@@ -1065,6 +1084,7 @@ module.exports = {
   summary,
   buildDescriptor,
   computeDispatchPlan,
+  patchGateForUnpricedModel,
   ORCHESTRATOR_ID,
   rolesPath,
   templatesPath,

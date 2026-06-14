@@ -37,9 +37,9 @@ describe("goalLoop capability declarations", () => {
     assert.strictEqual(caps.goalLoop, false, "gemini-cli.goalLoop must be explicitly false");
   });
 
-  it("generic does not declare goalLoop", () => {
+  it("generic declares goalLoop: false (explicit, never ambiguous)", () => {
     const caps = require(path.join(REPO_ROOT, "hosts", "generic", "capabilities.json"));
-    assert.ok(!caps.goalLoop, "generic should not have goalLoop");
+    assert.strictEqual(caps.goalLoop, false, "generic.goalLoop must be explicitly false");
   });
 });
 
