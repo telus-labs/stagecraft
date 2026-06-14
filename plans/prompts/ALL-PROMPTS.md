@@ -15,10 +15,10 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 4 | Capability roadmap (ADR-first) | ✅ complete (PRs #90–#97) |
 | D | Documentation system | ✅ complete (PRs #99 · #102 · #103 · #104 · #105 · #107) |
 | 5 | State integrity (round-2 review) | ✅ complete (PRs #114–#117) |
-| 6 | Promise integrity | ✅ 6.1–6.4 complete (PRs #118–#121); 6.5 🔲 ready |
+| 6 | Promise integrity | ✅ complete (PRs #118–#121 · #124) |
 | 7 | Test & CI harness | 🔲 ready |
 | 8 | Release v0.7.0 + semantic sync | ⏸ 8.3 needs 7.1 |
-| 9 | Evidence-gated capabilities | ⏸ Phase 6.5 pending; ADR-first |
+| 9 | Evidence-gated capabilities | ⏸ ADR-first |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1233,7 +1233,7 @@ Required tests: frontend-owned a11y blocker in a non-demo fixture routes to fron
 multi-workstream FAIL attribution; #106 and #109 regressions green.
 ```
 
-### 6.5 Small parity basket 🔲
+### 6.5 Small parity basket ✅ PR #124
 
 ```
 TASK: Implement plans/phase-6-promise-integrity.md, item 6.5 — three fixes, one commit
