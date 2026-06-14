@@ -509,11 +509,12 @@ describe("gate-validator: dispatched_tool_budget auto-injection (G10)", () => {
       "validator must not overwrite a dispatched_tool_budget that the orchestrator already stamped");
   });
 
-  it("injects dispatched_tool_budget: null for a generic host (no toolBudgetFor)", () => {
+  it("injects dispatched_tool_budget from core/roles for any host (including generic)", () => {
     const cwd = track(makeTargetProject());
     const dir = path.join(cwd, "pipeline", "gates");
     fs.mkdirSync(dir, { recursive: true });
-    // generic adapter has no toolBudgetFor — injection should write null.
+    // After 6.1, the validator uses core/roles.toolBudgetFor (host-neutral),
+    // so even a gate written against the generic host gets the budget injected.
     const gate = {
       stage: "stage-01",
       status: "PASS",
@@ -530,10 +531,15 @@ describe("gate-validator: dispatched_tool_budget auto-injection (G10)", () => {
     runValidator(cwd);
 
     const after = JSON.parse(fs.readFileSync(gateFile, "utf8"));
-    // generic adapter has no toolBudgetFor, so the field is either absent or
-    // not injected. The gate remains valid either way.
-    // What must NOT happen: the validator must not crash or flip status to FAIL.
+    assert.ok("dispatched_tool_budget" in after,
+      "validator must inject dispatched_tool_budget via core/roles even for the generic host");
+    assert.ok(Array.isArray(after.dispatched_tool_budget),
+      "dispatched_tool_budget must be an array for the pm role");
+    assert.ok(after.dispatched_tool_budget.length > 0,
+      "pm has a declared tool budget — dispatched_tool_budget must be non-empty");
+    assert.ok(!after.dispatched_tool_budget.includes("Bash"),
+      "pm budget must not include Bash (non-technical role constraint)");
     assert.ok(after.status === "PASS",
-      "validator must not change status when tool-budget injection is skipped for generic host");
+      "validator must not change status when injecting tool-budget");
   });
 });

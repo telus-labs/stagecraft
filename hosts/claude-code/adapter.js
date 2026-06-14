@@ -16,7 +16,7 @@ const path = require("node:path");
 
 const capabilities = require("./capabilities.json");
 const { runHeadless } = require("../../core/adapters/headless");
-const { listRoles, ROLES_DIR } = require("../../core/roles");
+const { listRoles, toolBudgetFor, ROLES_DIR } = require("../../core/roles");
 const baseInstall = require("../../core/adapters/base-install");
 const RULES_DIR = baseInstall.RULES_DIR;
 const SKILLS_DIR = baseInstall.SKILLS_DIR;
@@ -24,6 +24,9 @@ const COMMANDS_SRC = path.join(__dirname, "install", "commands");
 
 // Per-role frontmatter for Claude Code subagent files. The `name` field is
 // the filename stem the agent is invoked under inside Claude Code.
+// Tool budgets are sourced from core/roles.js (toolBudgetFor) — the tools
+// field was removed from here in 6.1 so the budget stays in one host-neutral
+// place.
 //
 // The KEYS of this object are role names. They must be a subset of the
 // roles discovered by core/roles.js (which scans roles/*.md). If a brief
@@ -34,108 +37,91 @@ const ROLE_FRONTMATTER = {
   pm: {
     name: "pm",
     description: "Product Manager. Owns the brief, acceptance criteria, scope, sign-off, and stakeholder summaries. Represents the customer; does not make technical decisions.",
-    tools: "Read, Write, Glob",
     model: "opus",
     permissionMode: "acceptEdits",
   },
   principal: {
     name: "principal",
     description: "Principal Engineer. Owns the design spec, ADRs, and technical rulings. Has veto power on architecture and on escalated code review conflicts.",
-    tools: "Read, Write, Glob, Grep, Bash",
     model: "opus",
     permissionMode: "acceptEdits",
   },
   reviewer: {
     name: "reviewer",
     description: "Peer reviewer for Stage 5. READ-ONLY during a review invocation; writes only to pipeline/code-review/by-<area>.md. Does not edit source or write stage gates directly.",
-    tools: "Read, Write, Glob, Grep",
     model: "sonnet",
     permissionMode: "acceptEdits",
   },
   security: {
     name: "security-engineer",
     description: "Security reviewer for changes touching auth, crypto, PII, payments, secrets, IaC, or new/upgraded external dependencies. Has veto power on Stage 4a security gates.",
-    tools: "Read, Write, Glob, Grep, Bash",
     model: "opus",
     permissionMode: "acceptEdits",
   },
   backend: {
     name: "dev-backend",
     description: "Backend implementer. Owns src/backend/. Implements APIs, services, data layer; runs local verification; writes the backend workstream gate.",
-    tools: "Read, Write, Edit, Glob, Grep, Bash",
     model: "sonnet",
     permissionMode: "acceptEdits",
   },
   frontend: {
     name: "dev-frontend",
     description: "Frontend implementer. Owns src/frontend/. Implements UI; runs local verification; writes the frontend workstream gate.",
-    tools: "Read, Write, Edit, Glob, Grep, Bash",
     model: "sonnet",
     permissionMode: "acceptEdits",
   },
   platform: {
     name: "dev-platform",
     description: "Platform/infra implementer. Owns src/infra/, CI, pre-review (Stage 4a) lint/test/SCA, and Stage 8 deploy. Writes the platform workstream gate.",
-    tools: "Read, Write, Edit, Glob, Grep, Bash",
     model: "sonnet",
     permissionMode: "acceptEdits",
   },
   qa: {
     name: "dev-qa",
     description: "QA. Owns src/tests/ and the Stage 6 test-execution gate. Maps each acceptance criterion to a test 1:1; does not own infra or deploy.",
-    tools: "Read, Write, Edit, Glob, Grep, Bash",
     model: "sonnet",
     permissionMode: "acceptEdits",
   },
   auditor: {
     name: "auditor",
     description: "Codebase auditor. Read-only by design — analyzes architecture, health, security, performance, code quality; produces docs/audit/00–10 outputs and a prioritized roadmap. Used by the /audit and /audit-quick slash commands. Never writes source code.",
-    tools: "Read, Glob, Grep, Bash, Write",
     model: "opus",
     permissionMode: "acceptEdits",
   },
   "red-team": {
     name: "red-team",
     description: "Adversarial reviewer for stage-04c. Read-only on code — finds concrete attack scenarios, hostile inputs, race conditions, abuse cases, scale failures, downstream effects, observability gaps the spec didn't cover. Writes pipeline/red-team-report.md + stage-04c gate. Distinct from security-engineer (narrower auth/crypto/PII remit, conditional, has veto) and reviewer (code review at stage-05). Route to a DIFFERENT host than the build agents for maximum independence.",
-    tools: "Read, Glob, Grep, Bash, Write",
     model: "opus",
     permissionMode: "acceptEdits",
   },
   migrations: {
     name: "migrations",
     description: "Migration-safety reviewer for stage-04d (conditional on data-layer diffs). Read-only on code — evaluates schema delta, breaking-change classification, backfill strategy, dual-write strategy, rollback plan + tested status. Writes pipeline/migration-safety.md + stage-04d gate. Has VETO power: a migration without a tested rollback halts the pipeline regardless of peer-review. Distinct from security-engineer (auth/crypto/PII), red-team (general adversarial), reviewer (code-level). Route to a different host than the build agents.",
-    tools: "Read, Glob, Grep, Bash, Write",
     model: "opus",
     permissionMode: "acceptEdits",
   },
   verifier: {
     name: "verifier",
     description: "Verification-beyond-tests reviewer for stage-06d (full track only, runs AFTER stage-06 PASS). Read-only on production code; writes property tests under src/tests/property/ and formal specs under pipeline/formal/. Applies property-based testing (fast-check / hypothesis / proptest), mutation testing (stryker / mutmut / mull), and/or formal verification (TLA+ / Alloy / Lean) to the changed code. Inventories candidates per code shape, picks methods, runs them, records counterexamples + surviving mutants + invariant violations as blocking findings. Distinct from qa (writes example tests, the floor), red-team (adversarial pre-build-acceptance), reviewer (code-level). Skill: verification-beyond-tests. Tests-pass becomes the floor; this role is the ceiling.",
-    tools: "Read, Glob, Grep, Bash, Write",
     model: "opus",
     permissionMode: "acceptEdits",
   },
 };
 
-// Return the declared tool budget for a role as a string array, or null if
-// no entry exists. The tools field is a comma-separated list of Claude Code
-// tool names ("Read, Write, Glob"). Called by the orchestrator to populate
-// descriptor.toolBudget; kept here so the source of truth (ROLE_FRONTMATTER)
-// stays in one place and the orchestrator never reads ROLE_FRONTMATTER directly.
-function toolBudgetFor(role) {
-  const fm = ROLE_FRONTMATTER[role];
-  if (!fm || !fm.tools) return null;
-  return fm.tools.split(", ").map((t) => t.trim()).filter(Boolean);
-}
+// toolBudgetFor is imported from core/roles.js (6.1: host-neutral source of
+// truth). Re-exported below so callers that reference adapter.toolBudgetFor
+// continue to work.
 
 function frontmatterFor(role) {
   const fm = ROLE_FRONTMATTER[role];
   if (!fm) throw new Error(`No frontmatter defined for role "${role}" in claude-code adapter`);
+  const toolsArray = toolBudgetFor(role);
+  if (!toolsArray) throw new Error(`No tool budget defined for role "${role}" in core/roles.js`);
   const lines = ["---"];
   lines.push(`name: ${fm.name}`);
   lines.push(`description: >`);
   for (const wrapped of wrapText(fm.description, 72)) lines.push(`  ${wrapped}`);
-  lines.push(`tools: ${fm.tools}`);
+  lines.push(`tools: ${toolsArray.join(", ")}`);
   lines.push(`model: ${fm.model}`);
   lines.push(`permissionMode: ${fm.permissionMode}`);
   lines.push("---");

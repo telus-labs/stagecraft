@@ -360,9 +360,9 @@ describe("adapter contract: PATCH MODE rendering", () => {
   });
 });
 
-// G10: claude-code adapter must export toolBudgetFor() returning the
-// per-role tool list. This is the extraction point the orchestrator uses
-// to populate descriptor.toolBudget for all hosts.
+// G10 / 6.1: toolBudgetFor() now lives in core/roles.js and is re-exported
+// by the claude-code adapter for backward compatibility. The orchestrator
+// resolves the budget host-neutrally from core/roles, not from the adapter.
 describe("adapter contract: claude-code toolBudgetFor", () => {
   const adapter = loadAdapter("claude-code");
 
@@ -441,14 +441,18 @@ describe("adapter contract: claude-code renderSettingsLocal portable hooks", () 
   });
 });
 
-// G10: prompt-only adapters must inject the tool budget advisory section
+// G10 / 6.1: prompt-only adapters must inject the tool budget advisory section
 // when descriptor.toolBudget is set, and must NOT inject it when absent.
+// After 6.1 the budget comes from core/roles.toolBudgetFor (host-neutral);
+// descriptorWithBudget() uses that real value instead of a fabricated array.
 describe("adapter contract: tool budget section rendering", () => {
   const PROMPT_ONLY_HOSTS = ["codex", "gemini-cli", "generic"];
-  const TOOL_BUDGET = ["Read", "Glob", "Grep"];
+  const { toolBudgetFor: rolesBudgetFor } = require(path.join(REPO_ROOT, "core", "roles"));
 
   function descriptorWithBudget() {
-    return { ...fixtureDescriptor(), toolBudget: TOOL_BUDGET };
+    // pm role has a declared budget (Read, Write, Glob) — use the real resolved
+    // value so this test exercises the same path as the orchestrator.
+    return { ...fixtureDescriptor(), toolBudget: rolesBudgetFor("pm") };
   }
 
   function descriptorNoBudget() {
@@ -460,10 +464,11 @@ describe("adapter contract: tool budget section rendering", () => {
 
     it(`${host}: prompt WITH toolBudget includes the tool surface advisory section`, () => {
       const d = tmpdir();
-      const prompt = adapter.renderStagePrompt(descriptorWithBudget(), fixtureContext(d));
+      const desc = descriptorWithBudget();
+      const prompt = adapter.renderStagePrompt(desc, fixtureContext(d));
       assert.ok(prompt.includes("Tool surface"),
         `${host}: prompt with toolBudget must include "Tool surface" heading`);
-      for (const tool of TOOL_BUDGET) {
+      for (const tool of desc.toolBudget) {
         assert.ok(prompt.includes(tool),
           `${host}: prompt must mention declared tool "${tool}" in budget section`);
       }
@@ -483,5 +488,111 @@ describe("adapter contract: tool budget section rendering", () => {
     const prompt = adapter.renderStagePrompt(descriptorWithBudget(), fixtureContext(d));
     assert.ok(!prompt.includes("Tool surface"),
       "claude-code prompt must not inject advisory section (tools enforced natively by host)");
+  });
+});
+
+// G10 / 6.1: host-neutral budget resolution via core/roles.toolBudgetFor.
+// After this change, every dispatch — regardless of host — receives a
+// descriptor.toolBudget derived from core/roles, not from the adapter.
+// These tests verify the three claims in the plan:
+//   1. Per non-claude host: advisory rendered in prompt + budget in descriptor
+//   2. Degradation warning fires exactly for prompt-only hosts
+//   3. claude-code frontmatter byte-identical (tools line unchanged after refactor)
+describe("adapter contract: 6.1 host-neutral tool-budget resolution", () => {
+  const { makeTargetProject, cleanup } = require("./_helpers");
+  const { runStage } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+  const { toolBudgetFor } = require(path.join(REPO_ROOT, "core", "roles"));
+
+  let _cwds = [];
+  function cwd(host = "generic") {
+    const cfg = `routing:\n  default_host: ${host}\npipeline:\n  default_track: full\n`;
+    const d = makeTargetProject({ config: cfg });
+    _cwds.push(d);
+    return d;
+  }
+  afterEach(() => { _cwds.forEach(cleanup); _cwds = []; });
+
+  // ── 1. Advisory section rendered + budget in descriptor for non-claude hosts ──
+
+  for (const host of ["codex", "gemini-cli", "generic"]) {
+    it(`${host}: descriptor.toolBudget populated from core/roles (pm role)`, () => {
+      const plan = runStage("requirements", { cwd: cwd(host) });
+      const ws = plan.workstreams[0];
+      assert.equal(ws.role, "pm");
+      assert.deepEqual(ws.descriptor.toolBudget, toolBudgetFor("pm"),
+        `${host}: descriptor.toolBudget must match core/roles.toolBudgetFor("pm")`);
+      assert.ok(Array.isArray(ws.descriptor.toolBudget) && ws.descriptor.toolBudget.length > 0,
+        `${host}: descriptor.toolBudget must be a non-empty array for the pm role`);
+    });
+
+    it(`${host}: rendered prompt includes tool surface advisory section`, () => {
+      const plan = runStage("requirements", { cwd: cwd(host) });
+      const ws = plan.workstreams[0];
+      assert.ok(ws.prompt.includes("Tool surface"),
+        `${host}: prompt must include "Tool surface" advisory when budget is set`);
+      for (const t of toolBudgetFor("pm")) {
+        assert.ok(ws.prompt.includes(t),
+          `${host}: prompt must mention declared tool "${t}"`);
+      }
+    });
+  }
+
+  // ── 2. Degradation warning fires for prompt-only, not for native ──
+
+  it("warnIfToolBudgetDegraded fires on stderr for a prompt-only host (codex)", () => {
+    // Capture stderr during runStage with a prompt-only host and a budgeted role.
+    const stderrChunks = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk, ...rest) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return origWrite(chunk, ...rest);
+    };
+    try {
+      runStage("requirements", { cwd: cwd("codex") });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+    const stderr = stderrChunks.join("");
+    assert.ok(stderr.includes("prompt-only"),
+      "warnIfToolBudgetDegraded must emit a warning mentioning prompt-only for codex");
+    assert.ok(stderr.includes("pm"),
+      "warning must name the affected role");
+  });
+
+  it("warnIfToolBudgetDegraded does NOT fire for claude-code (native enforcement)", () => {
+    const stderrChunks = [];
+    const origWrite = process.stderr.write.bind(process.stderr);
+    process.stderr.write = (chunk, ...rest) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return origWrite(chunk, ...rest);
+    };
+    try {
+      runStage("requirements", { cwd: cwd("claude-code") });
+    } finally {
+      process.stderr.write = origWrite;
+    }
+    const stderr = stderrChunks.join("");
+    const budgetWarnings = stderr.split("\n").filter((l) => l.includes("tool budget") && l.includes("prompt-only"));
+    assert.equal(budgetWarnings.length, 0,
+      "claude-code enforces natively — no degradation warning should fire");
+  });
+
+  // ── 3. claude-code frontmatter byte-identical (tools line from core/roles) ──
+
+  it("claude-code pm subagent frontmatter tools line is byte-identical after 6.1 refactor", () => {
+    // pm budget from core/roles: "Read, Write, Glob"
+    const pmBudget = toolBudgetFor("pm");
+    const expectedToolsLine = `tools: ${pmBudget.join(", ")}`;
+
+    // Render frontmatter via install into a tempdir and check the file.
+    const d = tmpdir();
+    const adapter = loadAdapter("claude-code");
+    adapter.install(d, { isolation: "in-place", force: true });
+    const agentFile = require("node:fs").readFileSync(
+      require("node:path").join(d, ".claude", "agents", "pm.md"), "utf8"
+    );
+    const frontmatterSection = agentFile.split("---")[1]; // between first two ---
+    assert.ok(frontmatterSection.includes(expectedToolsLine),
+      `claude-code pm agent frontmatter must contain "${expectedToolsLine}"; got:\n${frontmatterSection}`);
   });
 });

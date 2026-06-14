@@ -161,20 +161,18 @@ function autoInjectMetadata(gate, gateFilePath) {
     modified = true;
   }
 
-  // G10: inject dispatched_tool_budget for user-driven gates that weren't
+  // G10 / 6.1: inject dispatched_tool_budget for user-driven gates that weren't
   // stamped by the headless path. Only applies to workstream gates (gate.workstream
-  // present). Loads the adapter for the resolved host and calls toolBudgetFor();
+  // present). Uses core/roles.toolBudgetFor (host-neutral) — previously loaded
+  // the adapter and called adapter.toolBudgetFor(), which only worked for
+  // claude-code gates (other adapters don't export the function).
   // best-effort — failure leaves the field absent rather than blocking validation.
   if (!("dispatched_tool_budget" in gate) && typeof gate.workstream === "string") {
     try {
-      const { loadAdapter } = require("../router");
-      const resolvedHost = gate.host || "generic";
-      const adapter = loadAdapter(resolvedHost);
-      if (typeof adapter.toolBudgetFor === "function") {
-        const budget = adapter.toolBudgetFor(gate.workstream);
-        gate.dispatched_tool_budget = budget; // null when role has no declared budget
-        modified = true;
-      }
+      const { toolBudgetFor } = require("../roles");
+      const budget = toolBudgetFor(gate.workstream);
+      gate.dispatched_tool_budget = budget; // null when role is unknown
+      modified = true;
     } catch {
       // Injection failed — leave field absent; gate is still valid.
     }

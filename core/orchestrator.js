@@ -272,11 +272,12 @@ function runStage(stageName, opts = {}) {
         adapter = resolved.adapter;
       }
       assertCapabilities(stageDef, entry.role, hostName, adapter);
-      // G10: resolve per-role tool budget from the adapter (only claude-code
-      // exports toolBudgetFor; others return undefined → null budget).
-      const toolBudget = typeof adapter.toolBudgetFor === "function"
-        ? adapter.toolBudgetFor(entry.role)
-        : null;
+      // G10 / 6.1: resolve per-role tool budget from core/roles.js (host-neutral).
+      // Previously resolved from the adapter, so only claude-code dispatches
+      // ever got a non-null budget. Now every host receives the declared budget,
+      // enabling prompt-only advisory rendering and dispatched_tool_budget stamping
+      // on codex, gemini-cli, and generic dispatches.
+      const toolBudget = require("./roles").toolBudgetFor(entry.role);
       warnIfToolBudgetDegraded(toolBudget, entry.role, hostName, adapter);
       const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId, changeId: ctx.changeId, toolBudget });
       const prompt = withSpan("adapter.renderStagePrompt", {
