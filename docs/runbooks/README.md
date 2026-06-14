@@ -20,6 +20,8 @@ Find your symptom below and jump to the section that covers it. Each row links t
 | Verification-beyond-tests (stage-06d) FAIL | [fix-and-retry.md](fix-and-retry.md) | [Case 9](fix-and-retry.md#case-9-verification-beyond-tests-stage-06d-fail--blocking_findings-non-empty) |
 | Preflight (stage-04e) FAIL — committed ignored files or broken import path | [fix-and-retry.md](fix-and-retry.md) | [Case 10](fix-and-retry.md#case-10-preflight-stage-04e-fail--committed-ignored-files-or-broken-import-path) |
 | Unresolved `noted_for_followup[]` items before peer-review | [fix-and-retry.md](fix-and-retry.md) | [Case 11](fix-and-retry.md#case-11-advise-workflow--triage-follow-up-items-before-downstream-stages) |
+| License-gate (stage-04a) FAIL — `license_check_passed: false` | [fix-and-retry.md](fix-and-retry.md) | [Case 12](fix-and-retry.md#case-12-license-gate-stage-04a-fail--license_check_passed-false) |
+| Tool-budget denial — native refusal or advisory non-compliance | [fix-and-retry.md](fix-and-retry.md) | [Case 13](fix-and-retry.md#case-13-tool-budget-denial) |
 | Stage 8 deploy FAIL — read and classify | [deploy-failure.md](deploy-failure.md) | [§ Step 1 — Read the failure](deploy-failure.md#step-1--read-the-failure) |
 | Stage 8 deploy FAIL — classify the failure shape | [deploy-failure.md](deploy-failure.md) | [§ Step 2 — Classify the failure](deploy-failure.md#step-2--classify-the-failure) |
 | Deploy FAIL — need to rollback | [deploy-failure.md](deploy-failure.md) | [§ Rollback path](deploy-failure.md#rollback-path) |
@@ -32,7 +34,7 @@ Find your symptom below and jump to the section that covers it. Each row links t
 ## Runbooks in this directory
 
 - [escalation.md](escalation.md) — what to read, how to decide, and how to encode the result when `devteam next` says `resolve-escalation`
-- [fix-and-retry.md](fix-and-retry.md) — 11 fix-and-retry cases: red-team, QA, pre-review, peer-review (both failure shapes), PM sign-off, accessibility, consistency, verification, preflight, advise
+- [fix-and-retry.md](fix-and-retry.md) — 13 fix-and-retry cases: red-team, QA, pre-review, peer-review (both failure shapes), PM sign-off, accessibility (three-path recipe), consistency, verification, preflight, advise, license-gate, tool-budget denial
 - [open-followups.md](open-followups.md) — extract ticket stubs from `open_followups[]`; field mapping to JIRA, Linear, GitHub Issues; production feedback seam
 - [deploy-failure.md](deploy-failure.md) — Stage 8 failure: classify the shape, adapter-specific diagnostics, rollback, retry
 - [autonomous-run.md](autonomous-run.md) — `devteam run` reference: autonomous escalation resolution, launch, exit codes, halts, consequence ceiling, honest limitations

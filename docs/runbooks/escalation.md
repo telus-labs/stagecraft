@@ -11,7 +11,7 @@ For the mechanism's design rationale, see `rules/escalation.md`. For specific sc
 - [2. Decide](#2-decide)
 - [3. Get a Principal ruling](#3-get-a-principal-ruling-when-applicable)
 - [4. Encode the decision](#4-encode-the-decision)
-- [4b. Retry loop exhaustion](#4b-retry-loop-exhaustion--a-distinct-escalation-shape)
+- [4c. Retry loop exhaustion](#4c-retry-loop-exhaustion--a-distinct-escalation-shape)
 - [5. Stop and ask if any of these are true](#5-stop-and-ask-if-any-of-these-are-true)
 - [6. Common gotchas](#6-common-gotchas)
 - [7. After resolution](#7-after-resolution)
@@ -23,7 +23,7 @@ For the mechanism's design rationale, see `rules/escalation.md`. For specific sc
 
 ESCALATE signals that a decision requires human judgment. It is not a model bug. The agent that wrote ESCALATE has a specific question it cannot resolve autonomously. The pipeline halts until you act. `devteam next` will continue to report `resolve-escalation` until the escalation is encoded.
 
-The action carries a `failure_class` distinguishing *why* you're being asked to rule: **`judgment-gate`** (a gate wrote `status: ESCALATE` — the usual case, §1–4) versus **`convergence-exhausted`** (no gate escalated; the stage hit its retry budget and `next` escalated on its own — see [§4b](#4b-retry-loop-exhaustion--a-distinct-escalation-shape)).
+The action carries a `failure_class` distinguishing *why* you're being asked to rule: **`judgment-gate`** (a gate wrote `status: ESCALATE` — the usual case, §1–4) versus **`convergence-exhausted`** (no gate escalated; the stage hit its retry budget or made no progress across two attempts, and `next` escalated on its own — see [§4c](#4c-retry-loop-exhaustion--a-distinct-escalation-shape)).
 
 ## 1. Read the three places that hold the disagreement
 
@@ -233,35 +233,49 @@ devteam next        # should now report run-stage <next-stage>
 
 ## 4c. Retry loop exhaustion — a distinct escalation shape
 
-When `devteam next` reports `resolve-escalation` but the gate shows
-`retry_number: 3` (or higher) on a stage-06 gate, this is **not** a
-normal escalation — it's the retry protocol auto-escalating because the
-same test failure repeated three times identically. The pipeline chose to
-stop rather than loop forever.
+When `devteam next` reports `resolve-escalation` with `failure_class: convergence-exhausted`,
+the retry budget is spent **or** the breaker detected no progress across two attempts. This is
+**not** a normal escalation — the driver escalated because continuing to loop would waste
+resources without converging. The default ceiling is **2 retries** (`autonomy.max_retries`).
+
+The mechanism derives exhaustion from `pipeline/gates/archive/`, not from an agent-reported
+field. Each failed attempt's gate is archived as `stage-NN.attempt-N.json` before the gate is
+cleared; the driver diffs consecutive archives and escalates when blockers are identical across
+attempts (`no_progress_evidence` in `run-log.jsonl`).
+
+**Confirm the shape:**
 
 ```bash
-# Confirm this is a retry exhaustion, not a Principal-requested escalation
-cat pipeline/gates/stage-06.json | jq '{retry_number, previous_failure_reason, this_attempt_differs_by, failing_tests}'
+# Read the archived attempt gates to see what changed (or didn't) between attempts
+ls pipeline/gates/archive/stage-06.attempt-*.json
+diff pipeline/gates/archive/stage-06.attempt-1.json \
+     pipeline/gates/archive/stage-06.attempt-2.json
+
+# Read the run-log entry that fired the breaker
+tail -20 pipeline/run-log.jsonl | jq 'select(.no_progress_evidence)'
+# → { "event": "fix-retry", "outcome": "convergence-exhausted",
+#     "no_progress_evidence": "blocker 'X' identical across attempts 1,2", ... }
 ```
 
-If `retry_number >= 3` and `failing_tests` in the current gate matches the
-previous gate exactly, you are in retry exhaustion.
+If the archive diff shows that `failing_tests` (or `blockers`) did not shrink between
+attempts, you are in no-progress exhaustion. If only one attempt exists and the budget
+(`autonomy.max_retries = 2`) is the limit, the archive will have a single file.
 
 **Root cause is almost always one of two things:**
 
 **Root cause A — the implementation is fundamentally wrong.** The owning dev
 fixed the symptom (a specific assertion) but not the underlying behaviour. Each
 retry addressed a different surface manifestation of the same bug. Evidence:
-`this_attempt_differs_by` describes minor changes but `failing_tests` is
-unchanged.
+the archive diff shows minor changes but the same blocker IDs or test names
+appear in both attempts.
 
 → Get a Principal ruling on whether the spec or the implementation is the
 source of truth. Invoke via:
 
 ```bash
 devteam ruling \
-  --topic "Stage 6 retry exhaustion: failing_tests unchanged after 3 cycles on <AC-N>" \
-  --context pipeline/gates/stage-06.json,pipeline/test-report.md,pipeline/brief.md,pipeline/design-spec.md \
+  --topic "Stage 6 convergence exhausted: blockers unchanged after 2 cycles on <AC-N>" \
+  --context pipeline/gates/archive/stage-06.attempt-2.json,pipeline/test-report.md,pipeline/brief.md,pipeline/design-spec.md \
   --headless
 ```
 
@@ -273,15 +287,15 @@ it, which may require a brief amendment and a new QA cycle.
 
 **Root cause B — the test itself is wrong.** The test asserts the wrong
 thing, or it's flaky (timing-sensitive, ordering-dependent, global-state
-leak). Evidence: the implementation looks correct but the test fails
-non-deterministically or asserts an assumption that isn't in the brief.
+leak). Evidence: the archive diff shows the blocker text changed between
+attempts but the test still fails, or the test fails non-deterministically.
 
-→ Clear the QA gate and re-run QA with the retry context visible:
+→ Clear the QA gate and re-run QA with the archive context visible:
 
 ```bash
 rm pipeline/gates/stage-06.json
-# The retry_number and previous_failure_reason remain in context.md;
-# QA reads them and revises the failing test rather than re-running the implementation.
+# The archived attempts remain in pipeline/gates/archive/ so QA can read the
+# failure history; QA revises the failing test rather than re-running the implementation.
 devteam stage qa --headless
 ```
 
@@ -294,8 +308,8 @@ devteam validate   # confirm gate is no longer ESCALATE
 devteam next       # confirm advance
 ```
 
-The retry counter resets on the next stage-06 invocation — the `retry_number`
-field is per-gate-file, not persistent across runs.
+Archives are cleared when `devteam restart` is called. They are not cleared by
+re-running a stage — so the diff evidence persists across manual interventions.
 
 ---
 

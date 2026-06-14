@@ -62,7 +62,7 @@ Progress prints to **stderr**; the `--json` summary prints to **stdout**.
 | `pipeline/run.lock` | Exclusive lock for the run (pid + host + start time). Removed on exit. |
 | `pipeline/run-state.json` | Resumable state: current stage, iteration count, per-stage retry counts. |
 | `pipeline/run-log.jsonl` | One line per transition (stage, action, `failure_class`, outcome, duration, cost) — the audit + debug trail. |
-| `pipeline/gates/archive/<stage>.attempt-N.json` | A snapshot of each failed attempt's stage gate, taken before the auto-fix retry clears/overwrites it. Diff `attempt-1` vs `attempt-2` to see whether blockers were shrinking or stuck — the post-mortem record of a `code-defect` retry sequence. |
+| `pipeline/gates/archive/<stage>.attempt-N.json` | A snapshot of each failed attempt's stage gate, taken before the auto-fix retry clears/overwrites it. Diff `attempt-1` vs `attempt-2` to see whether blockers were shrinking or stuck — the post-mortem record of a `code-defect` retry sequence. `devteam restart` clears the archive directory; a normal stage re-run does not. |
 
 ## Exit codes
 
@@ -125,3 +125,14 @@ consequences, and stops there for you.
 - **No heartbeat.** A hung dispatch (waiting on a model API) is invisible to the
   driver until it exits. `--budget-usd` + a wall-clock timeout in your CI config
   are the practical guards.
+- **Stale archives from a prior run can trip the no-progress breaker.** The
+  convergence breaker compares the blocker sets in `pipeline/gates/archive/` to
+  determine whether a retry made progress. If archive files from a *previous* run
+  survive (because the run ended without a `devteam restart`), the breaker may
+  see `attempt-1.json` from the old run and `attempt-1.json` from the new run as
+  the same stage, conclude no progress was made, and escalate immediately.
+  `devteam restart` clears the archive directory and should be called at the start
+  of any fresh run. Operators on versions before Phase 5.2 (which fixed archive
+  lifecycle management) may see this symptom when upgrading — clearing the archive
+  directory manually (`rm -rf pipeline/gates/archive/`) before the first Phase 5.2+
+  run resolves it.

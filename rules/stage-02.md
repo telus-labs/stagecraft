@@ -27,7 +27,7 @@ Gate file: `pipeline/gates/stage-02.json`.
   "arch_approved": true,
   "pm_approved": true,
   "adr_count": 2,
-  "adrs_consulted": ["ADR-007", "ADR-012"],
+  "adrs_consulted": ["PADR-1", "PADR-2"],
   "adrs_superseded": []
 }
 ```
@@ -36,3 +36,8 @@ Gate file: `pipeline/gates/stage-02.json`.
 `adr_count` is the number of ADRs written or updated in this stage.
 `adrs_consulted` lists prior ADR IDs reviewed; `adrs_superseded` lists any
 that this design explicitly overrides.
+
+The example uses `PADR-N` (project ADR) IDs to distinguish project-level
+architectural decisions from the Stagecraft framework's own ADR namespace
+(`ADR-001`–`ADR-006`, …, in `docs/adr/`), which would collide if used as
+example values here.
