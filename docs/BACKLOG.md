@@ -34,25 +34,25 @@ A living list of work beyond the initial migration, organized into seven buckets
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
 | B1 | ~~Accessibility audit stage~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
-| B2 | ~~Performance budget stage~~ | 4 | 3 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| B2 | ~~Performance budget stage~~ | 4 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B3 | **Cost gate at deploy** | 4 | 2 | Estimate cloud cost delta from the deploy plan. Block deploys that 10× cost without explicit override. |
 | B4 | ~~Observability gate~~ | 4 | 2 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B5 | ~~Migration safety stage~~ | 5 | 3 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | B6 | **Documentation gate** | 3 | 2 | Public API changed → README/CHANGELOG must reflect it. Mechanical but catches a common drift. |
 | B7 | **Multi-language QA** | 4 | 4 | Stage 6 currently assumes one test framework. Real projects have JS + Python + Go. Per-language test runners with a merged report. |
 | B8 | ~~Cross-artifact consistency analyze~~ `[cmp-E-1]` | 4 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
-| B9 | ~~Bounded workspace deltas~~ `[cmp-E-2]` | 4 | 3 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
-| B10 | ~~Discover Standards preprocessing~~ `[cmp-E-5]` | 3 | 3 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| B9 | ~~Bounded workspace deltas~~ `[cmp-E-2]` | 4 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| B10 | ~~Discover Standards preprocessing~~ `[cmp-E-5]` | 3 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 
 ## C. Quality & safety — enforcement, sandboxing, scanning
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| C1 | ~~Filesystem-level `allowedWrites` enforcement~~ | 4 | 4 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| C1 | ~~Filesystem-level `allowedWrites` enforcement~~ | 4 | 4 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C2 | ~~Secret scanning hook~~ | 4 | 1 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
-| C3 | ~~License compatibility gate~~ | 3 | 1 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| C3 | ~~License compatibility gate~~ | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C4 | ~~Reproducible runs (recording half)~~ | 4 | 4 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
-| C5 | ~~Capability-required permissions~~ | 3 | 2 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| C5 | ~~Capability-required permissions~~ | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C6 | ~~Tamper-evident gate chain~~ | 3 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C7 | ~~`eslint-plugin-security`~~ `[hist-a]` | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C8 | ~~CHANGELOG-per-PR fragments~~ `[hist-b]` | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
@@ -80,7 +80,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 | E4 | **Live streaming output** | 3 | 2 | Currently `--headless` waits for the host CLI to finish. Stream the LLM's output to the user's terminal as it happens. |
 | E5 | ~~Pre-flight check (`devteam doctor`)~~ | 3 | 1 | ✅ v0.1.0 · [CHANGELOG](../CHANGELOG.md#010--2026-05-26) |
 | E6 | ~~`devteam replay <stage-id>`~~ | 3 | 3 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
-| E7 | ~~`/goal` integration for convergence-shaped stages~~ | 3 | 2 | ✅ landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| E7 | ~~`/goal` integration for convergence-shaped stages~~ | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | E8 | ~~Codebase audit feature~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
 | E9 | **Conversational stage mode** `[cmp-E-4]` | 3 | 3 | `devteam stage requirements --interactive` opens a conversation with the PM subagent to refine the brief through Q&A before producing the artifact. Useful specifically for upstream stages (requirements, design, clarification) where the artifact benefits from refinement before being rendered. Architecture supports it (adapters could expose streaming-conversation alongside one-shot render). Implement if user feedback indicates the gate-driven loop is too rigid for upstream stages. Related to E7 but different mechanism: E7 is host-loops-until-condition; E9 is stage-manager-converses-with-agent. |
 
@@ -109,7 +109,7 @@ These don't fit neatly in impact/effort because their value depends on how the f
 ### G5. Multi-modal stages
 Design specs include architecture diagrams (images). Stage 2 (design) and Stage 5 (review) accept image inputs. Principal can output a system diagram, not just prose. Visual reasoning is no longer a separate workflow.
 
-### G6. ~~Stage shopping (AI-inferred tracks)~~ — landed (Unreleased) · [CHANGELOG](../CHANGELOG.md#unreleased)
+### G6. ~~Stage shopping (AI-inferred tracks)~~ — v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11)
 
 ### G7. ~~Verification beyond tests~~ — v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28)
 

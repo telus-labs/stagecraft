@@ -2,12 +2,13 @@
   "stage": "stage-05",
   "workstream": "platform",
   "host": "claude-code",
-  "orchestrator": "devteam@0.1.0",
+  "orchestrator": "devteam@0.7.0",
   "track": "full",
   "status": "FAIL",
   "timestamp": "2026-05-26T20:11:37.249Z",
   "blockers": [],
   "warnings": [],
+  "dispatched_tool_budget": ["Read", "Write", "Glob", "Grep"],
   "area": "platform",
   "approvals": [
     "dev-backend"

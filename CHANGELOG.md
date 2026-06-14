@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+---
+
+## [0.7.0] — 2026-06-14
+
 ### Fixed
 
 - **PM role can't follow its own brief — Phase 6.2** (closes the pm/shell contradiction). `roles/pm.md`'s stage-03b procedure previously instructed the pm to run `devteam spec generate` and `devteam spec verify`, but pm's declared tool budget is `Read, Write, Glob` — no Bash. Under claude-code's native enforcement the pm subagent cannot execute its own brief. Solution: (1) `core/verify/stamp.js` gains `stampStage03b()` — the orchestrator now runs spec generation (if `spec.feature` is absent) and drift verification via `core/spec/verify.js`, stamping all spec-related gate fields (`criteria_count`, `scenarios_count`, `criteria_to_scenario_mapping`, `all_criteria_mapped`, `orphan_scenarios`, `orphan_criteria`, `drift`) with model-said vs observed in the same pattern as stage-04a/06. `stage-03b` is added to `STAMPABLE_STAGES`; (2) `roles/pm.md` stage-03b procedure rewritten — pm now authors ACs and fills in Given/When/Then directly via Write; the orchestrator handles generation and verification; no shell commands in the procedure. Rejected alternative (grant pm Bash): verification belongs to the orchestrator, not to the agent self-certifying; (3) `scripts/consistency.js` gains a new check class `role-budget-brief`: any `Run \`devteam <subcommand>\`` instruction in a role brief whose tool budget lacks Bash is flagged as a violation, catching the next budget/brief contradiction mechanically. Check applies to `roles/*.md`; informational references (no leading "Run") are not flagged. Tests (13 new): `tests/verify-stamp.test.js` — stampStage03b happy path with all gate fields verified, status flip to FAIL on drift with model_said vs orchestrator recorded, scaffold generation when spec.feature absent, graceful skip when brief.md absent, model_said capture on count mismatch, stamp() dispatch round-trip; `tests/consistency-meta.test.js` — checker fires on pm fixture with "Run `devteam` " instruction, passes on qa fixture with Bash, passes on pm fixture with informational reference (no "Run"), real roles/ regression guard after pm.md rewrite. Suite: 1562 pass (was 1552), lint clean, `npm run consistency` 313 checks passed.
@@ -27,6 +31,363 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - **Audience-based documentation map** (D2 of documentation-plan.md). Replaced the flat 30-doc list in README's "Documentation map" with four reader-path tables (Evaluator / Operator / Contributor / Model), each with an ordered 3–5 doc core trail and a one-line purpose per doc. Every previously-mapped doc is assigned to exactly one path; 8 docs not previously in the map (BACKLOG.md, TESTING.md, adr/README.md, autonomous-execution-design.md, brief-template.md, design-spec-template.md, GAP-ANALYSIS.md, runbook-template.md) are now included. Created `docs/README.md` with the same four paths restricted to files under `docs/`. Created `docs/runbooks/README.md`: a 24-row troubleshooting index mapping symptom → runbook section (with deep-link anchors) sourced from all five runbooks. Extended `scripts/consistency.js` with check 7 (`docs-index`): every `.md` file under `docs/` (excluding `historical/`, `audit-archive/`, `reference/`, and `audit/`) must be linked from `docs/README.md` — directly or via a parent directory's `README.md` — so orphan docs fail CI. Added 8 meta-tests for the new check in `tests/consistency-meta.test.js`.
 
   Honest scope note: `docs/audit/` is excluded from the orphan check (generated output); `docs/adr/*.md` individual files are covered by the `adr/README.md` directory-index link rather than individually linked entries. The "~30 lines" target for `docs/README.md` was not achievable while covering all 40 docs — the file is ~55 lines.
+
+- **docs(adr):** Sync `docs/adr/README.md`: add ADR-006 (track inference under autonomy, Proposed); correct ADR-004 status from Proposed to Accepted (the ADR file itself already said Accepted); add a "Deferred" subsection documenting that ADR-005 (standing grants), ADR-007 (heartbeat/liveness), and ADR-008 (exit semantics) are identified in `plans/phase-4-capability-roadmap.md §4.4` as intentionally deferred — the gap in numbering is deliberate and now recorded in the index.
+
+- **docs(runbook):** Add stale-archive symptom to `autonomous-run.md`: the no-progress breaker compares archive files from `pipeline/gates/archive/`; archives surviving from a prior run (pre-Phase-5.2 or a run that ended without `devteam restart`) can cause a false-positive convergence-exhausted escalation on the very first retry of a new run. Documents the `rm -rf pipeline/gates/archive/` recovery step for operators upgrading from older versions.
+
+- **docs(runbook):** Rewrite `escalation.md` §4c to the archive-based convergence-exhaustion reality: the driver derives exhaustion from `pipeline/gates/archive/` diffs (not from an agent-falsifiable `retry_number` field), the default ceiling is 2 retries, and `no_progress_evidence` in `run-log.jsonl` carries the operator-readable evidence. Fix two dead TOC and §0 anchors that still pointed to the pre-drift-sweep `#4b` heading.
+
+- **docs(runbook):** Sync `fix-and-retry.md` to shipped behavior: (a) update `convergence-exhausted` framing from pure retry-budget to budget-or-no-progress (archive-diff breaker); (b) rewrite Case 7 accessibility to the three-path recipe shipped in Phase 6.4 (`fix-recipes.js`): Path 1 prior-stage advise IDs, Path 2 gate-blocker rebuild, Path 3 no-blocker advise panel — removes the "always frontend" claim; (c) new Case 12 for license-gate FAIL (`license_check_passed: false`) documenting the replace-dependency vs allowlist-policy split (neither is `--patch`); (d) new Case 13 for tool-budget denial covering native claude-code refusal vs advisory non-compliance on prompt-only hosts; (e) add #109 stage-04a note to Cases 4 and 5 manual-recovery paths (must clear `stage-04a.json` when hand-clearing build gates). Index rows added to `runbooks/README.md`.
+
+- **docs(rules):** Rename example ADR IDs in `rules/stage-02.md` gate JSON from `ADR-007`/`ADR-012` to `PADR-1`/`PADR-2` (project ADR namespace) to avoid collision with the Stagecraft framework's own ADR namespace (`docs/adr/`). Add a clarifying half-sentence explaining the PADR-N convention.
+
+- **docs(tracks):** Add `devteam assess` sentence and link to `docs/tracks.md §Choosing a track` — the doc that explains how to pick a track never mentioned the command that automates the choice. Links to `ADR-006` for the `pipeline/track.json` track-record design.
+
+- **docs(adr):** Draft ADR 004 — Role tool budgets (G10). Proposes formalising the existing `tools:` field in `ROLE_FRONTMATTER` as the per-role tool-budget declaration, adding `enforces.tool_budget: "native" | "prompt-only"` to each host's `capabilities.json` following the C1 pattern, recording `dispatched_tool_budget` on workstream gates, and deferring an MCP mediation server in favour of host-native tool pinning ("ship the seam, not the server"). Status: Proposed — awaiting reviewer sign-off on three open questions (warn vs block for prompt-only hosts, cross-host tool-name translation, canonical budget location). (plans/phase-4-capability-roadmap.md §4.1)
+
+- **docs(adr):** Draft ADR 006 — Track inference under autonomy (plans/phase-4-capability-roadmap.md §4.4). Proposes `pipeline/track.json` as an explicit per-run track record written by `devteam assess --apply`, consumed by `devteam run` between `--track` and the `custom_stages` config fallback. Key rules: the driver MUST NOT call `assess` internally (inference must be operator-visible); inferred tracks at medium/low confidence halt in CI (`CI=true`) with `halt_action: "unconfirmed-track"`; `"human"` source is always silent. Stoplist (Phase 1.1) remains the floor; this ADR is the ceiling. Status: Proposed — five open questions for reviewer ruling (assess --apply migration path, interactive-pause vs always-halt at low confidence, gitignore policy, confirm-track command surface, standing-grant interaction with ADR-005).
+
+- **D3.2 — Generated CLI reference (documentation-plan.md D3 sub-item 2).** Added `scripts/generate-cli-ref.js`, which emits `docs/reference/cli.md` — a full `devteam` command reference generated from the per-command flag schemas in `core/cli/commands/`. For each of the 31 commands (in registry order matching `bin/devteam`), the output contains: a synopsis line, a one-line description, and a flag table derived from the schema (flag name, type, description). Output is fenced with `<!-- generated: do not hand-edit -->` markers, consistent with D3.1/D3.3.
+
+  Extended `scripts/docs-generate.js` to include the CLI ref as the fourth generator target; `npm run docs:generate` now writes all four outputs (tracks matrix, stages ref, hosts ref, CLI ref) in one pass. Extended `scripts/consistency.js` with a new `checkCliRefSync()` check (`cli-ref`) that fails CI when the committed file diverges from regenerated output — same pattern as the `stages-ref` and `hosts-ref` checks. Added 4 tests to `tests/consistency-meta.test.js`: committed-file sync (real-repo), import-without-side-effects, simulated-hand-edit proof, and the task-required sampled-command test (both `devteam run` and `devteam next` flag schemas: every flag name from the schema appears in the generated doc — agreement by construction).
+
+  **Duplication sweep (step 2):** Grepped `devteam ` code blocks across all non-excluded `docs/` files and runbooks. Finding: no flag or command enumeration tables exist outside the generated file. Every `devteam --flag` reference in the corpus is a procedure example (code block teaching a workflow) or a feature description — both stay under the judgment rule (procedure beats reference). No content was converted to links.
+
+  Honest scope note: Synopsis strings and command descriptions live in the generator itself (`COMMANDS` array in `generate-cli-ref.js`), not in the command modules — the flag schemas in `core/cli/commands/` remain the authoritative source for flag metadata. If a new command is added without an entry in the generator's `COMMANDS` array, the CLI reference will silently omit it; a future check could enforce that every file in `core/cli/commands/` has a matching entry. (closes BACKLOG D3 sub-item 2)
+
+- **D3 — Generated reference docs (stages + hosts, D3.1/D3.3/D3.4 of documentation-plan.md).** Added two documentation generators and their consistency checks, completing the "generate, don't transcribe" principle for the two biggest sources of prose drift.
+
+  New generators: `scripts/generate-stages-ref.js` emits `docs/reference/stages.md` — a full stage table (ID, name, roles, conditionalOn, gate files, artifact, template) derived from `STAGES`/`ORDERED_STAGE_NAMES` in `core/pipeline/stages.js`, grouped by phase. `scripts/generate-hosts-ref.js` emits `docs/reference/hosts.md` — a capability/enforcement matrix derived from `hosts/*/capabilities.json`, covering all four host adapters. `scripts/docs-generate.js` orchestrates all three generators (tracks matrix, stages ref, hosts ref); `npm run docs:generate` is the single entry point. Outputs are fenced with `<!-- generated: do not hand-edit -->` markers.
+
+  Extended `scripts/consistency.js` with two new checks (`stages-ref`, `hosts-ref`) that verify the committed files equal regenerated output — drift from a hand-edit or a stages.js change fails CI. Added 6 meta-tests in `tests/consistency-meta.test.js` covering: committed-file sync (real-repo), import-without-side-effects, and a simulated-hand-edit proof for each new generator.
+
+  Replaced hand-maintained equivalents with links + ≤2-line summaries. Replacements: (1) `docs/FEATURES.md §Supported hosts` — four-host prose block replaced with one-paragraph summary + link to `docs/reference/hosts.md`; (2) `docs/FEATURES.md §A structured SDLC / Tracks` — the 19-row stage+role table and the 6-row track+stages table replaced with 2-line summaries + links to `docs/reference/stages.md` and `docs/tracks.md`; (3) `docs/concepts.md §Tracks at a glance` — the 6-row track table (which also contained a stale "All 17" stage count) replaced with a 2-line summary + links; (4) `docs/user-guide.md §Conditional stages` — 2-row conditional-stages table replaced with 1-sentence summary + link to `docs/reference/stages.md §Phase 2`.
+
+  Idempotency: a second `npm run docs:generate` produces no diff.
+
+  Honest scope note: `docs/reference/cli.md` (D3.2) is a separate later prompt — deferred until Phase 3.1a flag schemas land. (closes BACKLOG D3 sub-items 1, 3, 4)
+
+- **D4 — Dedup and lifecycle (BACKLOG · README · CONTRIBUTING · AGENTS).** BACKLOG slimming: all struck-through table rows compressed to one-liner format (`ID · ~~Title~~ · vX.Y.Z · CHANGELOG link`); G-section innovation bets collapsed to sub-heading stubs; priority queue pruned to the two surviving open items (D5, H3). Eight items that had no CHANGELOG.md entry (B2, B9, B10, C1, C3, C5, E7, G6) each gained a `changelog.d/` fragment before slimming so no implementation detail was lost. README diet: flat 30-doc "Documentation map" replaced with the four D2 audience-path tables (Evaluator / Operator / Contributor / Model); "What this gives you" slimmed from 12 bullets to 5 headline bullets with a `docs/FEATURES.md` link for the full catalogue. CONTRIBUTING additions: new "Documentation principles" section (the five §2 rules from the documentation plan), "Doc-update checklist" X→Y table (stages.js / new flag / new feature / new decision / landed BACKLOG item), and "Archive policy" paragraph formalizing the `docs/historical/` convention. AGENTS.md refit: rewritten from 112 lines to ~65 lines; load-bearing contracts section condensed to two paragraphs that link to `ARCHITECTURE.md`, `gate.schema.json`, and `host-adapter.md` rather than restating their content; "Adding things" table now links to CONTRIBUTING recipes; test commands section added (`npm test`, `npm run consistency`, `npx eslint .`, `CI=true DEVTEAM_HEADLESS_COMMAND=cat npm test`). (closes BACKLOG D4)
+
+---
+type: changed
+pr: ~
+---
+
+**Execute D5 step 3 — role-brief token trim (8.3)**
+
+Move stage-conditional task sections from `roles/platform.md` (15,617 B →
+2,400 B, −85%) and `roles/qa.md` (12,878 B → 2,718 B, −79%) into dedicated
+per-stage skill files, leaving role identity + handoff + gate rules in the
+briefs.
+
+- **New skills (platform):** `skills/platform-build/SKILL.md`,
+  `skills/platform-pre-review/SKILL.md`, `skills/platform-deploy/SKILL.md`.
+  Extended: `skills/review-rubric/SKILL.md` (Platform Reviewer Focus section),
+  `skills/observability-verification/SKILL.md` (Platform gate detail section).
+- **New skills (qa):** `skills/qa-augmentation/SKILL.md`,
+  `skills/qa-test-authoring/SKILL.md`, `skills/qa-test-execution/SKILL.md`.
+  Extended: `skills/review-rubric/SKILL.md` (QA Reviewer Focus section).
+- **`rules/stage-05.md`** trimmed from 9,985 B to 8,177 B (under the 8 KB
+  advisory ceiling). The approval-derivation hook contract detail (blockers[]
+  schema, gate merge strategy, affected_workstreams derivation) moved to
+  `docs/conventions.md §Stage 5 approval-derivation hook contract`.
+- **`docs/reference/prompt-budget.md`** regenerated. Platform dispatch:
+  27,402 B → 14,185 B (−48%); QA dispatch: 24,663 B → 14,503 B (−41%).
+- `npm run consistency` — 314 checks passed, zero advisories (was 1).
+
+Honest scope note: the skill files are loaded on-demand by the model (directed
+by the Task Skills table in each role brief), not automatically injected by the
+orchestrator per stage identity. Orchestrator-level automatic injection remains
+a future architectural improvement; the token reduction is real because the
+brief is what the orchestrator includes in every dispatch, and skills are read
+only for the current task.
+
+- **D6 — Onboarding flow upkeep (documentation-plan.md D6).** Three sub-items:
+
+  **D6.1 — EXAMPLE.md freshness stamp.** Added a "captured at v0.5.0" stamp near the top of `EXAMPLE.md` (last substantive content update: commits `21a7995`/`b001e9b`, released in v0.5.0). Extended `scripts/consistency.js` with a new `checkExampleMdFreshnessStamp()` advisory that warns when the stamp is more than one minor behind `package.json` — fires at the next minor release, not before. Extended `scripts/release.js` `check()` with an EXAMPLE.md re-capture reminder (warning, not failure) that surfaces on every `node scripts/release.js check` run.
+
+  **D6.2 — First-30-minutes CI smoke.** Extended `.github/workflows/test.yml` with a "First-30-minutes onboarding smoke" step (after the existing doctor step). The step executes the README's actual onboarding sequence in a temp dir: `devteam init` → `devteam doctor` → `DEVTEAM_HEADLESS_COMMAND=cat devteam stage requirements --feature "smoke test feature" --headless` → `devteam next --json` (asserts the action is one of the six valid pipeline actions). `DEVTEAM_HEADLESS_COMMAND=cat` renders the prompt to stdout without invoking a model — fully offline-safe; no divergence from the README sequence.
+
+  **D6.3 — FAQ policy note + entry cleanup.** Added a three-line "How this FAQ is maintained" policy note to the top of `docs/faq.md`. Applied the policy once to existing entries (cross-check against FEATURES.md): deleted "When will this hit 1.0?" (future-state claim with a stale time bound — not an operational question); trimmed "What's planned next?" to a bare link to BACKLOG.md (the item list cited `devteam run` as planned but it shipped in v0.3.0).
+
+- **docs:** Mark Phase 4 complete in plans/prompts/ALL-PROMPTS.md (PRs #90–#97); update BACKLOG.md to mark G3, G10, and H2 progress-based convergence as landed with accurate implementation descriptions; add progress-based convergence bullet to FEATURES.md autonomous execution section.
+
+- **docs(platform):** Declared Stagecraft as macOS/Linux-only (POSIX-only); Windows native is not supported. README prerequisites and `docs/faq.md` now state this explicitly with a WSL2 recommendation. `devteam doctor` and `devteam init` print a clear warning (not a hard exit) when `process.platform === "win32"`. `docs/BACKLOG.md` gains item A6 (Windows port, impact 2 / effort 4) with the three known breakage points: PATH probe, headless command splitter, and POSIX `rm` in fix steps. Cheap correctness wins: `devteam doctor`'s `which` subprocess replaced by a pure-Node PATH probe (`findOnPath`); the headless command splitter in `core/adapters/headless.js` and `core/escalation.js` now throws a clear error on quote characters rather than silently mis-splitting. 13 new tests in `tests/posix-only.test.js`. (plans/phase-3-structural-debt.md §3.5)
+
+- **C3 Phase 6.3 — License gate runner: verify, don't trust.** `core/verify/license-runner.js` adds an orchestrator-side offline license compliance check for Node projects. `stampStage04a()` now walks `node_modules/*/package.json` (including scoped `@scope/pkg` packages) and evaluates each declared SPDX license against the C3 policy table (MIT/Apache-2.0/BSD-*/ISC/CC0/Unlicense → allowed; UNLICENSED/SSPL/BUSL → warned; GPL-*/AGPL-*/LGPL-* → denied). The orchestrator's result overwrites the model's `license_check_passed` claim with model-said vs observed recorded in `_orchestrator_stamped`. Non-Node projects (no `package.json`) and Node projects where `node_modules/` is not installed are stamped `"unverified-by-orchestrator"` (new tri-state value) with a `warnings[]` entry — the model's assertion stands but is explicitly labeled unverified. Schema (`stage-04a.schema.json`) and `rules/stage-04a.md` updated for the tri-state. Project-level license exceptions via `.devteam/config.yml` `license.extra_allowed[]` are respected. `dependency_review_passed` is relabeled model-asserted by design in both schema and rules: vulnerability scanning (npm audit, pip-audit) requires network access to the advisory database and cannot be verified offline by the orchestrator. (closes C3 doctrine exception, Phase 6.3)
+
+- **feat(stage-07):** Add documentation gate to PM sign-off. The PM must now classify whether the change touches a user-visible surface (CLI flag, config key, API endpoint, or behaviour change) and confirm that the appropriate doc update was made. `docs_updated: false` with `docs_surface_affected: true` is a gate blocker. Internal-only changes require only a one-line skip reason. Auto-fold from Stage 6 is blocked when a surface is detected but doc completion cannot be confirmed from the artifacts.
+
+- **feat(G10): role tool budgets — per-role tool-surface restriction with cross-host degradation.** Formalises the existing `tools:` field in `ROLE_FRONTMATTER` (hosts/claude-code/adapter.js) as the per-role tool-budget declaration. `hosts/claude-code/adapter.js` exports `toolBudgetFor(role)` → `string[] | null`. Orchestrator resolves `descriptor.toolBudget` at dispatch time, warns (not blocks) when a budget-carrying role routes to a prompt-only host (`enforces.tool_budget: "native" | "prompt-only"` added to all four `capabilities.json` files). Prompt-only hosts (codex, gemini-cli, generic) inject an intent-plus-names advisory section via `toolBudgetSection()` in `core/adapters/render-helpers.js`. Claude-code enforces natively (subagent `tools:` line); no prompt injection needed. `dispatched_tool_budget` field added to `gate.schema.json`; stamped orchestrator-side for headless runs (mtime-guarded to preserve replay flow), auto-injected by the gate validator for user-driven gates. 12 new tests in tests/adapter-contract.test.js. docs/FEATURES.md and docs/concepts.md updated.
+- **fix(6.1): prompt-only path made real.** Role→tools table moved from `hosts/claude-code/adapter.js` to `core/roles.js` (`toolBudgetFor` export); orchestrator and gate validator now resolve the budget host-neutrally so codex, gemini-cli, and generic dispatches receive `descriptor.toolBudget`, render the advisory section, fire the degradation warning, and stamp `dispatched_tool_budget`. 9 new tests added; gate-validator and adapter-contract tests updated to exercise the real resolution path.
+
+- **feat(G3): production feedback seam — close the brief→production SLO loop (effort-1).** Operator-curated `pipeline/production-feedback.md` (template + conventions entry) provides the integration seam between the pipeline and production signals without automated ingestion. Template (`templates/production-feedback-template.md`) has sections keyed by the brief's metric/SLO names plus an incidents list; registered in `templates/README.md`. Stage-09 `readFirst` gains an optional entry rendered as "(if present)" via a new `{ path, optional: true }` object form handled in `buildDescriptor` (orchestrator.js) — smallest code change, bounded workspace-safe. Stage-09 gate adds an optional `production_feedback_reviewed: true|false|"absent"` field (schema + rules/stage-09.md + gate skeleton). `rules/stage-09.md` gains a "Production deltas vs. brief SLOs" section directing the principal to read the file, write a `## Production Deltas` retro section, and stamp the gate field. `devteam next` on `pipeline-complete` emits one suggestion line when the file is absent — not a blocker, not a nag. Docs: `docs/conventions.md` catalogue entry, `docs/FEATURES.md` row, `docs/runbooks/open-followups.md` cross-link. Tests: contract test extended (template registered), gate schema validates all three `production_feedback_reviewed` values, pipeline-complete CLI output correct when file present/absent. *Honest scope note:* No automated ingestion — the file is the integration seam; Jira/Datadog automation can write it later without framework changes (BACKLOG F2/F3/F5 deprioritized, honored).
+
+- **feat(driver):** Add `detectNoSourceChange` convergence check — when a blocker names specific files and those files' content is identical across consecutive auto-fix attempts, the driver halts as `convergence-exhausted` after just one wasted build dispatch instead of two. Catches config-level defects (e.g. Dockerfile base image) that are invisible to the build agent's lint/test goal condition.
+
+- **feat(convergence):** Progress-based convergence breaker implemented on both the interactive (`devteam next`) and autonomous (`devteam run`) paths (Phase 4.2 / ADR-003). The breaker now trips on **no progress** — identical blocker sets across the last two archived attempts — rather than solely on attempt count. When it trips, `halt_reason` and a new `no_progress_evidence` field state what didn't change (e.g. `"blocker 'unit tests failing' identical across attempts 1,2"`) for operator inspection and escalation context. `run-log.jsonl` also carries the evidence.
+- **feat(convergence):** Interactive path (`devteam next` / `core/orchestrator.js`) now derives attempt count from archived gate files (`countArchivedAttempts`) instead of the model-written `gate.retry_number`, removing an agent-falsifiable input from the convergence decision. The count-based ceiling (`autonomy.max_retries`, default 2) is retained as the backstop for the first retry, before two archives exist to compare.
+- **feat(convergence):** New module `core/gates/convergence.js` exports `detectNoProgress`, `countArchivedAttempts`, and `noProgressEvidence`. Reads from `pipeline/gates/archive/` (the per-attempt archive layer landed in commit `3d0b16f`); never writes; best-effort (unreadable archives leave the count-based ceiling in control).
+- **docs:** `docs/autonomous-execution-design.md` §2.5 updated from "grounding correction — not implemented" to the implemented state. §4.1 step 4 updated. `docs/runbooks/autonomous-run.md` limitation updated from "count-based" to progress-based with honest scope note.
+
+  **Honest scope note:** the progress comparison is blocker-set text (model-written), normalized and sorted. Stable blocker IDs are not yet assigned; two semantically identical blockers with different wording will not be detected as stuck. Targeted fanout retry remains deferred per the spec.
+
+- **Phase 5.2 — Archive lifecycle owner.** Closes the bug class where per-attempt gate archives (`pipeline/gates/archive/`) could outlive the failure sequence they describe, producing false `convergence-exhausted` halts on re-entry and stale-archive false no-progress halts on fresh runs. Three-part fix: (1) **Prune-on-recovery**: new `pruneArchives(gatesDir, stageId)` in `core/gates/archive.js`; called at both finalization sites — `mergeWorkstreamGates` (multi-role merge path) and `runStageHeadless` (single-role stamp path) — whenever the stage gate reaches PASS. (2) **Prune-on-re-entry**: the driver's `fix-and-retry` path calls `pruneArchives` for every stage whose gate is cleared by a recipe, generalizing the `#106` restart-only fix; `restart.js` already used the shared `archive.js` `listArchives` path. (3) **Defense-in-depth guard** in `core/gates/convergence.js`: `_currentSequenceArchives()` filters archives from previous failure sequences by comparing mtime to the current attempt-1 archive, so stale archives that survived a missed prune cannot trigger false `detectNoProgress` or `countArchivedAttempts` results. Two regression tests (both failed on main before this fix): stage that failed twice, recovered, and was re-entered via a downstream recipe no longer hits instant `convergence-exhausted`; fresh run with stale attempt-2/3 archives from a previous run no longer produces a false no-progress halt. Existing `#106` restart archive-cleanup tests continue to pass via the shared path.
+
+- **Phase 5.3 — Interactive convergence ceiling.** Closes the gap where a purely interactive `devteam next` / `devteam stage` loop had no convergence ceiling: archives were only created by the autonomous driver, so an interactive loop that failed the same stage repeatedly accumulated zero archive files and `countArchivedAttempts()` never returned a non-zero count. Fix: new shared helper `archiveGateIfFail(gatesDir, stageId)` in `core/gates/archive.js` — checks whether the current gate has status FAIL, derives the attempt number from existing archives on disk (`listArchives().length + 1`), and calls `archiveGate`. This function is called at two sites: (1) `runStageHeadless` (in `core/orchestrator.js`) archives the stage gate before dispatch — covers the interactive path; (2) the driver's fix-and-retry branch (in `core/driver.js`) now calls `archiveGateIfFail` instead of the bare `archiveGate` call — consolidates both paths to the same helper. No double-archiving: the driver clears the gate before `runStageHeadless` runs, so the shared-path call in the orchestrator is a no-op on the autonomous path (gate absent → `archiveGateIfFail` returns null). Convergence module header updated to document the archive-before-overwrite coverage boundary (interactive and driver paths covered; manual hook-driven gate overwrites are out of scope). Two new regression tests (`tests/convergence-ceiling-interactive.test.js`): both failed on main before this fix — `runStageHeadless` archives a pre-existing FAIL gate before dispatch (verified by archive count after each dispatch), and interactive loop of `maxRetries+1` identical-blocker failures → `next()` returns `convergence-exhausted` with `no_progress_evidence` populated.
+
+- **Phase 5.4 (commit 1) — Bounded isolation fence.** Closes the silent-wrong state where `isolation: bounded` in `.devteam/config.yml` allowed the CLI read-side commands (`next`, `restart`, `log`, `advise`, `replay`, `derive-approvals`, `spec`) to proceed without changeId awareness, silently reading and writing the global `pipeline/` directory instead of the per-change subtree. Fix: new `checkBoundedFence(config, commandName)` function in `core/config.js` (exported alongside `BOUNDED_UNWIRED_COMMANDS`). Each of the seven unwired commands calls the fence at entry — if `isolation: bounded` is active and `isolation_acknowledge_partial: true` is not set, the command exits with an error that names the full unwired list. The fence is honest: it neither silently proceeds (data corruption risk) nor refuses the driver path (which is fully wired). Escape hatch: set `isolation_acknowledge_partial: true` in `.devteam/config.yml` to use only the driver path while the CLI layer catches up. `loadConfig` now parses `isolation_acknowledge_partial`. Tests: `tests/bounded-fence.test.js` — fence throws for each unwired command; escape hatch bypasses the fence; in-place config is always a no-op; `loadConfig` parses the new field; meta-test greps `core/cli/commands/` for `resolveChangeId` and verifies `BOUNDED_UNWIRED_COMMANDS` matches the derived unwired set (prevents fence message from going stale as commands are wired in commit 2).
+
+  Honest scope note: the CLI read-side commands are still not changeId-aware after this commit; commit 2 wires each command, shrinks `BOUNDED_UNWIRED_COMMANDS`, and the meta-test enforces parity automatically.
+
+## fix(b9-cli-layer): wire all seven CLI read-side commands for bounded isolation — Phase 5.4 commit 2
+
+**Scope**: Phase 5.4, commit 2 — B9 bounded workspace isolation, CLI read-side wiring.
+
+### What was broken
+
+In `isolation: bounded` mode, the seven CLI read-side commands (`next`, `restart`,
+`log`, `advise`, `replay`, `derive-approvals`, `spec`) silently read from and wrote
+to the global `pipeline/` directory instead of the per-change
+`pipeline/changes/<changeId>/` subtree. The autonomous driver's auto-fix path
+additionally looked for `clear_gates` entries at in-place paths, finding nothing
+and halting with _"fix steps contain no gate clears"_.
+
+### What changed
+
+#### New: `core/cli/resolve-change-id.js`
+Shared helper `resolveChangeId(flags, config)` returns `changeIdFromFeature(flags.feature)`
+in bounded mode or `null` in in-place mode. The presence of this import token is what
+the meta-test in `tests/bounded-fence.test.js` greps for to determine a command is "wired".
+
+#### CLI commands — `--feature` flag and bounded path routing
+All seven commands now accept `--feature <name>` and call `resolveChangeId` at entry.
+Each routes artifact reads and writes through the bounded path helpers:
+
+| Command | Bounded path used |
+|---------|-------------------|
+| `next` | `pipelineRoot(cwd, changeId)` for production-feedback check |
+| `restart` | `gatesDir(cwd, changeId)`, `pipelineRoot(cwd, changeId)` for context.md |
+| `log` | `buildEvents(cwd, changeId)` scans bounded pipelineRoot |
+| `advise` | `gatesDir(cwd, changeId)`, `pipelineRoot(cwd, changeId)/context.md` |
+| `replay` | `gatesDir(cwd, changeId)` for gate lookup and archive |
+| `derive-approvals` | `pipelineRoot(cwd, changeId)/code-review`; passes `DEVTEAM_REVIEW_DIR` and `DEVTEAM_GATES_DIR` env vars to the hook subprocess |
+| `spec` | `pipelineRoot(cwd, changeId)` as `pipelineDir` for brief/spec/test-report |
+
+#### `core/driver.js` — `prefixPipelineRelative` for recipe `clear_gates`
+Recipes emit gate paths in the in-place format (`"pipeline/gates/stage-NN.json"`).
+The driver now rewrites each path through `prefixPipelineRelative(rel, changeId)` before
+calling `clearGates()`, so bounded runs clear the correct `pipeline/changes/<id>/gates/`
+file instead of a non-existent in-place file that caused the "no gate clears" false halt.
+
+#### `core/log/journal.js` — `buildEvents` accepts `changeId`
+`buildEvents(cwd, changeId)` now uses `pipelineRoot(cwd, changeId)` as the scan root.
+`walkArtifacts` receives `relBase = pipelineRoot` instead of `cwd`, and computes
+`"pipeline/" + path.relative(relBase, full)` so ARTIFACT_PATTERNS (which all start
+with `"pipeline/"`) match in both in-place and bounded mode.
+
+#### `core/hooks/approval-derivation.js` — env-var path overrides
+`DEVTEAM_REVIEW_DIR` and `DEVTEAM_GATES_DIR` environment variables override the
+hook's hardcoded in-place paths, allowing `devteam derive-approvals` to pass the
+bounded paths to the hook subprocess without changing its argument interface.
+
+#### `core/spec/verify.js` — `opts.pipelineDir` parameter
+`verify(cwd, opts)` now accepts `opts.pipelineDir` to override the default
+`cwd/pipeline` root, used by `devteam spec` in bounded mode.
+
+#### `core/config.js` — `BOUNDED_UNWIRED_COMMANDS` emptied
+Now `[]` — all seven commands are wired. The bounded isolation fence is fully
+transparent for all CLI commands and no longer requires `isolation_acknowledge_partial: true`.
+
+### Tests added
+
+`tests/bounded-mode-wiring.test.js` (16 tests):
+- Driver auto-fix regression: recipe clears the PREFIXED bounded gate and the run completes.
+- Per-command bounded path coverage for all seven wired commands (next, restart, log, advise, replay, derive-approvals, spec): each test verifies the command reads/writes from `pipeline/changes/<id>/` when `--feature` is supplied and from `pipeline/` without it.
+
+## fix(6.2): orchestrator stamps stage-03b — pm brief no longer needs Bash
+
+**Scope**: Phase 6.2 — Promise Integrity: PM role/shell contradiction.
+
+### What was broken
+
+`roles/pm.md` stage-03b procedure instructed the pm to run `devteam spec generate`
+and `devteam spec verify` (shell commands), but pm's declared tool budget is
+`Read, Write, Glob` — no Bash. Under claude-code's native tool-budget enforcement
+the pm subagent cannot execute its own brief: the instructions are unreachable.
+
+Additionally, no mechanical check existed to catch future budget/brief contradictions
+of the same kind.
+
+### What changed
+
+#### `core/verify/stamp.js` — `stampStage03b()`
+
+New stamping function added to the orchestrator layer. After the pm agent writes
+`pipeline/gates/stage-03b.json`, the orchestrator now:
+
+1. Generates `pipeline/spec.feature` via `generateScaffold()` (from `core/spec/verify.js`)
+   if the file is absent — one scaffold scenario per AC in `brief.md`.
+2. Runs `verify()` (pure Node.js, same function `devteam spec verify` uses) to detect
+   drift between `brief.md` acceptance criteria and `spec.feature` scenarios.
+3. Stamps all seven spec-related gate fields with model-said vs orchestrator-observed:
+
+| Field | Stamped value |
+|-------|---------------|
+| `criteria_count` | AC count from `brief.md` |
+| `scenarios_count` | scenario count from `spec.feature` |
+| `criteria_to_scenario_mapping` | per-criterion scenario names |
+| `all_criteria_mapped` | true iff no orphan criteria or duplicates |
+| `orphan_scenarios` | scenario names with no matching AC |
+| `orphan_criteria` | AC IDs with no matching scenario |
+| `drift` | true iff any orphan or duplicate found |
+
+If `drift` is true or `all_criteria_mapped` is false, a blocker is appended and
+the gate status flips to FAIL — same `finalizeStamp` pattern as stage-04a/06.
+
+`"stage-03b"` added to `STAMPABLE_STAGES`.
+
+#### `roles/pm.md` — stage-03b procedure rewritten
+
+The pm's stage-03b procedure now:
+- Reads `brief.md` for acceptance criteria (source of truth).
+- Reads or writes `spec.feature` directly via the Write tool — one scenario per AC,
+  each tagged `@AC-N`, with concrete Given/When/Then steps.
+- Writes `pipeline/gates/stage-03b.json` with its self-assessment.
+- No shell commands appear anywhere in the procedure.
+
+A note clarifies that `devteam spec generate` and `devteam spec verify` are pipeline
+shell commands the orchestrator runs on the pm's behalf after dispatch.
+
+Rejected alternative — grant pm Bash: verification belongs to the orchestrator, not
+to an agent self-certifying what the orchestrator should verify.
+
+#### `scripts/consistency.js` — new check class `role-budget-brief`
+
+`checkRoleBriefToolBudgetCompatibility()` scans `roles/*.md`. For each role whose
+`toolBudgetFor()` result does not include Bash, any line matching
+`` Run `devteam <subcommand>` `` is flagged as a violation. The check distinguishes
+imperative instructions ("Run `devteam …`") from informational references
+(`` `devteam …` `` without the leading "Run"), so descriptions of what the pipeline
+does are not penalised. The real `roles/` tree produces zero violations after the
+`pm.md` rewrite.
+
+### Tests added
+
+**`tests/verify-stamp.test.js`** — 6 new tests for `stampStage03b`:
+- Happy path: all 7 gate fields stamped correctly, `drift=false`, status PASS.
+- Drift detected: status flips to FAIL, `model_said` recorded, blocker appended.
+- Scaffold generated when `spec.feature` is absent.
+- Graceful skip when `brief.md` is absent (track without requirements stage).
+- `model_said` vs orchestrator captured on count mismatch.
+- `stamp()` dispatch round-trip for `"stage-03b"`.
+
+**`tests/consistency-meta.test.js`** — 4 new tests for `role-budget-brief`:
+- `"Run \`devteam spec generate\`"` in a no-Bash role → violation detected (exit 1).
+- Same command in a role with Bash (e.g. qa) → no violation (exit 0).
+- Informational reference `` `devteam spec generate` `` without "Run" → no violation.
+- Real `roles/` regression guard → 0 violations after `pm.md` rewrite (exit 0).
+
+- **Fix (6.4): de-overfit fix recipes — provenance-based blocker routing replaces regex heuristics.**
+  Three overfit sources removed:
+
+  1. **`_wsFromText` regex demoted to last-resort fallback.** Recipe routing now reads workstream attribution from blocker fields (`assigned_to`, `workstream`) directly — provenance first, regex only when no structured attribution exists (emits a WARN). A new `_wsFromProvenance()` helper encodes this priority.
+
+  2. **`mergeWorkstreamGates` preserves workstream on object blockers.** The merge previously flattened all workstream gate blockers into a single array without recording their source. Object blockers now carry `workstream: role` when merged, enabling provenance-based routing downstream.
+
+  3. **stage-06b recipe: backend hardcoding and demo-project comment removed.** The old recipe unconditionally routed A11Y blockers to the backend workstream (based on a demo-project CSS filename). The updated recipe routes to whichever workstream `assigned_to`/`workstream` fields identify; falls back to regex then to all build roles when blockers carry no structured attribution.
+
+  4. **Hardcoded `["backend","frontend","platform","qa"]` fallback arrays → `_buildRoles()`.** Two last-resort fallbacks in stage-04c and stage-06d that listed build roles explicitly now derive them from the build stage definition (`getStage("build").roles`), so they stay correct if the build stage's role list changes.
+
+  **Tests added:** frontend-owned A11Y blocker (assigned_to: frontend) routes to frontend, not backend; multi-workstream A11Y blockers clear all attributed gates; soc2 scenario (string blockers) uses general build dispatch; recipe-hygiene meta-test ensures no recipe source quotes a filename that exists only under `examples/`.
+
+  Honest scope note: string blockers without `assigned_to` still fall back to regex then to clearing all build workstream gates — these are safe but may over-clear. Adding `assigned_to` to A11Y blockers in the gate schema is the long-term fix.
+
+- **fix(7.1):** Git-aware consistency enumeration and meta-test isolation. `scripts/consistency.js` now uses `git ls-files -z` when `.git` is present so untracked files never block a blocking check — they emit an advisory instead. Added `--only <check-class>` flag so meta-tests run only their own check class, eliminating five-test fan-out from a single stray file. Added `PROMPT_BUDGET_FILE` env override (mirrors `CONSISTENCY_BASELINE_FILE`) so prompt-budget meta-tests write to a tempdir instead of rewriting the real file in place. The stage-05.md "known exceedance" test is now fixture-based via `--root` + `--only file-size-ceiling`, so trimming that file in Phase 8 won't break the suite. CI workflow permanently creates `docs/SCRATCH-ci-probe.md` before `npm test` as a regression guard; this step was red on the pre-fix main and is green after. (plans/phase-7-test-harness.md §7.1)
+
+## fix/ci-signal (Phase 7.2) — CI signal quality
+
+### 7.2.1 — Tighten onboarding smoke assertion
+- The CI onboarding smoke step now captures `devteam stage` stdout+stderr and
+  asserts the requirements-role header (`Stage stage-01`) appears in the
+  output. A crash inside `devteam stage` now fails the step instead of
+  silently succeeding behind `|| true`.
+- Pinned `devteam next` action check to `run-stage|continue-stage` (the two
+  actions reachable from a headless run that wrote no gate), replacing the
+  previous six-action whitelist that included `pipeline-complete` and
+  `resolve-escalation` (neither reachable from a fresh `init`).
+
+### 7.2.2 — Coverage signal surfacing
+- Coverage step now emits a summary block to `$GITHUB_STEP_SUMMARY` — numbers
+  are visible from the PR checks list without opening the raw log.
+- New `upload-artifact` step saves `coverage-report.txt` for 14 days per node
+  version (non-blocking, `if-no-files-found: ignore`).
+- Moved the recorded baseline from a YAML comment into
+  `.github/coverage-baseline.json` so updating it produces a visible diff.
+
+### 7.2.3 — a11y-fixer success-path tests
+- Added three tests covering `fixA11yBlockers`'s dispatch → re-validation path
+  (the reason the module exists), which was untested at 69.7% line coverage:
+  - PASS gate: returns `{ status: "PASS", exitCode: 0 }`.
+  - FAIL gate with remaining blockers: returns `{ status: "FAIL", exitCode: 1,
+    remainingBlockers: [...] }`.
+  - No gate written by re-run: returns `{ status: "MISSING", exitCode: 1 }`.
+
+### 7.2.4 — Fix preflight git-hygiene dead code
+- Fixed `core/preflight.js`: added `-c` (`--cached`) flag to `git ls-files
+  --ignored --exclude-standard`. Without it the command exits 128 on git ≥
+  2.27, making the blocker path permanently unreachable on modern git (macOS
+  Apple Git ≥ 2.28, Ubuntu default git ≥ 2.27).
+- Replaced the two documenting tests (which recorded the broken behavior) with
+  three behavioral tests: clean repo passes, committed-then-ignored file fires
+  a blocker with a `git rm --cached` suggestion.
+
+- **Fix: `--allow-stage` now accepts comma-separated values.** Previously, `--allow-stage sign-off,deploy` was treated as a single literal stage name and failed to grant the consequence ceiling for either stage. Adding `split: true` to the flag definition makes both `--allow-stage sign-off,deploy` and `--allow-stage sign-off --allow-stage deploy` produce the same result.
+
+- **Fix: build retry recipes now clear `stage-04a` (pre-review lint gate).** `buildGatePaths()` — the shared helper used by six fix recipes to generate clear_gates lists — was omitting `pipeline/gates/stage-04a.json`. When any recipe re-dispatched the build workstream, the driver saw stage-04a still PASS and skipped the pre-review lint check entirely. Lint errors introduced by the build agent during the re-dispatch reached deploy time undetected. Adding `stage-04a.json` to `buildGatePaths()` closes the gap for all callers at once. Resolves #108.
+
+- **Fix: DAG-derived gate invalidation — Phase 5.1 (closes the #109 class generalized).** Fix recipes hand-listed `clear_gates` per stage; when stage-06d cleared stage-04 build gates, stage-05 (peer-review) and stage-06 (QA) PASS gates were left standing — rewritten code re-entered verification without passing peer-review or QA again. New `core/pipeline/invalidation.js` helper `derivedClearGates()` computes which downstream attestation gates to clear by walking the ordered stage list between the cleared root and the failing stage, returning only paths for gate files that actually exist on disk. Recipes now declare only root stage(s); derived clearing adds every intermediate gate automatically. The hand-listed `stage-04a.json` entry removed from `buildGatePaths`. Updated recipes: stage-04a, stage-04c, stage-05 (code-changes path), stage-06, stage-06b (path 2), stage-06d. `_nextImpl` now passes `stageList` and `changeId` to every `diagnose()` call; the helper is changeId-aware for bounded-mode runs (Phase 5.4). 17 new tests in `tests/invalidation.test.js`, including the regression test that failed on `main` before this fix.
+
+- **Fix: `devteam log` no longer shows artifacts from prior pipeline runs.** When a second feature was started with `devteam restart design --cascade`, gate files were cleared but artifact files (ADRs, design-spec, build-plan, etc.) remained on disk with their original timestamps. The journal sorted all pipeline artifacts by mtime, so first-feature artifacts appeared at the head of `devteam log --follow` output alongside the new feature's events — making the timeline confusing and hard to follow. Fixed by anchoring the artifact timeline to `pipeline/brief.md` mtime: artifacts written before the current brief are treated as prior-run artifacts and suppressed. Gates are unaffected (they are always cleared and re-created). When no brief exists yet, no filtering is applied.
+
+- **fix(write-audit):** `snapshotWritables` now uses `git status --porcelain -z` (NUL-delimited) instead of the newline-based format. Git quotes paths that contain spaces or high-byte characters in the newline format; the old `slice(3).trim()` captured the quote characters verbatim, causing false-positive `allowedWrites` violations that flipped PASS gates to FAIL. The `-z` format never quotes paths. Rename/copy entries (two NUL-separated records) are handled with a `skipNext` flag that discards the origin path, consistent with the previous `" -> "` handling. (plans/phase-3-structural-debt.md §3.7.1)
+- **fix(orchestrator):** `mergeWorkstreamGates` now falls back to the locally-resolved `track` variable (derived from `opts.track` / `custom_stages` / `default_track`) when `wsGates[0].gate.track` is `undefined`. Previously a workstream gate that omitted the `track` field caused the merged gate to ship `track: undefined`, which the validator flagged as an unrecognised track — a gate the orchestrator itself wrote was self-flagged. (plans/phase-3-structural-debt.md §3.7.2)
+- **fix(tracks):** `core/gates/validator.js` and the `devteam doctor` track check in `bin/devteam` now derive their valid-track sets from the canonical `TRACKS` export in `core/pipeline/stages.js` rather than maintaining independent inline literals. Any track added to `stages.js` automatically propagates to both without a separate manual edit. `VALID_TRACKS` is now exported from `validator.js` for testability. (plans/phase-3-structural-debt.md §3.7.5)
+
+- **fix(config):** `assess --apply` now calls `clearConfigCache()` after writing `.devteam/config.yml`. Previously, any `loadConfig()` call in the same process (e.g. a chained command) would return the stale pre-write value from the in-process cache. Also adds a comment in `core/driver.js` documenting the intentional per-run config pinning: the driver loads config once at run start because track, isolation, and changeId are derived from it and baked into `run-state.json`; re-reading mid-loop could silently corrupt an in-progress run. (plans/phase-3-structural-debt.md §3.7.3)
+- **fix(orchestrator):** The `--workstream` filter is now applied inside `runStage` before prompt rendering, rather than in separate post-render implementations in `runStageHeadless` and `cmdStage`. Both headless and non-headless modes now share a single filter path. The matching rule is documented as "role-prefix match": filter values are bare role names; for fanout stages, all fanout instances of a role (e.g. `stage-05.backend.claude-code` and `stage-05.backend.codex`) are selected together by a single `--workstream backend` value. `roles[]` in the returned object now reflects the filtered set. (plans/phase-3-structural-debt.md §3.7.6)
+- **fix(pricing):** `mergeWorkstreamGates` now adds a `warnings[]` entry (`"unpriced model X — budget enforcement incomplete"`) when a workstream gate reports token usage for a model not in the pricing table. Previously, budget sums silently treated unpriced models as zero cost. The pricing table remains hand-maintained; this change makes staleness visible without auto-updating it. (plans/phase-3-structural-debt.md §3.7.7)
+
+- **6.5.1 — Unpriced-model WARN on single-role stamp path.** `patchGateForUnpricedModel()` added to `core/orchestrator.js` and called in `runStageHeadless` after a single-role gate is written. Single-role stages (e.g. requirements, executable-spec, qa) now emit the same D7 budget-enforcement warning that `mergeWorkstreamGates` has emitted for multi-role stages since v0.6.0. Function exported for direct unit testing; four cases in `tests/orchestrator.test.js`.
+- **6.5.2 — `hosts/generic/capabilities.json` declares `goalLoop: false` explicitly.** Closes the v0.6.0 "explicit false, never ambiguous" gap (same principle applied to gemini-cli in Phase 4). `tests/goal-loop.test.js` strengthened: generic assertion is now `strictEqual(false)` instead of the weaker `ok(!caps.goalLoop)`, so a missing key is caught. `docs/reference/hosts.md` regenerated.
+- **6.5.3 — codex/gemini-cli adapter dedup.** The two adapters were ~95% identical (165/166 LOC). Shared `installRoles`, `install`, `uninstall`, `status`, and `renderStagePrompt` logic extracted into `core/adapters/markdown-host.js` as `makeMarkdownHostAdapter(capabilities)`. Both adapters delegate to the base; each retains only its own `invoke()`. Deletes the in-file NOTE comments that flagged this dedup as pending since Phase 3. `tests/audit.test.js` updated: the "uses `core/roles.listRoles()`" invariant now checks the shared base. Adapter-contract and install-roundtrip tests confirm byte-identical rendered output.
+
+- **Fix: `devteam init` hook commands are now portable across machines.** The claude-code adapter previously baked absolute paths to Stagecraft core scripts into `.claude/settings.local.json` at init time (e.g. `node "/abs/path/core/gates/validator.js"`), making the file machine-specific and requiring `devteam init` to be re-run after every fresh clone to a different machine or path. Hook commands now use `devteam hook validate`, `devteam hook secret-scan`, and `devteam hook approval-derivation` — resolved at execution time via the installed `devteam` binary. A new `devteam hook <name>` subcommand dispatches to the same underlying scripts with full stdio and exit-code fidelity. `settings.local.json` is now safe to commit or omit from `.gitignore` without consequence; existing projects can regenerate with `devteam init --host claude-code --force`.
+
+- **Fix: `devteam restart <stage>` now also clears archive files for the restarted stage.** Previously, only the live gate JSON files were deleted; archive files under `pipeline/gates/archive/<stage>.attempt-N.json` were left on disk. This caused `detectNoProgress` to compare stale archives from a prior run against a new attempt, firing a false `convergence-exhausted` halt before the driver could apply the fix recipe and clear gates. The restart command now deletes all archive files for every stage it restarts (including cascade targets), making re-runs after a manual restart start with a clean convergence slate.
+
+- **Fix: stage-06b (accessibility-audit) fix recipe now routes correctly.** The previous recipe scanned `noted_for_followup` items across all gate files — including `stage-06b.json` itself — and, when cosmetic advisory IDs (disclosure triangle, `aria-hidden`) matched the A11Y regex, generated a `devteam advise --apply` command with `clear_gates: []`. Applying cosmetic advisories did not resolve the actual color-contrast blockers, so the stage failed again and `detectNoProgress` fired on the second attempt. The updated recipe (1) excludes stage-06b's own gate from the `noted_for_followup` search, (2) adds an explicit path for stages where A11Y blockers name specific source files — clearing and re-dispatching the backend build + audit gates so the agent can actually edit the CSS.
+
+- **Fix: stage-06d fix steps now include `--patch` on targeted workstream build dispatch.** When a build workstream was identifiable from blocker text (e.g. `Fix: src/backend/server.js:10`), the recipe generated `devteam stage build --workstream backend --headless` — without `--patch`. Without patch mode the build agent verifies existing code rather than implementing the fix, so an operator following the fix steps verbatim would see the same verification blockers again. Added `--patch --from verification-beyond-tests` to match the existing else-branch (unidentifiable workstream) behaviour. Note: the autonomous driver still dispatches build without patch context (`runStageHeadless` does not yet accept `patchFrom`); this fixes the human-visible fix steps only.
+
+- **Fix: stage-06d auto-fix now dispatches build before re-running verification.** When `_wsFromText` could not map a verification blocker to a known workstream (e.g. the blocker contained `"Fix: if (value instanceof Date)…"` — a code snippet, not a file path — and files like `hasher.js` didn't match `src/backend/` patterns), `computeFixSteps` fell back to a no-op descriptive step with empty `commands`. `clearGatesFromFixSteps` found only `rm pipeline/gates/stage-06d.json`, so the driver cleared the gate and re-ran the verifier on unchanged code — burning both retry slots without any patch attempt. Fix: replace the no-op else branch with a global build dispatch (`devteam stage build --patch --from verification-beyond-tests`) plus `rm` commands for all four per-area gates and `stage-04.json`, so `next()` routes through build before re-running verification. Tests added for the unidentifiable-workstream and code-snippet Fix: clause cases.
+
+- **refactor(cli):** `bin/devteam` is now a 91-line pure registry dispatcher. All 31 commands (read-only, pipeline, tooling) are extracted into `core/cli/commands/<command>.js` modules, each exporting `{ name, flags, run(positional, flags) }`. The monolith that was ~2,900 lines is gone; every command is independently loadable, testable, and auditable. `core/cli/get-orchestrator.js` provides a shared lazy-loader so commands that need the orchestrator don't incur its ~60 ms cold-load unless invoked. (plans/phase-3-structural-debt.md §3.1 PR 2)
+
+- **refactor(cli):** Introduce `core/cli/flags.js` — a schema-driven flag parser (`parseFlags(argv, schema)`) that replaces the flat shared `parseFlags` in `bin/devteam`. Each command now declares its own `FLAGS` schema (`{ flagName: { type, key?, split?, description } }`), and unknown flags are rejected per-command rather than via a global catch-all. `generateHelp(commandLine, schema)` produces per-command usage text from the same schema, replacing hand-maintained `Usage:` strings. The Phase-1.4 `--apply` peek-ahead hack dissolves: `assess` declares `apply` as `boolean`, `advise` declares it as `string` — the parser enforces the correct contract for each. `bin/devteam` stays monolithic in this PR; commands move in PR 2. (plans/phase-3-structural-debt.md §3.1 PR 1)
+
+- **refactor(gates):** extracted gate snapshot/restore logic from the replay command module into `core/gates/replay-backup.js`. The new module provides `snapshotGate`, `restoreFromBackup`, `deleteBackup`, `findLeftoverBackups`, `archiveReplayGate`, and `clearOriginalGate`. Command modules now contain argument handling and output formatting only — all gate file operations are delegated to core. (plans/phase-3-structural-debt.md §3.1 PR 3)
+- **fix(replay):** eliminated the clobber-and-restore race in `devteam replay`. Previously, the headless run overwrote the original workstream gate with only an in-memory restore; a crash between dispatch and restore left the original silently replaced. Fix: the original gate is now snapshotted to `pipeline/gates/.replay-backup/<name>.json` *before* dispatch; restored from disk afterwards; backup deleted on clean success. On next `devteam replay` invocation, leftover backups from a prior crash are detected and reported before any new dispatch begins. (plans/phase-3-structural-debt.md §3.7.4)
+
+- **refactor(recipes):** replaced the 440-line `computeFixSteps` if-ladder in `core/orchestrator.js` with a per-stage recipe registry in `core/pipeline/fix-recipes.js`. Each stage registers a `diagnose(gate, ctx)` function that returns `{ clear_gates, steps }` directly as data; a single `formatGateClear` formatter derives the human-readable `rm` command strings — no other code generates them. `clearGatesFromFixSteps` (the reverse parse of rm strings back into paths) is deleted; `_nextImpl` calls `getRecipe().diagnose()` directly and the structured `clear_gates` array is attached to every `fix-and-retry` action without post-hoc parsing. `driver.js` updated to consume `clear_gates` exclusively (the `fix_steps` fallback path is removed). orchestrator.js shrank by 521 lines (1481 → 960). (plans/phase-3-structural-debt.md §3.2)
+
+- **refactor(markers):** Extracted `upsertSection` and `stripSection` into a new `core/markers.js` module, eliminating three copies of begin/end-marker section logic. The two strip implementations (core/gates/validator.js and bin/devteam) were byte-for-byte identical; no behavioral divergence. The upsert implementation in core/driver.js had a verified bug: inverted markers (end before begin) or a missing end marker caused a duplicate section to be appended. The new `upsertSection` treats corrupt input explicitly — replaces from the begin-marker to EOF and emits a warning — instead of appending. Both functions operate on text strings; callers own file I/O. (plans/phase-3-structural-debt.md §3.3)
+
+- **refactor(deps):** Moved `@huggingface/transformers` from `dependencies` to `optionalDependencies`. The package is only needed for `devteam memory` with the default local embedding provider; it is never loaded by other commands. `core/memory/embed.js` already lazily `require`d the package — the change adds MODULE_NOT_FOUND detection and a clear actionable error message naming the install command. `devteam doctor` now reports embedding availability as informational (`ℹ`) instead of omitting it or treating absence as a failure. Honest scope note: `npm install` (with no flags) still installs optional dependencies by default, so most users see no change; only `npm install --omit=optional` skips the ~447 MB download. (plans/phase-3-structural-debt.md §3.4)
+
+- **test(coverage):** Added behavioral test suites for the two previously-untested core modules: `tests/preflight.test.js` (19 tests covering `runGitHygieneCheck`, `runImportPathCheck`, `runDeferredItemsRisk`, and `runPreflight` — gate I/O, track propagation, FAIL/PASS status, skipWrite) and `tests/a11y-fixer.test.js` (21 tests covering `parseBlocker` including malformed-input cases, `buildA11yFixPrompt` across empty/single/multiple/null blockers, and `fixA11yBlockers` error paths — no blockers, missing headless capability, missing headlessCommand, non-zero agent exit). Added a non-blocking `Coverage report (informational)` step to `.github/workflows/test.yml` using `node --test --experimental-test-coverage`; baseline at 3.6 merge: 85.43% lines / 76.02% branches / 82.42% functions. No threshold set. Honest scope note: `runGitHygieneCheck`'s blocker path (committed-but-ignored files) is unreachable on git 2.27+ because `git ls-files --ignored --exclude-standard` now requires `-c` or `-o`; the function always produces a warning instead of a blocker on modern git. (plans/phase-3-structural-debt.md §3.6)
 
 ---
 
@@ -71,6 +432,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - **`docs/comparative-analysis.md` — Stagecraft vs the AI-dev tooling landscape (2026).** A 300-line positioning document comparing Stagecraft against six adjacent public frameworks: BMAD-METHOD, GitHub Spec Kit, Agent OS, OpenSpec, AWS Kiro, AI-DLC. Synthesized from three independently-written analyses (one generated in Claude Code, two contributed by the operator from external sessions) and verified against current web sources. Includes: (a) a four-school taxonomy of the 2026 AI-dev-framework space, with a complementary 5-layer functional-stack lens; (b) a 10-dimension comparison matrix; (c) per-framework deep-dives; (d) three claims Stagecraft can defend (gate JSON as executable state seam, heterogeneous multi-model dispatch, downstream-of-build coverage); (e) three honest cases where Stagecraft is *not* the best fit; (f) seven evolution opportunities ranked by leverage with effort estimates and a "what Stagecraft should NOT absorb" section; (g) a four-layer composability stack diagram. Linked from README under Reference / extension. Doc-only; no code changes.
 
 - **Between-cycle observations channel in `docs/audit-archive/HISTORY.md`.** Three observations surfaced between audit #2 (2026-06-03) and the next audit, but had nowhere durable to live — they'd be lost from the conversation that produced them. New `## Between-cycle observations` section in HISTORY.md captures them; `skills/audit/SKILL.md` § Phase 3.1 updated to read the section and fold each observation into the new backlog (promoted to a finding with full ratings, or closed-out with a citation). Convention is "observations live with the audit they informed" — at archive time, processed observations move from HISTORY.md into the archived audit's `09-backlog.md` § Project-Specific. First three captured: (a) `eslint-plugin-security` as a P3 candidate — three CodeQL alerts in one week since v0.5.0 suggests the PR 2.1 defer should be revisited; (b) CHANGELOG-per-PR fragments as a P3 — `[Unreleased]` merge conflicts hit 4+ times across Batch 1/2; (c) "verify before promoting" discipline didn't hold even after codification — the C-1 retraction in PR #32 was the same failure mode as the 2026-05-28 audit's S5, suggesting an enforceable mechanism is needed, not just textual guidance.
+
+- *(entry backfilled post-release)* **B2 — Performance budget stage (stage-06e).** New `stage-06e`, role `qa`, between observability-gate and sign-off. Checks Lighthouse Web Vitals (LCP/CLS/FID against the brief's targets), bundle size delta (vs. merge-base), and k6/autocannon load-test throughput against configured budgets (`.devteam/config.yml` `performance.budget.*` or fallback `performance.budget.json`). `budget_exceeded: true` → gate FAIL; `skipped_reason` for non-performance-relevant changes (backend-only, config-only, dep-update). `requiredCapabilities: { shell: true }`. Included in `full`, `quick`, `hotfix` tracks; excluded from `nano`, `config-only`, `dep-update`. `skills/performance-budget/SKILL.md` walks seven steps from tool selection through gate writing. `templates/performance-report-template.md`. Stage journal entries embed budget status, checks run, and Lighthouse score. 25 tests in `tests/performance-budget.test.js`. *Honest scope note:* the stage depends on the project having a Lighthouse-compatible frontend and a load-testing entrypoint; non-applicable projects use `skipped_reason` rather than failing. (closes BACKLOG B2)
+
+- *(entry backfilled post-release)* **B9 — Bounded workspace deltas.** Opt-in isolation mode: when `.devteam/config.yml` sets `pipeline.isolation: bounded`, every in-flight feature's artifacts (prompts, gates, logs) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. `changeId` is derived by slugifying `opts.feature`. New `core/paths.js` exports `pipelineRoot`, `gatesDir`, `logsDir`, `prefixPipelineRelative`. `changeIdFromFeature` added to `core/config.js`. `orchestrator.js` computes `ctx.changeId`, threads it into `buildDescriptor` (prefixes `readFirst`/`allowedWrites`/`artifact`), and uses path helpers in `runStageHeadless`/`mergeWorkstreamGates`. `headless.js` routes gate + log files to the bounded directory. `render-helpers.js` writes the bounded gate path into the agent prompt. `validator.js` reads `DEVTEAM_CHANGE_ID` env var to validate gates in the bounded directory. Default `in-place` mode is unchanged — zero impact for existing setups. 35 new tests in `tests/bounded-workspace.test.js`. (closes BACKLOG B9 / cmp-E-2)
+
+- *(entry backfilled post-release)* **B10 — Discover Standards preprocessing.** New `devteam standards discover [--cwd <dir>] [--json] [--dry-run] [--force]` — pure static analysis that scans a project codebase and writes `docs/project-conventions.md`. Detects: tech stack (JS/TS/Python/Go/Rust via manifest files), module system (ESM/CJS/mixed from `package.json type` + source sampling), file layout (top-level dirs + source subdirs), naming style (kebab/PascalCase/camelCase/snake_case plurality), tooling (TypeScript/ESLint/Prettier/Biome/Husky/EditorConfig), test config (framework, co-location, pattern), and most-used imports (regex-based tally, skips builtins). `--dry-run` prints without writing; `--json` emits the structured discovery result; `--force` overwrites an existing file. `core/standards/discover.js` exports `discover()`, `formatReport()`, and individual detectors for unit testing. 67 tests in `tests/standards-discover.test.js`. Pair with `readFirst` lists and AGENTS.md to inject discovered conventions into agent prompts. (closes BACKLOG B10 / cmp-E-5)
+
+- *(entry backfilled post-release)* **C1 — Filesystem-level `allowedWrites` enforcement.** Post-hoc write-audit via git-status diff for adapters that lack hook infrastructure (codex, gemini-cli). New `core/guards/write-audit.js` exports `snapshotWritables` (git status before spawn), `auditWrites` (diff before/after, checked against `allowedWrites` patterns), `isAllowed` (exact-file + directory-prefix matching). `runHeadless` snapshots dirty state before the host process starts and diffs after close; unauthorized writes are logged immediately and returned as `writeViolations[]`. Orchestrator patches the gate to `FAIL` and appends violation messages to `blockers[]` when violations are found. `codex` and `gemini-cli` capabilities updated from `prompt-only` to `post-hoc-audit`; `claude-code` keeps `tool-call-time` (hooks already block writes at dispatch time). `render-helpers.js` caption updated to reflect actual enforcement level. 33 tests in `tests/write-audit.test.js`. (closes BACKLOG C1)
+
+- *(entry backfilled post-release)* **C3 — License compatibility gate.** `stage-04a.schema.json` now requires `license_check_passed` (boolean) and `license_findings[]` (per-package `{ package, license, policy: allowed|warned|denied, note? }`). Default policy table: MIT/Apache-2.0/BSD-*/ISC/CC0-1.0/Unlicense → `allowed`; UNLICENSED/SSPL/BUSL → `warned`; GPL-*/AGPL-*/LGPL-* → `denied`. `roles/platform.md` step 4 replaced with a concrete procedure: license-checker (Node), pip-licenses (Python), cargo-license (Rust) + SPDX classification; fallback advice for missing tools; `.devteam/config.yml license.extra_allowed[]` override for intentional exceptions. `rules/gates-core.md` and `templates/pre-review-template.md` updated with the per-license policy table. Gate skeleton in `stages.js` carries the new fields. (closes BACKLOG C3)
+
+- *(entry backfilled post-release)* **C5 — Capability-required permissions.** All four adapter `capabilities.json` files now declare `enforces.shell` and `enforces.network` (true for claude-code/codex/gemini-cli; false for generic). Four stages that need shell access to do their work declare `requiredCapabilities: { shell: true }` in `stages.js` (pre-review, qa, verification-beyond-tests, deploy). `assertCapabilities()` in `orchestrator.js` is called at dispatch time for every workstream — headless or interactive — and throws a named `CapabilityError` if the routed host lacks a required capability; the error surfaces as an `ESCALATE` gate with a "host does not enforce shell" message. 31 new tests in `tests/capabilities.test.js`. (closes BACKLOG C5)
+
+- *(entry backfilled post-release)* **E7 — `/goal` integration for convergence-shaped stages.** `claude-code` and `codex` now declare `capabilities.goalLoop: true`. `build` (stage-04) and `qa` (stage-06) carry a `goalCondition` template in `stages.js` with a `{workstreamId}` placeholder that `buildDescriptor` resolves at dispatch time. `runStageHeadless` prepends `/goal "<condition>"` to the prompt for any workstream whose adapter has `goalLoop: true` and whose stage has a `goalCondition` — instructing the host to loop until the gate passes rather than exiting after one pass. Non-goal stages and non-goal-loop hosts (gemini-cli, generic) are unaffected. `hosts/gemini-cli/capabilities.json` explicitly declares `"goalLoop": false` so absence is never ambiguous. 30 new tests in `tests/goal-loop.test.js`. (closes BACKLOG E7)
+
+- *(entry backfilled post-release)* **G6 — Stage shopping (AI-inferred tracks).** `devteam assess [--description "..."] [--json] [--apply] [files...]` runs rule-based track analysis: description keyword patterns + path/content heuristics (via `security-heuristic.js` and `migration-heuristic.js`) recommend a track with rationale. Priority order: hotfix keywords → dep-update → config-only → nano → quick → full (default). Heuristic overrides: migration-safety-required bumps lighter tracks to full; security-required bumps nano to quick. `--apply` writes `pipeline.custom_stages` to `.devteam/config.yml`; `custom_stages` is consumed by `next()`, `summary()`, and `runStage()` transparently, overriding `default_track`. `orderedStageNamesForTrack` and `isStageInTrack` now accept custom stage arrays. `trackLabel()` serializes array tracks for OTel span attributes. New `core/stage-shopping/assess.js`. 38 new tests in `tests/stage-shopping.test.js`. *Cross-confirmed by comparative analysis:* AI-DLC dynamic pathway selection and BMAD scale-adaptive depth both validate this direction (cmp-E-3). (closes BACKLOG G6)
 
 ### Changed
 
