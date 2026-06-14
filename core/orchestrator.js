@@ -21,7 +21,7 @@ const { classifyGate, MAX_RETRIES_DEFAULT } = require("./gates/classify");
 const { pricingFor } = require("./pricing");
 const { getRecipe } = require("./pipeline/fix-recipes");
 const { detectNoProgress, countArchivedAttempts, noProgressEvidence } = require("./gates/convergence");
-const { pruneArchives } = require("./gates/archive");
+const { archiveGateIfFail, pruneArchives } = require("./gates/archive");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -336,6 +336,13 @@ async function runStageHeadless(stageName, opts = {}) {
       ? path.join(gatesDir, `${plan.stage}.json`) : null;
     let preGateMtime = null;
     if (singleRoleGate) { try { preGateMtime = fs.statSync(singleRoleGate).mtimeMs; } catch { preGateMtime = null; } }
+
+    // 5.3: archive-before-overwrite — interactive convergence ceiling. Archive
+    // the stage gate if it exists with FAIL status so countArchivedAttempts() in
+    // next() sees the attempt even on the interactive path (devteam stage / next
+    // loops). On the driver path the gate is cleared before this runs, so this
+    // is a no-op there (gate absent → archiveGateIfFail returns null). Best-effort.
+    try { archiveGateIfFail(gatesDir, plan.stage); } catch { /* never block dispatch */ }
 
     // --workstream filtering is applied in runStage (before rendering), so
     // plan.workstreams already contains only the requested workstreams here.
