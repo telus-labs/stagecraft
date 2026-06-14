@@ -7,7 +7,7 @@ description: "QA Developer: Stage 6 test-authoring phase. Map every acceptance c
 
 Use this skill when you are the QA Developer writing tests during the Stage 6
 authoring phase. This phase produces the test code; running the suite is a
-separate stage-6 execution phase (see `skills/qa-test-execution/SKILL.md`).
+separate execution phase (see `skills/qa-test-execution/SKILL.md`).
 
 ## Procedure
 
