@@ -1,8 +1,9 @@
 // tests/a11y-fixer.test.js
 //
 // Behavioral tests for core/a11y-fixer.js.
-// Covers the pure-core functions (parseBlocker, buildA11yFixPrompt) plus the
-// early-exit paths of fixA11yBlockers that don't require a live LLM.
+// Covers the pure-core functions (parseBlocker, buildA11yFixPrompt), the
+// early-exit paths of fixA11yBlockers, and the dispatch → re-validation
+// success path via DEVTEAM_HEADLESS_COMMAND mocks.
 
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -15,6 +16,7 @@ const {
   buildA11yFixPrompt,
   fixA11yBlockers,
 } = require(path.join(REPO_ROOT, "core", "a11y-fixer"));
+const { clearConfigCache } = require(path.join(REPO_ROOT, "core", "config"));
 
 // Capture stderr writes temporarily so warnings don't pollute test output.
 async function captureStderrAsync(fn) {
@@ -280,5 +282,110 @@ describe("fixA11yBlockers — agent exits non-zero", () => {
       if (prev === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
       else process.env.DEVTEAM_HEADLESS_COMMAND = prev;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fixA11yBlockers — success path: dispatch exits 0 → re-validation
+//
+// This covers the "reason the module exists" path: agent fixes the HTML,
+// exits 0, then the accessibility audit is re-run to verify.
+//
+// Setup: a minimal devteam project (just .devteam/config.yml pointing to
+// claude-code, which has capabilities.headless = true).  DEVTEAM_HEADLESS_COMMAND
+// is set to a node script that controls the gate written by the re-run.
+// ---------------------------------------------------------------------------
+
+// Write a minimal devteam project into a tempdir so runStageHeadless can
+// resolve the host adapter (claude-code has capabilities.headless=true).
+function makeDevteamProject() {
+  const cwd = makeTmp();
+  fs.mkdirSync(path.join(cwd, ".devteam"), { recursive: true });
+  fs.writeFileSync(
+    path.join(cwd, ".devteam", "config.yml"),
+    "routing:\n  default_host: claude-code\n",
+  );
+  fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+  return cwd;
+}
+
+// Write a node script that writes a gate file to ./pipeline/gates/stage-06b.json
+// relative to CWD when invoked, then exits 0.
+function writeGateScript(dir, gate) {
+  const p = path.join(dir, "write-gate.js");
+  fs.writeFileSync(p, [
+    "const fs = require('fs');",
+    "const path = require('path');",
+    "const gdir = path.join(process.cwd(), 'pipeline', 'gates');",
+    "fs.mkdirSync(gdir, { recursive: true });",
+    `fs.writeFileSync(path.join(gdir, 'stage-06b.json'), ${JSON.stringify(JSON.stringify(gate))});`,
+  ].join("\n"));
+  return p;
+}
+
+// Save/restore DEVTEAM_HEADLESS_COMMAND and DEVTEAM_NO_LOG around a test fn.
+async function withHeadlessCommand(cmd, fn) {
+  const prevCmd = process.env.DEVTEAM_HEADLESS_COMMAND;
+  const prevLog = process.env.DEVTEAM_NO_LOG;
+  process.env.DEVTEAM_HEADLESS_COMMAND = cmd;
+  process.env.DEVTEAM_NO_LOG = "1"; // suppress log files in tempdir
+  try {
+    return await fn();
+  } finally {
+    if (prevCmd === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
+    else process.env.DEVTEAM_HEADLESS_COMMAND = prevCmd;
+    if (prevLog === undefined) delete process.env.DEVTEAM_NO_LOG;
+    else process.env.DEVTEAM_NO_LOG = prevLog;
+    clearConfigCache(); // prevent cross-test cwd pollution
+  }
+}
+
+describe("fixA11yBlockers — success path: dispatch exits 0 + audit re-run writes PASS gate", () => {
+  it("returns status PASS and exitCode 0 when the re-run gate shows no blockers", async () => {
+    const cwd = makeDevteamProject();
+    const scriptPath = writeGateScript(cwd, { status: "PASS", blockers: [] });
+    // Verify no spaces in scriptPath — the headless command is split on whitespace.
+    assert.ok(!scriptPath.includes(" "), `scriptPath must not contain spaces: ${scriptPath}`);
+    const cmd = `${process.execPath} ${scriptPath}`;
+
+    const blockers = [{ id: "A-1", description: "Remediation: Add aria-label." }];
+    const { result } = await captureStderrAsync(() =>
+      withHeadlessCommand(cmd, () => fixA11yBlockers(cwd, blockers)),
+    );
+    assert.equal(result.status, "PASS");
+    assert.equal(result.exitCode, 0);
+    assert.deepEqual(result.remainingBlockers, []);
+  });
+});
+
+describe("fixA11yBlockers — success path: dispatch exits 0 + audit re-run writes FAIL gate", () => {
+  it("returns status FAIL and exitCode 1 with remaining blockers when audit still fails", async () => {
+    const cwd = makeDevteamProject();
+    const remaining = [{ id: "A-2", description: "Still failing" }];
+    const scriptPath = writeGateScript(cwd, { status: "FAIL", blockers: remaining });
+    assert.ok(!scriptPath.includes(" "), `scriptPath must not contain spaces: ${scriptPath}`);
+    const cmd = `${process.execPath} ${scriptPath}`;
+
+    const blockers = [{ id: "A-2", description: "Remediation: Add alt text." }];
+    const { result } = await captureStderrAsync(() =>
+      withHeadlessCommand(cmd, () => fixA11yBlockers(cwd, blockers)),
+    );
+    assert.equal(result.status, "FAIL");
+    assert.equal(result.exitCode, 1);
+    assert.deepEqual(result.remainingBlockers, remaining);
+  });
+});
+
+describe("fixA11yBlockers — success path: dispatch exits 0 + audit re-run writes no gate", () => {
+  it("returns status MISSING and exitCode 1 when the re-run does not produce a gate", async () => {
+    const cwd = makeDevteamProject();
+    // 'true' exits 0 but writes nothing — gate remains absent after the re-run.
+    const blockers = [{ id: "A-3", description: "Remediation: Add role attribute." }];
+    const { result } = await captureStderrAsync(() =>
+      withHeadlessCommand("true", () => fixA11yBlockers(cwd, blockers)),
+    );
+    assert.equal(result.status, "MISSING");
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.reason && result.reason.includes("gate not written"));
   });
 });

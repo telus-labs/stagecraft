@@ -16,8 +16,8 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | D | Documentation system | ✅ complete (PRs #99 · #102 · #103 · #104 · #105 · #107) |
 | 5 | State integrity (round-2 review) | ✅ complete (PRs #114–#117) |
 | 6 | Promise integrity | ✅ complete (PRs #118–#121 · #124) |
-| 7 | Test & CI harness | 🔲 ready |
-| 8 | Release v0.7.0 + semantic sync | ⏸ 8.3 needs 7.1 |
+| 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
+| 8 | Release v0.7.0 + semantic sync | ⏸ 8.3 needs 7.1 (merged #122) |
 | 9 | Evidence-gated capabilities | ⏸ ADR-first |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -1262,7 +1262,7 @@ Kill the repo-state-sensitivity class (third recurrence) structurally. Order: 7.
 Plan file: plans/phase-7-test-harness.md. The preamble's TEST HYGIENE rule already
 carries the new meta-test line — verify it, don't re-add it.
 
-### 7.1 Git-aware consistency + meta-test isolation 🔲
+### 7.1 Git-aware consistency + meta-test isolation ✅ (PR #122)
 
 ```
 TASK: Implement plans/phase-7-test-harness.md, item 7.1. Read scripts/consistency.js's
@@ -1288,7 +1288,7 @@ Required tests: tracked-vs-untracked fixture git repos in tempdirs; --only filte
 the env override; advisory-vs-blocking behavior.
 ```
 
-### 7.2 CI signal quality 🔲
+### 7.2 CI signal quality ✅ (PR #125)
 
 ```
 TASK: Implement plans/phase-7-test-harness.md, item 7.2 — four items, one commit each.
@@ -1318,7 +1318,7 @@ Order: 8.3 → 8.2 → 8.1 (release last — it folds this phase's own fragments
 8.2(a–c) need Phase 6.4 merged; 8.3 needs 7.1 merged. Plan file:
 plans/phase-8-release-and-sync.md.
 
-### 8.3 Execute D5 step 3 (token work) ⏸ needs 7.1
+### 8.3 Execute D5 step 3 (token work) ✅ (PR #123)
 
 ```
 PRECONDITION: Phase 7.1 merged (the stage-05.md exceedance test is fixture-based; the

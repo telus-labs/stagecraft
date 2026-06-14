@@ -27,13 +27,6 @@ afterEach(() => { _tmpDirs.forEach(cleanup); _tmpDirs = []; });
 
 // ---------------------------------------------------------------------------
 // runGitHygieneCheck
-//
-// Note: `git ls-files --ignored --exclude-standard` (without -c or -o) was
-// deprecated in git 2.27 and now exits 128 on git 2.27+.  On such systems
-// (including macOS with Apple Git 2.28+) the hygiene check always hits the
-// warning path and can never produce a blocker.  The blocker path is
-// exercised only on older git.  Tests below verify the observable behavior
-// on the current platform.
 // ---------------------------------------------------------------------------
 
 describe("runGitHygieneCheck — non-git directory", () => {
@@ -47,22 +40,46 @@ describe("runGitHygieneCheck — non-git directory", () => {
   });
 });
 
-describe("runGitHygieneCheck — git repo, non-zero exit from git ls-files", () => {
-  // On git 2.27+ (including Apple Git), `git ls-files --ignored --exclude-standard`
-  // requires -c or -o, so it exits 128 inside any git repo too.
-  // The function treats any non-zero exit as a skip (warning, pass:true).
-  it("returns pass:true and a warning when git returns non-zero (modern git)", () => {
+describe("runGitHygieneCheck — clean git repo (no committed+ignored files)", () => {
+  it("returns pass:true with no blockers and no warnings for a clean repo", () => {
     const cwd = makeTmp();
     spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+    // Commit a clean file
+    fs.writeFileSync(path.join(cwd, "readme.txt"), "hello\n");
+    spawnSync("git", ["add", "."], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "init"], { cwd, encoding: "utf8" });
     const r = runGitHygieneCheck(cwd);
     assert.equal(r.pass, true);
     assert.equal(r.blockers.length, 0);
-    // Either a warning (non-zero exit) or no warnings (clean empty stdout).
-    // On modern git: always a warning.
-    assert.ok(
-      r.warnings.length === 0 || r.warnings[0].includes("git not available or not a git repo"),
-      `unexpected warning: ${r.warnings[0]}`,
-    );
+    assert.equal(r.warnings.length, 0);
+  });
+});
+
+describe("runGitHygieneCheck — committed file later ignored → blocker fires", () => {
+  it("produces a blocker listing the committed+ignored file", () => {
+    const cwd = makeTmp();
+    spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+
+    // Commit a file that we will later add to .gitignore
+    fs.writeFileSync(path.join(cwd, "build.out"), "compiled output\n");
+    spawnSync("git", ["add", "build.out"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add build output"], { cwd, encoding: "utf8" });
+
+    // Now add .gitignore that covers build.out
+    fs.writeFileSync(path.join(cwd, ".gitignore"), "*.out\n");
+    spawnSync("git", ["add", ".gitignore"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add gitignore"], { cwd, encoding: "utf8" });
+
+    // build.out is now committed but ignored — the hygiene check must catch it.
+    const r = runGitHygieneCheck(cwd);
+    assert.equal(r.pass, false, "committed+ignored file should produce a blocker");
+    assert.equal(r.blockers.length, 1);
+    assert.ok(r.blockers[0].includes("build.out"), `expected 'build.out' in blocker: ${r.blockers[0]}`);
+    assert.ok(r.blockers[0].includes("git rm --cached"), "blocker should suggest git rm --cached");
   });
 });
 

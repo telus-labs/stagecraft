@@ -57,14 +57,37 @@ jobs:
         run: rm -f docs/SCRATCH-ci-probe.md
 
       # Coverage report — report-only, never fails the build.
-      # Baseline recorded at item 3.6 (2026-06-11):
-      #   lines: 85.43%  branches: 76.02%  functions: 82.42%
+      # Baseline is in .github/coverage-baseline.json (a diff, not a comment).
       # No threshold is set yet; thresholds without history invite gaming.
       - name: Coverage report (informational)
+        id: coverage
         continue-on-error: true
-        run: node --test --experimental-test-coverage tests/*.test.js
+        run: |
+          node --test --experimental-test-coverage tests/*.test.js \
+            2>&1 | tee coverage-report.txt
+          # Emit summary to the GitHub step summary so numbers are visible
+          # without opening the log — one click from the PR checks list.
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            echo "## Coverage report" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E '(lines|branches|functions|uncovered)' coverage-report.txt \
+              >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Baseline in [.github/coverage-baseline.json](../../.github/coverage-baseline.json)_" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
         env:
           DEVTEAM_HEADLESS_COMMAND: cat
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-node${{ matrix.node-version }}
+          path: coverage-report.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Run consistency checks
         run: npm run consistency
@@ -84,19 +107,28 @@ jobs:
         # DEVTEAM_HEADLESS_COMMAND=cat renders the prompt to stdout without
         # invoking a model (offline-safe). The stage command exits non-zero
         # because cat doesn't write a gate — that's expected and intentional.
-        # The || true lets the step continue; the assertion is on devteam next,
-        # which must return a valid pipeline action without crashing.
+        # The || true lets the step continue; we then assert the rendered prompt
+        # content appeared (proof that devteam stage actually ran and produced
+        # output, not just that it didn't crash) and pin devteam next to the
+        # two actions that mean "stage ran but no gate was written yet".
         run: |
           TARGET=$(mktemp -d)
+          STAGE_OUT=$(mktemp)
           ./bin/devteam init --host claude-code --cwd "$TARGET"
           ./bin/devteam doctor --cwd "$TARGET"
           DEVTEAM_HEADLESS_COMMAND=cat ./bin/devteam stage requirements \
-            --feature "smoke test feature" --headless --cwd "$TARGET" || true
+            --feature "smoke test feature" --headless --cwd "$TARGET" \
+            > "$STAGE_OUT" 2>&1 || true
+          cat "$STAGE_OUT"
+          # Assert the rendered prompt contains the requirements-role header.
+          # If devteam stage crashes before rendering, this grep fails the step.
+          grep -q "Stage stage-01" "$STAGE_OUT" \
+            || { echo "✗ expected 'Stage stage-01' in stage output"; exit 1; }
           ACTION=$(./bin/devteam next --json --cwd "$TARGET" | jq -r '.action')
           echo "devteam next action: $ACTION"
           case "$ACTION" in
-            run-stage|continue-stage|merge|fix-and-retry|resolve-escalation|pipeline-complete)
-              echo "✓ valid pipeline action: $ACTION" ;;
+            run-stage|continue-stage)
+              echo "✓ valid post-headless action: $ACTION" ;;
             *)
               echo "✗ unexpected action from devteam next: $ACTION" && exit 1 ;;
           esac
