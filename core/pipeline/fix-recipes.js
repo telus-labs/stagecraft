@@ -19,6 +19,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { loadGateSafe } = require("../gates/load-gate");
+const { derivedClearGates } = require("./invalidation");
 
 // ── Workstream-attribution helpers (shared with orchestrator.js during migration) ──
 
@@ -58,15 +59,14 @@ function formatGateClear(clearGates) {
 }
 
 // Build the standard set of clear_gates paths for a stage-04 (build) retry:
-// one per workstream gate + the merged stage-04.json + stage-04a (pre-review
-// lint/test gate). stage-04a must be cleared alongside the build gates so the
-// driver re-runs the lint check after the agent writes new code — omitting it
-// allows lint errors introduced during a re-dispatch to bypass pre-review.
+// one per workstream gate + the merged stage-04.json. stage-04a and all later
+// attestation stages (stage-05, stage-06, …) are derived automatically by
+// derivedClearGates() rather than hand-listed here — see Phase 5.1 and the
+// #109 class description in plans/phase-5-state-integrity.md.
 function buildGatePaths(workstreams) {
   return [
     ...workstreams.map(w => `pipeline/gates/stage-04.${w}.json`),
     "pipeline/gates/stage-04.json",
-    "pipeline/gates/stage-04a.json",
   ];
 }
 
@@ -82,7 +82,7 @@ const DEFAULT_DIAGNOSE = (_gate, _ctx) => ({ clear_gates: [], steps: null });
 
 // ── stage-04a: pre-review ─────────────────────────────────────────────────────
 
-register("stage-04a", (gate, _ctx) => {
+register("stage-04a", (gate, ctx) => {
   const issues = [];
   if (gate.lint_passed === false) issues.push("lint errors");
   if (gate.tests_passed === false) issues.push("failing tests");
@@ -93,8 +93,16 @@ register("stage-04a", (gate, _ctx) => {
   if (!ws.length && gate.workstream) ws.push(gate.workstream);
 
   const buildPaths = ws.length ? buildGatePaths(ws) : [];
+  // Derive stage-04a itself and any other intermediate gates that exist on
+  // disk between stage-04 and stage-04a (Phase 5.1 DAG derivation).
+  const derived = derivedClearGates({
+    rootStageId: "stage-04", failingStageId: "stage-04a",
+    stageList: ctx.stageList, gatesDir: ctx.gatesDir, changeId: ctx.changeId,
+  });
+  const clear_gates = [...buildPaths, ...derived];
+  // prReviewPaths kept for human-readable step guidance only; the driver
+  // clears stage-04a.json via clear_gates (derived above).
   const prReviewPaths = ["pipeline/gates/stage-04a.json"];
-  const clear_gates = [...buildPaths, ...prReviewPaths];
 
   const steps = [];
   steps.push({
@@ -121,7 +129,7 @@ register("stage-04a", (gate, _ctx) => {
   return { clear_gates, steps };
 });
 
-// ── stage-04c: red-team ───────────────────────────────────────────────────────
+// ── stage-04c: red-team (Phase 5.1: derived invalidation added) ───────────────
 
 register("stage-04c", (gate, ctx) => {
   const findings = gate.must_address_before_peer_review || [];
@@ -200,7 +208,13 @@ register("stage-04c", (gate, ctx) => {
     commands: [...formatGateClear([redTeamPath]), "devteam stage red-team --headless"],
   });
 
-  const clear_gates = [...(buildClearGates || []), redTeamPath];
+  // Derive all existing attestation gates between stage-04 (root) and
+  // stage-04c (failing): stage-04a, stage-04b (if ran), etc. (Phase 5.1).
+  const derived = derivedClearGates({
+    rootStageId: "stage-04", failingStageId: "stage-04c",
+    stageList: ctx.stageList, gatesDir: ctx.gatesDir, changeId: ctx.changeId,
+  });
+  const clear_gates = [...(buildClearGates || []), redTeamPath, ...derived];
   return { clear_gates, steps };
 });
 
@@ -314,6 +328,14 @@ register("stage-05", (gate, ctx) => {
         // build PASS and skips it, re-running the reviewer against unfixed code.
         const buildPaths = buildGatePaths(ws);
         buildPaths.forEach(p => { if (!clear_gates.includes(p)) clear_gates.push(p); });
+        // Derive intermediate attestation gates (stage-04a and any other sub-stages
+        // between stage-04 and stage-05) that must be re-attested when code changes
+        // are required. (Phase 5.1)
+        const derivedPaths = derivedClearGates({
+          rootStageId: "stage-04", failingStageId: "stage-05",
+          stageList: ctx.stageList, gatesDir: ctx.gatesDir, changeId: ctx.changeId,
+        });
+        derivedPaths.forEach(p => { if (!clear_gates.includes(p)) clear_gates.push(p); });
         steps.push({
           description: `Re-run build workstream${ws.length !== 1 ? "s" : ""}: ${ws.join(", ")}`,
           commands: [
@@ -448,7 +470,7 @@ register("stage-05", (gate, ctx) => {
 
 // ── stage-06: qa ─────────────────────────────────────────────────────────────
 
-register("stage-06", (gate, _ctx) => {
+register("stage-06", (gate, ctx) => {
   const failing = gate.failing_tests || [];
   const wsSet = new Set();
   for (const t of failing) { if (t.assigned_to) wsSet.add(t.assigned_to); }
@@ -456,11 +478,20 @@ register("stage-06", (gate, _ctx) => {
 
   if (!ws.length) return { clear_gates: [], steps: null };
 
-  const clear_gates = buildGatePaths(ws);
+  const buildPaths = buildGatePaths(ws);
+  // Derive all attestation gates between stage-04 (root) and stage-06 (failing):
+  // stage-04a, stage-04b-d if they ran, and stage-05 (peer-review). Rewritten
+  // code must pass pre-review and peer-review again. (Phase 5.1 — #109 class)
+  const derived = derivedClearGates({
+    rootStageId: "stage-04", failingStageId: "stage-06",
+    stageList: ctx.stageList, gatesDir: ctx.gatesDir, changeId: ctx.changeId,
+  });
+  const clear_gates = [...buildPaths];
+  derived.forEach(p => { if (!clear_gates.includes(p)) clear_gates.push(p); });
   const steps = [
     {
       description: `Fix failing tests in: ${ws.join(", ")}`,
-      commands: formatGateClear(clear_gates),
+      commands: formatGateClear(buildPaths),
     },
     {
       description: "Re-run build with QA context",
@@ -539,17 +570,25 @@ register("stage-06b", (gate, ctx) => {
   });
 
   if (hasA11yBlockers) {
-    const clear_gates = [
-      "pipeline/gates/stage-04.backend.json",
-      "pipeline/gates/stage-04.json",
-      "pipeline/gates/stage-06b.json",
-    ];
+    const buildPaths = buildGatePaths(["backend"]);
+    // Derive all attestation gates between stage-04 (root) and stage-06b (failing):
+    // stage-04a, stage-04b-d, stage-05, stage-06, stage-06a — any that exist.
+    // CSS/ARIA source edits require re-review and re-QA. (Phase 5.1)
+    const derived = derivedClearGates({
+      rootStageId: "stage-04", failingStageId: "stage-06b",
+      stageList: ctx.stageList, gatesDir: ctx.gatesDir, changeId: ctx.changeId,
+    });
+    const clear_gates = [...buildPaths];
+    derived.forEach(p => { if (!clear_gates.includes(p)) clear_gates.push(p); });
+    // Ensure the audit gate is always cleared even when stageList is absent.
+    const auditGate = "pipeline/gates/stage-06b.json";
+    if (!clear_gates.includes(auditGate)) clear_gates.push(auditGate);
     return {
       clear_gates,
       steps: [
         {
           description: "Clear stale build and audit gates",
-          commands: formatGateClear(clear_gates),
+          commands: formatGateClear(buildPaths),
         },
         {
           description: "Re-run backend build with accessibility fix context",
@@ -576,7 +615,7 @@ register("stage-06b", (gate, ctx) => {
 // Blockers often carry a "Fix: <file>:<line> — <remedy>" clause; parse that to
 // derive which workstream owns the fix and what file to edit.
 
-register("stage-06d", (gate, _ctx) => {
+register("stage-06d", (gate, ctx) => {
   const blockers = gate.blockers || [];
   const wsSet = new Set();
   const fileHints = [];
@@ -622,7 +661,16 @@ register("stage-06d", (gate, _ctx) => {
     description: "Re-run verification",
     commands: [...formatGateClear([verifPath]), "devteam stage verification-beyond-tests --headless"],
   });
+  // Derive all attestation gates between stage-04 (root) and stage-06d (failing):
+  // stage-04a, stage-04b-d, stage-05 (peer-review), stage-06, stage-06a–06c.
+  // This is the primary fix for the #109 class: rewritten code must pass
+  // pre-review and peer-review before re-entering QA and verification. (Phase 5.1)
+  const derived = derivedClearGates({
+    rootStageId: "stage-04", failingStageId: "stage-06d",
+    stageList: ctx.stageList, gatesDir: ctx.gatesDir, changeId: ctx.changeId,
+  });
   const clear_gates = [...buildClearGates, verifPath];
+  derived.forEach(p => { if (!clear_gates.includes(p)) clear_gates.push(p); });
   return { clear_gates, steps };
 });
 

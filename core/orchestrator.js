@@ -859,7 +859,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
       };
     }
     if (gate.status === "FAIL") {
-      const { clear_gates, steps: fix_steps } = getRecipe(stageDef.stage).diagnose(gate, { gatesDir, stageDef });
+      const { clear_gates, steps: fix_steps } = getRecipe(stageDef.stage).diagnose(gate, { gatesDir, stageDef, stageList, changeId });
 
       // Convergence ceiling (ADR-003 / H1 + 4.2).
       //
