@@ -4,7 +4,7 @@ Walks one feature ("Add SMS notification opt-in to user settings") through the f
 
 If you read one doc to learn Stagecraft, read this one.
 
-> **Freshness:** captured at v0.5.0. Command outputs reflect the pipeline at that release.
+> **Freshness:** captured at v0.7.0. Command outputs reflect the pipeline at that release.
 > Re-run the traced pipeline before using this doc for demos or release notes.
 > `npm run consistency` warns when this stamp is more than one minor behind the current version.
 

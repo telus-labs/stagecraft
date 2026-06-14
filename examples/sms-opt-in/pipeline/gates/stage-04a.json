@@ -2,14 +2,17 @@
   "stage": "stage-04a",
   "workstream": "platform",
   "host": "claude-code",
-  "orchestrator": "devteam@0.1.0",
+  "orchestrator": "devteam@0.7.0",
   "track": "full",
   "timestamp": "2026-05-26T15:30:00Z",
   "status": "PASS",
   "blockers": [],
   "warnings": [],
+  "dispatched_tool_budget": ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
   "lint_passed": true,
   "tests_passed": true,
   "dependency_review_passed": true,
+  "license_check_passed": true,
+  "license_findings": [],
   "security_review_required": true
 }

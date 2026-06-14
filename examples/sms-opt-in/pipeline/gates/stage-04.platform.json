@@ -2,12 +2,13 @@
   "stage": "stage-04",
   "workstream": "platform",
   "host": "claude-code",
-  "orchestrator":"devteam@0.1.0",
+  "orchestrator": "devteam@0.7.0",
   "track": "full",
   "timestamp": "2026-05-26T15:10:00Z",
   "status": "PASS",
   "blockers": [],
   "warnings": [],
+  "dispatched_tool_budget": ["Read", "Write", "Edit", "Glob", "Grep", "Bash"],
   "pr_summaries_written": ["pipeline/pr-platform.md"],
   "local_verification": ["npm test", "npm run lint"]
 }

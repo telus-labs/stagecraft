@@ -1,1 +1,0 @@
-- **docs(tracks):** Add `devteam assess` sentence and link to `docs/tracks.md §Choosing a track` — the doc that explains how to pick a track never mentioned the command that automates the choice. Links to `ADR-006` for the `pipeline/track.json` track-record design.

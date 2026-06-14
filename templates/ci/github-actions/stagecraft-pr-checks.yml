@@ -44,7 +44,7 @@ jobs:
     env:
       # CUSTOMIZE — point at your Stagecraft fork / release.
       STAGECRAFT_REPO: anthropics/stagecraft
-      STAGECRAFT_REF:  v0.6.0
+      STAGECRAFT_REF:  v0.7.0
     steps:
       - name: Check out the target project
         uses: actions/checkout@v5
