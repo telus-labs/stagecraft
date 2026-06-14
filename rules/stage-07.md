@@ -8,6 +8,27 @@ Gate key: `"pm_signoff": true`
 On NO: PM writes delta list. Return to Stage 4 with delta items only.
 Delta items must not trigger a full pipeline rerun — scope them explicitly.
 
+## Documentation gate
+
+Before signing off, the PM must classify whether the change touches a **user-visible surface** and confirm that documentation has been updated or explicitly waived.
+
+**Surface type → required action:**
+
+| Changed surface | Required doc action |
+|---|---|
+| CLI flag, config key, API endpoint | Update the relevant reference doc (README, `docs/reference/cli.md`, etc.) |
+| User-visible behaviour change | Add a changelog entry (`changelog.d/<slug>.md`) |
+| Internal refactor, test, infrastructure | Changelog entry optional; no other doc required |
+| Significant design decision | Flag for an ADR at Stage 9 (retrospective) — not a Stage 7 blocker |
+
+**Gate fields:**
+
+- `docs_surface_affected` (bool, required) — `true` if the change touches any CLI flag, config key, API endpoint, or user-visible behaviour; `false` for internal-only changes.
+- `docs_updated` (bool, required when `docs_surface_affected: true`) — `true` only when the required doc action above has been completed. A `false` value here is a gate **blocker** and must be listed in `blockers[]`.
+- `docs_skipped_reason` (string, required when `docs_surface_affected: false`) — one-line reason why no doc update is needed (e.g. `"internal refactor, no user-visible surface changed"`).
+
+The PM must answer this question even on the auto-fold path (see below). Failing to populate all three fields fails the gate.
+
 ## Gate
 
 Gate file: `pipeline/gates/stage-07.json`.
@@ -24,8 +45,21 @@ Gate file: `pipeline/gates/stage-07.json`.
   "pm_signoff": true,
   "deploy_requested": true,
   "runbook_referenced": true,
+  "docs_surface_affected": true,
+  "docs_updated": true,
+  "docs_skipped_reason": null,
   "open_followups": [],
   "delta_items": []
+}
+```
+
+When no user-visible surface was changed:
+
+```json
+{
+  "docs_surface_affected": false,
+  "docs_updated": null,
+  "docs_skipped_reason": "internal refactor, no user-visible surface changed"
 }
 ```
 
@@ -103,8 +137,15 @@ The auto-fold is skipped (and the PM agent invoked normally) when:
   (one test covers multiple criteria, or one criterion has no test)
 - The user explicitly requested a manual sign-off
 - The track is `hotfix` (hotfixes always require PM sign-off)
+- `docs_surface_affected: true` and `docs_updated` is not yet `true` — the PM must confirm the doc update before auto-fold can proceed
 
 Rationale: when criteria are clean, Stage 7 re-derives the same verdict
 the platform dev already wrote at Stage 6. PM judgment adds value on
 delta items and edge cases, not on rubber-stamping a clean sheet.
+
+On the auto-fold path the orchestrator must still derive and populate
+`docs_surface_affected`, `docs_updated`, and `docs_skipped_reason` by
+reading the Stage 4 PR summaries and the brief. If a user-visible surface
+is detected (`docs_surface_affected: true`) but `docs_updated` cannot be
+confirmed from the artifacts, auto-fold is blocked and the PM is invoked.
 

@@ -78,6 +78,17 @@ Platform role verifies that observability signals are actually in place before s
 - Warns when the verification method is too weak to be trusted
 - Tracks: `full`, `hotfix`
 
+### Documentation gate — PM must confirm doc coverage at sign-off
+
+At Stage 7 (PM sign-off), the PM classifies whether the change touches a **user-visible surface** — a CLI flag, config key, API endpoint, or user-visible behaviour change — and must confirm that the appropriate documentation has been updated.
+
+- `docs_surface_affected` (bool) records the classification; `docs_updated` (bool) records whether the required update was completed; `docs_skipped_reason` (string) records the waiver rationale for internal-only changes
+- `docs_updated: false` with `docs_surface_affected: true` is a gate **blocker** — the PM cannot sign off until docs are updated
+- Internal refactors, tests, and infrastructure changes require only a one-line skip reason; no doc update is mandated
+- Auto-fold from Stage 6 is blocked when `docs_surface_affected: true` and `docs_updated` cannot be confirmed from the pipeline artifacts — the PM is invoked to resolve it
+
+The pattern mirrors `runbook_referenced` (Stage 8): the gate cannot PASS without an explicit answer.
+
 ### Migration safety — untested rollbacks halt the pipeline
 
 Fires conditionally when the heuristic detects data-layer changes (migration files, schema files, DDL fragments like `ALTER TABLE`).
