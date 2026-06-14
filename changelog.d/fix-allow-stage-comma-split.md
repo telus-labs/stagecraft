@@ -1,0 +1,1 @@
+- **Fix: `--allow-stage` now accepts comma-separated values.** Previously, `--allow-stage sign-off,deploy` was treated as a single literal stage name and failed to grant the consequence ceiling for either stage. Adding `split: true` to the flag definition makes both `--allow-stage sign-off,deploy` and `--allow-stage sign-off --allow-stage deploy` produce the same result.

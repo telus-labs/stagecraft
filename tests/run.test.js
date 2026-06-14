@@ -178,6 +178,25 @@ describe("driver: dispatch loop (injected deps)", () => {
     assert.ok(s.stages_advanced.includes("sign-off"));
   });
 
+  it("--allow-stage accepts comma-separated values (e.g. sign-off,deploy)", async () => {
+    const cwd = track(makeTargetProject());
+    const actions = [
+      { action: "run-stage", stage: "stage-07", name: "sign-off" },
+      { action: "run-stage", stage: "stage-08", name: "deploy" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let i = 0;
+    const s = await run({
+      cwd,
+      allowStages: ["sign-off", "deploy"],
+      next: () => actions[i++],
+      runStageHeadless: async () => [{ role: "pm", gatePath: "x", durationMs: 1 }],
+    });
+    assert.equal(s.completed, true);
+    assert.ok(s.stages_advanced.includes("sign-off"));
+    assert.ok(s.stages_advanced.includes("deploy"));
+  });
+
   it("stops at the --until boundary", async () => {
     const cwd = track(makeTargetProject());
     // until=design: a request to run a later stage (build) must halt.

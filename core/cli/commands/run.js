@@ -18,7 +18,7 @@ const flags = {
   "timeout-ms":      { type: "number",  description: "Per-dispatch timeout (ms)" },
   "retry-delay-ms":  { type: "number",  description: "Backoff delay between transient retries (ms)" },
   "auto-rule":       { type: "list", split: true, description: "Auto-apply Principal rulings of these classes (comma-separated)" },
-  "allow-stage":     { type: "list",    description: "Grant consequence-ceiling approval for this stage (repeatable)" },
+  "allow-stage":     { type: "list", split: true, description: "Grant consequence-ceiling approval for this stage (repeatable, comma-separated)" },
   resume:            { type: "boolean", description: "Resume an interrupted run" },
   force:             { type: "boolean", description: "Force-unlock a stale run.lock" },
   json:              { type: "boolean", description: "JSON summary on stdout" },
