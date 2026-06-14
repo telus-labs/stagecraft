@@ -383,3 +383,67 @@ describe("invalidation: registry meta-test", () => {
     }
   });
 });
+
+// ── Recipe-hygiene: no examples-only filenames in recipe source (Phase 6.4) ───
+//
+// Guard against overfitting fix recipes to demo-project specifics. Any filename
+// that exists only under examples/ (not in the main project tree) must not
+// appear as a string literal in fix-recipes.js source.
+
+describe("recipe-hygiene: no examples-only filenames in fix-recipes.js", () => {
+  it("fix-recipes.js contains no filename that exists only under examples/", () => {
+    const recipeSrc = fs.readFileSync(
+      path.join(REPO_ROOT, "core", "pipeline", "fix-recipes.js"), "utf8"
+    );
+    const examplesDir = path.join(REPO_ROOT, "examples");
+
+    // Collect all basenames from examples/.
+    function collectBasenames(dir, acc = new Set()) {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+      for (const e of entries) {
+        if (e.isDirectory()) collectBasenames(path.join(dir, e.name), acc);
+        else acc.add(e.name);
+      }
+      return acc;
+    }
+    const examplesBasenames = collectBasenames(examplesDir);
+
+    // Find basenames that appear only under examples/ (not elsewhere in the repo).
+    function existsOutsideExamples(basename) {
+      // Search core/, roles/, scripts/, tests/ — the recipe-relevant trees.
+      for (const searchDir of ["core", "roles", "scripts", "tests", "hosts", "bin"]) {
+        const full = path.join(REPO_ROOT, searchDir);
+        function walk(d) {
+          let ents;
+          try { ents = fs.readdirSync(d, { withFileTypes: true }); } catch { return false; }
+          for (const e of ents) {
+            if (e.isDirectory()) { if (walk(path.join(d, e.name))) return true; }
+            else if (e.name === basename) return true;
+          }
+          return false;
+        }
+        if (walk(full)) return true;
+      }
+      return false;
+    }
+
+    const exclusiveToExamples = [...examplesBasenames].filter(
+      n => !existsOutsideExamples(n)
+    );
+
+    // Only flag quoted occurrences on non-comment lines. Strip lines that are
+    // pure comments (// …) to avoid false positives from format-explanations.
+    const codeLines = recipeSrc.split("\n")
+      .filter(l => !/^\s*\/\//.test(l))
+      .join("\n");
+    const violations = exclusiveToExamples.filter(name =>
+      codeLines.includes(`"${name}"`) || codeLines.includes(`'${name}'`)
+    );
+
+    assert.deepEqual(violations, [],
+      `fix-recipes.js references filenames exclusive to examples/: ${violations.join(", ")}. ` +
+      "Remove project-specific knowledge from recipes."
+    );
+  });
+});

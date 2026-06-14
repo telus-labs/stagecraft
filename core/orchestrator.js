@@ -556,7 +556,13 @@ function mergeWorkstreamGates(stageName, opts = {}) {
       // undefined and the validator flags a gate the orchestrator itself wrote.
       track: wsGates[0].gate.track ?? track,
       timestamp: new Date().toISOString(),
-      blockers: wsGates.flatMap((w) => w.gate.blockers || []),
+      // Preserve source workstream on object blockers so recipe routing can use
+      // provenance instead of text-regex heuristics (Phase 6.4).
+      blockers: wsGates.flatMap((w) => (w.gate.blockers || []).map(b =>
+        typeof b === "object" && b !== null && !b.workstream
+          ? { ...b, workstream: w.role }
+          : b
+      )),
       warnings: mergedWarnings,
       changes_requested: mergedChangesRequested,
       workstreams: wsGates.map((w) => {
