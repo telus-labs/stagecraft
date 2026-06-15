@@ -18,7 +18,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 6 | Promise integrity | ✅ complete (PRs #118–#121 · #124) |
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
-| 9 | Evidence-gated capabilities | ⏸ ADR-first |
+| 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1403,7 +1403,7 @@ Workflow per item: draft/ground-truth → HUMAN approval → implement. Never im
 against an unapproved ADR. Order: 9.1 draft + 9.2a in parallel → approvals → 9.3 → 9.4.
 Plan file: plans/phase-9-evidence-gated-capabilities.md.
 
-### 9.1a Draft ADR-007: liveness/heartbeat ⏸ Phases 5–6 merged
+### 9.1a Draft ADR-007: liveness/heartbeat ✅ #128
 
 ```
 TASK: DRAFT (do not implement) docs/adr/007-liveness-heartbeat.md per
@@ -1420,7 +1420,7 @@ Proposed; include Alternatives and honest Consequences; end the report with the
 questions a human must rule on. NO implementation.
 ```
 
-### 9.2a H3 ground-truth: the failure corpus 🔲 (read-and-report, runs in parallel)
+### 9.2a H3 ground-truth: the failure corpus ✅ #129 — gate stays shut
 
 ```
 TASK: Execute plans/phase-9-evidence-gated-capabilities.md item 9.2a. READ-AND-REPORT:
@@ -1457,7 +1457,7 @@ proposal, and why suggestion-not-application is the permanent boundary (or argue
 otherwise in Alternatives). Status: Proposed; end with the human ruling questions.
 ```
 
-### 9.3 Draft ADRs 005 + 008 ⏸ as review bandwidth allows
+### 9.3 Draft ADR-008 ✅ #131 (ADR-005 deferred — see docs/adr/README.md)
 
 ```
 TASK: DRAFT (do not implement) ONE of the two deferred ADRs, using its preserved brief
@@ -1472,7 +1472,7 @@ this file, with one update each:
 Status: Proposed; end with the human ruling questions. NO implementation.
 ```
 
-### 9.4 D5 maturation: adaptive routing evidence review ⏸ needs ADR-007 implemented + run volume
+### 9.4 D5 maturation: adaptive routing evidence review ✅ — stays gated (no real-run telemetry; see plans/adaptive-routing-evidence.md)
 
 ```
 TASK: Execute plans/phase-9-evidence-gated-capabilities.md item 9.4. READ-AND-REPORT
