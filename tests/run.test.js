@@ -1129,3 +1129,172 @@ describe("run CLI: advisory loud line + --fail-on-advisory exit code (ADR-008)",
     assert.ok(!r.stderr.includes("advisory blocker"), "no loud advisory line for a clean pipeline");
   });
 });
+
+// ─── ADR-006 Phase 11.3: track provenance + confidence guard ──────────────────
+
+describe("driver: track provenance — resolveTrack + run-start event (ADR-006)", () => {
+  it("no pipeline/track.json → falls through to config default_track", async () => {
+    const cwd = track(makeTargetProject());
+    // No track.json; config has default_track: full. Pipeline-complete immediately.
+    const s = await run({
+      cwd,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+    });
+    assert.equal(s.completed, true);
+    // run-log must contain a run-start event with source: config or default
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const events = log.trim().split("\n").map((l) => JSON.parse(l));
+    const runStart = events.find((e) => e.outcome === "run-start");
+    assert.ok(runStart, "run-start event must be present in run-log.jsonl");
+    assert.ok(runStart.track_source !== "inferred", "source must not be inferred when no track.json");
+  });
+
+  it("pipeline/track.json present → driver picks up track and source", async () => {
+    const cwd = track(makeTargetProject());
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "quick", source: "inferred", confidence: "high" }),
+    );
+    const s = await run({
+      cwd,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+    });
+    assert.equal(s.completed, true);
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const events = log.trim().split("\n").map((l) => JSON.parse(l));
+    const runStart = events.find((e) => e.outcome === "run-start");
+    assert.ok(runStart, "run-start event must be present");
+    assert.equal(runStart.track_source, "inferred");
+    assert.equal(runStart.track_confidence, "high");
+  });
+});
+
+describe("driver: checkTrackConfidence guard (ADR-006 §3/4)", () => {
+  it("require_confirmed_track off (default) → inferred/medium proceeds with warn (no halt)", async () => {
+    const cwd = track(makeTargetProject());
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "quick", source: "inferred", confidence: "medium" }),
+    );
+    const events = [];
+    const s = await run({
+      cwd,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+      onEvent: (ev) => events.push(ev),
+    });
+    assert.equal(s.completed, true, "must not halt when flag is off");
+    assert.ok(!s.halted, "must not be halted");
+    const checkEv = events.find((e) => e.type === "track-confidence-check");
+    assert.ok(checkEv, "track-confidence-check event must be emitted");
+    assert.equal(checkEv.warned, true, "must warn, not halt");
+  });
+
+  it("require_confirmed_track on + inferred/medium → unconfirmed-track halt (no prompt)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  require_confirmed_track: true\n",
+    }));
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "quick", source: "inferred", confidence: "medium" }),
+    );
+    const s = await run({
+      cwd,
+      next: () => { throw new Error("next() must not be called — should halt before the loop"); },
+    });
+    assert.equal(s.halted, true, "must halt");
+    assert.equal(s.halt_action, "unconfirmed-track");
+    assert.equal(s.halt_failure_class, "unconfirmed-track");
+    assert.match(s.halt_reason, /inferred at medium confidence/);
+    assert.match(s.halt_reason, /--track/);
+  });
+
+  it("require_confirmed_track on + inferred/low → unconfirmed-track halt", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  require_confirmed_track: true\n",
+    }));
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "full", source: "inferred", confidence: "low" }),
+    );
+    const s = await run({ cwd });
+    assert.equal(s.halt_action, "unconfirmed-track");
+  });
+
+  it("require_confirmed_track on + inferred/high → proceeds (high is CI-safe bar)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  require_confirmed_track: true\n",
+    }));
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "quick", source: "inferred", confidence: "high" }),
+    );
+    const s = await run({
+      cwd,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+    });
+    assert.equal(s.completed, true, "high-confidence inferred must proceed even with flag on");
+    assert.ok(!s.halted);
+  });
+
+  it("require_confirmed_track on + human source → proceeds silently (no halt, no warn)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  require_confirmed_track: true\n",
+    }));
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "quick", source: "human", confidence: "medium" }),
+    );
+    const events = [];
+    const s = await run({
+      cwd,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+      onEvent: (ev) => events.push(ev),
+    });
+    assert.equal(s.completed, true, "human source must always proceed");
+    const checkEv = events.find((e) => e.type === "track-confidence-check");
+    assert.ok(!checkEv, "no track-confidence-check event for human source");
+  });
+
+  it("require_confirmed_track on + --force → bypasses unconfirmed-track halt", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\nautonomy:\n  require_confirmed_track: true\n",
+    }));
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "quick", source: "inferred", confidence: "medium" }),
+    );
+    const s = await run({
+      cwd,
+      force: true,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+    });
+    assert.equal(s.completed, true, "--force must bypass the unconfirmed-track halt");
+    assert.ok(!s.halted);
+  });
+
+  it("run-start event carries track_source + track_confidence", async () => {
+    const cwd = track(makeTargetProject());
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "track.json"),
+      JSON.stringify({ track: "hotfix", source: "human", confidence: null }),
+    );
+    await run({
+      cwd,
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+    });
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const events = log.trim().split("\n").map((l) => JSON.parse(l));
+    const runStart = events.find((e) => e.outcome === "run-start");
+    assert.ok(runStart, "run-start event must appear in run-log.jsonl");
+    assert.equal(runStart.track_source, "human");
+    assert.ok("track_confidence" in runStart, "track_confidence field must be present");
+  });
+});

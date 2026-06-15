@@ -38,6 +38,10 @@ const DEFAULTS = {
     // follow-up — it requires gate archiving, which this layer does not add.
     // 0 = escalate on the first FAIL.
     max_retries: 2,
+    // ADR-006: when true, an inferred pipeline/track.json at medium/low confidence
+    // produces an unconfirmed-track halt (requires --track or --force to proceed).
+    // Off by default — opt in via .devteam/config.yml autonomy.require_confirmed_track.
+    require_confirmed_track: false,
   },
 };
 
@@ -77,6 +81,8 @@ function loadConfig(cwd = process.cwd()) {
         max_retries: Number.isInteger(parsed.autonomy?.max_retries) && parsed.autonomy.max_retries >= 0
           ? parsed.autonomy.max_retries
           : DEFAULTS.autonomy.max_retries,
+        // ADR-006: explicit opt-in flag; not CI=true (CI is already overloaded)
+        require_confirmed_track: parsed.autonomy?.require_confirmed_track === true,
       },
       _source: "file",
       _path: p,

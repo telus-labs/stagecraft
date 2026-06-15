@@ -165,13 +165,35 @@ function totalCostUsd(cwd, changeId) {
   return total;
 }
 
-function resolveTrack(opts, config) {
+// ADR-006: resolveTrack returns {track, source, confidence} so callers can
+// apply the confidence guard without a second file read. Source values:
+//   "human"   — --track CLI flag or pipeline/track.json with source:"human"
+//   "inferred" — pipeline/track.json with source:"inferred"
+//   "config"   — custom_stages or default_track from .devteam/config.yml
+//   "default"  — hard-coded "full" fallback
+function resolveTrack(opts, config, cwd) {
   // ADR-009 §Decision.1: --repair defaults to hotfix depth; --repair --track X overrides.
-  return opts.track
-    || (opts.repair ? "hotfix" : null)
-    || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
-    || config.pipeline.default_track
-    || "full";
+  if (opts.track) return { track: opts.track, source: "human", confidence: null };
+  if (opts.repair) return { track: "hotfix", source: "human", confidence: null };
+
+  // ADR-006 §2: pipeline/track.json per-run record takes precedence over
+  // project-wide config; assess writes it here, driver reads it.
+  if (cwd) {
+    try {
+      const tjPath = path.join(cwd, "pipeline", "track.json");
+      if (fs.existsSync(tjPath)) {
+        const tj = JSON.parse(fs.readFileSync(tjPath, "utf8"));
+        if (tj && tj.track) {
+          return { track: tj.track, source: tj.source || "inferred", confidence: tj.confidence || null };
+        }
+      }
+    } catch { /* fall through to lower precedence */ }
+  }
+
+  if (Array.isArray(config.pipeline.custom_stages)) {
+    return { track: config.pipeline.custom_stages, source: "config", confidence: null };
+  }
+  return { track: config.pipeline.default_track || "full", source: "config", confidence: null };
 }
 
 const RUN_BLOCKERS_BEGIN = "<!-- devteam:run-blockers:begin -->";
@@ -386,7 +408,10 @@ async function run(opts = {}) {
   // silently corrupt an in-progress run. Users who edit .devteam/config.yml mid-run
   // must stop and restart (run.lock will alert them to the active run).
   const config = opts.config || loadConfig(cwd);
-  const track = resolveTrack(opts, config);
+  // ADR-006: resolveTrack returns {track, source, confidence} so the startup
+  // confidence guard below can apply the require_confirmed_track check without
+  // a second file read.
+  const { track, source: trackSource, confidence: trackConfidence } = resolveTrack(opts, config, cwd);
   // ADR-009 §Decision.7: tag runs by intent from day one so feature vs repair
   // history is distinguishable in run-state.json and run-log.jsonl.
   const intent = opts.repair ? "repair" : "feature";
@@ -596,10 +621,54 @@ async function run(opts = {}) {
       }
     }
 
+    // ADR-006 §2/4: run-start event captures track provenance before any check.
+    logEvent(cwd, changeId, {
+      outcome: "run-start",
+      track: Array.isArray(effectiveTrack) ? effectiveTrack.join(",") : effectiveTrack,
+      track_source: trackSource,
+      track_confidence: trackConfidence,
+      intent,
+    });
+
     // Check-point 1: run start (before the first loop iteration).
     if (runStoplistCheck("run-start")) {
       // halt recorded above; skip the loop entirely.
-    } else
+    } else {
+    // ADR-006 §3/4: checkTrackConfidence — keyed on autonomy.require_confirmed_track
+    // (NOT CI=true — revision note 1; CI is already overloaded by validator strict-mode
+    // and set by verify/runner). Off (default): warn-once on inferred, never block.
+    // On: inferred at medium/low halts with typed unconfirmed-track (no prompt —
+    // revision note 3); high proceeds. --force bypasses; --track sets source:"human".
+    const _requireConfirmedTrack = !!(config.autonomy && config.autonomy.require_confirmed_track);
+    let trackHalted = false;
+
+    if (trackSource === "inferred" && !opts.force) {
+      if (_requireConfirmedTrack && trackConfidence !== "high") {
+        const tName = Array.isArray(effectiveTrack) ? "custom" : effectiveTrack;
+        const reason =
+          `Track '${tName}' was inferred at ${trackConfidence || "unknown"} confidence. ` +
+          `Set pipeline/track.json source to 'human' (run \`devteam assess --confirm\`) or pass --track.`;
+        logEvent(cwd, changeId, { outcome: "track-confidence-check", source: trackSource, confidence: trackConfidence, halted: true, reason });
+        onEvent({ type: "track-confidence-check", source: trackSource, confidence: trackConfidence, halted: true });
+        summary.halted = true;
+        summary.halt_action = "unconfirmed-track";
+        summary.halt_failure_class = "unconfirmed-track";
+        summary.halt_reason = reason;
+        trackHalted = true;
+      } else {
+        // warn-once: flag off, or flag on + high confidence (high proceeds per ADR-006 §3)
+        const tName = Array.isArray(effectiveTrack) ? "custom" : effectiveTrack;
+        logEvent(cwd, changeId, { outcome: "track-confidence-check", source: trackSource, confidence: trackConfidence, warned: true });
+        onEvent({ type: "track-confidence-check", source: trackSource, confidence: trackConfidence, warned: true });
+        process.stderr.write(`[devteam] track '${tName}' was auto-inferred (${trackConfidence || "unknown"} confidence). Pass --track to silence.\n`);
+      }
+    } else if (trackSource === "inferred" && opts.force) {
+      // --force bypasses the unconfirmed-track halt; still log for the audit trail
+      logEvent(cwd, changeId, { outcome: "track-confidence-check", source: trackSource, confidence: trackConfidence, bypassed: "force" });
+      onEvent({ type: "track-confidence-check", source: trackSource, confidence: trackConfidence, bypassed: "force" });
+    }
+
+    if (!trackHalted) {
     for (let i = 0; i < maxIterations; i++) {
       // ADR-007 §2: emit heartbeat before next() so run-log.jsonl always has a
       // bounded last-event age regardless of dispatch duration. Cheap: no fs scans.
@@ -621,9 +690,9 @@ async function run(opts = {}) {
       });
 
       // Pass the repair-aware order (array) for repair runs — includes the diagnosis
-      // stage at the front. Passes the raw CLI track for feature runs, keeping
-      // the original behaviour. G6's custom-array path handles array tracks.
-      const nextTrack = intent === "repair" ? order : opts.track;
+      // stage at the front. For feature runs, pass effectiveTrack so pipeline/track.json
+      // and custom_stages selections propagate to next() without a second config read.
+      const nextTrack = intent === "repair" ? order : effectiveTrack;
       const r = _next({ cwd, track: nextTrack, changeId });
       state.iterations = (state.iterations || 0) + 1;
       state.last_action = r.action;
@@ -977,7 +1046,7 @@ async function run(opts = {}) {
         try {
           runResult = await _runStageHeadless(r.name, {
             cwd,
-            track: opts.repair ? effectiveTrack : opts.track,
+            track: effectiveTrack,
             feature: opts.feature || "",
             intent,   // ADR-009 §Decision.7: propagate so adapters render repair prompts
             timeoutMs,
@@ -1064,7 +1133,7 @@ async function run(opts = {}) {
 
       if (r.action === "merge") {
         onEvent({ type: "merge", ...base });
-        const m = _merge(r.name, { cwd, track: opts.track, changeId });
+        const m = _merge(r.name, { cwd, track: effectiveTrack, changeId });
         logEvent(cwd, changeId, { ...base, outcome: m.merged ? "merged" : "merge-failed", reason: m.reason || null });
         if (!m.merged) {
           summary.halted = true;
@@ -1084,6 +1153,8 @@ async function run(opts = {}) {
       onEvent({ type: "unhandled", ...base });
       break;
     }
+    } // if (!trackHalted)
+    } // else (not stoplist-halted)
 
     if (!summary.completed && !summary.halted) {
       summary.halted = true;

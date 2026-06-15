@@ -105,6 +105,38 @@ The template pins `STAGECRAFT_REF: <version>`. Update it on each Stagecraft rele
 
 Update the workflow file in lockstep with Stagecraft upgrades.
 
+## Track provenance in CI (`devteam assess` + `require_confirmed_track`)
+
+Before running the pipeline autonomously in CI, record the track decision with `devteam assess`:
+
+```yaml
+- name: Assess track
+  run: devteam assess --description "${{ github.event.pull_request.title }}" --confirm
+  # writes pipeline/track.json with source:"human" (--confirm) so devteam run
+  # proceeds without the unconfirmed-track guard triggering.
+```
+
+By default, `devteam run` warns on an inferred track but never halts. To enforce the guard in CI, set `autonomy.require_confirmed_track: true` in `.devteam/config.yml`:
+
+```yaml
+autonomy:
+  require_confirmed_track: true
+```
+
+With the flag on, an inferred `pipeline/track.json` at medium or low confidence halts with `unconfirmed-track` instead of proceeding. High confidence proceeds. The flag is **not** tied to `CI=true` — it is an explicit opt-in so unrelated tooling running under a CI environment does not silently change track behavior.
+
+**CI pipeline pattern with track recording + strict guard:**
+
+```yaml
+- name: Assess track (record with human-confirm)
+  run: devteam assess --description "$FEATURE_DESC" --confirm
+
+- name: Run pipeline
+  run: devteam run --json > run-summary.json
+  # With require_confirmed_track:true, --confirm above means source:"human" → no halt.
+  # Without --confirm, medium/low inferred would halt here.
+```
+
 ## Lenient vs strict advisory gate
 
 `devteam run` emits a loud advisory line on stderr and adds `advisory_blockers_count`
