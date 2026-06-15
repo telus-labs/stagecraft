@@ -117,7 +117,7 @@ Design specs include architecture diagrams (images). Stage 2 (design) and Stage 
 
 ### G11. `devteam run --repair` — bug-fix intent mode (ADR-009) — in progress (Phase 10)
 
-Four-phase delivery: **10.1 ✅** (`--repair` flag, PATCH MODE build scoping, scope gate wired, intent tag); **10.2** (diagnosis as fix-aware stage-01, affected-files list activates scope gate); **10.3** (failing-first reproduction criterion); **10.4** (retrospective repair entry). See [plans/phase-10-repair-mode.md](../plans/phase-10-repair-mode.md) and [ADR-009](adr/009-repair-mode.md).
+Four-phase delivery: **10.1 ✅** (`--repair` flag, PATCH MODE build scoping, scope gate wired, intent tag); **10.2 ✅** (diagnosis as fix-aware stage-01, `affected_files` list activates scope gate, `--repair-at` escape hatch, `--auto-rule diagnosis-approved` ruling class); **10.3** (failing-first reproduction criterion, stage-03b in repair mode); **10.4** (retrospective repair entry). See [plans/phase-10-repair-mode.md](../plans/phase-10-repair-mode.md) and [ADR-009](adr/009-repair-mode.md).
 
 ### G9. Self-modifying pipeline
 Retrospective stage proposes changes to `stages.js` / `roles/` / `rules/` based on what worked. Proposals queue for human approval. The pipeline learns its own shape from operation.

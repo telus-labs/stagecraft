@@ -19,7 +19,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
-| 10 | Repair mode (`--repair`, ADR-009) | 🔄 in progress — 10.1 ✅ |
+| 10 | Repair mode (`--repair`, ADR-009) | 🔄 in progress — 10.1 ✅ · 10.2 ✅ |
 | 11 | Autonomy polish (ADR-006/007/008) | 🔲 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -1525,7 +1525,7 @@ scope gate FAILs an out-of-scope build against a synthetic affected-files list.
 Done: npm test / eslint / consistency green; manual smoke pasted.
 ```
 
-### 10.2 Diagnosis as fix-aware stage-01, escalation-gated 🔲 (10.1 merged)
+### 10.2 Diagnosis as fix-aware stage-01, escalation-gated ✅ (PR: feat/repair-diagnosis-stage · commit d117b65)
 
 ```
 TASK: Implement plans/phase-10-repair-mode.md item 10.2 (ADR-009 Phase 2).

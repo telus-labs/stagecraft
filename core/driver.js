@@ -276,6 +276,9 @@ async function run(opts = {}) {
   // ADR-009 §Decision.7: tag runs by intent from day one so feature vs repair
   // history is distinguishable in run-state.json and run-log.jsonl.
   const intent = opts.repair ? "repair" : "feature";
+  // ADR-009 Phase 2: --repair-at escape hatch. Defined early so the stage-order
+  // computation below can tell whether to prepend the diagnosis stage.
+  const repairAtRaw = opts.repairAt || null;
   // B9 (item 1.6): derive changeId from feature + isolation config so the
   // driver reads/writes lock, run-state, run-log, gates, and context.md in
   // the same bounded subtree that runStageHeadless writes gates into.
@@ -327,7 +330,16 @@ async function run(opts = {}) {
     if (repairStoplistMatches.length > 0) effectiveTrack = "full";
   }
 
-  const order = orderedStageNamesForTrack(effectiveTrack);
+  // ADR-009 Phase 2: repair without escape hatch prepends "requirements" (diagnosis)
+  // to the stage list so next() routes through it before build. The escape hatch
+  // (--repair-at) seeds the affected-files list directly and writes a synthetic
+  // stage-01 gate — no LLM diagnosis needed, so no prepend.
+  // "requirements" is filtered out first to guard against double-prepend if the
+  // user specifies a full track that already includes it.
+  const repairNeedsDiagnosis = intent === "repair" && !repairAtRaw;
+  const order = repairNeedsDiagnosis
+    ? ["requirements", ...orderedStageNamesForTrack(effectiveTrack).filter((n) => n !== "requirements")]
+    : orderedStageNamesForTrack(effectiveTrack);
   const untilIndex = opts.until ? order.indexOf(opts.until) : -1;
 
   acquireLock(cwd, { force: opts.force }, changeId);
@@ -385,7 +397,9 @@ async function run(opts = {}) {
 
   // ADR-009 §Decision.1: patchItems for repair mode. Populated from the symptom
   // until 10.2's diagnosis supplies an affected-files list + structured items.
-  const repairPatchItems = opts.repair ? [opts.repair] : null;
+  // 10.2: made mutable — updated from the diagnosis gate's affected_files once
+  // stage-01 PASSes, so the build stage receives a structured list not just the symptom.
+  let repairPatchItems = opts.repair ? [opts.repair] : null;
 
   try {
     // Log the repair stoplist upgrade event (computed before lock/state were set up).
@@ -403,14 +417,57 @@ async function run(opts = {}) {
       });
     }
 
+    // ADR-009 Phase 2: --repair-at escape hatch. Parse locations, seed
+    // affectedFiles + patchItems, write synthetic stage-01 PASS gate.
+    if (repairAtRaw && opts.repair) {
+      const locations = Array.isArray(repairAtRaw)
+        ? repairAtRaw
+        : String(repairAtRaw).split(",").map((s) => s.trim()).filter(Boolean);
+      const seededFiles = [...new Set(locations.map((loc) => loc.replace(/:.*$/, "")))];
+      if (seededFiles.length > 0) {
+        state.affectedFiles = seededFiles;
+        repairPatchItems = locations.map((loc) => `Fix ${loc}: ${opts.repair}`);
+        // Synthetic gate makes next() see stage-01 as PASS (skips LLM diagnosis).
+        const diagGatePath = path.join(gatesDir(cwd, changeId), "stage-01.json");
+        try {
+          fs.mkdirSync(path.dirname(diagGatePath), { recursive: true });
+          fs.writeFileSync(diagGatePath, JSON.stringify({
+            stage: "stage-01",
+            workstream: "pm",
+            status: "PASS",
+            track: effectiveTrack,
+            timestamp: nowIso(),
+            blockers: [],
+            warnings: [],
+            root_cause: opts.repair,
+            proposed_fix: `User-specified fix location(s): ${locations.join(", ")}`,
+            affected_files: seededFiles,
+            regression_criterion: "",
+            diagnosis_confirmed: true,
+            seeded_by: "--repair-at",
+            seeded_locations: locations,
+          }, null, 2) + "\n");
+        } catch { /* best-effort — if write fails, next() dispatches stage-01 normally */ }
+        saveRunState(cwd, changeId, state);
+        logEvent(cwd, changeId, {
+          outcome: "repair-at-seeded",
+          symptom: opts.repair,
+          locations,
+          affected_files: seededFiles,
+        });
+        onEvent({ type: "repair-at-seeded", symptom: opts.repair, locations, affected_files: seededFiles });
+      }
+    }
+
     // Check-point 1: run start (before the first loop iteration).
     if (runStoplistCheck("run-start")) {
       // halt recorded above; skip the loop entirely.
     } else
     for (let i = 0; i < maxIterations; i++) {
-      // Pass effectiveTrack for repair runs so next() uses the (possibly upgraded)
-      // track rather than the raw CLI flag — keeps stage ordering consistent.
-      const nextTrack = opts.repair ? effectiveTrack : opts.track;
+      // Pass the repair-aware order (array) for repair runs — includes the diagnosis
+      // stage at the front. Passes the raw CLI track for feature runs, keeping
+      // the original behaviour. G6's custom-array path handles array tracks.
+      const nextTrack = intent === "repair" ? order : opts.track;
       const r = _next({ cwd, track: nextTrack, changeId });
       state.iterations = (state.iterations || 0) + 1;
       state.last_action = r.action;
@@ -697,16 +754,47 @@ async function run(opts = {}) {
         // have seen no brief yet.  Exactly two check-points: start + pre-build.
         if (r.stage === "stage-04" && runStoplistCheck("pre-build")) break;
 
+        // ADR-009 Phase 2: before dispatching build (stage-04) in repair mode,
+        // check whether the diagnosis gate has now landed (stage-01 just PASSed
+        // after escalation approval) and propagate its affected_files.
+        // This is also the point where repairPatchItems upgrades from the raw
+        // symptom string to a structured per-file list from the diagnosis.
+        if (intent === "repair" && !repairAtRaw && !state.affectedFiles) {
+          const diagGatePath = path.join(gatesDir(cwd, changeId), "stage-01.json");
+          try {
+            if (fs.existsSync(diagGatePath)) {
+              const diagGate = JSON.parse(fs.readFileSync(diagGatePath, "utf8"));
+              if (
+                diagGate.status === "PASS" &&
+                Array.isArray(diagGate.affected_files) &&
+                diagGate.affected_files.length > 0
+              ) {
+                state.affectedFiles = diagGate.affected_files;
+                // Upgrade patchItems to structured per-file entries from the diagnosis.
+                repairPatchItems = diagGate.affected_files.map(
+                  (f) => `Fix ${f}: ${diagGate.proposed_fix || opts.repair}`,
+                );
+                saveRunState(cwd, changeId, state);
+                logEvent(cwd, changeId, {
+                  outcome: "diagnosis-activated",
+                  affected_files: state.affectedFiles,
+                });
+              }
+            }
+          } catch { /* best-effort — diagnosis gate may not exist yet */ }
+        }
+
         onEvent({ type: "dispatch", ...base });
         const t0 = Date.now();
         const runResult = await _runStageHeadless(r.name, {
           cwd,
           track: opts.repair ? effectiveTrack : opts.track,
           feature: opts.feature || "",
+          intent,   // ADR-009 §Decision.7: propagate so adapters render repair prompts
           timeoutMs,
           skipCompleted: r.action === "continue-stage",
           // ADR-009 §Decision.2: repair builds run in PATCH MODE (renderPatchBlock).
-          // Populated from the symptom until 10.2's diagnosis supplies a structured list.
+          // After 10.2 diagnosis, repairPatchItems holds structured per-file items.
           ...(repairPatchItems ? { patchItems: repairPatchItems } : {}),
         });
         const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
