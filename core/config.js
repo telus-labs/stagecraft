@@ -150,6 +150,10 @@ function changeIdFromFeature(feature) {
   return slug || null;
 }
 
+// ADR-009 §Consequences: bounded-isolation needs a changeId derivation for
+// repair runs (from the symptom string). Same slug algorithm as changeIdFromFeature.
+function changeIdFromSymptom(symptom) { return changeIdFromFeature(symptom); }
+
 // B9 fence (item 5.4): CLI commands that have not yet been wired to pass
 // changeId through their pipeline/ path calls. The meta-test in
 // tests/bounded-fence.test.js greps core/cli/commands/ for resolveChangeId
@@ -181,6 +185,6 @@ function checkBoundedFence(config, commandName) {
 
 module.exports = {
   loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig,
-  writeConfigIfAbsent, changeIdFromFeature, DEFAULTS,
+  writeConfigIfAbsent, changeIdFromFeature, changeIdFromSymptom, DEFAULTS,
   BOUNDED_UNWIRED_COMMANDS, checkBoundedFence,
 };

@@ -27,7 +27,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
-const { loadConfig, changeIdFromFeature } = require("./config");
+const { loadConfig, changeIdFromFeature, changeIdFromSymptom } = require("./config");
 const { pipelineRoot, gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
@@ -165,7 +165,9 @@ function totalCostUsd(cwd, changeId) {
 }
 
 function resolveTrack(opts, config) {
+  // ADR-009 §Decision.1: --repair defaults to hotfix depth; --repair --track X overrides.
   return opts.track
+    || (opts.repair ? "hotfix" : null)
     || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
     || config.pipeline.default_track
     || "full";
@@ -210,6 +212,21 @@ function writeRunBlockers(cwd, stageName, blockers, changeId) {
 
 function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// ADR-009 §Decision.3: structural scope gate — check whether a build touched files
+// outside the diagnosed affected-files set. Returns an array of out-of-scope file
+// paths. Empty array = within scope. Uses git diff --name-only HEAD; returns []
+// on any error (be lenient when git is unavailable — the gate is advisory until
+// 10.2 supplies a real diagnosis).
+const { spawnSync } = require("node:child_process");
+function defaultCheckScopeGate(cwd, affectedFiles) {
+  if (!affectedFiles || affectedFiles.length === 0) return [];
+  const r = spawnSync("git", ["diff", "--name-only", "HEAD"], { cwd, encoding: "utf8" });
+  if (!r || r.status !== 0) return [];
+  const modified = r.stdout.split(/\r?\n/).filter(Boolean);
+  const allowed = new Set(affectedFiles);
+  return modified.filter((f) => !allowed.has(f));
+}
+
 /**
  * Drive the pipeline autonomously until completion or a halt condition.
  *
@@ -233,6 +250,21 @@ function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
  * @returns {Promise<object>} run summary
  */
 async function run(opts = {}) {
+  // ADR-009: --repair and --feature are mutually exclusive intents. Reject early
+  // so there is no ambiguity about which string drives the changeId or patchItems.
+  if (opts.repair && opts.feature) {
+    return {
+      completed: false,
+      halted: true,
+      halt_action: "mutual-exclusion",
+      halt_failure_class: "mutual-exclusion",
+      halt_reason: "--repair and --feature are mutually exclusive — a run is either a bug fix or a feature, not both",
+      stages_advanced: [],
+      iterations: 0,
+      cost_usd: 0,
+    };
+  }
+
   const cwd = opts.cwd || process.cwd();
   // Config is intentionally pinned for the lifetime of this run. The track,
   // isolation mode, and changeId are derived here and baked into run-state.json —
@@ -241,14 +273,20 @@ async function run(opts = {}) {
   // must stop and restart (run.lock will alert them to the active run).
   const config = opts.config || loadConfig(cwd);
   const track = resolveTrack(opts, config);
+  // ADR-009 §Decision.7: tag runs by intent from day one so feature vs repair
+  // history is distinguishable in run-state.json and run-log.jsonl.
+  const intent = opts.repair ? "repair" : "feature";
   // B9 (item 1.6): derive changeId from feature + isolation config so the
   // driver reads/writes lock, run-state, run-log, gates, and context.md in
   // the same bounded subtree that runStageHeadless writes gates into.
-  // Accept an explicit opts.changeId for tests; otherwise derive from feature.
+  // Accept an explicit opts.changeId for tests; otherwise derive from feature
+  // (or symptom for repair runs — ADR-009 §Consequences).
   const isolation = config.pipeline.isolation;
   const changeId = opts.changeId !== undefined
     ? opts.changeId
-    : (isolation === "bounded" ? changeIdFromFeature(opts.feature || "") : null);
+    : (isolation === "bounded"
+        ? (opts.repair ? changeIdFromSymptom(opts.repair || "") : changeIdFromFeature(opts.feature || ""))
+        : null);
 
   // Dependencies are injectable for deterministic testing of the loop without
   // spawning host CLIs; production passes none and gets the real orchestrator.
@@ -274,18 +312,41 @@ async function run(opts = {}) {
   const grantSet = new Set(opts.autoRule || []);
   const _runRuling = typeof opts.runRuling === "function" ? opts.runRuling : defaultRunRuling;
   const _runFixEscalation = typeof opts.runFixEscalation === "function" ? opts.runFixEscalation : defaultRunFixEscalation;
+  // ADR-009 §Decision.3: injectable scope gate for deterministic tests.
+  const _checkScopeGate = typeof opts.checkScopeGate === "function" ? opts.checkScopeGate : defaultCheckScopeGate;
 
-  const order = orderedStageNamesForTrack(track);
+  // ADR-009 §Decision.1: repair stoplist upgrade — hotfix bypasses STOPLIST_TRACKS
+  // by design, but auth/payments/migration symptoms must still force the track to
+  // full. Check the symptom now (before acquiring the lock) so the upgrade is visible
+  // in the initial run-state write. --force opts out, same as the regular stoplist.
+  let effectiveTrack = track;
+  let repairStoplistMatches = [];
+  if (opts.repair && !opts.force && effectiveTrack !== "full") {
+    const _checkStoplist = opts.checkStoplist || checkStoplist;
+    repairStoplistMatches = _checkStoplist({ description: opts.repair, cwd });
+    if (repairStoplistMatches.length > 0) effectiveTrack = "full";
+  }
+
+  const order = orderedStageNamesForTrack(effectiveTrack);
   const untilIndex = opts.until ? order.indexOf(opts.until) : -1;
 
   acquireLock(cwd, { force: opts.force }, changeId);
 
+  const nowTs = nowIso();
   const state = (opts.resume && loadRunState(cwd, changeId)) || {
-    track: Array.isArray(track) ? track.join(",") : track,
+    track: Array.isArray(effectiveTrack) ? effectiveTrack.join(",") : effectiveTrack,
+    intent,                                      // ADR-009 §Decision.7
+    ...(opts.repair ? { repair: opts.repair } : {}), // symptom string persisted for correlation
     iterations: 0,
     retries: {},
-    started_at: nowIso(),
+    started_at: nowTs,
   };
+  // Correlation id (ADR-009 §Decision.7): on resume, record the prior run's identity
+  // so a re-classified re-run is linkable to its predecessor in the run log.
+  if (opts.resume && state.started_at && state.started_at !== nowTs) {
+    state.prior_run_id = state.started_at;
+    state.started_at = nowTs;
+  }
   // PR-B counters (resilient to a resumed state that predates them).
   state.fixRetries = state.fixRetries || {};      // code-defect re-dispatches per stage
   state.autoRule = state.autoRule || {};          // auto-rule attempts per stage
@@ -308,8 +369,8 @@ async function run(opts = {}) {
   // description already matches.  Full/hotfix bypass by design — they are not in
   // STOPLIST_TRACKS.  --force opts out.
   function runStoplistCheck(label) {
-    if (!STOPLIST_TRACKS.has(track)) return false; // bypass for full/hotfix
-    if (opts.force) return false;                   // --force explicit bypass
+    if (!STOPLIST_TRACKS.has(effectiveTrack)) return false; // bypass for full/hotfix
+    if (opts.force) return false;                            // --force explicit bypass
     const _checkStoplist = opts.checkStoplist || checkStoplist;
     const matches = _checkStoplist({ description: opts.description || "", cwd });
     if (matches.length === 0) return false;
@@ -317,18 +378,40 @@ async function run(opts = {}) {
     summary.halted = true;
     summary.halt_action = "stoplist";
     summary.halt_reason = reason;
-    logEvent(cwd, changeId, { outcome: "stoplist-halt", label, track, matches: matches.map((m) => m.name) });
-    onEvent({ type: "halt", action: "stoplist", reason, label, track, matches: matches.map((m) => m.name) });
+    logEvent(cwd, changeId, { outcome: "stoplist-halt", label, track: effectiveTrack, matches: matches.map((m) => m.name) });
+    onEvent({ type: "halt", action: "stoplist", reason, label, track: effectiveTrack, matches: matches.map((m) => m.name) });
     return true; // halted
   }
 
+  // ADR-009 §Decision.1: patchItems for repair mode. Populated from the symptom
+  // until 10.2's diagnosis supplies an affected-files list + structured items.
+  const repairPatchItems = opts.repair ? [opts.repair] : null;
+
   try {
+    // Log the repair stoplist upgrade event (computed before lock/state were set up).
+    if (repairStoplistMatches.length > 0) {
+      logEvent(cwd, changeId, {
+        outcome: "repair-stoplist-upgrade",
+        symptom: opts.repair,
+        upgraded_to: effectiveTrack,
+        matches: repairStoplistMatches.map((m) => m.name),
+      });
+      onEvent({
+        type: "repair-stoplist-upgrade",
+        track: effectiveTrack,
+        matches: repairStoplistMatches,
+      });
+    }
+
     // Check-point 1: run start (before the first loop iteration).
     if (runStoplistCheck("run-start")) {
       // halt recorded above; skip the loop entirely.
     } else
     for (let i = 0; i < maxIterations; i++) {
-      const r = _next({ cwd, track: opts.track, changeId });
+      // Pass effectiveTrack for repair runs so next() uses the (possibly upgraded)
+      // track rather than the raw CLI flag — keeps stage ordering consistent.
+      const nextTrack = opts.repair ? effectiveTrack : opts.track;
+      const r = _next({ cwd, track: nextTrack, changeId });
       state.iterations = (state.iterations || 0) + 1;
       state.last_action = r.action;
       state.current_stage = r.name || null;
@@ -341,6 +424,7 @@ async function run(opts = {}) {
         action: r.action,
         failure_class: r.failure_class || null,
         reason: r.reason,
+        intent, // ADR-009 §Decision.7
       };
 
       if (r.action === "pipeline-complete") {
@@ -617,10 +701,13 @@ async function run(opts = {}) {
         const t0 = Date.now();
         const runResult = await _runStageHeadless(r.name, {
           cwd,
-          track: opts.track,
+          track: opts.repair ? effectiveTrack : opts.track,
           feature: opts.feature || "",
           timeoutMs,
           skipCompleted: r.action === "continue-stage",
+          // ADR-009 §Decision.2: repair builds run in PATCH MODE (renderPatchBlock).
+          // Populated from the symptom until 10.2's diagnosis supplies a structured list.
+          ...(repairPatchItems ? { patchItems: repairPatchItems } : {}),
         });
         const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
         const durationMs = Date.now() - t0;
@@ -650,6 +737,28 @@ async function run(opts = {}) {
         if (dispatchClass === "ok") {
           state.transient[r.name] = 0;
           saveRunState(cwd, changeId, state);
+
+          // ADR-009 §Decision.3: structural scope gate. FAILs a build that
+          // touches files outside the diagnosed affected-files set. In 10.1 the
+          // gate is inert (opts.affectedFiles is absent — no diagnosis yet);
+          // 10.2 activates it by supplying the diagnosed affected-files list.
+          // Peer-review criteria gain "could this be smaller?" as a judgment on
+          // top of this mechanical boundary.
+          const affectedFiles = opts.affectedFiles || state.affectedFiles || null;
+          if (r.stage === "stage-04" && affectedFiles) {
+            const outOfScope = _checkScopeGate(cwd, affectedFiles);
+            if (outOfScope.length > 0) {
+              summary.halted = true;
+              summary.halt_action = "scope-gate";
+              summary.halt_failure_class = "scope-gate";
+              summary.halt_reason = `repair scope gate: build touched files outside the diagnosed affected-files set: ${outOfScope.join(", ")}`;
+              summary.out_of_scope = outOfScope;
+              logEvent(cwd, changeId, { ...base, outcome: "scope-gate-fail", out_of_scope: outOfScope });
+              onEvent({ type: "halt", ...base, action: "scope-gate", reason: summary.halt_reason, out_of_scope: outOfScope });
+              break;
+            }
+          }
+
           continue;
         }
         if (dispatchClass === "transient") {
