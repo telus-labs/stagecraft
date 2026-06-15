@@ -35,6 +35,7 @@ function parseArgs(argv) {
     from: [process.cwd()],
     cwd: process.cwd(),
     since: null,
+    intent: null,   // ADR-009 §Decision.7: filter to "repair" or "feature" runs only
     apply: false,
     yes: false,
     json: false,
@@ -46,6 +47,7 @@ function parseArgs(argv) {
     if (a === "--from") args.from = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
     else if (a === "--cwd") args.cwd = argv[++i];
     else if (a === "--since") args.since = argv[++i];
+    else if (a === "--intent") args.intent = argv[++i];
     else if (a === "--apply") args.apply = true;
     else if (a === "--yes" || a === "-y") args.yes = true;
     else if (a === "--json") args.json = true;
@@ -278,6 +280,15 @@ function applyChanges(cwd, recs, yes) {
   return 0;
 }
 
+// Filter gates by intent (ADR-009 §Decision.7 — advisory only).
+// When --intent is set, restrict routing analysis to gates from runs with
+// that intent, so repair-vs-feature routing differences can be compared.
+// Gates without an intent field are excluded when a filter is active.
+function filterByIntent(gates, intent) {
+  if (!intent) return gates;
+  return gates.filter((g) => g.intent === intent);
+}
+
 function usage() {
   console.log(`routing-suggest — D5 adaptive routing recommendations
 
@@ -285,6 +296,7 @@ Usage:
   node scripts/routing-suggest.js                       Print suggestions only.
   node scripts/routing-suggest.js --from p1,p2,...      Read from multiple projects.
   node scripts/routing-suggest.js --since YYYY-MM-DD    Time-window filter.
+  node scripts/routing-suggest.js --intent repair|feature  Filter to one intent (ADR-009 advisory).
   node scripts/routing-suggest.js --json                JSON output.
   node scripts/routing-suggest.js --apply               Rewrite .devteam/config.yml after prompt.
   node scripts/routing-suggest.js --apply --yes         Apply without prompting.
@@ -298,6 +310,12 @@ How it works:
     the current host by ≥ --min-delta percentage points, suggest the swap.
   - Output: a YAML diff (default) or JSON. --apply rewrites the config
     file in place after confirmation.
+
+Intent filtering (ADR-009 §Decision.7 — advisory only):
+  --intent repair limits analysis to gates from repair-mode runs.
+  --intent feature limits to feature runs. Gates without an intent field
+  are excluded when a filter is active. Compare the two outputs to spot
+  whether routing preferences differ by intent.
 
 This is the D5 BACKLOG item. Pairs with D6 (cost telemetry) + D4
 (performance scores). Manual review is the default; --apply is the
@@ -317,7 +335,9 @@ function main() {
     if (loaded.warning) warnings.push(loaded.warning);
   }
   all = filterSince(all, args.since);
+  all = filterByIntent(all, args.intent);
   for (const w of warnings) process.stderr.write(`[routing-suggest] ⚠️  ${w}\n`);
+  if (args.intent) process.stderr.write(`[routing-suggest] intent filter: ${args.intent}\n`);
 
   const summaries = [...aggregatePerformance(all).values()].map(summarize);
   const cfg = loadCurrentConfig(args.cwd);
@@ -353,6 +373,7 @@ module.exports = {
   scoreFor,
   compareScores,
   loadCurrentConfig,
+  filterByIntent,
   MIN_DISPATCHES,
   MIN_PASS_RATE_DELTA,
 };

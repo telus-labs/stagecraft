@@ -19,7 +19,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
-| 10 | Repair mode (`--repair`, ADR-009) | 🔄 in progress — 10.1 ✅ · 10.2 ✅ |
+| 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | 🔲 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -1574,7 +1574,7 @@ includes stage-03b.
 Done: npm test / eslint / consistency green.
 ```
 
-### 10.4 Vocabulary map + docs + metrics surface 🔲 (ships last)
+### 10.4 Vocabulary map + docs + metrics surface ✅ (PR: docs/repair-vocab-and-metrics · commit 64a2bde)
 
 ```
 TASK: Implement plans/phase-10-repair-mode.md item 10.4 (ADR-009 §Decision.8 + deferred

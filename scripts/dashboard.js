@@ -34,8 +34,8 @@ function parseArgs(argv) {
     else if (argv[i] === "--since") args.since = argv[++i];
     else if (argv[i] === "-h" || argv[i] === "--help") { args.help = true; }
   }
-  if (!["stage", "host", "role", "status"].includes(args.by)) {
-    process.stderr.write(`Invalid --by ${args.by}. Choose: stage / host / role / status.\n`);
+  if (!["stage", "host", "role", "status", "intent"].includes(args.by)) {
+    process.stderr.write(`Invalid --by ${args.by}. Choose: stage / host / role / status / intent.\n`);
     process.exit(2);
   }
   if (!["rate", "cost"].includes(args.view)) {
@@ -120,6 +120,7 @@ function aggregate(gates, byKey) {
       case "host":   key = g.host || "(no host)"; break;
       case "role":   key = g.workstream || "(no role)"; break;
       case "status": key = g.status || "(no status)"; break;
+      case "intent": key = g.intent || "(no intent)"; break;
     }
     if (!groups.has(key)) groups.set(key, emptyCounts());
     bump(groups.get(key), g.status);
@@ -182,6 +183,7 @@ function aggregateCost(gates, byKey) {
       case "host":   key = g.host || "(no host)"; break;
       case "role":   key = g.workstream || "(no role)"; break;
       case "status": key = g.status || "(no status)"; break;
+      case "intent": key = g.intent || "(no intent)"; break;
     }
     if (!groups.has(key)) groups.set(key, emptyCostRec());
     bumpCost(groups.get(key), g);
@@ -349,16 +351,70 @@ function renderJSON(args, allGates, overallRec, grouped) {
 // Main
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Repair-mode metrics (ADR-009 §Decision.7, deferred metrics surface — advisory only)
+// ---------------------------------------------------------------------------
+
+// Scope adherence: did the repair build stay within the diagnosed affected-files set?
+// Reads from gates that carry scope_adhered (true/false) — written by the orchestrator
+// when the structural scope gate fires (ADR-009 §Decision.3). Gates without the field
+// are excluded from the computation (not counted as failures).
+//
+// Returns { total, adhered, violated, adhered_rate } or null if no data.
+function computeScopeAdherence(gates) {
+  const repair = gates.filter((g) => g.intent === "repair" && typeof g.scope_adhered === "boolean");
+  if (repair.length === 0) return null;
+  const adhered = repair.filter((g) => g.scope_adhered === true).length;
+  return {
+    total: repair.length,
+    adhered,
+    violated: repair.length - adhered,
+    adhered_rate: (adhered / repair.length) * 100,
+  };
+}
+
+// Cost inversion estimate (ADR-009 §Decision.7).
+// Savings from catching a wrong root cause before build are real but
+// counterfactual — never measured. Report as an estimate with exposed inputs
+// so users can reason about the trade-off honestly.
+//
+// Formula: savings ≈ diagnosis_rejection_rate × avg_full_build_cost − diagnosis_cost
+// All three inputs must be supplied by the caller (read from gate cost fields or config).
+// Returns null if any input is missing or invalid.
+function computeCostInversionEstimate({ diagnosisRejectionRate, avgFullBuildCost, diagnosisCost }) {
+  if (
+    typeof diagnosisRejectionRate !== "number" ||
+    typeof avgFullBuildCost !== "number" ||
+    typeof diagnosisCost !== "number"
+  ) return null;
+  const savings = diagnosisRejectionRate * avgFullBuildCost - diagnosisCost;
+  return {
+    savings_per_run_usd: savings,
+    inputs: { diagnosisRejectionRate, avgFullBuildCost, diagnosisCost },
+    note: "estimate — savings ≈ rejection_rate × avg_full_build_cost − diagnosis_cost; never a measured figure",
+  };
+}
+
 function usage() {
   console.log(`dashboard — pipeline rollup (pass-rate or cost)
 
 Usage:
   node scripts/dashboard.js                       Read cwd/pipeline/gates/ (default --view rate).
   node scripts/dashboard.js --from p1,p2,...      One or more project roots.
-  node scripts/dashboard.js --by stage|host|role|status  Group rows. Default: stage.
+  node scripts/dashboard.js --by stage|host|role|status|intent  Group rows. Default: stage.
   node scripts/dashboard.js --view rate|cost      Default rate; cost requires tokens_in/out/model on gates.
   node scripts/dashboard.js --since YYYY-MM-DD    Filter by gate timestamp.
   node scripts/dashboard.js --json                Machine-readable output.
+
+Intent slice (ADR-009 §Decision.7 — advisory only):
+  --by intent groups by the intent field on each gate (repair / feature).
+  Intent is stamped on gates produced by devteam run --repair or --feature.
+  Gates without an intent field group under "(no intent)".
+
+Headline repair metric — scope adherence:
+  Whether a repair build stayed within the diagnosed affected-files set (ADR-009 §Decision.3).
+  Read programmatically via the exported computeScopeAdherence(gates) function.
+  Scope adherence is structural (FAIL by diff); cost inversion is advisory-only.
 
 Cost view note:
   Cost data is opt-in per gate. The adapter or agent writes tokens_in,
@@ -419,4 +475,7 @@ module.exports = {
   renderCostMarkdown,
   renderCostJSON,
   formatDuration,
+  // ADR-009 §Decision.7 repair-mode metrics (advisory only)
+  computeScopeAdherence,
+  computeCostInversionEstimate,
 };

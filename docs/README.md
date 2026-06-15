@@ -28,6 +28,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [runbooks/open-followups.md](runbooks/open-followups.md) — extract ticket stubs from `open_followups[]` after a run
 - [runbooks/deploy-failure.md](runbooks/deploy-failure.md) — Stage 8 failure: classify, diagnose, rollback, retry
 - [runbooks/autonomous-run.md](runbooks/autonomous-run.md) — `devteam run`: bounded autonomous driver reference
+- [runbooks/repair-flow.md](runbooks/repair-flow.md) — `devteam run --repair`: diagnosis gate approval, scope-gate FAIL recovery, tri-state reproduction
 - [runbook-template.md](runbook-template.md) — template and guide for writing new runbooks
 
 ## Contributor — I change Stagecraft
