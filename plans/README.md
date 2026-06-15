@@ -15,7 +15,7 @@ written to be executed by Claude (Sonnet) one item at a time.
 | 6 | [phase-6-promise-integrity.md](phase-6-promise-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | Make shipped claims true: G10 prompt-only path, pm budget, C3 runner, recipe de-overfit | none (6.2 needs 6.1) |
 | 7 | [phase-7-test-harness.md](phase-7-test-harness.md) | [prompts](prompts/ALL-PROMPTS.md) | Kill the repo-state test class structurally; CI signal quality | none |
 | 8 | [phase-8-release-and-sync.md](phase-8-release-and-sync.md) | [prompts](prompts/ALL-PROMPTS.md) | v0.7.0 with honest attribution; semantic runbook sync; D5 token work | 8.2 needs 6.4 · 8.3 needs 7.1 |
-| 9 | [phase-9-evidence-gated-capabilities.md](phase-9-evidence-gated-capabilities.md) | [prompts](prompts/ALL-PROMPTS.md) | ADR-007 heartbeat, H3 ground-truth, ADRs 005/008, adaptive-routing evidence | Phases 5–6 merged; ADR-first |
+| 9 | [phase-9-evidence-gated-capabilities.md](phase-9-evidence-gated-capabilities.md) | [prompts](prompts/ALL-PROMPTS.md) | ADR-007 heartbeat, H3 ground-truth, ADR-008, adaptive-routing evidence | ✅ complete (PRs #128 · #129 · #131 + this PR) — ADR-005 deferred |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status
