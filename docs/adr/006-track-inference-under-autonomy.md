@@ -1,7 +1,7 @@
 # ADR 006 — Track inference under autonomy
 
-**Status:** Proposed
-**Date:** 2026-06-11
+**Status:** Accepted
+**Date:** 2026-06-11 (accepted 2026-06-15)
 **Authors:** Mumit Khan (design), drafted with Claude Sonnet 4.6
 
 ## Context
@@ -102,6 +102,31 @@ no audit trail: it is evidence of a mistake, not a record that prevented it.
 ---
 
 ## Decision
+
+> **Revision note (2026-06-15, critical review — accepted with three adjustments).** The
+> core decision below stands (no internal inference; `pipeline/track.json` as the explicit
+> provenance record; stoplist-floor / confidence-ceiling). Three changes from the original
+> draft, carried into the Phase-11 execution plan:
+>
+> 1. **Mode switch is explicit, not `CI=true`.** §3 keyed halt-vs-warn on the ambient
+>    `CI` env var. But `core/gates/validator.js` already keys strict-mode on
+>    `CI === "true"`, and `core/verify/runner.js` *sets* `CI=1` on child processes — so
+>    `CI` is overloaded and side-effect-laden. Track-confidence enforcement instead keys on
+>    an explicit `autonomy.require_confirmed_track` config flag (default off), so unrelated
+>    tooling running under `CI` does not silently change track behavior. CI pipelines opt in
+>    by setting the flag, not by inheriting an ambient var.
+> 2. **No breaking change to `assess --apply`.** §2/Q1 proposed `--apply` write
+>    `track.json` instead of `custom_stages`. Instead: **`devteam assess` (default) writes
+>    the per-run `pipeline/track.json`** (it is a per-run inference record — the natural
+>    default output), and **`--apply` keeps its existing project-wide `custom_stages`
+>    meaning, unchanged.** Clean per-run vs project-wide split, zero migration.
+> 3. **No interactive prompt.** §3's low-confidence `[y/N]` pause contradicts the driver's
+>    no-prompts posture. Low confidence (when `require_confirmed_track` is set) is a typed
+>    `unconfirmed-track` **halt** requiring `--track` or `--force`, consistent with every
+>    other halt. The warn-only behavior stays for the non-enforced default.
+>
+> Q5 (standing-grant composition) is parked: **ADR-005 is Deferred**, so the two-ADR
+> boundary is revisited if and when ADR-005 is drafted.
 
 ### 1. `devteam run` MUST NOT infer a track by calling `assess` internally
 

@@ -19,7 +19,8 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
-| 10 | Repair mode (`--repair`, ADR-009) | 🔲 ready — start here |
+| 10 | Repair mode (`--repair`, ADR-009) | 🔲 ready |
+| 11 | Autonomy polish (ADR-006/007/008) | 🔲 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1594,3 +1595,102 @@ Tests: consistency green (vocab refs resolve, CLI reference regenerates with --r
 metrics meta-test that the intent slice computes on fixture telemetry.
 Done: npm run docs:generate idempotent; npm test / consistency green.
 ```
+
+---
+
+## Phase 11 — Autonomy Polish (ADR-006 / 007 / 008)
+
+Implements three accepted autonomy ADRs as one phase. Plan file:
+plans/phase-11-autonomy-polish.md. Order: 11.1 → 11.2 → 11.3 (serial; all touch the driver
+startup/teardown). **Read each ADR's revision note first — all three were accepted WITH
+adjustments; implement the adjusted decision, not the original draft prose.** 11.4 (the
+ADR-007 Tier-2 kill policy + `--watch`) is PARKED, evidence-gated — do not implement it.
+
+### 11.1 Liveness: heartbeat + observe-only stall logging + `devteam status` 🔲
+
+```
+TASK: Implement plans/phase-11-autonomy-polish.md item 11.1 (ADR-007 Tier 1 ONLY). Read
+the plan item and ADR-007's revision note first. Branch: feat/liveness-heartbeat
+
+Tier 1 is observe-only — NO process killing, NO Promise.race, NO --watch (all parked in
+11.4). Implement: (1) a `heartbeat` event to run-log.jsonl + onEvent at the start of each
+driver loop iteration (ADR-007 §2 shape); (2) a fire-and-forget stall probe alongside each
+run-stage/continue-stage dispatch that self-cancels when the dispatch settles and emits a
+`stall-detected` event (stall_class: "observed") when neither the workstream log
+(pipeline/logs/<id>.log via logsDir, changeId-aware) grew ≥ stallMinGrowthBytes (default
+512) nor the gate updated within stallThresholdMs (default 5 min) — it NEVER kills or
+alters the dispatch ([verify-first] how the dispatch is awaited in core/driver.js); (3)
+document that any log growth resets the clock so loop-spew is out of scope (silent hangs
+only); (4) a read-only `devteam status` command (run-state.json + run-log.jsonl tail →
+status/current_stage/last_action/iterations/cost_usd/last_heartbeat_age_ms/
+last_event_age_ms/stall_detected); (5) optional config autonomy.stall_threshold_ms /
+autonomy.stall_min_growth_bytes.
+
+Tests (CI-env-mirrored): heartbeat every iteration; observe-only probe emits stall-detected
+on flat log+gate past threshold (injected clock) and does NOT kill; probe self-cancels when
+dispatch settles first (no stale event); devteam status computes ages from a fixture log.
+Docs: remove "No heartbeat" from autonomous-run.md (note observe-first); devteam status in
+the CLI reference + a runbook row.
+Done: npm test / eslint / consistency green; manual sleep-dispatch tail pasted.
+```
+
+### 11.2 Exit semantics: advise sweep + `--fail-on-advisory` 🔲 (11.1 merged)
+
+```
+TASK: Implement plans/phase-11-autonomy-polish.md item 11.2 (adjusted ADR-008: A-default +
+opt-in flag). Branch: feat/advise-aware-exit
+
+Implement: (1) a post-pipeline-complete in-process advise sweep reusing core/advise.js
+([verify-first] its noted_for_followup collection + QA_BLOCKER/PEER_REVIEW_RISK/A11Y_FIX
+classes — reuse, don't reimplement); add advisory_blockers_count + per-class breakdown to
+the driver summary; bump RUN_SCHEMA_VERSION. (2) DEFAULT EXIT CODE UNCHANGED —
+pipeline-complete still exits 0 (do not touch the cleanStop default; external
+`if devteam run; then merge` consumers must not break). (3) when advisory_blockers_count >
+0, a loud stderr line: "pipeline complete — N advisory blocker(s) remain; run
+`devteam advise` to review". (4) opt-in --fail-on-advisory flag → exit 3 (NOT 1; add 3 to
+the exit-code table) when blocker-class items remain; default threshold QA_BLOCKER +
+A11Y_FIX; --fail-on-advisory=all adds PEER_REVIEW_RISK ([verify-first] cleanStop location +
+flag-schema pattern in core/cli/commands/run.js).
+
+Tests: completing pipeline + a QA_BLOCKER noted_for_followup → default exit 0 + loud line +
+advisory_blockers_count in --json; --fail-on-advisory → exit 3; only a PEER_REVIEW_RISK
+item → exit 0 unless =all; clean pipeline → exit 0 no line.
+Docs: first-class exit-code table (0/1/2/3) in autonomous-run.md + CLI reference; ci.md
+lenient-vs-strict examples.
+Done: npm test / eslint / consistency green.
+```
+
+### 11.3 Track provenance: `pipeline/track.json` + confirmation guard 🔲 (11.2 merged)
+
+```
+TASK: Implement plans/phase-11-autonomy-polish.md item 11.3 (adjusted ADR-006: explicit
+config flag not CI=true; no --apply breakage; halt not prompt). Branch: feat/track-provenance
+
+Implement: (1) pipeline/track.json under pipelineRoot() (changeId-aware): {track, source,
+confidence, reasons, assessed_at, assessed_by}, source human|inferred. (2) `devteam assess`
+(default) writes track.json as the per-run record; `devteam assess --apply` KEEPS writing
+project-wide custom_stages UNCHANGED (no breaking change); add --confirm → source:"human"
+([verify-first] current assess.js / stage-shopping/assess.js --apply behavior). (3)
+resolveTrack reads track.json in precedence
+--track > pipeline/track.json > custom_stages > default_track > "full", returning
+{track, source, confidence} without breaking callers ([verify-first] current resolveTrack
+in core/driver.js). (4) checkTrackConfidence keyed on autonomy.require_confirmed_track
+config — NOT CI=true (CI is already overloaded by validator strict-mode + set by
+verify/runner). Flag OFF (default): warn-once on inferred, never block. Flag ON: inferred +
+medium/low → typed `unconfirmed-track` HALT (no interactive prompt) requiring --track or
+--force; high proceeds. --track overrides silently; --force bypasses. Log
+track-confidence-check; add track_source + track_confidence to the run-start event.
+
+Tests: no track.json → config/default fallthrough; require_confirmed_track on + inferred/
+medium → unconfirmed-track halt (no prompt); + --force → proceeds; human source any
+confidence → no halt; flag off → warn-only; assess default writes track.json; --apply still
+writes custom_stages (no-breakage regression); --confirm sets source:human.
+Docs: docs/tracks.md "Track record" section; autonomous-run.md pre-run checklist + halt row;
+ci.md assess step + require_confirmed_track.
+Done: npm test / eslint / consistency green.
+```
+
+**11.4 — PARKED (do NOT implement):** ADR-007 Tier-2 active stall response (SIGTERM kill
+policy, transient/structural, content-distinct growth for loop-spew) and `--watch`. Gated on
+the observe-only `stall-detected` data from 11.1, like H3. Re-open a follow-up decision once
+real runs have produced that data.

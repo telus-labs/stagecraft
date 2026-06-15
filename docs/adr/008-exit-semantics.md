@@ -1,7 +1,7 @@
 # ADR 008 — Exit semantics: pipeline-complete with pending advise blockers
 
-**Status:** Proposed
-**Date:** 2026-06-14
+**Status:** Accepted
+**Date:** 2026-06-14 (accepted 2026-06-15; A-default + opt-in `--fail-on-advisory`)
 **Authors:** Mumit Khan (design), drafted with Claude Sonnet 4.6
 
 ## Context

@@ -1,7 +1,7 @@
 # ADR 007 — Liveness/heartbeat: stall detector distinct from wall-clock timeout
 
-**Status:** Proposed
-**Date:** 2026-06-14
+**Status:** Accepted
+**Date:** 2026-06-14 (accepted 2026-06-15, observe-first staging)
 **Authors:** Mumit Khan (design), drafted with Claude Sonnet 4.6
 
 ## Context
