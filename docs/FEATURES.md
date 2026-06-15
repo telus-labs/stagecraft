@@ -335,6 +335,10 @@ When `devteam run --repair` is used, stage-03b (executable-spec) is injected int
 - **No double-inject on full track**: stage-03b is already in the full track order; the driver filters it out before re-injecting it at the correct position (immediately before build).
 - **`--repair-at` still includes it**: the escape hatch skips diagnosis but not the reproduction stage.
 
+### Repair mode vocabulary and operator runbook (ADR-009 Phase 4)
+
+The authoritative term map lives in [docs/conventions.md](conventions.md#repair-mode-vocabulary-adr-009-decision8): it distinguishes `--repair` (intent), `hotfix` (track depth), `fix-and-retry` / `fix_steps` (internal self-correction machinery), and PATCH MODE (build-scoping mechanism). The runbook at [docs/runbooks/repair-flow.md](runbooks/repair-flow.md) covers the three operator decision points: diagnosis gate approval (interactive or `--auto-rule diagnosis-approved`), scope-gate FAIL recovery, and tri-state reproduction handling.
+
 ### Inspection and power tools
 
 **`devteam validate`** — confirm gate files haven't been edited by hand.
