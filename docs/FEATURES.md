@@ -302,12 +302,24 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - `devteam stage <name> --feature "..." --headless` spawns the host CLI, pipes the rendered prompt to its stdin, waits for the gate, and exits
 - Combine with `devteam next` to chain stages in a script
 
-**`devteam run [--feature "..."] [--repair "<symptom>"] [--track <t>] [--until <s>] [--budget-usd X] [--timeout-ms N] [--retry-delay-ms N] [--auto-rule <classes>] [--allow-stage <s>] [--max-iterations N] [--resume] [--force] [--json]`** — drive the whole pipeline unattended. See the **Autonomous pipeline execution** section under Advanced AI capabilities (and [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md)) for the full behavior.
+**`devteam run [--feature "..."] [--repair "<symptom>"] [--repair-at <file>:<line>] [--track <t>] [--until <s>] [--budget-usd X] [--timeout-ms N] [--retry-delay-ms N] [--auto-rule <classes>] [--allow-stage <s>] [--max-iterations N] [--resume] [--force] [--json]`** — drive the whole pipeline unattended. See the **Autonomous pipeline execution** section under Advanced AI capabilities (and [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md)) for the full behavior.
 
 - Loops `next → dispatch → merge` to completion; auto-fixes `code-defect` failures and retries transient dispatch blips
 - Halts cleanly for a human at the consequence ceiling, on un-granted escalations, a budget cap, or a structural failure
 - Writes `pipeline/run.lock`, `run-state.json`, and an audit-trail `run-log.jsonl`
-- **`--repair "<symptom>"`** — bug-fix intent mode (ADR-009). Orthogonal to `--track`; defaults to hotfix depth. Auth/payments/migration symptoms auto-upgrade to full via the stoplist. Mutually exclusive with `--feature`. The build runs in **PATCH MODE** (`renderPatchBlock` injects a `⚠️ PATCH MODE — targeted fix only` block so the AI scopes its changes to the diagnosed symptom). A structural scope gate (activated in Phase 2 when a diagnosis stage supplies the affected-files list) FAILs any build that writes outside the diagnosed file set. Run-state records `intent: "repair"` and `repair: "<symptom>"`; every run-log event carries the intent tag for post-run analysis. `--repair` and `--feature` are mutually exclusive at both CLI and driver level.
+- **`--repair "<symptom>"`** — bug-fix intent mode (ADR-009). Orthogonal to `--track`; defaults to hotfix depth. Auth/payments/migration symptoms auto-upgrade to full via the stoplist. Mutually exclusive with `--feature`. Automatically routes through a **diagnosis stage** (see below) before build; the diagnosed `affected_files` list activates the structural scope gate. The build runs in **PATCH MODE** (`renderPatchBlock` injects a `⚠️ PATCH MODE — targeted fix only` block so the AI scopes its changes to the diagnosed files). Run-state records `intent: "repair"` and `repair: "<symptom>"`; every run-log event carries the intent tag.
+- **`--repair-at <file>:<line>`** — escape hatch for when you already know the defect location. Comma-separated `file:line` pairs (e.g. `src/auth.js:42,src/session.js:18`) seed the affected-files list directly, write a synthetic PASS stage-01 gate, and skip the LLM diagnosis dispatch entirely. Combine with `--repair` to bypass the diagnosis stage while retaining PATCH MODE scoping and the scope gate.
+
+### Repair mode diagnosis stage — stage-01 produces a DIAGNOSIS in repair mode (ADR-009 Phase 2)
+
+When `devteam run --repair` is used, stage-01 (requirements) switches its artifact from a feature brief to a **DIAGNOSIS** document. Same stage, same gate file path, fix-aware output — no new stages, no parallel pipeline.
+
+- **Diagnosis document** (`pipeline/diagnosis.md`): root cause with specific `file:line` references, proposed fix, every file the fix must touch (`affected_files`), and a regression criterion the executable-spec stage can translate into a runnable test.
+- **Judgment gate**: the diagnosis gate is always ESCALATE-shaped — it requires explicit human approval or `--auto-rule diagnosis-approved` before the build proceeds. This prevents the AI from autonomously proceeding on an incorrect root-cause assessment.
+  - Interactive mode: the gate lands as an ESCALATE; `devteam next` shows the judgment question before you proceed.
+  - Autonomous mode: `--auto-rule diagnosis-approved` grants the driver permission to auto-rule the diagnosis; the Principal issues a `PRINCIPAL-RULING: ... [class: diagnosis-approved]` line and the run continues.
+- **Scope gate activation**: once stage-01 PASSes (after approval), the driver reads `affected_files` from the diagnosis gate and stores it in run-state. The structural scope gate — which was wired in Phase 1 but inert without a list — now FAILs any build that writes files outside the diagnosed set.
+- **`--repair-at` escape hatch**: when the defect location is already known, pass `--repair-at src/auth.js:42` to seed `affected_files` directly and skip the LLM diagnosis dispatch. A synthetic PASS stage-01 gate is written so `next()` advances past requirements immediately.
 
 ### Inspection and power tools
 
