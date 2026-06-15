@@ -100,6 +100,51 @@ explicit human grant via `--allow-stage`. This is the line that keeps autonomy
 bounded: the driver does the mechanical work up to the decisions that carry real
 consequences, and stops there for you.
 
+## Liveness: heartbeats and stall detection (ADR-007 Tier 1)
+
+The driver emits a `heartbeat` event to `run-log.jsonl` at the **start of every
+loop iteration**, before dispatching. This bounds the age of the last log entry:
+if `run-log.jsonl` went quiet, the driver itself is not looping.
+
+Alongside each `run-stage`/`continue-stage` dispatch the driver runs an
+**observe-only stall probe**. It wakes every 60 s and checks whether the
+workstream log (`pipeline/logs/`) or any stage gate updated. If neither showed
+≥ 512 bytes of growth nor a gate update within 5 minutes, the probe emits a
+`stall-detected` event (with `stall_class: "observed"`) to `run-log.jsonl` and
+`onEvent`. The dispatch continues unchanged — **no process is killed, no
+Promise.race fires**. The probe self-cancels when the dispatch settles so no
+stale event is emitted after the stage moves on.
+
+Note: the probe detects **silent hangs** (flat output, no gate) but **not
+loop-spew** (a model emitting repetitive output indefinitely resets the clock).
+Catching loop-spew requires content-distinct growth and rides with ADR-007
+Tier 2 (not yet shipped).
+
+Use `devteam status` to see the current liveness snapshot at any time.
+
+**Config:** `autonomy.stall_threshold_ms` (default 300000) and
+`autonomy.stall_min_growth_bytes` (default 512) in `.devteam/config.yml`.
+
+## `devteam status`
+
+```bash
+devteam status          # human-readable liveness snapshot
+devteam status --json   # machine-readable (CI, tooling)
+```
+
+Reads `run-state.json` and the tail of `run-log.jsonl`; reports:
+
+| Field | Meaning |
+|---|---|
+| `status` | `running` / `completed` / `halted` / `no-run` |
+| `current_stage` | The stage the driver is working on |
+| `last_action` | Last action dispatched |
+| `iterations` | Loop iterations completed so far |
+| `cost_usd` | Cumulative cost from all gate files |
+| `last_heartbeat_age_ms` | Ms since the last heartbeat event |
+| `last_event_age_ms` | Ms since any event in run-log.jsonl |
+| `stall_detected` | `true` if the most recent dispatch event was stall-detected |
+
 ## Honest limitations
 
 - **Auto-fix only amplifies a competent agent.** On a `code-defect`, the driver
@@ -122,9 +167,10 @@ consequences, and stops there for you.
 - **Lock is advisory.** `devteam run` holds the lock, but other mutating
   commands (`devteam stage`, `devteam merge`) do not yet check it — don't run
   them against a live autonomous run.
-- **No heartbeat.** A hung dispatch (waiting on a model API) is invisible to the
-  driver until it exits. `--budget-usd` + a wall-clock timeout in your CI config
-  are the practical guards.
+- **Stall detector logs stalls but does not yet act on them (observe-first).**
+  `stall-detected` events in `run-log.jsonl` surface the condition but no
+  autonomous action is taken. Tier-2 active stall response (SIGTERM kill policy)
+  is evidence-gated on the data this item produces — see ADR-007.
 - **Stale archives from a prior run can trip the no-progress breaker.** The
   convergence breaker compares the blocker sets in `pipeline/gates/archive/` to
   determine whether a retry made progress. If archive files from a *previous* run

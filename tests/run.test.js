@@ -874,3 +874,163 @@ describe("driver: progress-based convergence (4.2)", () => {
     assert.ok(!s.no_progress_evidence, "count-based halt must not set no_progress_evidence");
   });
 });
+
+// ─── ADR-007 Tier 1: heartbeat + observe-only stall probe ─────────────────
+
+describe("driver: heartbeat events (ADR-007 §2)", () => {
+  it("emits a heartbeat event in run-log.jsonl at the start of every iteration", async () => {
+    const cwd = track(makeTargetProject());
+    const actions = [
+      { action: "run-stage", stage: "stage-01", name: "requirements" },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let i = 0;
+    await run({
+      cwd,
+      next: () => actions[i++],
+      runStageHeadless: async () => [{ role: "pm", gatePath: "x", exitCode: 0, durationMs: 1 }],
+      // Noop stall probe so dispatch tests don't depend on fs probing.
+      stallProbe: () => () => {},
+    });
+    const logLines = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8")
+      .trim().split("\n").map((l) => JSON.parse(l));
+    const heartbeats = logLines.filter((e) => e.outcome === "heartbeat");
+    // 3 iterations → 3 heartbeats (before each next() call).
+    assert.equal(heartbeats.length, 3, "one heartbeat per iteration");
+    // Heartbeat shape: has iteration, stage, action, run_state_path, cost_usd_so_far.
+    for (const hb of heartbeats) {
+      assert.ok(typeof hb.iteration === "number", "heartbeat.iteration must be a number");
+      assert.ok("stage" in hb, "heartbeat must have a stage field");
+      assert.ok("action" in hb, "heartbeat must have an action field");
+      assert.ok("run_state_path" in hb, "heartbeat must have run_state_path");
+    }
+  });
+
+  it("onEvent receives heartbeat on every iteration", async () => {
+    const cwd = track(makeTargetProject());
+    const events = [];
+    const actions = [
+      { action: "run-stage", stage: "stage-01", name: "requirements" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let i = 0;
+    await run({
+      cwd,
+      next: () => actions[i++],
+      runStageHeadless: async () => [{ role: "pm", gatePath: "x", exitCode: 0, durationMs: 1 }],
+      onEvent: (ev) => events.push(ev),
+      stallProbe: () => () => {},
+    });
+    const hbEvents = events.filter((e) => e.type === "heartbeat");
+    assert.equal(hbEvents.length, 2, "two heartbeat onEvent calls for 2 iterations");
+    assert.ok(hbEvents.every((e) => typeof e.iteration === "number"), "heartbeat events have iteration");
+  });
+});
+
+describe("driver: observe-only stall probe (ADR-007 §3, Tier 1)", () => {
+  it("emits stall-detected in run-log.jsonl when injected probe fires (does NOT kill dispatch)", async () => {
+    const cwd = track(makeTargetProject());
+    const actions = [
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let i = 0;
+
+    // Inject a stallProbe that fires a stall event synchronously via logEvent callback.
+    // This simulates a flat log+gate past the threshold (injected clock).
+    let dispatchCompleted = false;
+    let probeCancelCalled = false;
+    const fakeStallProbe = (_stageName, _stageId, _cwd, _changeId, _t0, probeOpts) => {
+      // Fire stall-detected immediately via the logEvent callback.
+      if (probeOpts.logEvent) {
+        probeOpts.logEvent({
+          outcome: "stall-detected",
+          iteration: probeOpts.iteration,
+          stage: _stageName,
+          action: probeOpts.action,
+          stall_threshold_ms: 300000,
+          log_growth_bytes_last_interval: 0,
+          gate_updated: false,
+          dispatch_elapsed_ms: 10000,
+          stall_class: "observed",
+        });
+      }
+      if (probeOpts.onEvent) {
+        probeOpts.onEvent({
+          type: "stall-detected",
+          stage: _stageName,
+          stall_class: "observed",
+        });
+      }
+      return () => { probeCancelCalled = true; };
+    };
+
+    const s = await run({
+      cwd,
+      next: () => actions[i++],
+      runStageHeadless: async () => {
+        dispatchCompleted = true;
+        return [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: fakeStallProbe,
+    });
+
+    // Dispatch must complete normally — probe never kills.
+    assert.equal(s.completed, true, "stall-detected must not kill the dispatch");
+    assert.equal(dispatchCompleted, true, "dispatch must complete even when stall is detected");
+
+    // stall-detected event must be in run-log.jsonl.
+    const logLines = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8")
+      .trim().split("\n").map((l) => JSON.parse(l));
+    const stallEvent = logLines.find((e) => e.outcome === "stall-detected");
+    assert.ok(stallEvent, "stall-detected must appear in run-log.jsonl");
+    assert.equal(stallEvent.stall_class, "observed", "stall_class must be 'observed' in Tier 1");
+    assert.equal(stallEvent.stage, "build");
+
+    // Cancel must be called when dispatch settles (no stale events after stage moves on).
+    assert.equal(probeCancelCalled, true, "cancel() must be called when dispatch settles");
+  });
+
+  it("probe cancel is called even when dispatch throws (no leaked stall timers)", async () => {
+    const cwd = track(makeTargetProject());
+    let cancelCalled = false;
+    await run({
+      cwd,
+      next: () => ({ action: "run-stage", stage: "stage-01", name: "requirements" }),
+      runStageHeadless: async () => {
+        throw new Error("dispatch failed unexpectedly");
+      },
+      stallProbe: () => () => { cancelCalled = true; },
+    }).catch(() => null);
+    // Whether or not the driver surfaces the error, cancel must have been called.
+    assert.equal(cancelCalled, true, "cancel() must be called via finally even when dispatch throws");
+  });
+
+  it("stall-detected event appears in onEvent stream", async () => {
+    const cwd = track(makeTargetProject());
+    const events = [];
+    const actions = [
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let i = 0;
+
+    await run({
+      cwd,
+      next: () => actions[i++],
+      runStageHeadless: async () => [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }],
+      onEvent: (ev) => events.push(ev),
+      stallProbe: (_name, _id, _cwd, _changeId, _t0, probeOpts) => {
+        if (probeOpts.onEvent) {
+          probeOpts.onEvent({ type: "stall-detected", stage: _name, stall_class: "observed" });
+        }
+        return () => {};
+      },
+    });
+
+    const stallEv = events.find((e) => e.type === "stall-detected");
+    assert.ok(stallEv, "stall-detected must appear in onEvent stream");
+    assert.equal(stallEv.stall_class, "observed");
+  });
+});

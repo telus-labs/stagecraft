@@ -28,7 +28,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
 const { loadConfig, changeIdFromFeature, changeIdFromSymptom } = require("./config");
-const { pipelineRoot, gatesDir: getGatesDir, prefixPipelineRelative } = require("./paths");
+const { pipelineRoot, gatesDir: getGatesDir, logsDir: getLogsDir, prefixPipelineRelative } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
@@ -212,6 +212,118 @@ function writeRunBlockers(cwd, stageName, blockers, changeId) {
 
 function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+// ADR-007 Tier 1: observe-only stall probe. Runs fire-and-forget alongside
+// each run-stage/continue-stage dispatch. Wakes every stallPollIntervalMs
+// and checks whether the workstream log grew or a gate appeared. If neither
+// happened within stallThresholdMs, emits a stall-detected event and exits.
+// Any log growth resets the clock, so this detects silent hangs only —
+// loop-spew (a model emitting repeating output indefinitely) resets the clock
+// and is not detected. Content-distinct growth rides with Tier 2.
+//
+// Returns a cancel() function the caller must invoke when the dispatch settles
+// so no stale event fires after the stage has moved on.
+function defaultStallProbe(stageName, stageId, cwd, changeId, dispatchStart, opts = {}) {
+  const {
+    stallThresholdMs = 5 * 60 * 1000,   // 5 minutes
+    stallPollIntervalMs = 60 * 1000,     // 60 seconds
+    stallMinGrowthBytes = 512,
+    logEvent: _logEvent,
+    onEvent: _onEvent,
+    iteration,
+    action,
+    sleep: _sleep = defaultSleep,
+  } = opts;
+
+  const logsPath = getLogsDir(cwd, changeId);
+  const gatesPath = getGatesDir(cwd, changeId);
+
+  // Snapshot log sizes and gate mtimes at probe start.
+  function totalLogBytes() {
+    try {
+      let total = 0;
+      const files = fs.readdirSync(logsPath).filter((f) => f.endsWith(".log"));
+      for (const f of files) {
+        try { total += fs.statSync(path.join(logsPath, f)).size; } catch { /* gone */ }
+      }
+      return total;
+    } catch { return 0; }
+  }
+
+  function latestGateMtime() {
+    try {
+      let latest = 0;
+      const prefix = stageId ? stageId.replace(/\.[^.]+$/, "") : "";
+      for (const f of fs.readdirSync(gatesPath)) {
+        if (prefix && !f.startsWith(prefix)) continue;
+        try {
+          const mt = fs.statSync(path.join(gatesPath, f)).mtimeMs;
+          if (mt > latest) latest = mt;
+        } catch { /* gone */ }
+      }
+      return latest;
+    } catch { return 0; }
+  }
+
+  let cancelled = false;
+  let lastLogBytes = totalLogBytes();
+  let lastGateMtime = latestGateMtime();
+  let lastProgressMs = Date.now();
+
+  (async () => {
+    while (true) {
+      await _sleep(stallPollIntervalMs);
+      if (cancelled) return;
+
+      const nowBytes = totalLogBytes();
+      const nowMtime = latestGateMtime();
+      const growth = nowBytes - lastLogBytes;
+      const gateUpdated = nowMtime > lastGateMtime;
+
+      if (growth >= stallMinGrowthBytes || gateUpdated) {
+        lastLogBytes = nowBytes;
+        lastGateMtime = nowMtime;
+        lastProgressMs = Date.now();
+        continue;
+      }
+
+      // No qualifying progress signal since lastProgressMs.
+      if (Date.now() - lastProgressMs >= stallThresholdMs) {
+        if (cancelled) return;
+        const elapsedMs = Date.now() - dispatchStart;
+        if (_logEvent) {
+          _logEvent({
+            outcome: "stall-detected",
+            iteration,
+            stage: stageName,
+            action,
+            stall_threshold_ms: stallThresholdMs,
+            log_growth_bytes_last_interval: growth,
+            gate_updated: gateUpdated,
+            dispatch_elapsed_ms: elapsedMs,
+            stall_class: "observed",
+          });
+        }
+        if (_onEvent) {
+          _onEvent({
+            type: "stall-detected",
+            stage: stageName,
+            action,
+            iteration,
+            stall_threshold_ms: stallThresholdMs,
+            log_growth_bytes_last_interval: growth,
+            gate_updated: gateUpdated,
+            dispatch_elapsed_ms: elapsedMs,
+            stall_class: "observed",
+          });
+        }
+        return; // one observed stall per dispatch (Tier 1 — no retry/kill)
+      }
+    }
+  })();
+
+  return () => { cancelled = true; };
+}
+
 // ADR-009 §Decision.3: structural scope gate — check whether a build touched files
 // outside the diagnosed affected-files set. Returns an array of out-of-scope file
 // paths. Empty array = within scope. Uses git diff --name-only HEAD; returns []
@@ -247,6 +359,7 @@ function defaultCheckScopeGate(cwd, affectedFiles) {
  * @param {function} [opts.runFixEscalation] injectable applicator runner (for tests)
  * @param {function} [opts.onEvent]      progress callback (type + fields)
  * @param {function} [opts.sleep]        injectable delay (for tests)
+ * @param {function} [opts.stallProbe]   injectable stall-probe factory (for tests); receives (stageName, stageId, cwd, changeId, dispatchStart, probeOpts) and returns a cancel()
  * @returns {Promise<object>} run summary
  */
 async function run(opts = {}) {
@@ -310,6 +423,14 @@ async function run(opts = {}) {
     ? opts.maxTransientRetries
     : MAX_TRANSIENT_RETRIES_DEFAULT;
   const _sleep = typeof opts.sleep === "function" ? opts.sleep : defaultSleep;
+  // ADR-007 Tier 1: stall probe config and injectable factory.
+  const stallThresholdMs = (config.autonomy && typeof config.autonomy.stall_threshold_ms === "number")
+    ? config.autonomy.stall_threshold_ms
+    : 5 * 60 * 1000;
+  const stallMinGrowthBytes = (config.autonomy && typeof config.autonomy.stall_min_growth_bytes === "number")
+    ? config.autonomy.stall_min_growth_bytes
+    : 512;
+  const _stallProbe = typeof opts.stallProbe === "function" ? opts.stallProbe : defaultStallProbe;
   // PR-C2: bounded autonomous escalation resolution. Default grant is empty →
   // every escalation halts for a human (the safe default). Class-allowlist only.
   const grantSet = new Set(opts.autoRule || []);
@@ -479,6 +600,25 @@ async function run(opts = {}) {
       // halt recorded above; skip the loop entirely.
     } else
     for (let i = 0; i < maxIterations; i++) {
+      // ADR-007 §2: emit heartbeat before next() so run-log.jsonl always has a
+      // bounded last-event age regardless of dispatch duration. Cheap: no fs scans.
+      const heartbeatIteration = (state.iterations || 0) + 1;
+      logEvent(cwd, changeId, {
+        outcome: "heartbeat",
+        iteration: heartbeatIteration,
+        stage: state.current_stage || null,
+        action: state.last_action || null,
+        run_state_path: runStatePath(cwd, changeId),
+        cost_usd_so_far: totalCostUsd(cwd, changeId),
+      });
+      onEvent({
+        type: "heartbeat",
+        iteration: heartbeatIteration,
+        stage: state.current_stage || null,
+        action: state.last_action || null,
+        cost_usd: totalCostUsd(cwd, changeId),
+      });
+
       // Pass the repair-aware order (array) for repair runs — includes the diagnosis
       // stage at the front. Passes the raw CLI track for feature runs, keeping
       // the original behaviour. G6's custom-array path handles array tracks.
@@ -801,17 +941,36 @@ async function run(opts = {}) {
 
         onEvent({ type: "dispatch", ...base });
         const t0 = Date.now();
-        const runResult = await _runStageHeadless(r.name, {
-          cwd,
-          track: opts.repair ? effectiveTrack : opts.track,
-          feature: opts.feature || "",
-          intent,   // ADR-009 §Decision.7: propagate so adapters render repair prompts
-          timeoutMs,
-          skipCompleted: r.action === "continue-stage",
-          // ADR-009 §Decision.2: repair builds run in PATCH MODE (renderPatchBlock).
-          // After 10.2 diagnosis, repairPatchItems holds structured per-file items.
-          ...(repairPatchItems ? { patchItems: repairPatchItems } : {}),
+        // ADR-007 Tier 1: start the observe-only stall probe fire-and-forget.
+        // The probe emits stall-detected if the workstream log and gate are both
+        // flat for stallThresholdMs. It NEVER kills or alters the dispatch — the
+        // await below is always the sole resolution path (no Promise.race).
+        const cancelStallProbe = _stallProbe(r.name, r.stage, cwd, changeId, t0, {
+          stallThresholdMs,
+          stallMinGrowthBytes,
+          logEvent: (entry) => logEvent(cwd, changeId, entry),
+          onEvent,
+          iteration: state.iterations,
+          action: r.action,
+          sleep: _sleep,
         });
+        let runResult;
+        try {
+          runResult = await _runStageHeadless(r.name, {
+            cwd,
+            track: opts.repair ? effectiveTrack : opts.track,
+            feature: opts.feature || "",
+            intent,   // ADR-009 §Decision.7: propagate so adapters render repair prompts
+            timeoutMs,
+            skipCompleted: r.action === "continue-stage",
+            // ADR-009 §Decision.2: repair builds run in PATCH MODE (renderPatchBlock).
+            // After 10.2 diagnosis, repairPatchItems holds structured per-file items.
+            ...(repairPatchItems ? { patchItems: repairPatchItems } : {}),
+          });
+        } finally {
+          // Dispatch settled — cancel the probe so it never fires a stale event.
+          cancelStallProbe();
+        }
         const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
         const durationMs = Date.now() - t0;
         const nonSkipped = results.filter((x) => !x.skipped);
@@ -923,4 +1082,4 @@ async function run(opts = {}) {
   return summary;
 }
 
-module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd };
+module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, runStatePath, runLogPath };

@@ -99,6 +99,12 @@ Commands:
                                    pipeline/context.md and fixes gates, runs stages,
                                    and merges — so devteam next advances. No
                                    hand-editing required.
+  status [--json]                  Liveness report (ADR-007 Tier 1): reads
+                                   run-state.json + run-log.jsonl tail and
+                                   reports status / current_stage /
+                                   last_action / iterations / cost_usd /
+                                   last_heartbeat_age_ms / last_event_age_ms /
+                                   stall_detected. Read-only; no --watch.
   summary [--json]                 One-screen pipeline state report.
   log [--follow] [--json]          Chronological event timeline: every gate
                                    and every artifact write, in mtime order,
