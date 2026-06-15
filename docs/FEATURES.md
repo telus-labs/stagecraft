@@ -302,11 +302,12 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - `devteam stage <name> --feature "..." --headless` spawns the host CLI, pipes the rendered prompt to its stdin, waits for the gate, and exits
 - Combine with `devteam next` to chain stages in a script
 
-**`devteam run [--track <t>] [--until <s>] [--budget-usd X] [--timeout-ms N] [--retry-delay-ms N] [--auto-rule <classes>] [--allow-stage <s>] [--max-iterations N] [--resume] [--force] [--json]`** — drive the whole pipeline unattended. See the **Autonomous pipeline execution** section under Advanced AI capabilities (and [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md)) for the full behavior.
+**`devteam run [--feature "..."] [--repair "<symptom>"] [--track <t>] [--until <s>] [--budget-usd X] [--timeout-ms N] [--retry-delay-ms N] [--auto-rule <classes>] [--allow-stage <s>] [--max-iterations N] [--resume] [--force] [--json]`** — drive the whole pipeline unattended. See the **Autonomous pipeline execution** section under Advanced AI capabilities (and [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md)) for the full behavior.
 
 - Loops `next → dispatch → merge` to completion; auto-fixes `code-defect` failures and retries transient dispatch blips
 - Halts cleanly for a human at the consequence ceiling, on un-granted escalations, a budget cap, or a structural failure
 - Writes `pipeline/run.lock`, `run-state.json`, and an audit-trail `run-log.jsonl`
+- **`--repair "<symptom>"`** — bug-fix intent mode (ADR-009). Orthogonal to `--track`; defaults to hotfix depth. Auth/payments/migration symptoms auto-upgrade to full via the stoplist. Mutually exclusive with `--feature`. The build runs in **PATCH MODE** (`renderPatchBlock` injects a `⚠️ PATCH MODE — targeted fix only` block so the AI scopes its changes to the diagnosed symptom). A structural scope gate (activated in Phase 2 when a diagnosis stage supplies the affected-files list) FAILs any build that writes outside the diagnosed file set. Run-state records `intent: "repair"` and `repair: "<symptom>"`; every run-log event carries the intent tag for post-run analysis. `--repair` and `--feature` are mutually exclusive at both CLI and driver level.
 
 ### Inspection and power tools
 

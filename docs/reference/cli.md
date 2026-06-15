@@ -49,6 +49,7 @@ Bounded autonomous driver: loop next → dispatch → merge until pipeline-compl
 | ---------------- | ------ | ------------------------------------------------------------------------------- |
 | --cwd            | string | Target project directory                                                        |
 | --feature        | string | Feature description                                                             |
+| --repair         | string | Bug symptom for repair mode (exclusive with --feature; ADR-009)                 |
 | --track          | string | Override the pipeline track                                                     |
 | --until          | string | Stop before this stage                                                          |
 | --max-iterations | number | Iteration cap                                                                   |

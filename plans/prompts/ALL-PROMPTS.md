@@ -19,7 +19,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
-| 10 | Repair mode (`--repair`, ADR-009) | 🔲 ready |
+| 10 | Repair mode (`--repair`, ADR-009) | 🔄 in progress — 10.1 ✅ |
 | 11 | Autonomy polish (ADR-006/007/008) | 🔲 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
@@ -1499,7 +1499,7 @@ without 10.2.** The flag is `--repair`, never `--fix` (collides with `fix-and-re
 is feature work, so the mechanical-equivalence rule does NOT apply; new behavior needs
 tests that fail on main first.
 
-### 10.1 `--repair` flag + PATCH-MODE build + scope gate + intent tag 🔲
+### 10.1 `--repair` flag + PATCH-MODE build + scope gate + intent tag ✅
 
 ```
 TASK: Implement plans/phase-10-repair-mode.md item 10.1 (ADR-009 Phase 1). Read the plan

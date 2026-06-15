@@ -11,6 +11,7 @@ const name = "run";
 const flags = {
   cwd:               { type: "string",  description: "Target project directory" },
   feature:           { type: "string",  description: "Feature description" },
+  repair:            { type: "string",  description: "Bug symptom for repair mode (exclusive with --feature; ADR-009)" },
   track:             { type: "string",  description: "Override the pipeline track" },
   until:             { type: "string",  description: "Stop before this stage" },
   "max-iterations":  { type: "number",  description: "Iteration cap" },
@@ -32,6 +33,11 @@ const flags = {
 // auto-rule yet — that is PR-B / Phase 2.
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam run [options]", flags)); process.exit(0); }
+  // ADR-009: --repair and --feature are mutually exclusive intents.
+  if (_flags.repair && _flags.feature) {
+    console.error("devteam run: --repair and --feature are mutually exclusive — a run is either a bug fix or a feature, not both");
+    process.exit(1);
+  }
   const cwd = _flags.cwd || process.cwd();
   const { run: runDriver } = require(path.join(__dirname, "..", "..", "driver"));
   const jsonMode = Boolean(_flags.json);
@@ -62,6 +68,7 @@ function run(positional, _flags) {
   runDriver({
     cwd,
     feature: _flags.feature || "",
+    repair: _flags.repair || null,
     track: _flags.track,
     until: _flags.until,
     maxIterations: Number.isFinite(_flags.maxIterations) ? _flags.maxIterations : undefined,
