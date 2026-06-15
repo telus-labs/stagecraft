@@ -37,10 +37,19 @@ function parseFlags(argv, schema) {
       continue;
     }
 
-    const flagName = a.slice(2);
+    // Support --flag=value form: split on the first '=' after '--'.
+    let rawToken = a.slice(2);
+    let embeddedValue = null;
+    const eqIdx = rawToken.indexOf("=");
+    if (eqIdx >= 0) {
+      embeddedValue = rawToken.slice(eqIdx + 1);
+      rawToken = rawToken.slice(0, eqIdx);
+    }
+
+    const flagName = rawToken;
     const def = schema[flagName];
     if (!def) {
-      process.stderr.write(`Unknown flag: ${a}\n`);
+      process.stderr.write(`Unknown flag: --${flagName}\n`);
       process.exit(2);
     }
 
@@ -51,38 +60,53 @@ function parseFlags(argv, schema) {
         flags[key] = true;
         break;
 
+      // toggle: bare (--flag) sets true; --flag=value sets the value string.
+      // Use when a flag can optionally refine its behaviour with a value (e.g.
+      // --fail-on-advisory=all) while also being valid without one.
+      case "toggle":
+        flags[key] = embeddedValue !== null ? embeddedValue : true;
+        break;
+
       case "string": {
-        i++;
-        if (i >= argv.length) {
-          process.stderr.write(`${a} requires a value\n`);
-          process.exit(2);
-        }
-        flags[key] = argv[i];
+        const val = embeddedValue !== null ? embeddedValue : (() => {
+          i++;
+          if (i >= argv.length) {
+            process.stderr.write(`--${flagName} requires a value\n`);
+            process.exit(2);
+          }
+          return argv[i];
+        })();
+        flags[key] = val;
         break;
       }
 
       case "number": {
-        i++;
-        if (i >= argv.length) {
-          process.stderr.write(`${a} requires a value\n`);
-          process.exit(2);
-        }
-        flags[key] = Number(argv[i]);
+        const raw = embeddedValue !== null ? embeddedValue : (() => {
+          i++;
+          if (i >= argv.length) {
+            process.stderr.write(`--${flagName} requires a value\n`);
+            process.exit(2);
+          }
+          return argv[i];
+        })();
+        flags[key] = Number(raw);
         break;
       }
 
       case "list": {
-        i++;
-        if (i >= argv.length) {
-          process.stderr.write(`${a} requires a value\n`);
-          process.exit(2);
-        }
+        const raw = embeddedValue !== null ? embeddedValue : (() => {
+          i++;
+          if (i >= argv.length) {
+            process.stderr.write(`--${flagName} requires a value\n`);
+            process.exit(2);
+          }
+          return argv[i];
+        })();
         if (!flags[key]) flags[key] = [];
-        const v = argv[i];
         if (def.split) {
-          flags[key].push(...v.split(",").map((s) => s.trim()).filter(Boolean));
+          flags[key].push(...raw.split(",").map((s) => s.trim()).filter(Boolean));
         } else {
-          flags[key].push(v);
+          flags[key].push(raw);
         }
         break;
       }
@@ -104,7 +128,9 @@ function generateHelp(commandLine, schema) {
   if (entries.length > 0) {
     lines.push("", "Options:");
     for (const [flagName, def] of entries) {
-      const valPart = def.type === "boolean" ? "" : ` <${flagName}>`;
+      const valPart = def.type === "boolean" ? ""
+      : def.type === "toggle" ? ` [<value>]`
+      : ` <${flagName}>`;
       const desc = def.description || "";
       lines.push(`  --${flagName}${valPart}${desc ? `  ${desc}` : ""}`);
     }

@@ -1634,7 +1634,7 @@ the CLI reference + a runbook row.
 Done: npm test / eslint / consistency green; manual sleep-dispatch tail pasted.
 ```
 
-### 11.2 Exit semantics: advise sweep + `--fail-on-advisory` 🔲 (11.1 merged)
+### 11.2 Exit semantics: advise sweep + `--fail-on-advisory` ✅
 
 ```
 TASK: Implement plans/phase-11-autonomy-polish.md item 11.2 (adjusted ADR-008: A-default +

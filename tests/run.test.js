@@ -10,7 +10,7 @@ const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
+const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 const { run } = require(path.join(REPO_ROOT, "core", "driver"));
 const { orderedStageNamesForTrack } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 
@@ -1032,5 +1032,100 @@ describe("driver: observe-only stall probe (ADR-007 §3, Tier 1)", () => {
     const stallEv = events.find((e) => e.type === "stall-detected");
     assert.ok(stallEv, "stall-detected must appear in onEvent stream");
     assert.equal(stallEv.stall_class, "observed");
+  });
+});
+
+// ─── ADR-008 Phase 11.2: advisory sweep + --fail-on-advisory ─────────────────
+
+describe("driver: post-completion advisory sweep (ADR-008 Phase 11.2)", () => {
+  it("pipeline-complete with QA_BLOCKER noted_for_followup → advisory_blockers_count + breakdown in summary", async () => {
+    // Item with an AC ref and no spec.feature → classifyItem returns QA_BLOCKER.
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const gateFile = path.join(cwd, "pipeline", "gates", "stage-04.json");
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    gate.noted_for_followup = [{ id: "RT-01", text: "AC-5: missing coverage in auth flow" }];
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    const s = await run({ cwd });
+    assert.equal(s.completed, true);
+    assert.equal(s.advisory_blockers_count, 1, "advisory_blockers_count must reflect the QA_BLOCKER item");
+    assert.equal((s.advisory_breakdown || {}).QA_BLOCKER, 1, "breakdown must count QA_BLOCKER");
+  });
+
+  it("clean pipeline (no noted_for_followup) → advisory_blockers_count = 0", async () => {
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const s = await run({ cwd });
+    assert.equal(s.completed, true);
+    assert.equal(s.advisory_blockers_count || 0, 0, "advisory_blockers_count must be 0 on a clean pipeline");
+  });
+});
+
+describe("run CLI: advisory loud line + --fail-on-advisory exit code (ADR-008)", () => {
+  // Tests run the CLI as a subprocess so exit codes and stderr output are observable.
+  // All stages are pre-seeded PASS so no dispatch occurs — these complete quickly.
+
+  it("QA_BLOCKER noted_for_followup → default exit 0, loud line on stderr, advisory_blockers_count in --json", () => {
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const gateFile = path.join(cwd, "pipeline", "gates", "stage-04.json");
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    gate.noted_for_followup = [{ id: "RT-01", text: "AC-5: missing coverage" }];
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    const r = runCLI(["run", "--cwd", cwd, "--json"]);
+    assert.equal(r.status, 0, "default exit must be 0 even when advisory blockers exist");
+    const json = JSON.parse(r.stdout);
+    assert.ok((json.advisory_blockers_count || 0) > 0, "advisory_blockers_count must appear in --json output");
+    assert.match(r.stderr, /advisory blocker\(s\) remain/, "loud advisory line must appear on stderr");
+  });
+
+  it("QA_BLOCKER item + --fail-on-advisory → exit 3", () => {
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const gateFile = path.join(cwd, "pipeline", "gates", "stage-04.json");
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    gate.noted_for_followup = [{ id: "RT-01", text: "AC-5: missing coverage" }];
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    const r = runCLI(["run", "--cwd", cwd, "--fail-on-advisory"]);
+    assert.equal(r.status, 3, "--fail-on-advisory must exit 3 when QA_BLOCKER items remain");
+  });
+
+  it("only PEER_REVIEW_RISK + --fail-on-advisory (default threshold) → exit 0", () => {
+    // PEER_REVIEW_RISK is below the default threshold (QA_BLOCKER + A11Y_FIX only).
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const gateFile = path.join(cwd, "pipeline", "gates", "stage-04.json");
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    gate.noted_for_followup = [{ id: "RT-02", text: "risky security change", severity: "high" }];
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    const r = runCLI(["run", "--cwd", cwd, "--fail-on-advisory"]);
+    assert.equal(r.status, 0, "--fail-on-advisory default threshold must not exit 3 for PEER_REVIEW_RISK only");
+  });
+
+  it("only PEER_REVIEW_RISK + --fail-on-advisory=all → exit 3", () => {
+    // =all adds PEER_REVIEW_RISK to the threshold.
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const gateFile = path.join(cwd, "pipeline", "gates", "stage-04.json");
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    gate.noted_for_followup = [{ id: "RT-02", text: "risky security change", severity: "high" }];
+    fs.writeFileSync(gateFile, JSON.stringify(gate, null, 2));
+
+    const r = runCLI(["run", "--cwd", cwd, "--fail-on-advisory=all"]);
+    assert.equal(r.status, 3, "--fail-on-advisory=all must exit 3 when PEER_REVIEW_RISK items remain");
+  });
+
+  it("clean pipeline → exit 0, no loud advisory line", () => {
+    const cwd = track(makeTargetProject());
+    seedAllPass(cwd);
+    const r = runCLI(["run", "--cwd", cwd, "--json"]);
+    assert.equal(r.status, 0, "clean pipeline must exit 0");
+    const json = JSON.parse(r.stdout);
+    assert.equal(json.advisory_blockers_count || 0, 0, "advisory_blockers_count must be 0 for a clean pipeline");
+    assert.ok(!r.stderr.includes("advisory blocker"), "no loud advisory line for a clean pipeline");
   });
 });
