@@ -105,6 +105,43 @@ The template pins `STAGECRAFT_REF: <version>`. Update it on each Stagecraft rele
 
 Update the workflow file in lockstep with Stagecraft upgrades.
 
+## Lenient vs strict advisory gate
+
+`devteam run` emits a loud advisory line on stderr and adds `advisory_blockers_count`
+to the `--json` summary when unresolved follow-up items remain after
+`pipeline-complete`. The exit code is **0 by default** so existing
+`if devteam run; then merge` pipelines are unaffected.
+
+Teams that want CI to block on advisory findings can opt in with
+`--fail-on-advisory`:
+
+**Lenient (default) — report advisory blockers, don't block merge:**
+
+```yaml
+- name: Run pipeline
+  run: devteam run --json > run-summary.json
+  # exits 0 even if advisory blockers remain; loud line appears in logs
+```
+
+**Strict — block merge on QA_BLOCKER or A11Y_FIX findings (exit 3):**
+
+```yaml
+- name: Run pipeline
+  run: devteam run --fail-on-advisory
+  # exits 3 if QA_BLOCKER or A11Y_FIX items remain; exits 0 otherwise
+```
+
+**All-class strict — also block on PEER_REVIEW_RISK:**
+
+```yaml
+- name: Run pipeline
+  run: devteam run --fail-on-advisory=all
+  # exits 3 if any blocker-class item (QA_BLOCKER, A11Y_FIX, PEER_REVIEW_RISK) remains
+```
+
+Exit code 3 is distinct from exit 1 (a pipeline halt) so scripts can distinguish
+"pipeline didn't finish" from "pipeline finished but has outstanding advisories".
+
 ## See also
 
 - [`templates/ci/github-actions/stagecraft-pr-checks.yml`](../templates/ci/github-actions/stagecraft-pr-checks.yml) — the workflow itself.

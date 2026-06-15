@@ -71,6 +71,9 @@ Progress prints to **stderr**; the `--json` summary prints to **stdout**.
 | `0` | `pipeline-complete`, or a clean configured stop (`--until` boundary, or the consequence ceiling — a gate you must approve). |
 | `1` | Halted on something that needs fixing (FAIL, escalation, no-progress, merge failure, budget cap, max iterations). |
 | `2` | Could not acquire the lock (another run is active). |
+| `3` | Pipeline complete **and** `--fail-on-advisory` is set **and** at least one unaddressed blocker-class item (QA_BLOCKER or A11Y_FIX by default; +PEER_REVIEW_RISK with `=all`) remains. |
+
+Use exit 3 in CI to enforce a stricter merge gate. The default (no flag) keeps the exit-0 contract so `if devteam run; then merge` pipelines are unaffected. See [lenient vs strict CI patterns](../ci.md#lenient-vs-strict-advisory-gate).
 
 ## Why it halted — and what to do
 
@@ -124,6 +127,30 @@ Use `devteam status` to see the current liveness snapshot at any time.
 
 **Config:** `autonomy.stall_threshold_ms` (default 300000) and
 `autonomy.stall_min_growth_bytes` (default 512) in `.devteam/config.yml`.
+
+## Advisory sweep on completion (ADR-008)
+
+After `pipeline-complete`, the driver runs an in-process advisory sweep (the same
+classification logic as `devteam advise`) to surface any unresolved
+`noted_for_followup` items from the gate files.
+
+- **`advisory_blockers_count`** and **`advisory_breakdown`** (per-class counts)
+  are added to the `--json` summary.
+- When any blocker-class items remain, the driver prints to **stderr**:
+  ```
+  pipeline complete — N advisory blocker(s) remain; run `devteam advise` to review
+  ```
+- **The default exit code is unchanged.** Pipeline-complete still exits 0.
+  External `if devteam run; then merge` consumers are unaffected.
+- **`--fail-on-advisory`** opts in to exit 3 when blocker-class items remain
+  (threshold: `QA_BLOCKER` + `A11Y_FIX`). Use `--fail-on-advisory=all` to also
+  include `PEER_REVIEW_RISK`.
+
+```bash
+devteam run --fail-on-advisory        # exit 3 if QA_BLOCKER or A11Y_FIX items remain
+devteam run --fail-on-advisory=all    # exit 3 if any blocker-class item remains
+devteam run                           # exit 0 as before; loud line only
+```
 
 ## `devteam status`
 

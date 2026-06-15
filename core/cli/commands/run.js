@@ -4,7 +4,8 @@ const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 
 // Version of the `devteam run --json` summary schema. Bump on breaking changes.
-const RUN_SCHEMA_VERSION = "1.0";
+// 1.1: adds advisory_blockers_count + advisory_breakdown (ADR-008 Phase 11.2).
+const RUN_SCHEMA_VERSION = "1.1";
 
 const name = "run";
 
@@ -24,6 +25,9 @@ const flags = {
   resume:            { type: "boolean", description: "Resume an interrupted run" },
   force:             { type: "boolean", description: "Force-unlock a stale run.lock" },
   json:              { type: "boolean", description: "JSON summary on stdout" },
+  // ADR-008: opt-in advisory-blocker exit code. Bare flag uses QA_BLOCKER+A11Y_FIX
+  // threshold; =all also includes PEER_REVIEW_RISK. Default (no flag) exits 0.
+  "fail-on-advisory": { type: "toggle", description: "Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold)" },
   help:              { type: "boolean", description: "Show this help" },
 };
 
@@ -96,12 +100,29 @@ function run(positional, _flags) {
         process.stderr.write(`  → run \`devteam next\` for the fix steps / escalation details\n`);
       }
     }
+    // ADR-008: loud advisory line when blockers remain after a successful run.
+    if (summary.completed && (summary.advisory_blockers_count || 0) > 0) {
+      process.stderr.write(
+        `pipeline complete — ${summary.advisory_blockers_count} advisory blocker(s) remain; run \`devteam advise\` to review\n`,
+      );
+    }
     // Exit 0 when the pipeline finished or stopped at a boundary the operator
     // configured (--until) or a gate they must approve (consequence ceiling).
     // Exit 1 for halts that signal something needs fixing. Exit 2 = lock error.
+    // Exit 3 = pipeline complete but --fail-on-advisory threshold exceeded.
     const cleanStop = summary.completed
       || summary.halt_action === "until"
       || summary.halt_action === "ceiling";
+    // ADR-008: --fail-on-advisory opt-in. Only fires on a cleanStop to preserve
+    // the exit-1 contract for halts. Threshold: QA_BLOCKER+A11Y_FIX (default)
+    // or all three blocker classes (=all).
+    if (cleanStop && _flags.failOnAdvisory && (summary.advisory_blockers_count || 0) > 0) {
+      const bd = summary.advisory_breakdown || {};
+      const isAll = _flags.failOnAdvisory === "all";
+      const count = (bd.QA_BLOCKER || 0) + (bd.A11Y_FIX || 0)
+        + (isAll ? (bd.PEER_REVIEW_RISK || 0) : 0);
+      if (count > 0) process.exit(3);
+    }
     process.exit(cleanStop ? 0 : 1);
   }).catch((err) => {
     console.error(`devteam run: ${err.message}`);

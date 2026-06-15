@@ -30,6 +30,7 @@ const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator
 const { loadConfig, changeIdFromFeature, changeIdFromSymptom } = require("./config");
 const { pipelineRoot, gatesDir: getGatesDir, logsDir: getLogsDir, prefixPipelineRelative } = require("./paths");
 const { orderedStageNamesForTrack } = require("./pipeline/stages");
+const { runAdvise } = require("./advise");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate, pruneArchives } = require("./gates/archive");
@@ -641,6 +642,24 @@ async function run(opts = {}) {
 
       if (r.action === "pipeline-complete") {
         summary.completed = true;
+        // ADR-008: post-completion advise sweep. Classify all noted_for_followup
+        // items to surface advisory blockers without altering the exit contract.
+        // Best-effort: a sweep failure must never break a clean run.
+        try {
+          const adviseResult = runAdvise(cwd, {
+            checkOnly: true,
+            gatesDir: gatesDir(cwd, changeId),
+            contextFile: path.join(pipelineRoot(cwd, changeId), "context.md"),
+          });
+          const breakdown = {};
+          for (const r2 of adviseResult.items) {
+            if (!r2.addressed) {
+              breakdown[r2.classification] = (breakdown[r2.classification] || 0) + 1;
+            }
+          }
+          summary.advisory_blockers_count = adviseResult.unresolvedBlockers;
+          summary.advisory_breakdown = breakdown;
+        } catch { /* sweep failure must never break the run */ }
         logEvent(cwd, changeId, { ...base, outcome: "complete" });
         onEvent({ type: "complete", ...base });
         break;
