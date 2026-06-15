@@ -1606,7 +1606,7 @@ startup/teardown). **Read each ADR's revision note first — all three were acce
 adjustments; implement the adjusted decision, not the original draft prose.** 11.4 (the
 ADR-007 Tier-2 kill policy + `--watch`) is PARKED, evidence-gated — do not implement it.
 
-### 11.1 Liveness: heartbeat + observe-only stall logging + `devteam status` 🔲
+### 11.1 Liveness: heartbeat + observe-only stall logging + `devteam status` ✅
 
 ```
 TASK: Implement plans/phase-11-autonomy-polish.md item 11.1 (ADR-007 Tier 1 ONLY). Read
