@@ -321,6 +321,20 @@ When `devteam run --repair` is used, stage-01 (requirements) switches its artifa
 - **Scope gate activation**: once stage-01 PASSes (after approval), the driver reads `affected_files` from the diagnosis gate and stores it in run-state. The structural scope gate — which was wired in Phase 1 but inert without a list — now FAILs any build that writes files outside the diagnosed set.
 - **`--repair-at` escape hatch**: when the defect location is already known, pass `--repair-at src/auth.js:42` to seed `affected_files` directly and skip the LLM diagnosis dispatch. A synthetic PASS stage-01 gate is written so `next()` advances past requirements immediately.
 
+### Repair mode reproduction stage — stage-03b in repair mode (ADR-009 Phase 3)
+
+When `devteam run --repair` is used, stage-03b (executable-spec) is injected into the stage order immediately before build — even on hotfix depth, which previously skipped it. The stage author writes a **failing-first regression scenario** for the reported bug: a Gherkin Scenario that exercises the defect so the regression test is RED before the fix and GREEN after.
+
+- **Tri-state `reproduced` gate field**: set by the agent; verified by the orchestrator stamp.
+  - `true` — bug reproduced; a runnable failing test was written.
+  - `false` — could not reproduce the defect at all.
+  - `"unverifiable: <reason>"` — an automated test is impossible (external API, nondeterminism, data dependency). Stamp emits a loud `WARN reproduction-unverifiable` and continues without blocking.
+- **Stamp verification (not agent-asserted)**:
+  - `stampStage03b` captures the pre-build test baseline (`reproduction_pre_build` audit record). If unverifiable, the baseline is skipped; the WARN is embedded in the gate.
+  - `stampStage04a` finalizes `reproduced` on the stage-03b gate after the post-build test run: `red_before_confirmed` (pre-build failed) + `green_after_confirmed` (post-build passed) confirm the regression test actually turned green. Written to `reproduction_verification` in the stage-03b `_orchestrator_stamped.runs`.
+- **No double-inject on full track**: stage-03b is already in the full track order; the driver filters it out before re-injecting it at the correct position (immediately before build).
+- **`--repair-at` still includes it**: the escape hatch skips diagnosis but not the reproduction stage.
+
 ### Inspection and power tools
 
 **`devteam validate`** — confirm gate files haven't been edited by hand.
