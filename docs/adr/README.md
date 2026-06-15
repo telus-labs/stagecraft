@@ -46,15 +46,15 @@ What else was on the table and why we didn't pick those.
 | [003](003-bounded-autonomous-execution.md) | Bounded autonomous pipeline execution: typed failure model + authority provenance + consequence-ceilinged driver | Accepted |
 | [004](004-role-tool-budgets.md) | Role tool budgets: host-native tool pinning via ROLE_FRONTMATTER, capability-level degradation, MCP vocabulary deferred | Accepted |
 | [006](006-track-inference-under-autonomy.md) | Track inference under autonomy: `pipeline/track.json`, CI confidence halt, `devteam assess` as separate explicit step | Proposed |
+| [007](007-liveness-heartbeat.md) | Liveness/heartbeat: stall detector distinct from wall-clock timeout; heartbeat events in `run-log.jsonl` | Proposed |
 
 ### Deferred
 
-ADR-005, ADR-007, and ADR-008 are identified in `plans/phase-4-capability-roadmap.md` §4.4 as
+ADR-005 and ADR-008 are identified in `plans/phase-4-capability-roadmap.md` §4.4 as
 the remaining open questions for Phase-3-of-ADR-003 autonomy. They are not yet drafted; the gap
 in numbering is intentional, not an accident.
 
 | ADR | Title | Status |
 |---|---|---|
 | 005 | Standing grants: persistent `--auto-rule`/`--allow-stage` config vs per-invocation grants; authority-binding on the gate chain | Deferred |
-| 007 | Liveness/heartbeat: stall detector distinct from wall-clock timeout; heartbeat events in `run-log.jsonl` | Deferred |
 | 008 | Exit semantics: what exit code a "successful" run returns when `advise` still reports blockers | Deferred |
