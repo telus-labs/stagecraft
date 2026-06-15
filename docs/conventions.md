@@ -336,9 +336,32 @@ halts the host session on a hook bug. If a gate is not updating after a
 review file write, run `devteam derive-approvals` manually to re-process
 all existing `by-*.md` files.
 
+## Repair-mode vocabulary (ADR-009 §Decision.8)
+
+"Fix" is already overloaded in this codebase. The vocabulary map below draws the lines between the user-facing flag, the track option, and the internal driver machinery so they are never conflated:
+
+| Term | Axis | Meaning |
+|---|---|---|
+| `--repair "<symptom>"` | intent | User-initiated bug fix: diagnosis + minimal change + reproduction. Orthogonal to `--track`. |
+| `--feature "<description>"` | intent | Additive work, implemented fully. The default intent when `--repair` is absent. |
+| `hotfix` (a `--track` value) | depth | Skip planning stages, keep every safety and review stage — orthogonal to intent. |
+| `fix-and-retry` | internal | The driver self-correcting a failed gate mid-run (distinct from `--repair`). |
+| `fix-recipes.js` / `fix_steps` | internal | The per-stage mechanism that produces each retry step. |
+| `advise --apply` | internal | Applies those fix steps to `pipeline/context.md`. |
+| PATCH MODE (`--patch --from`) | mechanism | The build-scoping constraint that `--repair` reuses to limit changes to diagnosed files. |
+
+**The key distinctions that matter in practice:**
+
+- A `--repair` run will itself emit `fix-retry` events in its `run-log.jsonl` as the driver self-corrects mid-run. That coexistence is expected: the two words describe different things (user intent vs. internal recovery).
+- `--repair --track full` is a supported combination — deep repair of auth/payments/migration code requires a heavier verification depth. `hotfix` is the *default* depth for repair, not a forced one.
+- Renaming `fix-and-retry` / `fix_steps` / `fix-recipes` to free up "fix" was rejected: the tail wagging the dog — it touches gate-schema fields, the runbook, run-log event names, and the consistency checker.
+
+See [`docs/runbooks/repair-flow.md`](runbooks/repair-flow.md) for the operator procedure when running in repair mode, and [ADR-009](adr/009-repair-mode.md) for the full decision record.
+
 ## See also
 
 - [`docs/runbooks/escalation.md`](runbooks/escalation.md) — full procedure when a gate hits `ESCALATE`
+- [`docs/runbooks/repair-flow.md`](runbooks/repair-flow.md) — repair mode: diagnosis gate, scope-gate FAIL recovery, tri-state reproduction
 - [`docs/user-guide.md`](user-guide.md) § Daily loop — operational reference
 - [`rules/coding-principles.md`](../rules/coding-principles.md) — what the dev-side markers (`QUESTION:`, `CONCERN:`, `## Plan`, `## Assumptions`) enforce
 - [`core/hooks/approval-derivation.js`](../core/hooks/approval-derivation.js) — how `REVIEW:` markers become Stage 5 gates

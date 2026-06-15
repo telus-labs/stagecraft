@@ -30,6 +30,9 @@ Find your symptom below and jump to the section that covers it. Each row links t
 | Production feedback via G3 seam | [open-followups.md](open-followups.md) | [§ Production feedback](open-followups.md#production-feedback-g3-seam) |
 | `devteam run` halted unexpectedly | [autonomous-run.md](autonomous-run.md) | [§ Why it halted — and what to do](autonomous-run.md#why-it-halted--and-what-to-do) |
 | `devteam run` exited with code 2 (locked) | [autonomous-run.md](autonomous-run.md) | [§ Exit codes](autonomous-run.md#exit-codes) |
+| Diagnosis gate landed as ESCALATE — how to approve | [repair-flow.md](repair-flow.md) | [§ The diagnosis gate](repair-flow.md#the-diagnosis-gate--what-youre-looking-at) |
+| Repair build halted with `scope-gate` — files outside `affected_files` | [repair-flow.md](repair-flow.md) | [§ Scope-gate FAIL recovery](repair-flow.md#scope-gate-fail-recovery) |
+| Stage-03b `reproduced` field is `"unverifiable"` | [repair-flow.md](repair-flow.md) | [§ Tri-state reproduction](repair-flow.md#tri-state-reproduction-reproduced-field) |
 
 ## Runbooks in this directory
 
@@ -38,3 +41,4 @@ Find your symptom below and jump to the section that covers it. Each row links t
 - [open-followups.md](open-followups.md) — extract ticket stubs from `open_followups[]`; field mapping to JIRA, Linear, GitHub Issues; production feedback seam
 - [deploy-failure.md](deploy-failure.md) — Stage 8 failure: classify the shape, adapter-specific diagnostics, rollback, retry
 - [autonomous-run.md](autonomous-run.md) — `devteam run` reference: autonomous escalation resolution, launch, exit codes, halts, consequence ceiling, honest limitations
+- [repair-flow.md](repair-flow.md) — `devteam run --repair` reference: diagnosis gate approval, scope-gate FAIL recovery, tri-state reproduction
