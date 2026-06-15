@@ -1,6 +1,6 @@
 # ADR 009 — Repair mode: `devteam run --repair` for bug fixes
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-15
 **Authors:** Mumit Khan
 
@@ -184,5 +184,5 @@ stages — zero new stages, zero parallel pipeline.** Concretely:
 ---
 
 *This ADR is the in-repo decision record for repair mode. Tracking issue: telus-labs/stagecraft#135.
-When accepted, it spawns a `plans/phase-N-*.md` execution plan in the same way ADR-003 spawned the
-Phase 1–4 plans.*
+Accepted 2026-06-15; execution plan: [`plans/phase-10-repair-mode.md`](../../plans/phase-10-repair-mode.md),
+spawned the way ADR-003 spawned the Phase 1–4 plans.*

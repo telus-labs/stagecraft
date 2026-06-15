@@ -19,6 +19,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
+| 10 | Repair mode (`--repair`, ADR-009) | 🔲 ready — start here |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1484,4 +1485,112 @@ hindsight, or is the sample still noise? Include per-(role,host) sample counts. 
 framework's own stated uncertainty ("converges with small samples or just chases
 noise") is the acceptance bar. End with a verdict: continuous routing gets an ADR, or
 stays gated with the data threshold that would change it.
+```
+
+---
+
+## Phase 10 — Repair Mode (`devteam run --repair`)
+
+Implements [ADR-009](../../docs/adr/009-repair-mode.md) (Accepted). Plan file:
+plans/phase-10-repair-mode.md. Order: 10.1 → 10.2 → 10.3 → 10.4. **10.1 must not ship
+without 10.2.** The flag is `--repair`, never `--fix` (collides with `fix-and-retry`); a
+`--repair` run legitimately emits `fix-retry` events — that coexistence is expected. This
+is feature work, so the mechanical-equivalence rule does NOT apply; new behavior needs
+tests that fail on main first.
+
+### 10.1 `--repair` flag + PATCH-MODE build + scope gate + intent tag 🔲
+
+```
+TASK: Implement plans/phase-10-repair-mode.md item 10.1 (ADR-009 Phase 1). Read the plan
+item and ADR-009 §Decision first. Branch: feat/repair-flag-and-scoping
+
+Add --repair "<symptom>" to core/cli/commands/run.js as an intent flag parallel to
+--feature, orthogonal to --track: defaults to hotfix depth, --repair --track full
+overrides, the stoplist still governs depth (auth/payments/migration symptoms upgrade),
+--repair and --feature mutually exclusive. Ship the intent tag NOW (perishable baseline):
+intent: "repair"|"feature" onto run-state.json beside `track` and onto the run-log base
+object, plus a re-run correlation id ([verify-first] how run-state identifies a run).
+Repair builds run PATCH MODE via renderPatchBlock with patchItems from the symptom
+([verify-first] mirror how cmdStage populates patchItems from --patch --from — do NOT
+write a new minimal-change prompt). Add the changeIdFromFeature symptom-string equivalent
+([verify-first]). Wire the structural scope gate (FAIL a build writing outside a supplied
+affected-files list) behind the presence of that list, so 10.2 activates it; add the
+peer-review "could this be smaller?" judgment criterion.
+
+Tests (mirror CI env CI=true DEVTEAM_HEADLESS_COMMAND=cat): mutual exclusion; hotfix
+default + --track full override; auth-symptom still stoplist-upgraded; intent tag in
+run-state + run-log; repair build renders the PATCH MODE block (adapter-contract pattern);
+scope gate FAILs an out-of-scope build against a synthetic affected-files list.
+Done: npm test / eslint / consistency green; manual smoke pasted.
+```
+
+### 10.2 Diagnosis as fix-aware stage-01, escalation-gated 🔲 (10.1 merged)
+
+```
+TASK: Implement plans/phase-10-repair-mode.md item 10.2 (ADR-009 Phase 2).
+Branch: feat/repair-diagnosis-stage
+
+When intent === "repair", stage-01 produces a DIAGNOSIS (root cause, proposed fix,
+affected-files list, regression criterion) instead of a feature brief — same stage, same
+gate, fix-aware artifact, NO new stage ([verify-first] how stage-01's artifact/role is
+selected; smallest swap on intent). The affected-files list populates 10.1's scope gate
+and the build's patchItems; a build may amend the list with a recorded justification peer
+review scrutinizes. Gate it via the TYPED ESCALATION contract, not --allow-stage:
+interactive = a normal gate read before `devteam next`; autonomous = a judgment-gate halt
+unless --auto-rule diagnosis-approved (add that grantable class) or a standing grant
+(ADR-005, deferred). [verify-first] read the escalation contract + --auto-rule plumbing.
+Add the know-the-fix escape hatch (--repair-at <file>:<line> or similar; [verify-first]
+shape against --from/--patch conventions) that seeds the list and skips diagnosis.
+
+Tests: repair stage-01 emits a diagnosis gate with affected-files; 10.1's scope gate now
+ACTIVATES and FAILs an out-of-scope build (this test fails on main before 10.2);
+interactive diagnosis gate is readable; autonomous unapproved → judgment-gate halt;
+--auto-rule diagnosis-approved proceeds; escape hatch seeds + skips.
+Done: npm test / eslint / consistency green.
+```
+
+### 10.3 Failing-first reproduction (stage-03b + stamp, tri-state) 🔲 (10.2 merged)
+
+```
+TASK: Implement plans/phase-10-repair-mode.md item 10.3 (ADR-009 Phase 3). Schedule right
+after 10.2 — it is the mitigation for the diagnosis knowledge-gate limit.
+Branch: feat/repair-reproduction
+
+In repair mode, stage-03b authors the regression criterion as a failing-first
+executable-spec scenario (red before the fix); the build makes it green; core/verify/
+stamp.js verifies red→green (the stamp already re-runs tests and records claimed-vs-
+observed — [verify-first] read how stage-03b is gated and how stamp records). Build writes
+the failing test first, then the fix. Tri-state honest skip when unreproducible (external
+API / nondeterminism / data dep): reproduced: true | false | "unverifiable: <reason>" —
+copy the license-gate "unverified-by-orchestrator" / production-feedback "absent"
+convention; skip LOUDLY, never silent-pass; update the stage-03b gate schema + rules.
+hotfix skips stage-03b today — confirm repair intent pulls stage-03b into the active stage
+list even at hotfix depth ([verify-first] stage-list composition from track + intent).
+
+Tests: red-before/green-after reproduction verified by stamp (not agent-asserted);
+unverifiable bug stamps tri-state + WARN, never silent pass; schema test; repair-on-hotfix
+includes stage-03b.
+Done: npm test / eslint / consistency green.
+```
+
+### 10.4 Vocabulary map + docs + metrics surface 🔲 (ships last)
+
+```
+TASK: Implement plans/phase-10-repair-mode.md item 10.4 (ADR-009 §Decision.8 + deferred
+metrics). Branch: docs/repair-vocab-and-metrics
+
+(1) Vocabulary map (ADR-009's table) into docs/conventions.md + a runbook pointer line,
+distinguishing --repair (intent) / hotfix (depth) / fix-and-retry + fix_steps (internal).
+(2) A docs/runbooks/ repair-flow entry (diagnosis gate, scope-gate FAIL recovery, tri-state
+reproduction) + README.md index row + docs/FEATURES.md row; confirm npm run docs:generate
+picks up --repair in the CLI reference. (3) Metrics surface (advisory only): extend
+scripts/dashboard.js / routing-suggest.js / budget.js with `intent` as a new slice; headline
+metric is SCOPE ADHERENCE (not diff size — confounded); cost inversion reported as an
+estimate with exposed inputs (savings ≈ rejection_rate × avg_build_cost − diagnosis_cost),
+never measured. (4) Keep examples/sms-opt-in as the feature reference; add a separate minimal
+repair example only if wanted.
+
+Tests: consistency green (vocab refs resolve, CLI reference regenerates with --repair);
+metrics meta-test that the intent slice computes on fixture telemetry.
+Done: npm run docs:generate idempotent; npm test / consistency green.
 ```
