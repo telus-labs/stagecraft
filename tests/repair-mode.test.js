@@ -444,3 +444,120 @@ describe("repair mode 10.2: stage-01 produces a diagnosis artifact when intent=r
     assert.ok(s.completed, "run must complete");
   });
 });
+
+// ─── 8. 10.3: Failing-first reproduction — stage-03b + tri-state ─────────────
+
+describe("repair mode 10.3: executable-spec (stage-03b) in repair order (ADR-009 Phase 3)", () => {
+  it("hotfix track baseline: executable-spec is NOT in hotfix stage list", () => {
+    const { isStageInTrack } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+    assert.equal(
+      isStageInTrack("executable-spec", "hotfix"),
+      false,
+      "hotfix track must NOT include executable-spec (baseline for Phase 3 verify-first)",
+    );
+  });
+
+  it("repair intent on hotfix includes executable-spec in the effective stage order", async () => {
+    // The driver passes the repair-aware order array as `track` to next(); capture
+    // it to verify executable-spec is injected even though hotfix omits it.
+    const cwd = track(makeTargetProject());
+    let capturedOrder = null;
+    await run({
+      cwd,
+      repair: "dropdown resets on blur",
+      next: ({ track: t }) => {
+        if (!capturedOrder && Array.isArray(t)) capturedOrder = t;
+        return { action: "pipeline-complete", reason: "done" };
+      },
+    });
+    assert.ok(Array.isArray(capturedOrder), "repair run must pass order array as track to next()");
+    assert.ok(
+      capturedOrder.includes("executable-spec"),
+      "repair-on-hotfix order must include executable-spec",
+    );
+  });
+
+  it("repair intent on hotfix places executable-spec immediately before build", async () => {
+    const cwd = track(makeTargetProject());
+    let capturedOrder = null;
+    await run({
+      cwd,
+      repair: "null pointer in pagination",
+      next: ({ track: t }) => {
+        if (!capturedOrder && Array.isArray(t)) capturedOrder = t;
+        return { action: "pipeline-complete", reason: "done" };
+      },
+    });
+    assert.ok(Array.isArray(capturedOrder));
+    const specIdx = capturedOrder.indexOf("executable-spec");
+    const buildIdx = capturedOrder.indexOf("build");
+    assert.ok(specIdx >= 0, "executable-spec must be in order");
+    assert.ok(buildIdx >= 0, "build must be in order");
+    assert.equal(specIdx + 1, buildIdx, "executable-spec must immediately precede build");
+  });
+
+  it("repair-on-full track also includes executable-spec (already present, no double-inject)", async () => {
+    const cwd = track(makeTargetProject());
+    let capturedOrder = null;
+    await run({
+      cwd,
+      repair: "broken pagination on search results",
+      track: "full",
+      next: ({ track: t }) => {
+        if (!capturedOrder && Array.isArray(t)) capturedOrder = t;
+        return { action: "pipeline-complete", reason: "done" };
+      },
+    });
+    assert.ok(Array.isArray(capturedOrder));
+    const specCount = capturedOrder.filter((n) => n === "executable-spec").length;
+    assert.equal(specCount, 1, "executable-spec must appear exactly once in the order (no double-inject)");
+  });
+
+  it("--repair-at escape hatch still includes executable-spec in the stage order", async () => {
+    const cwd = track(makeTargetProject());
+    let capturedOrder = null;
+    await run({
+      cwd,
+      repair: "null pointer in checkout",
+      repairAt: "src/checkout.js:42",
+      next: ({ track: t }) => {
+        if (!capturedOrder && Array.isArray(t)) capturedOrder = t;
+        return { action: "pipeline-complete", reason: "done" };
+      },
+    });
+    assert.ok(Array.isArray(capturedOrder));
+    assert.ok(
+      capturedOrder.includes("executable-spec"),
+      "--repair-at must still include executable-spec (reproduction discipline without diagnosis dispatch)",
+    );
+  });
+});
+
+describe("repair mode 10.3: executable-spec repairOverride shape (ADR-009 Phase 3)", () => {
+  it("buildDescriptor for executable-spec in repair mode uses failing-first objective", () => {
+    const { buildDescriptor } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+    const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+    const stageDef = getStage("executable-spec");
+    const descriptor = buildDescriptor(stageDef, "pm", { intent: "repair" });
+    assert.ok(
+      descriptor.objective.toLowerCase().includes("failing-first") ||
+      descriptor.objective.toLowerCase().includes("red before"),
+      `repair objective must mention failing-first or red before; got: ${descriptor.objective}`,
+    );
+    assert.ok(
+      "reproduced" in descriptor.expectedGate,
+      "repair gate must include reproduced field",
+    );
+  });
+
+  it("buildDescriptor for executable-spec in feature mode keeps standard objective (no reproduced)", () => {
+    const { buildDescriptor } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+    const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+    const stageDef = getStage("executable-spec");
+    const descriptor = buildDescriptor(stageDef, "pm", { intent: "feature" });
+    assert.ok(
+      !("reproduced" in descriptor.expectedGate),
+      "feature gate must not have reproduced field",
+    );
+  });
+});

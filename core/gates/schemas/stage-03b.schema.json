@@ -62,6 +62,13 @@
     "drift": {
       "type": "boolean",
       "description": "True iff `devteam spec verify` found any of: orphan_criteria, orphan_scenarios, duplicate AC numbers in brief, unknown AC refs in tests. PASS requires drift=false."
+    },
+    "reproduced": {
+      "oneOf": [
+        { "type": "boolean" },
+        { "type": "string", "pattern": "^unverifiable:.+" }
+      ],
+      "description": "ADR-009 Phase 3 (repair mode only). Tri-state: true = bug reproduced and fix verified green by stamp; false = could not reproduce the defect; \"unverifiable: <reason>\" = automated test impossible (external API / nondeterminism / data dependency). Set by the PM model; finalized by the orchestrator stamp at stage-04a after the build applies the fix. Feature runs omit this field."
     }
   },
   "additionalProperties": true

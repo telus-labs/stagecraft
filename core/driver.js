@@ -336,10 +336,25 @@ async function run(opts = {}) {
   // stage-01 gate — no LLM diagnosis needed, so no prepend.
   // "requirements" is filtered out first to guard against double-prepend if the
   // user specifies a full track that already includes it.
+  //
+  // ADR-009 Phase 3: repair intent always includes "executable-spec" (stage-03b),
+  // providing failing-first reproduction discipline even on hotfix depth (which
+  // normally skips it — hotfix has no requirements stage and therefore no brief).
+  // Inject executable-spec immediately before "build" in the filtered base list so
+  // the PM authors the regression scenario before the build writes the failing test.
   const repairNeedsDiagnosis = intent === "repair" && !repairAtRaw;
-  const order = repairNeedsDiagnosis
-    ? ["requirements", ...orderedStageNamesForTrack(effectiveTrack).filter((n) => n !== "requirements")]
-    : orderedStageNamesForTrack(effectiveTrack);
+  let order;
+  if (intent === "repair") {
+    const base = orderedStageNamesForTrack(effectiveTrack)
+      .filter((n) => n !== "requirements" && n !== "executable-spec");
+    const buildIdx = base.indexOf("build");
+    const withSpec = buildIdx >= 0
+      ? [...base.slice(0, buildIdx), "executable-spec", ...base.slice(buildIdx)]
+      : ["executable-spec", ...base];
+    order = repairNeedsDiagnosis ? ["requirements", ...withSpec] : withSpec;
+  } else {
+    order = orderedStageNamesForTrack(effectiveTrack);
+  }
   const untilIndex = opts.until ? order.indexOf(opts.until) : -1;
 
   acquireLock(cwd, { force: opts.force }, changeId);
