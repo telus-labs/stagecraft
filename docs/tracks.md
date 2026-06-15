@@ -9,6 +9,7 @@ A **track** is a named subset of pipeline stages. It tells Stagecraft how much r
 - [Conditional dispatch within a track](#conditional-dispatch-within-a-track)
 - [When you've picked the wrong track](#when-youve-picked-the-wrong-track)
 - [Choosing a track](#choosing-a-track)
+- [Track record (`pipeline/track.json`)](#track-record-pipelinetrackjson)
 - [Customizing tracks](#customizing-tracks)
 
 You set the active track in `.devteam/config.yml`:
@@ -131,7 +132,7 @@ This is an escape hatch, not a block.
 
 ## Choosing a track
 
-`devteam assess` automates this decision: given a change description and a file list it returns a `recommendedTrack`, a `confidence` level (`high | medium | low`), and the reasons. Run `devteam assess --apply` to write the result to `pipeline/track.json` so `devteam run` picks it up automatically (see [`ADR-006`](adr/006-track-inference-under-autonomy.md) for the full track-record design).
+`devteam assess` automates this decision: given a change description and a file list it returns a `recommendedTrack`, a `confidence` level (`high | medium | low`), and the reasons. Running `devteam assess` (no flags) writes the result to `pipeline/track.json` so `devteam run` picks it up automatically. Use `devteam assess --confirm` to set `source:"human"` (operator-confirmed). See [Track record (`pipeline/track.json`)](#track-record-pipelinetrackjson) and [`ADR-006`](adr/006-track-inference-under-autonomy.md).
 
 Decision tree:
 
@@ -144,6 +145,61 @@ Decision tree:
 7. **Otherwise** → `quick`. This covers most bounded features and fixes: a new endpoint, a new UI component, added business logic, a non-trivial bug fix. Requirements must be clear and design self-contained. When in doubt between `quick` and `full`, start with `quick`; if Stage 2 design review surfaces cross-cutting concerns, restart on `full`.
 
 > **Note on the config.yml default.** The factory default is `pipeline.default_track: full`, which is conservative and always safe. However, `full` runs red-team adversarial review and formal design on every change, which is wasteful when most attack surfaces don't apply. Evaluate the appropriate track for each brief rather than relying on the config default.
+
+## Track record (`pipeline/track.json`)
+
+`devteam assess` writes a per-run inference record to `pipeline/track.json`:
+
+```json
+{
+  "track": "quick",
+  "source": "inferred",
+  "confidence": "high",
+  "reasons": ["description matches quick-change keywords (minor/small fix)"],
+  "assessed_at": "2026-06-15T14:00:00Z",
+  "assessed_by": "devteam assess 0.7.0"
+}
+```
+
+`devteam run` reads this file as part of the track resolution chain:
+```
+--track  >  pipeline/track.json  >  custom_stages  >  default_track  >  "full"
+```
+
+| Field | Meaning |
+|---|---|
+| `track` | The inferred (or confirmed) track name |
+| `source` | `"inferred"` — produced by `devteam assess`; `"human"` — confirmed by `--confirm` |
+| `confidence` | `"high"` / `"medium"` / `"low"` — the assess heuristic's certainty |
+| `reasons` | Bullet-list of why this track was chosen |
+| `assessed_at` | ISO timestamp of the assess run |
+| `assessed_by` | The CLI version that wrote the record |
+
+### Writing track.json
+
+```bash
+devteam assess                  # writes pipeline/track.json with source:"inferred"
+devteam assess --confirm        # writes pipeline/track.json with source:"human"
+devteam assess --apply          # writes custom_stages to .devteam/config.yml (project-wide; no track.json)
+devteam run --track quick       # bypasses track.json entirely; always source:"human"
+```
+
+### Confidence guard (`autonomy.require_confirmed_track`)
+
+By default `devteam run` warns once on an inferred track but never blocks. Set
+`autonomy.require_confirmed_track: true` in `.devteam/config.yml` to enable the guard:
+
+| `source` | `confidence` | Flag off (default) | Flag on |
+|---|---|---|---|
+| `"human"` | any | proceed silently | proceed silently |
+| `"inferred"` | `"high"` | warn once | proceed silently |
+| `"inferred"` | `"medium"` or `"low"` | warn once | **`unconfirmed-track` halt** |
+
+The guard is keyed on the explicit config flag — not `CI=true` (which is already
+overloaded by the validator and verify runner). CI pipelines opt in by setting the
+flag, not by inheriting an ambient environment variable. See [ADR-006](adr/006-track-inference-under-autonomy.md).
+
+Override the halt with `--track <name>` (sets `source:"human"`) or `--force` (bypasses).
 
 ## Customizing tracks
 

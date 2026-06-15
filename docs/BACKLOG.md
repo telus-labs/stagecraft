@@ -74,7 +74,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| E1 | ~~`devteam status` rich CLI output~~ | 3 | 1 | ✅ v0.1.0 (shipped as `devteam summary`) · ✅ Phase 11.1 (`devteam status` liveness command: heartbeat age, stall_detected, last_event_age_ms) · ✅ Phase 11.2 (advisory sweep notification on `pipeline-complete`: loud stderr line + `--fail-on-advisory` exit 3) · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| E1 | ~~`devteam status` rich CLI output~~ | 3 | 1 | ✅ v0.1.0 (shipped as `devteam summary`) · ✅ Phase 11.1 (`devteam status` liveness command: heartbeat age, stall_detected, last_event_age_ms) · ✅ Phase 11.2 (advisory sweep notification on `pipeline-complete`: loud stderr line + `--fail-on-advisory` exit 3) · ✅ Phase 11.3 (track provenance: `pipeline/track.json` + `require_confirmed_track` guard — ADR-006) · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | E2 | ~~Web UI for pipeline runs~~ | 4 | 4 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | E3 | **VS Code extension** | 3 | 3 | Sidebar with stage status, "run next stage" button, gate viewer. |
 | E4 | **Live streaming output** | 3 | 2 | Currently `--headless` waits for the host CLI to finish. Stream the LLM's output to the user's terminal as it happens. |

@@ -41,6 +41,20 @@ and is an **allowlist only** (no wildcard).
 
 ---
 
+## Pre-run checklist
+
+Before `devteam run` on an autonomous or CI pipeline:
+
+1. **Seed changed files** — write `pipeline/changed-files.txt` (or pass files directly to `devteam assess`).
+2. **Record the track** — run `devteam assess` to write `pipeline/track.json` with the inferred track. Review the confidence level. If the confidence is medium or low, either re-run with `--confirm` after verifying, or pass `--track <name>` explicitly to `devteam run`.
+3. **Verify the stoplist** — if your change description mentions auth, PII, payments, or migrations, use `full` track; lighter tracks will be blocked anyway.
+
+```bash
+devteam assess --description "fix login validation bug"   # inferred, writes track.json
+devteam assess --description "fix login validation bug" --confirm  # human-confirmed
+devteam run                                               # reads track.json automatically
+```
+
 ## Launch
 
 ```bash
@@ -82,6 +96,7 @@ Read the `halt_action` (and `failure_class`) in the summary, or the last line of
 
 | `halt_action` | What happened | Do this |
 |---|---|---|
+| `unconfirmed-track` | `autonomy.require_confirmed_track` is set and `pipeline/track.json` carries an inferred track at medium or low confidence. | Run `devteam assess --confirm` to write `source:"human"`, or pass `--track <name>` explicitly. `--force` bypasses in an emergency. |
 | `stoplist` | The change description or `pipeline/brief.md` matched a safety-stoplist phrase (auth/credentials/PII/payments/migrations/…) and the resolved track is lighter than `full`. Checked at run start and again before build. | Switch to `devteam run --track full`. If this is a false positive, re-run with `--force`. |
 | `fix-and-retry` | A FAIL the driver won't auto-retry: `state-corruption` (gate unreadable) or `external-blocked` (needs a human/external action). | Run `devteam next` and follow [fix-and-retry.md](fix-and-retry.md). |
 | `resolve-escalation` | A gate escalated (`judgment-gate`), the retry budget was spent on a `code-defect` (`convergence-exhausted`), or an escalation's ruling class wasn't in your `--auto-rule` grant. | Follow [escalation.md](escalation.md), then re-run `devteam run`. |

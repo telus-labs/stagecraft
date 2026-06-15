@@ -302,13 +302,14 @@ Cross-artifact drift check: brief → spec → reviews → red-team → test-rep
 
 Infer the best pipeline track for the current change from file paths, content, and description heuristics.
 
-| Flag          | Type   | Description                                 |
-| ------------- | ------ | ------------------------------------------- |
-| --cwd         | string | Target project directory                    |
-| --description | string | Change description for heuristics           |
-| --json        | bool   | JSON output                                 |
-| --apply       | bool   | Write inferred track to .devteam/config.yml |
-| --no-content  | bool   | Skip file content scan                      |
+| Flag          | Type   | Description                                                                 |
+| ------------- | ------ | --------------------------------------------------------------------------- |
+| --cwd         | string | Target project directory                                                    |
+| --description | string | Change description for heuristics                                           |
+| --json        | bool   | JSON output                                                                 |
+| --apply       | bool   | Write inferred track to .devteam/config.yml as custom_stages (project-wide) |
+| --confirm     | bool   | Write pipeline/track.json with source:human (operator-confirmed)            |
+| --no-content  | bool   | Skip file content scan                                                      |
 
 ### `devteam standards discover [options]`
 

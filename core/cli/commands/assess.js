@@ -10,14 +10,17 @@ const flags = {
   cwd:          { type: "string",  description: "Target project directory" },
   description:  { type: "string",  description: "Change description for heuristics" },
   json:         { type: "boolean", description: "JSON output" },
-  apply:        { type: "boolean", description: "Write inferred track to .devteam/config.yml" },
+  apply:        { type: "boolean", description: "Write inferred track to .devteam/config.yml as custom_stages (project-wide)" },
+  confirm:      { type: "boolean", description: "Write pipeline/track.json with source:human (operator-confirmed)" },
   "no-content": { type: "boolean", description: "Skip file content scan" },
   help:         { type: "boolean", description: "Show this help" },
 };
 
 // G6 — Infer the best track for the current change.
 // Reads changed-files.txt from pipeline/ unless positional file args are given.
-// With --apply, writes pipeline.custom_stages to .devteam/config.yml.
+// Default: writes pipeline/track.json as the per-run inference record (ADR-006 §2).
+// With --confirm: writes source:"human" in track.json (operator-confirmed).
+// With --apply: writes pipeline.custom_stages to .devteam/config.yml (project-wide; unchanged).
 function run(positional, _flags) {
   const { assess } = require(path.join(__dirname, "..", "..", "stage-shopping", "assess"));
   if (_flags.help) { console.log(generateHelp("devteam assess [options] [files...]", flags)); process.exit(0); }
@@ -53,6 +56,29 @@ function run(positional, _flags) {
       console.log("To apply this track, run with --apply or set pipeline.custom_stages in .devteam/config.yml:");
       console.log(`  pipeline:`);
       console.log(`    custom_stages: [${result.stages.map((s) => `"${s}"`).join(", ")}]`);
+    }
+  }
+
+  // ADR-006 §2: default (no --apply) writes pipeline/track.json as the per-run
+  // inference record. --confirm sets source:"human" (operator-confirmed).
+  // --apply writes project-wide custom_stages (unchanged from before — no breaking change).
+  if (!_flags.apply) {
+    const trackJsonPath = path.join(cwd, "pipeline", "track.json");
+    const version = require(path.join(__dirname, "..", "..", "..", "package.json")).version;
+    const trackRecord = {
+      track: result.recommendedTrack,
+      source: _flags.confirm ? "human" : "inferred",
+      confidence: result.confidence,
+      reasons: result.reasons,
+      assessed_at: new Date().toISOString(),
+      assessed_by: `devteam assess ${version}`,
+    };
+    try {
+      fs.mkdirSync(path.dirname(trackJsonPath), { recursive: true });
+      fs.writeFileSync(trackJsonPath, JSON.stringify(trackRecord, null, 2) + "\n", "utf8");
+      if (!_flags.json) console.log(`  ✓ wrote pipeline/track.json (source: ${trackRecord.source})`);
+    } catch (err) {
+      if (!_flags.json) console.error(`  ✗ failed to write pipeline/track.json: ${err.message}`);
     }
   }
 

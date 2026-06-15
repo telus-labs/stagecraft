@@ -25,11 +25,12 @@ const {
 } = require("../core/stage-shopping/assess");
 const { orderedStageNamesForTrack, trackLabel } = require("../core/pipeline/stages");
 const { loadConfig, clearConfigCache } = require("../core/config");
+const { runCLI } = require("./_helpers");
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 function makeCwd(configYaml) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stage-shop-test-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
   fs.mkdirSync(path.join(dir, ".devteam"), { recursive: true });
   fs.writeFileSync(path.join(dir, ".devteam", "config.yml"), configYaml, "utf8");
   return dir;
@@ -367,6 +368,61 @@ describe("config.pipeline.custom_stages", () => {
       // Just verify config loads the custom_stages
       const cfg = loadConfig(dir);
       assert.deepEqual(cfg.pipeline.custom_stages, ["requirements", "build"]);
+    } finally {
+      cleanCwd(dir);
+    }
+  });
+});
+
+// ─── ADR-006 Phase 11.3: devteam assess pipeline/track.json behavior ─────────
+
+describe("devteam assess: pipeline/track.json (ADR-006 §2)", () => {
+  test("default (no --apply): writes pipeline/track.json with source:inferred", () => {
+    const dir = makeCwd("routing:\n  default_host: generic\npipeline:\n  default_track: full\n");
+    try {
+      const r = runCLI(["assess", "--cwd", dir, "--description", "quick fix typo"], { env: { CI: "" } });
+      assert.equal(r.status, 0, `assess must exit 0 (stderr: ${r.stderr})`);
+      const trackPath = path.join(dir, "pipeline", "track.json");
+      assert.ok(fs.existsSync(trackPath), "pipeline/track.json must be written by default");
+      const tj = JSON.parse(fs.readFileSync(trackPath, "utf8"));
+      assert.equal(tj.source, "inferred", "source must be inferred without --confirm");
+      assert.ok(tj.track, "track field must be present");
+      assert.ok(tj.confidence, "confidence field must be present");
+      assert.ok(Array.isArray(tj.reasons), "reasons must be an array");
+      assert.ok(tj.assessed_at, "assessed_at must be present");
+      assert.ok(tj.assessed_by, "assessed_by must be present");
+    } finally {
+      cleanCwd(dir);
+    }
+  });
+
+  test("--confirm: writes pipeline/track.json with source:human", () => {
+    const dir = makeCwd("routing:\n  default_host: generic\npipeline:\n  default_track: full\n");
+    try {
+      const r = runCLI(["assess", "--cwd", dir, "--confirm", "--description", "hotfix crash"], { env: { CI: "" } });
+      assert.equal(r.status, 0, `assess --confirm must exit 0 (stderr: ${r.stderr})`);
+      const trackPath = path.join(dir, "pipeline", "track.json");
+      assert.ok(fs.existsSync(trackPath), "pipeline/track.json must be written with --confirm");
+      const tj = JSON.parse(fs.readFileSync(trackPath, "utf8"));
+      assert.equal(tj.source, "human", "--confirm must set source:human");
+    } finally {
+      cleanCwd(dir);
+    }
+  });
+
+  test("--apply: writes custom_stages to config.yml (no-breakage regression; does not write track.json)", () => {
+    const dir = makeCwd("routing:\n  default_host: generic\npipeline:\n  default_track: full\n");
+    try {
+      const r = runCLI(["assess", "--cwd", dir, "--apply", "--description", "bump deps"], { env: { CI: "" } });
+      assert.equal(r.status, 0, `assess --apply must exit 0 (stderr: ${r.stderr})`);
+      // custom_stages must be written
+      clearConfigCache();
+      const cfg = loadConfig(dir);
+      assert.ok(Array.isArray(cfg.pipeline.custom_stages) && cfg.pipeline.custom_stages.length > 0,
+        "--apply must write custom_stages to config.yml");
+      // track.json must NOT be written by --apply path
+      const trackPath = path.join(dir, "pipeline", "track.json");
+      assert.ok(!fs.existsSync(trackPath), "--apply must not write pipeline/track.json");
     } finally {
       cleanCwd(dir);
     }
