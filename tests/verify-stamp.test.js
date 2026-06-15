@@ -365,3 +365,225 @@ describe("verify/stamp: dispatch", () => {
     assert.match(r.error, /gate not found/);
   });
 });
+
+// ─── ADR-009 Phase 3: reproduction tri-state (stage-03b repair mode) ─────────
+
+describe("verify/stamp: stampStage03b — reproduction tri-state (ADR-009 Phase 3)", () => {
+  function seedBrief(cwd, content) {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "brief.md"), content);
+  }
+  function seedSpec(cwd, content) {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "spec.feature"), content);
+  }
+  function seedGate03bRepair(cwd, extra = {}) {
+    return seedGateRaw(cwd, "stage-03b", {
+      stage: "stage-03b", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "hotfix", timestamp: "2026-06-15T00:00:00Z",
+      blockers: [], warnings: [],
+      criteria_count: 0, scenarios_count: 0, criteria_to_scenario_mapping: [],
+      all_criteria_mapped: false, orphan_scenarios: [], orphan_criteria: [], drift: false,
+      reproduced: false, // repair mode sentinel
+      ...extra,
+    });
+  }
+
+  it("unverifiable bug adds loud WARN, does NOT add a blocker, and never silent-passes", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, "## Regression\n- RC-1: OAuth token refresh fails after 24 h\n");
+    const unverifiableReason = "unverifiable: external OAuth provider not reproducible in test environment";
+    const gatePath = seedGate03bRepair(cwd, { reproduced: unverifiableReason });
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    // reproduced field kept as-is (the string value from the model)
+    assert.equal(r.gate.reproduced, unverifiableReason);
+    // WARN must be present and loud — never silent-pass
+    assert.ok(
+      r.gate.warnings.some((w) => /WARN reproduction-unverifiable/.test(w)),
+      "a loud WARN must be added for unverifiable reproduction",
+    );
+    // No blocker — run proceeds past the unverifiable stage
+    assert.ok(
+      !r.gate.blockers.some((b) => /reproduction/.test(b)),
+      "unverifiable reproduction must NOT add a blocker (run proceeds)",
+    );
+    // Stamp audit records the unverifiable result
+    assert.equal(r.gate._orchestrator_stamped.runs.reproduction_pre_build.unverifiable, true);
+    assert.equal(r.gate._orchestrator_stamped.runs.reproduction_pre_build.reason, unverifiableReason);
+  });
+
+  it("reproduced:true model claim records pre-build test run (test command fails = pre-fix red)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  verify:\n    test_command: \"false\"\n",
+    }));
+    seedBrief(cwd, "## Regression\n- RC-1: button does not submit form\n");
+    const gatePath = seedGate03bRepair(cwd, { reproduced: true });
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    // Model's claim is kept (stage-04a will finalize it)
+    assert.equal(r.gate.reproduced, true);
+    // Pre-build test run recorded (test fails = red state confirmed)
+    const preBuild = r.gate._orchestrator_stamped.runs.reproduction_pre_build;
+    assert.ok(preBuild, "reproduction_pre_build must be recorded");
+    assert.equal(preBuild.pre_build_tests_passed, false, "pre-fix red state must be recorded");
+    // Orchestrator deferred — not yet finalized
+    const reproField = r.gate._orchestrator_stamped.fields.find((f) => f.field === "reproduced");
+    assert.ok(reproField, "reproduced field entry must be present");
+    assert.ok(reproField.orchestrator_deferred, "orchestrator_deferred must be set (finalized at stage-04a)");
+  });
+
+  it("reproduced:false model claim records pre-build test run (test passes = cannot reproduce)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  verify:\n    test_command: \"true\"\n",
+    }));
+    seedBrief(cwd, "## Regression\n- RC-1: modal stays open on Escape\n");
+    const gatePath = seedGate03bRepair(cwd, { reproduced: false });
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    assert.equal(r.gate.reproduced, false);
+    const preBuild = r.gate._orchestrator_stamped.runs.reproduction_pre_build;
+    assert.equal(preBuild.pre_build_tests_passed, true, "pre-build passing recorded when tests green");
+  });
+
+  it("reproduced field absent (feature run) does not add reproduction_pre_build", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, "## ACs\n- AC-1: user can log in\n");
+    const SPEC = "Feature: auth\n  @AC-1\n  Scenario: AC-1 — log in\n    Given a user\n    When they log in\n    Then session created\n";
+    seedSpec(cwd, SPEC);
+    // No reproduced field — feature run
+    const gatePath = seedGateRaw(cwd, "stage-03b", {
+      stage: "stage-03b", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "full", timestamp: "2026-06-15T00:00:00Z",
+      blockers: [], warnings: [],
+      criteria_count: 0, scenarios_count: 0, criteria_to_scenario_mapping: [],
+      all_criteria_mapped: false, orphan_scenarios: [], orphan_criteria: [], drift: false,
+    });
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    assert.ok(!r.gate._orchestrator_stamped.runs.reproduction_pre_build,
+      "feature run must not have reproduction_pre_build in stamp");
+    assert.equal(r.gate.reproduced, undefined, "feature run must not have reproduced field");
+  });
+});
+
+// ─── ADR-009 Phase 3: reproduction finalization in stampStage04a ─────────────
+
+describe("verify/stamp: stampStage04a — reproduction finalization (ADR-009 Phase 3)", () => {
+  function base04aGate(extra = {}) {
+    return {
+      stage: "stage-04a", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "hotfix", timestamp: "2026-06-15T00:00:00Z",
+      blockers: [], warnings: [],
+      lint_passed: true, tests_passed: true,
+      dependency_review_passed: true, license_check_passed: true,
+      security_review_required: false, migration_safety_required: false,
+      license_findings: [],
+      ...extra,
+    };
+  }
+  function base03bGate(extra = {}) {
+    return {
+      stage: "stage-03b", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "hotfix", timestamp: "2026-06-15T00:00:00Z",
+      blockers: [], warnings: [],
+      criteria_count: 0, scenarios_count: 0, criteria_to_scenario_mapping: [],
+      all_criteria_mapped: false, orphan_scenarios: [], orphan_criteria: [], drift: false,
+      reproduced: true, // model's claim
+      ...extra,
+    };
+  }
+
+  it("red-before/green-after: stamps reproduced:true on stage-03b when pre-build failed and post-fix tests pass", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  verify:\n    test_command: \"true\"\n",
+    }));
+    // Stage-03b gate: model claimed reproduced:true, pre-build test FAILED (red before fix)
+    seedGateRaw(cwd, "stage-03b", {
+      ...base03bGate(),
+      _orchestrator_stamped: {
+        stamper_version: "1",
+        at: "2026-06-15T00:00:00Z",
+        fields: [{ field: "reproduced", model_said: true, orchestrator_deferred: "verified-at-stage-04a" }],
+        runs: {
+          spec_generate: { skipped: "spec.feature already exists" },
+          spec_verify: { drift: false, criteria_count: 0, scenarios_count: 0 },
+          reproduction_pre_build: {
+            command: "false",
+            exit_code: 1,
+            duration_ms: 5,
+            pre_build_tests_passed: false, // RED before fix
+          },
+        },
+      },
+    });
+    const gate04aPath = seedGateRaw(cwd, "stage-04a", base04aGate());
+    await stampStage04a(cwd, gate04aPath);
+    // Read the stage-03b gate to verify it was updated by the stamp
+    const gate03b = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-03b.json"), "utf8"));
+    assert.equal(gate03b.reproduced, true, "reproduced must be stamped true by orchestrator (not just agent-asserted)");
+    const verification = gate03b._orchestrator_stamped.runs.reproduction_verification;
+    assert.ok(verification, "reproduction_verification record must be added");
+    assert.equal(verification.green_after_confirmed, true, "green_after_confirmed must be true");
+    assert.equal(verification.red_before_confirmed, true, "red_before_confirmed must be true");
+    assert.equal(verification.post_build_tests_passed, true);
+    assert.equal(verification.pre_build_tests_passed, false);
+  });
+
+  it("stamps reproduced:false on stage-03b when post-fix tests fail (fix did not work)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  verify:\n    test_command: \"false\"\n",
+    }));
+    seedGateRaw(cwd, "stage-03b", {
+      ...base03bGate(),
+      _orchestrator_stamped: {
+        stamper_version: "1",
+        at: "2026-06-15T00:00:00Z",
+        fields: [],
+        runs: {
+          reproduction_pre_build: { pre_build_tests_passed: false, exit_code: 1 },
+        },
+      },
+    });
+    const gate04aPath = seedGateRaw(cwd, "stage-04a", base04aGate({ tests_passed: true }));
+    await stampStage04a(cwd, gate04aPath);
+    const gate03b = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-03b.json"), "utf8"));
+    assert.equal(gate03b.reproduced, false, "reproduced must be stamped false when post-fix tests fail");
+    assert.equal(gate03b._orchestrator_stamped.runs.reproduction_verification.green_after_confirmed, false);
+  });
+
+  it("does not modify stage-03b gate when reproduced is unverifiable", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  verify:\n    test_command: \"true\"\n",
+    }));
+    const unverifiableReason = "unverifiable: external payment gateway";
+    const gate03bContent = {
+      ...base03bGate({ reproduced: unverifiableReason }),
+      _orchestrator_stamped: {
+        stamper_version: "1",
+        at: "2026-06-15T00:00:00Z",
+        fields: [],
+        runs: { reproduction_pre_build: { unverifiable: true, reason: unverifiableReason } },
+      },
+    };
+    seedGateRaw(cwd, "stage-03b", gate03bContent);
+    const gate04aPath = seedGateRaw(cwd, "stage-04a", base04aGate());
+    await stampStage04a(cwd, gate04aPath);
+    const gate03b = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "gates", "stage-03b.json"), "utf8"));
+    assert.equal(gate03b.reproduced, unverifiableReason,
+      "unverifiable reproduced must not be changed by stage-04a stamp");
+    assert.ok(!gate03b._orchestrator_stamped.runs.reproduction_verification,
+      "reproduction_verification must not be added for unverifiable bugs");
+  });
+
+  it("skips reproduction finalization gracefully when no stage-03b gate exists (feature run)", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  verify:\n    test_command: \"true\"\n",
+    }));
+    // No stage-03b gate — feature run
+    const gate04aPath = seedGateRaw(cwd, "stage-04a", base04aGate());
+    const r = await stampStage04a(cwd, gate04aPath);
+    assert.equal(r.ok, true, "stage-04a stamp must succeed even without stage-03b gate");
+    assert.equal(r.gate.tests_passed, true);
+  });
+});

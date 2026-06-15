@@ -131,6 +131,52 @@ async function stampStage04a(cwd, gatePath) {
     }
   }
 
+  // ADR-009 Phase 3: finalize stage-03b's `reproduced` field for repair runs.
+  // stampStage03b recorded the pre-build test baseline (reproduction_pre_build)
+  // and left `reproduced` as the model's claim. Now that the build has applied
+  // the fix, we observe the post-build (current) test result and finalize:
+  //   pre-build failed + current pass → reproduced: true  (verified red→green)
+  //   pre-build not failed + current pass → reproduced: true (green confirmed)
+  //   current fail → reproduced: false (fix didn't work)
+  // Unverifiable bugs are not touched (the "unverifiable: <reason>" string is final).
+  // Best-effort: a stage-03b gate update failure must never block pre-review.
+  const stage03bGatePath = path.join(path.dirname(gatePath), "stage-03b.json");
+  if (fs.existsSync(stage03bGatePath)) {
+    try {
+      const gate03b = JSON.parse(fs.readFileSync(stage03bGatePath, "utf8"));
+      const modelReproduced03b = gate03b.reproduced;
+      const isUnverifiable03b = typeof modelReproduced03b === "string" &&
+        modelReproduced03b.startsWith("unverifiable:");
+      if (modelReproduced03b !== undefined && !isUnverifiable03b) {
+        // Determine current (post-build) test result from the stamp we just ran.
+        const currentTestRun = stamp.runs.test;
+        const currentTestPassed = currentTestRun && !currentTestRun.skipped
+          ? currentTestRun.exit_code === 0
+          : null;
+        const preBuildRecord = gate03b._orchestrator_stamped?.runs?.reproduction_pre_build;
+        const preBuildFailed = preBuildRecord && preBuildRecord.pre_build_tests_passed === false;
+        let finalReproduced = modelReproduced03b;
+        if (currentTestPassed === true) {
+          finalReproduced = true;  // green after fix confirmed by orchestrator
+        } else if (currentTestPassed === false) {
+          finalReproduced = false; // fix didn't make tests pass
+        }
+        // Record the reproduction verification audit on the stage-03b gate.
+        gate03b.reproduced = finalReproduced;
+        gate03b._orchestrator_stamped = gate03b._orchestrator_stamped || { runs: {} };
+        gate03b._orchestrator_stamped.runs.reproduction_verification = {
+          post_build_tests_passed: currentTestPassed,
+          pre_build_tests_passed: preBuildFailed ? false : preBuildRecord?.pre_build_tests_passed,
+          red_before_confirmed: Boolean(preBuildFailed),
+          green_after_confirmed: currentTestPassed === true,
+          finalized_at: new Date().toISOString(),
+        };
+        gate03b.timestamp = new Date().toISOString();
+        fs.writeFileSync(stage03bGatePath, JSON.stringify(gate03b, null, 2) + "\n");
+      }
+    } catch { /* best-effort — stage-03b gate update must never block pre-review */ }
+  }
+
   return finalizeStamp(gate, gatePath, blockers, stamp);
 }
 
@@ -269,6 +315,13 @@ function extractAcsFromReport(text) {
 // no Bash) into the orchestrator. If spec.feature is absent but brief.md
 // is present, generates a scaffold first so the gate records observed state.
 //
+// ADR-009 Phase 3: in repair mode (detected by `gate.reproduced !== undefined`),
+// stamp also handles the reproduction tri-state:
+//   reproduced: true | false       — model's claim; run test command to capture
+//                                    pre-build baseline; stampStage04a finalizes
+//   reproduced: "unverifiable: X"  — cannot write a runnable test; WARN loudly,
+//                                    no blocker (proceed but flag for manual review)
+//
 // Rejected alternative: granting pm Bash capability. Verification belongs
 // to the orchestrator — the trust model requires the orchestrator to check
 // the agent's work, not for the agent to self-certify (6.2 rationale).
@@ -366,6 +419,53 @@ async function stampStage03b(cwd, gatePath) {
     blockers.push(
       `spec drift: orphan_criteria=[${orphCritStr}], orphan_scenarios=${orphScenCount}`
     );
+  }
+
+  // ADR-009 Phase 3: reproduction tri-state (repair mode only).
+  // When the PM model writes `reproduced` in the gate (indicating a repair run),
+  // the stamp handles each case:
+  //   "unverifiable: <reason>" — cannot write a runnable test; WARN loudly, no
+  //     blocker so the run proceeds; manual verification of fix effectiveness is
+  //     required. Never silent-pass: the WARN is always added.
+  //   true | false — run the project's test command to capture the pre-build
+  //     (pre-fix) baseline; stampStage04a reads this record and finalizes the
+  //     field after the build applies the fix and tests are confirmed green.
+  const modelReproduced = gate.reproduced;
+  if (modelReproduced !== undefined) {
+    const isUnverifiable = typeof modelReproduced === "string" &&
+      modelReproduced.startsWith("unverifiable:");
+    if (isUnverifiable) {
+      stamp.fields.push({ field: "reproduced", orchestrator: modelReproduced });
+      gate.warnings = Array.isArray(gate.warnings) ? gate.warnings : [];
+      gate.warnings.push(
+        `WARN reproduction-unverifiable: ${modelReproduced} — ` +
+        `manual verification of fix effectiveness required; stamp cannot verify red→green`,
+      );
+      stamp.runs.reproduction_pre_build = { unverifiable: true, reason: modelReproduced };
+    } else {
+      // true or false claim. Run the test command to record the pre-build state.
+      // At stage-03b time the regression test code has not been written yet (the
+      // build stage does that), so this captures any currently-failing tests.
+      // stampStage04a combines this with the post-build result to finalize reproduced.
+      const config = loadConfig(cwd);
+      const commands = resolveCommands(cwd, config);
+      if (commands.test) {
+        const result = await runCommand(commands.test, { cwd });
+        const preBuildPassed = result.exitCode === 0 && !result.timedOut && !result.spawnError;
+        stamp.runs.reproduction_pre_build = {
+          command: result.command,
+          exit_code: result.exitCode,
+          duration_ms: result.durationMs,
+          pre_build_tests_passed: preBuildPassed,
+          timed_out: result.timedOut || undefined,
+          spawn_error: result.spawnError || undefined,
+        };
+      } else {
+        stamp.runs.reproduction_pre_build = { skipped: "no test command configured or discovered" };
+      }
+      // Keep model's claim; stampStage04a finalizes after the build.
+      stamp.fields.push({ field: "reproduced", model_said: modelReproduced, orchestrator_deferred: "verified-at-stage-04a" });
+    }
   }
 
   return finalizeStamp(gate, gatePath, blockers, stamp);

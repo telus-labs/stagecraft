@@ -1550,7 +1550,7 @@ interactive diagnosis gate is readable; autonomous unapproved → judgment-gate 
 Done: npm test / eslint / consistency green.
 ```
 
-### 10.3 Failing-first reproduction (stage-03b + stamp, tri-state) 🔲 (10.2 merged)
+### 10.3 Failing-first reproduction (stage-03b + stamp, tri-state) ✅ (merged feat/repair-reproduction)
 
 ```
 TASK: Implement plans/phase-10-repair-mode.md item 10.3 (ADR-009 Phase 3). Schedule right

@@ -115,6 +115,30 @@ const STAGES = {
       orphan_criteria: [],
       drift: false,
     },
+    // ADR-009 Phase 3: when intent === "repair", stage-03b becomes a failing-first
+    // reproduction gate. The PM authors a regression scenario that is RED before
+    // the build applies the fix and GREEN after. Bugs that cannot be expressed as
+    // a runnable test (external API / nondeterminism / data dependency) are stamped
+    // with the tri-state `reproduced: "unverifiable: <reason>"` — never silent-pass.
+    // The build stage writes the failing test code first, then the fix; stamp.js
+    // verifies green-after at stage-04a time and finalizes `reproduced` on this gate.
+    repairOverride: {
+      objective: "Author a failing-first regression scenario for the reported bug. Write a Gherkin Scenario that exercises the defect so the build's regression test will be RED before the fix and GREEN after. Read pipeline/diagnosis.md for the regression criterion. Set gate.reproduced = true when you can write a runnable test, false when you cannot reproduce the defect at all, or \"unverifiable: <reason>\" when the bug cannot be expressed as an automated test (external API / nondeterminism / data dependency). Never omit the reproduced field. The build stage will write the failing test code first, then the fix.",
+      readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/diagnosis.md"],
+      gate: {
+        criteria_count: 0,
+        scenarios_count: 0,
+        criteria_to_scenario_mapping: [],
+        all_criteria_mapped: false,
+        orphan_scenarios: [],
+        orphan_criteria: [],
+        drift: false,
+        // Tri-state: true = reproducible, false = cannot reproduce,
+        // "unverifiable: <reason>" = automated test impossible.
+        // Orchestrator stamp at stage-04a finalizes this from observed test results.
+        reproduced: false,
+      },
+    },
   },
   build: {
     stage: "stage-04",
