@@ -1,20 +1,20 @@
 # Stagecraft Consolidation & Roadmap Plans
 
-Four phase plans produced from the 2026-06-10 full-framework review. Each phase is a set of
+Phase plans produced from the 2026-06-10 full-framework review. Each phase is a set of
 PR-sized work items with file/line anchors, acceptance criteria, and verification commands,
-written to be executed by Claude (Sonnet) one item at a time.
+written to be executed by Claude (Sonnet) one item at a time. **All phases are complete.**
 
-| Phase | Plan | Prompts | Theme | Gate to start |
+| Phase | Plan | Prompts | Theme | Status |
 |---|---|---|---|---|
-| 1 | [phase-1-trust-consolidation.md](phase-1-trust-consolidation.md) | [prompts](prompts/ALL-PROMPTS.md) | Safety gaps in the autonomous path + verified CLI bugs | none — start here |
-| 2 | [phase-2-consistency-and-docs.md](phase-2-consistency-and-docs.md) | [prompts](prompts/ALL-PROMPTS.md) | Make prose/code drift mechanically impossible; release | Phase 1 items 1.1–1.5 merged |
-| 3 | [phase-3-structural-debt.md](phase-3-structural-debt.md) | [prompts](prompts/ALL-PROMPTS.md) | bin/devteam split, fix-steps registry, dependency & portability decisions | Phase 2 item 2.1 merged (consistency checker protects the refactor) |
-| 4 | [phase-4-capability-roadmap.md](phase-4-capability-roadmap.md) | [prompts](prompts/ALL-PROMPTS.md) | Resume planned capability work (G10, convergence, G3, H3 pre-work) | Phases 1–2 complete |
-| Docs | [documentation-plan.md](documentation-plan.md) | [prompts](prompts/ALL-PROMPTS.md) | Documentation system: audience paths, generated reference, token budgets | D1 (= Phase 2) done; see its sequencing table |
-| 5 | [phase-5-state-integrity.md](phase-5-state-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | State lifecycle: derived gate invalidation, archive ownership, interactive ceiling, B9 fence | none — start here (round-2 review, 2026-06-12) |
-| 6 | [phase-6-promise-integrity.md](phase-6-promise-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | Make shipped claims true: G10 prompt-only path, pm budget, C3 runner, recipe de-overfit | none (6.2 needs 6.1) |
-| 7 | [phase-7-test-harness.md](phase-7-test-harness.md) | [prompts](prompts/ALL-PROMPTS.md) | Kill the repo-state test class structurally; CI signal quality | none |
-| 8 | [phase-8-release-and-sync.md](phase-8-release-and-sync.md) | [prompts](prompts/ALL-PROMPTS.md) | v0.7.0 with honest attribution; semantic runbook sync; D5 token work | 8.2 needs 6.4 · 8.3 needs 7.1 |
+| 1 | [phase-1-trust-consolidation.md](phase-1-trust-consolidation.md) | [prompts](prompts/ALL-PROMPTS.md) | Safety gaps in the autonomous path + verified CLI bugs | ✅ complete (PRs #63–#69) |
+| 2 | [phase-2-consistency-and-docs.md](phase-2-consistency-and-docs.md) | [prompts](prompts/ALL-PROMPTS.md) | Make prose/code drift mechanically impossible; release | ✅ complete (PRs #71 · #72 · #75 · #76 · v0.6.0) |
+| 3 | [phase-3-structural-debt.md](phase-3-structural-debt.md) | [prompts](prompts/ALL-PROMPTS.md) | bin/devteam split, fix-steps registry, dependency & portability decisions | ✅ complete (PRs #79–#89) |
+| 4 | [phase-4-capability-roadmap.md](phase-4-capability-roadmap.md) | [prompts](prompts/ALL-PROMPTS.md) | Resume planned capability work (G10, convergence, G3, H3 pre-work) | ✅ complete (PRs #90–#97) |
+| Docs | [documentation-plan.md](documentation-plan.md) | [prompts](prompts/ALL-PROMPTS.md) | Documentation system: audience paths, generated reference, token budgets | ✅ complete (PRs #99 · #102 · #103 · #104 · #105 · #107) |
+| 5 | [phase-5-state-integrity.md](phase-5-state-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | State lifecycle: derived gate invalidation, archive ownership, interactive ceiling, B9 fence | ✅ complete (PRs #114–#117) |
+| 6 | [phase-6-promise-integrity.md](phase-6-promise-integrity.md) | [prompts](prompts/ALL-PROMPTS.md) | Make shipped claims true: G10 prompt-only path, pm budget, C3 runner, recipe de-overfit | ✅ complete (PRs #118–#121 · #124) |
+| 7 | [phase-7-test-harness.md](phase-7-test-harness.md) | [prompts](prompts/ALL-PROMPTS.md) | Kill the repo-state test class structurally; CI signal quality | ✅ complete (PRs #122 · #125) |
+| 8 | [phase-8-release-and-sync.md](phase-8-release-and-sync.md) | [prompts](prompts/ALL-PROMPTS.md) | v0.7.0 with honest attribution; semantic runbook sync; D5 token work | ✅ complete (PRs #123 · #126 · v0.7.0) |
 | 9 | [phase-9-evidence-gated-capabilities.md](phase-9-evidence-gated-capabilities.md) | [prompts](prompts/ALL-PROMPTS.md) | ADR-007 heartbeat, H3 ground-truth, ADR-008, adaptive-routing evidence | ✅ complete (PRs #128 · #129 · #131 · #133) — ADR-005 deferred |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
@@ -22,7 +22,24 @@ written to be executed by Claude (Sonnet) one item at a time.
 chips). Paste its §0 PREAMBLE plus the item prompt into a fresh Sonnet session — one
 item per session per branch.
 
-## How to run these with Sonnet
+---
+
+## Evidence reviews
+
+Read-and-report analyses produced during the roadmap — no code changed in these sessions.
+They document why certain capability gates remain shut and what would open them.
+
+| File | Phase item | PR | Verdict |
+|---|---|---|---|
+| [phase-4-ground-truth.md](phase-4-ground-truth.md) | 4.0 — convergence vs. spec | — | Implementation matched spec; no gaps at Phase 4 entry |
+| [h3-ground-truth.md](h3-ground-truth.md) | 9.2a — H3 recipe factory corpus | #129 | Gate stays shut: zero run-logs, zero gate archives; re-escalate after ≥2 real projects with ≥5 autonomous runs each |
+| [adaptive-routing-evidence.md](adaptive-routing-evidence.md) | 9.4 — D5 adaptive routing | #133 | Gate stays shut: max 4 dispatches per role (sms-opt-in fixture only); re-escalate after ≥5 dispatches per (role, host) pair across ≥2 real user projects with cost telemetry |
+
+---
+
+## How to run these with Sonnet (historical reference)
+
+All phases are complete. These notes are preserved for re-use if new phases are planned.
 
 - **One work item per session/PR.** Each item is scoped to be independently mergeable.
   Paste the item (plus the "Conventions" section below) as the task. Do not batch items.
