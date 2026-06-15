@@ -20,7 +20,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
-| 11 | Autonomy polish (ADR-006/007/008) | 🔲 ready |
+| 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1660,7 +1660,7 @@ lenient-vs-strict examples.
 Done: npm test / eslint / consistency green.
 ```
 
-### 11.3 Track provenance: `pipeline/track.json` + confirmation guard 🔲 (11.2 merged)
+### 11.3 Track provenance: `pipeline/track.json` + confirmation guard ✅
 
 ```
 TASK: Implement plans/phase-11-autonomy-polish.md item 11.3 (adjusted ADR-006: explicit

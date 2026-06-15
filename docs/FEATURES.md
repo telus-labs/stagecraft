@@ -247,12 +247,14 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 ### Core commands — the everyday loop
 
-**`devteam assess [--description "..."] [--json] [--apply] [files...]`** — rule-based track recommendation before starting a run.
+**`devteam assess [--description "..."] [--json] [--apply] [--confirm] [files...]`** — rule-based track recommendation before starting a run.
 
 - Analyzes description keywords and file/content heuristics (security patterns, migration files, config-only paths) to recommend a track
 - Priority order: hotfix keywords → dep-update → config-only → nano → quick → full (default)
 - Heuristic overrides: migration-safety-required bumps lighter tracks to full; security-required bumps nano to quick
-- `--apply` writes `pipeline.custom_stages` to `.devteam/config.yml` so `devteam next`/`devteam summary`/`devteam stage` all use the custom stage list automatically
+- **Default (no flags):** writes `pipeline/track.json` with the inferred track and `source: "inferred"` — per-run provenance record read by `devteam run`
+- **`--confirm`:** writes `pipeline/track.json` with `source: "human"` — use after verifying the recommendation; silences the unconfirmed-track guard in `devteam run`
+- **`--apply`:** writes `pipeline.custom_stages` to `.devteam/config.yml` (project-wide setting) so `devteam next`/`devteam summary`/`devteam stage` use the custom track; orthogonal to `pipeline/track.json` behavior
 - `--json` emits structured output including recommended track, rationale, and which heuristics fired
 
 **`devteam standards discover [--cwd <dir>] [--json] [--dry-run] [--force]`** — static analysis of a project's conventions.

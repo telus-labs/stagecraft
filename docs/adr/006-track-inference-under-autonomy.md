@@ -306,6 +306,18 @@ All three pass before the driver enters its main loop.
 
 ---
 
+## Implementation status
+
+**Phase 11.3 shipped** (branch `feat/track-provenance`, 2026-06-15). All Tier-1/accepted scope delivered:
+
+- `devteam assess` writes `pipeline/track.json` by default; `--confirm` sets `source: "human"`; `--apply` continues writing `custom_stages` (no breaking change)
+- `resolveTrack` returns `{track, source, confidence}`; reads `pipeline/track.json` in full precedence chain
+- `checkTrackConfidence` guard keyed on `autonomy.require_confirmed_track` (not `CI=true`)
+- `run-start` event + `track-confidence-check` event in `run-log.jsonl`
+- Docs: `docs/tracks.md`, `docs/runbooks/autonomous-run.md`, `docs/ci.md`
+
+The open questions below remain open (none blocked the implementation). ADR-007 Tier 2 (11.4) remains parked pending `stall-detected` data.
+
 ## Implementation sketch (post-ADR; no code in this draft)
 
 Files, sized as one PR (ADR-driven change to a single cross-cutting concern):
