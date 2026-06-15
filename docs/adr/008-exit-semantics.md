@@ -1,7 +1,7 @@
 # ADR 008 — Exit semantics: pipeline-complete with pending advise blockers
 
-**Status:** Proposed
-**Date:** 2026-06-14
+**Status:** Accepted
+**Date:** 2026-06-14 (accepted 2026-06-15; A-default + opt-in `--fail-on-advisory`)
 **Authors:** Mumit Khan (design), drafted with Claude Sonnet 4.6
 
 ## Context
@@ -59,7 +59,50 @@ Gates are the authoritative pass/fail verdict per stage; advise items are flagge
 concerns that a reviewer or CI step is supposed to act on. Collapsing both into the same
 exit code simplifies CI pipelines at the cost of blurring that distinction.
 
+### Who actually consumes the exit code (grounded, 2026-06-15)
+
+Stagecraft's own shipped CI template **does not run `devteam run`** — `docs/ci.md` states CI
+validates gates, verifies the tamper-evident chain, and posts check runs, but never runs the
+LLM pipeline. So the only consumers of `devteam run`'s exit code are **external, operator-
+defined** CI wrappers and shell scripts. Two consequences the original options weighed
+without stating: (1) there is no first-party consumer to break, so changing the code is
+lower-risk than implied — but also (2) there is no first-party *need* driving the change, so
+"the design doc specified step 9" is the only pressure, and the design doc is not
+dispositive (it specified plenty that was correctly cut). The decision should therefore
+optimize for not silently surprising the *external* `if devteam run; then merge` consumer
+who checks `== 0` today.
+
 ---
+
+## Recommendation (revised 2026-06-15, critical review)
+
+The original draft recommended "evaluate C first." On review, **C-as-default is the wrong
+choice**: exit-3-by-default silently flips today's exit-0-on-complete-with-advisories to
+nonzero, breaking every lenient external `if devteam run; then merge` wrapper that checks
+`== 0` — to serve a narrow consumer that gates on the exit code, won't parse JSON, and wants
+advisory-blocking on by default. The same actionable signal is available to *everyone* in one
+JSON parse without changing the default contract.
+
+**Recommended decision: A + D, reusing C's exit-3 code under the opt-in.** Concretely:
+
+- **Default stays exit 0** on `pipeline-complete` (Option A — contract unchanged, gate-vs-
+  advise authority preserved), **but** the run never lets advisory blockers pass silently:
+  - add `advisory_blockers_count` (and a per-class breakdown) to the driver's `--json`
+    summary, so a CI consumer gates on advisories in one parse, no second command;
+  - print a loud completion line to stderr: `pipeline complete — N advisory blockers remain;
+    run \`devteam advise\` to review`.
+- **Opt-in hard gate:** a `--fail-on-advisory` flag (Option D) makes the run exit **3**
+  (Option C's code, *not* 1 — preserving the failed-vs-advisory distinction) when
+  unaddressed blocker-class items remain. Consumers who want a hard stop add the flag
+  explicitly in CI; nobody else is surprised.
+- **Recommended class threshold for the flag:** `QA_BLOCKER` + `A11Y_FIX` (concrete
+  unaddressed work). `PEER_REVIEW_RISK` is opt-in on top (`--fail-on-advisory=all`), because
+  "needs a human to peer-review" is near-always true after an autonomous run and would make
+  the flag fire constantly.
+
+This is the in-process advise sweep of B/C (so step 9 is honored) without B/C's default
+exit-code change. The four options below are retained for the record; the recommendation
+selects A's default + D's flag + C's code-under-flag.
 
 ## Options considered
 
@@ -176,10 +219,17 @@ The only question is whether the exit code surfaces them.
    hierarchy is not formally ordered; a human ruling should establish which classes are
    "blocking enough" to change exit behavior.
 
-3. **Which option?** A (status quo), B (exit 1), C (exit 3), or D (opt-in flag)?
-   The recommendation to evaluate first is **C** — it preserves the current exit-1 meaning,
-   gives CI consumers a distinct signal, and is reversible if the exit-3 convention proves
-   awkward in practice.
+3. **Which option?** A, B, C, or D? The revised recommendation (see "Recommendation"
+   above) is **A's default + D's opt-in flag + C's exit-3 code under that flag** — keep
+   exit 0 as the default contract, surface `advisory_blockers_count` in `--json` and a loud
+   completion line, and let `--fail-on-advisory` exit 3 for consumers who opt into a hard
+   gate. This supersedes the original "evaluate C first," which would have changed the
+   default exit code for external consumers with no first-party benefit. Confirm or override.
+
+   *(Q1 and Q2 are answered by this recommendation: step 9 is implemented as an in-process
+   advise sweep but surfaced via the JSON count + opt-in flag rather than the default exit
+   code; the flag's default threshold is `QA_BLOCKER` + `A11Y_FIX`, with `PEER_REVIEW_RISK`
+   opt-in. Override if you disagree.)*
 
 4. **CI contract documentation:** wherever this decision lands, the `devteam run` exit code
    table (currently implicit in `run.js` comments) needs to be a first-class contract in

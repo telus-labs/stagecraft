@@ -45,9 +45,9 @@ What else was on the table and why we didn't pick those.
 | [002](002-host-adapter-contract.md) | Host adapter contract: capabilities + install + renderStagePrompt + status + uninstall | Accepted |
 | [003](003-bounded-autonomous-execution.md) | Bounded autonomous pipeline execution: typed failure model + authority provenance + consequence-ceilinged driver | Accepted |
 | [004](004-role-tool-budgets.md) | Role tool budgets: host-native tool pinning via ROLE_FRONTMATTER, capability-level degradation, MCP vocabulary deferred | Accepted |
-| [006](006-track-inference-under-autonomy.md) | Track inference under autonomy: `pipeline/track.json`, CI confidence halt, `devteam assess` as separate explicit step | Proposed |
-| [007](007-liveness-heartbeat.md) | Liveness/heartbeat: stall detector distinct from wall-clock timeout; heartbeat events in `run-log.jsonl` | Proposed |
-| [008](008-exit-semantics.md) | Exit semantics: pipeline-complete exit code when `advise` still reports blockers; four options and CI implications | Proposed |
+| [006](006-track-inference-under-autonomy.md) | Track inference under autonomy: `pipeline/track.json` provenance record, `autonomy.require_confirmed_track` halt, `devteam assess` as separate explicit step | Accepted |
+| [007](007-liveness-heartbeat.md) | Liveness/heartbeat: stall detector distinct from wall-clock timeout; heartbeat events in `run-log.jsonl` | Accepted |
+| [008](008-exit-semantics.md) | Exit semantics: pipeline-complete exit code when `advise` still reports blockers; four options and CI implications | Accepted |
 | [009](009-repair-mode.md) | Repair mode: `devteam run --repair` as an intent flag (orthogonal to `--track`); fix-aware artifacts on existing stages, reusing PATCH MODE + the spec→stamp chain | Accepted |
 
 ### Deferred

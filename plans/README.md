@@ -16,7 +16,8 @@ written to be executed by Claude (Sonnet) one item at a time. **All phases are c
 | 7 | [phase-7-test-harness.md](phase-7-test-harness.md) | [prompts](prompts/ALL-PROMPTS.md) | Kill the repo-state test class structurally; CI signal quality | ✅ complete (PRs #122 · #125) |
 | 8 | [phase-8-release-and-sync.md](phase-8-release-and-sync.md) | [prompts](prompts/ALL-PROMPTS.md) | v0.7.0 with honest attribution; semantic runbook sync; D5 token work | ✅ complete (PRs #123 · #126 · v0.7.0) |
 | 9 | [phase-9-evidence-gated-capabilities.md](phase-9-evidence-gated-capabilities.md) | [prompts](prompts/ALL-PROMPTS.md) | ADR-007 heartbeat, H3 ground-truth, ADR-008, adaptive-routing evidence | ✅ complete (PRs #128 · #129 · #131 · #133) — ADR-005 deferred |
-| 10 | [phase-10-repair-mode.md](phase-10-repair-mode.md) | [prompts](prompts/ALL-PROMPTS.md) | `devteam run --repair` bug-fix intent (ADR-009): PATCH-MODE-scoped build, diagnosis stage, failing-first reproduction | 🔲 ready — start here (ADR-009 Accepted) |
+| 10 | [phase-10-repair-mode.md](phase-10-repair-mode.md) | [prompts](prompts/ALL-PROMPTS.md) | `devteam run --repair` bug-fix intent (ADR-009): PATCH-MODE-scoped build, diagnosis stage, failing-first reproduction | 🔲 ready (ADR-009 Accepted) |
+| 11 | [phase-11-autonomy-polish.md](phase-11-autonomy-polish.md) | [prompts](prompts/ALL-PROMPTS.md) | Autonomy polish (ADR-006/007/008): track provenance, liveness heartbeat (observe-first), advise-aware exit semantics | 🔲 ready (ADRs Accepted) |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status

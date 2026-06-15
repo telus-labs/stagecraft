@@ -1,7 +1,7 @@
 # ADR 007 — Liveness/heartbeat: stall detector distinct from wall-clock timeout
 
-**Status:** Proposed
-**Date:** 2026-06-14
+**Status:** Accepted
+**Date:** 2026-06-14 (accepted 2026-06-15, observe-first staging)
 **Authors:** Mumit Khan (design), drafted with Claude Sonnet 4.6
 
 ## Context
@@ -58,19 +58,21 @@ pipeline/run-log.jsonl`) has no way to distinguish "the driver is working" from 
 driver has hung". `run-state.json` has a `last_action` and `current_stage` field but no
 timestamp indicating when that state was entered.
 
-### Why this blocks further autonomy work
+### Why this matters now
 
 ADR-003 added a budget cap, a consequence ceiling, and convergence detection — all of which
-are post-dispatch guards. None protect against the silent hang *during* a dispatch. Phase 9
-is adding standing grants (ADR-005) and a recipe factory (9.2). Both increase the autonomy
-scope and compound the cost of an invisible hang: a hung build stage with a standing grant
-burns tokens at the budget cap and exits only on wall-clock timeout, with no intermediate
-signal and no stall classification in the audit log.
+are post-dispatch guards. None protect against the silent hang *during* a dispatch. The gap
+stands on its own merits: unattended `devteam run` ships today, and a hung dispatch burns
+tokens up to the budget cap and exits only on wall-clock timeout, with no intermediate
+signal and no record in the audit log of *why* the run went quiet.
 
-The Phase 9 plan (`plans/phase-9-evidence-gated-capabilities.md`) identifies ADR-007 as the
-prerequisite blocker for further autonomy investment:
-
-> "9.1 ADR draft immediately (it blocks autonomy work)"
+> **Revision note (2026-06-15, critical review).** The original draft justified this ADR as
+> a prerequisite blocker for ADR-005 (standing grants) and the H3 recipe factory. As of the
+> Phase-9 evidence reviews, **ADR-005 is Deferred and H3 stays gated** (`plans/h3-ground-truth.md`),
+> so that rationale no longer holds. It is removed: the liveness gap is justified by the
+> *currently shipping* unattended driver, not by deferred work. The Phase-9 plan's "9.1 ADR
+> draft immediately" line referred to ordering within Phase 9 (now complete), not an ongoing
+> block.
 
 ### Relevant injection seams
 
@@ -89,6 +91,35 @@ shape; `opts.sleep` already sets the precedent for injectable timers.
 ---
 
 ## Decision
+
+> **Revision note (2026-06-15, critical review) — the decision is staged "observe-first."**
+> The sections below describe the full design, but it ships in two tiers so a trivially-safe
+> observability win is not blocked on a consequential, debatable action:
+>
+> **Tier 1 — decided, ships now (no behavior change, no process killing):**
+> - §2 the per-iteration `heartbeat` event;
+> - §3 the dispatch-progress probe in **observe-only mode** — it emits `stall-detected`
+>   events to `run-log.jsonl` and `onEvent`, but **never kills the child and never resolves
+>   a `Promise.race`**. Observe-only needs no race combinator (it is a fire-and-forget
+>   interval that self-cancels when the dispatch settles), which removes the dangling-timer
+>   correctness hazard from v1 entirely;
+> - §5 `devteam status` (a read over files the driver already writes).
+>
+> **Tier 2 — deferred until Tier-1 data exists:**
+> - §4 the **active stall response** (the transient→structural SIGTERM kill policy). Three
+>   reasons to wait: (a) at the proposed defaults the structural kill fires at
+>   `2 × stallThresholdMs` ≈ the wall-clock timeout, so it saves little until the threshold
+>   is tuned below `timeoutMs/2`; (b) the right threshold is an empirical question the
+>   Tier-1 `stall-detected` events are designed to answer; (c) killing a live child is the
+>   only irreversible action here and deserves real data before it becomes default.
+> - the `--watch` rendering (§5) — pure terminal UX, explicitly not load-bearing.
+>
+> **Scope correction for §1/§3:** the log-growth probe treats *any* byte growth as progress,
+> so it detects **silent hangs** (flat output, no gate) but **not loop-spew** (a model
+> emitting repeating output forever — that resets the clock and never fires, despite being a
+> motivating example in Context). v1 is therefore scoped to silent hangs only; catching
+> loop-spew requires *content-distinct* growth (content-hashing the log), which is more
+> expensive and rides with the Tier-2 active-response decision, not v1.
 
 ### 1. Define stall precisely and separately from wall-clock timeout
 
@@ -318,7 +349,7 @@ terminal rendering.
 - `docs/runbooks/autonomous-run.md`: remove "No heartbeat" from Honest Limitations; add
   a new row to the halt table for `structural-input` stall; add a troubleshooting entry
   for "Driver reported a stall — what do I do?".
-- `tests/driver.test.js` (or equivalent): cases for heartbeat emission (every iteration),
+- `tests/run.test.js` (or equivalent): cases for heartbeat emission (every iteration),
   transient stall (first stall → continue), structural stall (second stall → halt with
   `structural-input`), stall reset (growth signal before second stall → reset counter).
 - `.devteam/config.yml` schema: new optional `autonomy.stall_threshold_ms` and
@@ -383,7 +414,7 @@ Files, sized as one PR (two small PRs if the `--watch` rendering is split off):
    function (with injectable clock); wrap the `run-stage`/`continue-stage` dispatch in
    `Promise.race`; track `state.stallRetries[stageName]`; apply transient/structural
    stall policy.
-2. `tests/driver.test.js` — four new test cases: heartbeat per-iteration, transient stall,
+2. `tests/run.test.js` — four new test cases: heartbeat per-iteration, transient stall,
    structural stall halt, stall reset on log growth.
 3. `docs/runbooks/autonomous-run.md` — update Honest Limitations (remove "No heartbeat");
    add stall halt row to the halt table; add troubleshooting section.
