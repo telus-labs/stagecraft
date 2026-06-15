@@ -49,7 +49,7 @@ for a human. Output `plans/h3-ground-truth.md`. If the honest answer is "one pro
 too few runs," H3 stays gated — say so and stop; the BACKLOG caveat stands ("a learned
 recipe is a cached judgment… or it amplifies stale judgment").
 
-**9.2b ADR-009 — recipe suggestion, not recipe learning (only if 9.2a justifies):** the
+**9.2b ADR (next available number) — recipe suggestion, not recipe learning (only if 9.2a justifies):** the
 shape that honors the caveat: a `devteam recipes suggest` analyzer that mines run-logs +
 archives for recurring (failure-class, resolution) pairs and emits a *proposed recipe
 diff* for `core/pipeline/fix-recipes.js` — a PR for human review, never auto-applied,

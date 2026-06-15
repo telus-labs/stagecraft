@@ -1441,14 +1441,15 @@ otherwise. Output structure: ## Corpus inventory / ## Failure classes & recurren
 that would change it.
 ```
 
-### 9.2b Draft ADR-009: recipe suggestion ⏸ only if 9.2a opens the gate
+### 9.2b Draft recipe-suggestion ADR ⏸ only if 9.2a opens the gate
 
 ```
 PRECONDITION: plans/h3-ground-truth.md exists with a verdict that the gate opens. STOP
-otherwise.
+otherwise. (009 is taken by repair mode — use the next available ADR number; check
+docs/adr/README.md at draft time.)
 
-TASK: DRAFT (do not implement) docs/adr/009-recipe-suggestion.md per item 9.2b.
-Branch: docs/adr-009-recipe-suggestion
+TASK: DRAFT (do not implement) docs/adr/<NNN>-recipe-suggestion.md per item 9.2b.
+Branch: docs/adr-recipe-suggestion
 The shape that honors the caveat: devteam recipes suggest — an analyzer mining
 run-logs + archives for recurring (failure-class, resolution) pairs, emitting a
 PROPOSED DIFF to core/pipeline/fix-recipes.js for human PR review. Never auto-applied,
