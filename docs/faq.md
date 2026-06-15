@@ -82,6 +82,24 @@ Use the highest-risk read that applies:
 
 When in doubt, `full`. The cost of a falsely-skipped stage is usually higher than the cost of running an unnecessary one. `devteam next` skips stages that aren't needed (conditional stages) automatically, so `full` doesn't mean you always run all 18 manually.
 
+### How do I fix a bug instead of adding a feature?
+
+Use `devteam run --repair "<symptom>"` rather than `--feature`:
+
+```bash
+devteam run --repair "User authentication silently fails when the session token is expired — no error is surfaced to the caller"
+```
+
+`--repair` switches stage-01 from writing a feature brief to writing a **diagnosis** (root cause + `affected_files` list). The diagnosis gate always lands as ESCALATE — you approve it with `devteam next` or pass `--auto-rule diagnosis-approved` for autonomous approval. After approval, the build runs in PATCH MODE constrained to the diagnosed files (any write outside that set fails with `scope-gate`), and stage-03b runs a failing-first regression test even on hotfix depth.
+
+```bash
+devteam run --repair "symptom"                         # hotfix depth (default), diagnosis first
+devteam run --repair "symptom" --repair-at src/auth.js:42     # skip diagnosis; you already know the location
+devteam run --repair "symptom" --auto-rule diagnosis-approved  # approve diagnosis autonomously
+```
+
+`--repair` and `--feature` are mutually exclusive. Use `--feature` when the behavior was never correct (missing capability vs. regression). For the operator runbook, see [`docs/runbooks/repair-flow.md`](runbooks/repair-flow.md).
+
 ### Can I run multiple features through the pipeline simultaneously?
 
 Partially. Each feature lives in its own `pipeline/` directory — you can run the pipeline in parallel across different directories by running `devteam` commands from separate project directories (use `--cwd <dir>` or `cd` into the target). What you can't do is run two features through the *same* pipeline directory simultaneously; gate files would overwrite each other.

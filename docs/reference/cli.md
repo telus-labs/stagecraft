@@ -43,7 +43,7 @@ Inspect pipeline/gates/ and report what to do next: run a stage, merge, fix a FA
 
 ### `devteam run [options]`
 
-Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human.
+Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.
 
 | Flag               | Type   | Description                                                                                          |
 | ------------------ | ------ | ---------------------------------------------------------------------------------------------------- |

@@ -612,6 +612,36 @@ devteam run --auto-rule formatting-only,doc-only          # auto-resolve bounded
 
 It never advances into `sign-off`/`deploy` without `--allow-stage`, and by default halts on every escalation (the Principal isn't dispatched unless you pass `--auto-rule`). It writes `pipeline/run.lock`, a resumable `run-state.json` (`--resume`), and an audit-trail `run-log.jsonl`. See [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md) for the full launch guide, halt reasons, and limitations.
 
+### Running in repair mode (`--repair`)
+
+For bug fixes — when existing behavior is wrong, not when new capability is needed — use
+`--repair` instead of `--feature`:
+
+```bash
+devteam run --repair "symptom description"
+# e.g.: devteam run --repair "JSON.parse fails on markdown-fenced responses; output silently defaults to 'skip'"
+```
+
+`--repair` activates fix-aware behavior across three stages:
+
+1. **Diagnosis** — Stage-01 produces a `pipeline/diagnosis.md` (root cause, proposed fix,
+   affected-files list) instead of a feature brief. The gate lands as ESCALATE until you
+   approve it with `devteam next`, or pass `--auto-rule diagnosis-approved` to handle it
+   autonomously.
+2. **Scoped build** — The build agent sees a `⚠️ PATCH MODE` block and is constrained to the
+   diagnosed files. Any write outside that set causes a `scope-gate` halt.
+3. **Failing-first regression test** — Stage-03b runs even on hotfix depth and writes a test
+   that is RED before the fix and GREEN after.
+
+```bash
+devteam run --repair "symptom"                         # hotfix depth (default), diagnosis first
+devteam run --repair "symptom" --track full            # full pipeline with repair intent
+devteam run --repair "symptom" --auto-rule diagnosis-approved  # autonomous diagnosis approval
+devteam run --repair "symptom" --repair-at src/auth.js:42     # skip diagnosis; seed file:line
+```
+
+`--repair` and `--feature` are mutually exclusive. For the full operator runbook (diagnosis gate approval, scope-gate FAIL recovery, tri-state `reproduced` field), see [`docs/runbooks/repair-flow.md`](runbooks/repair-flow.md).
+
 **Under the hood** — `devteam run` is a code loop around `devteam next --json`. If you want to build your own (e.g. custom dispatch, a different halt policy), the primitive is the same:
 
 ```bash
