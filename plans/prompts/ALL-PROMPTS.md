@@ -18,7 +18,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 6 | Promise integrity | ✅ complete (PRs #118–#121 · #124) |
 | 7 | Test & CI harness | ✅ complete (PRs #122 · #125) |
 | 8 | Release v0.7.0 + semantic sync | ✅ complete (PRs #123 · #126 · release/v0.7.0) |
-| 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · this PR) |
+| 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
