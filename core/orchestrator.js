@@ -161,7 +161,14 @@ function computeDispatchPlan(stageDef, config, track) {
 }
 
 function buildDescriptor(stageDef, role, opts = {}) {
-  const allowedWrites = stageDef.roleWrites?.[role] ?? stageDef.allowedWrites;
+  // ADR-009 Phase 2: when intent === "repair" and the stage declares a
+  // repairOverride, merge override fields on top of the base stage definition.
+  // This swaps stage-01's objective/artifact/template/gate to a diagnosis
+  // shape — same stage id, same gate path, fix-aware artifact. No new stage.
+  const override = (opts.intent === "repair" && stageDef.repairOverride) ? stageDef.repairOverride : null;
+  const effectiveDef = override ? { ...stageDef, ...override } : stageDef;
+
+  const allowedWrites = effectiveDef.roleWrites?.[role] ?? effectiveDef.allowedWrites;
   const wsId = opts.workstreamId || workstreamId(stageDef.stage, role, stageDef.roles.length);
   const changeId = opts.changeId || null;
   const prefix = (p) => prefixPipelineRelative(p, changeId);
@@ -171,21 +178,21 @@ function buildDescriptor(stageDef, role, opts = {}) {
     role,
     rolesInStage: stageDef.roles,
     workstreamId: wsId,
-    objective: stageDef.objective,
-    readFirst: Array.isArray(stageDef.readFirst)
-      ? stageDef.readFirst.map((item) =>
+    objective: effectiveDef.objective,
+    readFirst: Array.isArray(effectiveDef.readFirst)
+      ? effectiveDef.readFirst.map((item) =>
           typeof item === "object" && item.optional
             ? `${prefix(item.path)} (if present)`
             : prefix(item),
         )
-      : stageDef.readFirst,
+      : effectiveDef.readFirst,
     allowedWrites: Array.isArray(allowedWrites) ? allowedWrites.map(prefix) : allowedWrites,
-    artifact: prefix(stageDef.artifact),
-    template: stageDef.template,
-    goalCondition: stageDef.goalCondition
-      ? stageDef.goalCondition.replace("{workstreamId}", wsId)
+    artifact: prefix(effectiveDef.artifact),
+    template: effectiveDef.template,
+    goalCondition: effectiveDef.goalCondition
+      ? effectiveDef.goalCondition.replace("{workstreamId}", wsId)
       : null,
-    expectedGate: stageDef.gate,
+    expectedGate: effectiveDef.gate,
     changeId,
     // G10: per-role tool budget declared by the adapter (e.g. ["Read","Glob","Grep"]).
     // null means the adapter declared no budget (full host surface applies).
@@ -224,6 +231,9 @@ function runStage(stageName, opts = {}) {
   const ctx = {
     track,
     feature,
+    // ADR-009 §Decision.7: intent propagated from driver so adapters can
+    // render repair-mode prompts (diagnosis vs. feature brief at stage-01).
+    intent: opts.intent || null,
     cwd,
     isolation,
     changeId: isolation === "bounded" ? changeIdFromFeature(feature) : null,
@@ -295,7 +305,7 @@ function runStage(stageName, opts = {}) {
       // on codex, gemini-cli, and generic dispatches.
       const toolBudget = require("./roles").toolBudgetFor(entry.role);
       warnIfToolBudgetDegraded(toolBudget, entry.role, hostName, adapter);
-      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId, changeId: ctx.changeId, toolBudget });
+      const descriptor = buildDescriptor(stageDef, entry.role, { workstreamId: entry.workstreamId, changeId: ctx.changeId, toolBudget, intent: ctx.intent });
       const prompt = withSpan("adapter.renderStagePrompt", {
         "devteam.host": hostName,
         "devteam.stage": stageDef.stage,

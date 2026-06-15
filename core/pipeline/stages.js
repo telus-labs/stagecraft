@@ -28,6 +28,29 @@ const STAGES = {
       out_of_scope_items: [],
       required_sections_complete: false,
     },
+    // ADR-009 Phase 2: when intent === "repair", stage-01 produces a DIAGNOSIS
+    // instead of a feature brief — same stage, same gate path, fix-aware artifact.
+    // The gate is always ESCALATE (judgment gate) until approved via the typed
+    // escalation contract (--auto-rule diagnosis-approved or standing grant).
+    repairOverride: {
+      objective: "Diagnose the reported bug: identify the root cause with specific file:line references, propose a targeted fix, enumerate every file the fix must touch (the structural scope contract for the build), and define a regression criterion the executable-spec stage can translate into a runnable test.",
+      readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md"],
+      allowedWrites: ["pipeline/diagnosis.md", "pipeline/gates/stage-01.json", "pipeline/context.md"],
+      artifact: "pipeline/diagnosis.md",
+      template: "diagnosis-template.md",
+      gate: {
+        root_cause: "",
+        proposed_fix: "",
+        affected_files: [],
+        regression_criterion: "",
+        diagnosis_confirmed: false,
+        // ESCALATE semantics: the diagnosis is always a judgment gate.
+        // The driver advances past it via --auto-rule diagnosis-approved
+        // (autonomous) or a human ruling (interactive).
+        escalation_reason: "Diagnosis requires human (or --auto-rule diagnosis-approved) confirmation before the build proceeds",
+        decision_needed: "Is the root cause correct, the fix targeted, and the affected-files list complete?",
+      },
+    },
   },
   design: {
     stage: "stage-02",

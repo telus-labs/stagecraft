@@ -290,3 +290,157 @@ describe("repair mode: structural scope gate (ADR-009 §Decision.3)", () => {
     assert.notEqual(s.halt_action, "scope-gate", "scope gate must be inert without affectedFiles");
   });
 });
+
+// ─── 7. 10.2: Diagnosis as stage-01 (ADR-009 Phase 2) ────────────────────────
+
+describe("repair mode 10.2: stage-01 produces a diagnosis artifact when intent=repair (ADR-009 Phase 2)", () => {
+  it("buildDescriptor swaps stage-01 to diagnosis shape when intent=repair (unit)", () => {
+    const { buildDescriptor } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+    const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+    const stageDef = getStage("requirements");
+    const descriptor = buildDescriptor(stageDef, "pm", { intent: "repair" });
+    assert.ok(descriptor.artifact.endsWith("diagnosis.md"),
+      `artifact must be diagnosis.md, got: ${descriptor.artifact}`);
+    assert.ok(descriptor.objective.includes("Diagnose"),
+      "objective must mention 'Diagnose'");
+    assert.ok(Array.isArray(descriptor.expectedGate.affected_files),
+      "gate must have affected_files array");
+    assert.ok("root_cause" in descriptor.expectedGate, "gate must have root_cause");
+    assert.ok("proposed_fix" in descriptor.expectedGate, "gate must have proposed_fix");
+    assert.ok("regression_criterion" in descriptor.expectedGate, "gate must have regression_criterion");
+    // ESCALATE semantics — diagnosis is always a judgment gate.
+    assert.ok("escalation_reason" in descriptor.expectedGate,
+      "gate must have escalation_reason (ESCALATE shape)");
+    assert.ok("decision_needed" in descriptor.expectedGate,
+      "gate must have decision_needed (ESCALATE shape)");
+  });
+
+  it("buildDescriptor keeps base stage-01 shape when intent=feature (unit)", () => {
+    const { buildDescriptor } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+    const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+    const stageDef = getStage("requirements");
+    const descriptor = buildDescriptor(stageDef, "pm", { intent: "feature" });
+    assert.ok(descriptor.artifact.endsWith("brief.md"),
+      `artifact must be brief.md, got: ${descriptor.artifact}`);
+    assert.ok(!("affected_files" in descriptor.expectedGate),
+      "feature gate must not have affected_files");
+    assert.ok(!("escalation_reason" in descriptor.expectedGate),
+      "feature gate must not have ESCALATE fields");
+  });
+
+  it("scope gate activates from diagnosis gate affected_files without opts.affectedFiles (FAILS on main without 10.2)", async () => {
+    const cwd = track(makeTargetProject());
+    // Pre-write a PASS stage-01 (diagnosis) gate with affected_files.
+    // The driver reads this before dispatching build to activate the scope gate.
+    const gateDir = path.join(cwd, "pipeline", "gates");
+    fs.mkdirSync(gateDir, { recursive: true });
+    fs.writeFileSync(path.join(gateDir, "stage-01.json"), JSON.stringify({
+      stage: "stage-01", status: "PASS", workstream: "pm",
+      root_cause: "auth drops token on refresh",
+      proposed_fix: "add null guard in refreshToken()",
+      affected_files: ["src/auth.js"],
+      regression_criterion: "token is returned after expiry",
+      diagnosis_confirmed: true,
+    }, null, 2));
+    const s = await run({
+      cwd,
+      repair: "auth token stale after refresh",
+      // No opts.affectedFiles — 10.2 activates the scope gate via state.affectedFiles
+      checkScopeGate: (_cwd, _af) => ["src/payments.js"],
+      next: () => ({ action: "run-stage", stage: "stage-04", name: "build" }),
+      runStageHeadless: async () => [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }],
+      maxIterations: 1,
+    });
+    assert.equal(s.halt_action, "scope-gate",
+      "scope gate must fire when diagnosis gate provides affected_files (10.2 activation)");
+  });
+
+  it("diagnosis ESCALATE gate halts without --auto-rule (judgment-gate halt)", async () => {
+    const cwd = track(makeTargetProject());
+    const s = await run({
+      cwd,
+      repair: "button not submitting",
+      // no autoRule — grantSet empty → halts immediately at resolve-escalation
+      next: () => ({
+        action: "resolve-escalation",
+        name: "requirements",
+        stage: "stage-01",
+        gate: path.join(cwd, "pipeline", "gates", "stage-01.json"),
+        failure_class: "judgment-gate",
+        reason: "diagnosis requires human or --auto-rule diagnosis-approved approval",
+      }),
+      maxIterations: 1,
+    });
+    assert.equal(s.halted, true, "run must be halted");
+    assert.equal(s.halt_action, "resolve-escalation", "halt_action must be resolve-escalation");
+    assert.equal(s.halt_failure_class, "judgment-gate", "halt_failure_class must be judgment-gate");
+  });
+
+  it("--auto-rule diagnosis-approved proceeds past the diagnosis judgment gate", async () => {
+    const cwd = track(makeTargetProject());
+    const nextSeq = [
+      {
+        action: "resolve-escalation",
+        name: "requirements",
+        stage: "stage-01",
+        gate: path.join(cwd, "pipeline", "gates", "x.json"),
+        failure_class: "judgment-gate",
+        reason: "diagnosis requires approval",
+      },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let ni = 0;
+    const s = await run({
+      cwd,
+      repair: "button not submitting",
+      autoRule: ["diagnosis-approved"],
+      runRuling: async (_cwd) => {
+        // Append a PRINCIPAL-RULING line so loadPrincipalOutputs finds the grant.
+        fs.mkdirSync(path.join(_cwd, "pipeline"), { recursive: true });
+        fs.appendFileSync(
+          path.join(_cwd, "pipeline", "context.md"),
+          "\nPRINCIPAL-RULING: diagnosis → proceed [class: diagnosis-approved]\n",
+        );
+        return { exitCode: 0 };
+      },
+      runFixEscalation: async () => null,
+      next: () => nextSeq[ni++] || { action: "pipeline-complete", reason: "done" },
+    });
+    assert.equal(s.completed, true,
+      "run must complete after auto-ruling the diagnosis judgment gate");
+  });
+
+  it("--repair-at seeds affectedFiles from file:line and skips the diagnosis dispatch", async () => {
+    const cwd = track(makeTargetProject());
+    const events = [];
+    let requirementsDispatched = false;
+    const s = await run({
+      cwd,
+      repair: "null pointer in checkout",
+      repairAt: "src/checkout.js:42",
+      next: () => ({ action: "pipeline-complete", reason: "done" }),
+      runStageHeadless: async (name) => {
+        if (name === "requirements") requirementsDispatched = true;
+        return [{ role: "pm", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      onEvent: (ev) => events.push(ev),
+    });
+    assert.equal(requirementsDispatched, false,
+      "requirements (diagnosis) must not be dispatched when --repair-at is used");
+    const state = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "run-state.json"), "utf8"));
+    assert.deepEqual(state.affectedFiles, ["src/checkout.js"],
+      "affectedFiles must be seeded from the --repair-at location");
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const logEvents = log.trim().split("\n").map((l) => JSON.parse(l));
+    const seededEv = logEvents.find((e) => e.outcome === "repair-at-seeded");
+    assert.ok(seededEv, "run-log must carry repair-at-seeded event");
+    assert.deepEqual(seededEv.affected_files, ["src/checkout.js"]);
+    const gateFile = path.join(cwd, "pipeline", "gates", "stage-01.json");
+    assert.ok(fs.existsSync(gateFile), "synthetic stage-01 gate must be written");
+    const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+    assert.equal(gate.status, "PASS", "synthetic gate must be PASS");
+    assert.equal(gate.seeded_by, "--repair-at", "synthetic gate must record seeded_by");
+    assert.deepEqual(gate.affected_files, ["src/checkout.js"]);
+    assert.ok(s.completed, "run must complete");
+  });
+});
