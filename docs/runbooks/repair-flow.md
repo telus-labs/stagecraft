@@ -162,3 +162,36 @@ It must **never** silently pass. A silent pass would hide that the fix was unver
 The `hotfix` track previously skipped stage-03b. In repair mode, stage-03b is injected
 immediately before the build stage even on hotfix depth — repair intent pulls it into the active
 stage list. This gives hotfix-depth repair runs the reproduction discipline they otherwise lack.
+
+---
+
+## When to commit in repair mode
+
+Three natural commit points exist in a `--repair` run:
+
+**1. After diagnosis gate approval** (stage-01 ESCALATE + operator approval):
+
+```bash
+devteam commit
+# Stages: pipeline/gates/stage-01.json, pipeline/diagnosis.md
+```
+
+**2. After failing-first test stage** (stage-03b PASS):
+
+```bash
+devteam commit
+# Stages: pipeline/gates/stage-03b.json, pipeline/spec.feature
+```
+
+**3. After build + scope gate PASS** (stage-04 PASS):
+
+```bash
+git add src/path/to/fixed-file.js   # operator stages the fix itself
+devteam commit                        # stages pipeline/gates/stage-04*.json and build artifacts
+```
+
+`devteam commit` stages gate files and pipeline artifacts automatically. The source files that
+constitute the fix — the application code changed by the build agent — must be staged explicitly
+by the operator. Stagecraft does not own application source files; only pipeline artifacts.
+
+For the full git workflow context, see [`docs/git-workflow.md` § Repair mode](../git-workflow.md#repair-mode).
