@@ -1,0 +1,1 @@
+- **feat(driver):** emit a two-line stderr warning when `devteam run` starts without `--budget-usd`, so operators know the run will not halt on spend (Phase 14.4).
