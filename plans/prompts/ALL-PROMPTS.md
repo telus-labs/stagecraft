@@ -23,6 +23,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
 | 12 | Git workflow automation (ADR-010) | ✅ complete (PRs #154 · #155 · #156 · #157) |
 | 13 | Deploy adapters: Cloud Run + Gizmos | ✅ complete |
+| 14 | Dogfooding support (`--profile dogfood`, doctor checks, preflight guard, budget warning) | 🔲 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1881,4 +1882,132 @@ Deliverables:
 
 Verify: npm test / npx eslint . / npm run consistency all green.
 Manual: confirm gizmos appears in core/deploy/README.md table.
+```
+
+---
+
+## Phase 14 — Dogfooding Support
+
+Items 14.1–14.5. Read plans/phase-14-dogfooding-support.md for full context before
+running any item. GitHub tracking issue: #130.
+
+Order: 14.1 → 14.2 → 14.3 → 14.4 (independent of each other after 14.1) → 14.5 (after 14.1 and 14.2 merged).
+
+### 14.1 `devteam init --profile dogfood` 🔲 feat/init-profile-dogfood
+
+```
+TASK: Implement plans/phase-14-dogfooding-support.md item 14.1. Read the plan item in full
+first. Branch: feat/init-profile-dogfood
+
+Goal: Add --profile dogfood to devteam init. When used, the command writes four safeguards:
+a supplemental dogfood gitignore block, a pre-commit infrastructure guard hook, a
+.git/info/exclude entry for pipeline/stages/deploy.md, and a profile: dogfood marker in
+.devteam/config.yml.
+
+Deliverables:
+1. core/gitignore.js — add writeDogfoodGitignoreBlock() with the canonical dogfood block
+   (verbatim in plan §Supplemental gitignore block). Export alongside writeGitignoreBlock.
+2. core/cli/commands/init.js — add --profile flag to flags{}. After the existing gitignore
+   block write, add a dogfood branch that calls all four safeguard writes (full code in
+   plan §14.1 Changes). All writes must be idempotent (skip if already correct).
+3. tests/init.test.js — add 7 tests in a 'devteam init --profile dogfood' describe block
+   (list in plan §14.1). Use mkdtempSync("devteam-test-") with a synthetic .git/ directory.
+4. changelog.d/init-profile-dogfood.md — one-bullet fragment.
+
+All writes use the verbatim content from the plan. Do not invent fields or hook content.
+Idempotency: running --profile dogfood twice must not duplicate blocks, hook content, or
+config entries.
+
+Verify: npm test / npx eslint . all green.
+Manual integration test (verbatim in plan §14.1 Verify block).
+```
+
+### 14.2 Doctor dogfood-mode checks 🔲 feat/doctor-dogfood-checks
+
+```
+TASK: Implement plans/phase-14-dogfooding-support.md item 14.2. Read the plan item in full
+first. Branch: feat/doctor-dogfood-checks. Blocked on 14.1 merged.
+
+Goal: Add a "Dogfood mode" section to devteam doctor when config.profile === "dogfood".
+Six checks: pre-commit guard present, hook executable, dogfood gitignore block present,
+.git/info/exclude deploy.md entry, no npm publish script (warn), budget-usd reminder (info).
+
+Deliverables:
+1. core/cli/commands/doctor.js — add the "Dogfood mode" block after the Adapters section.
+   Full code is in plan §14.2 Changes. Read config.profile (or parsed.profile) from the
+   loaded config — no changes to loadConfig() needed.
+2. tests/doctor.test.js — add tests for the dogfood section (details in plan §14.2).
+   Use a tempdir with synthetic .devteam/config.yml (profile: dogfood) + .git/hooks/
+   pre-commit + .gitignore + .git/info/exclude.
+3. changelog.d/doctor-dogfood-checks.md — one-bullet fragment.
+
+Verify: npm test / npx eslint . all green.
+Manual: run devteam doctor in a dogfood-init'd directory; must show "Dogfood mode" section.
+```
+
+### 14.3 Preflight: block staged pipeline artifacts 🔲 feat/preflight-staged-artifacts
+
+```
+TASK: Implement plans/phase-14-dogfooding-support.md item 14.3. Read the plan item in full
+first. Branch: feat/preflight-staged-artifacts
+
+Goal: Add a check to core/preflight.js runPreflight() that emits a BLOCKER when any pipeline
+artifact files (brief.md, context.md, spec.feature, gates/*.json, code-review/, etc.) appear
+in the git index. Applies to all projects, not just dogfood mode.
+
+Deliverables:
+1. core/preflight.js — add checkStagedPipelineArtifacts(cwd) using spawnSync("git",
+   ["diff", "--cached", "--name-only"]). Match against the ARTIFACT_PREFIXES list in the
+   plan. Convert matches to a blocker string. Handle "not a git repo" gracefully (exit 0,
+   return []).
+2. tests/preflight.test.js — add tests for the staged-artifact check:
+   - Returns a blocker when pipeline/brief.md is staged
+   - Returns no blocker when only non-pipeline files are staged
+   Use a real git tempdir (git init, git add) rather than mocking spawnSync.
+3. changelog.d/preflight-staged-artifacts.md — one-bullet fragment.
+
+Verify: npm test / npx eslint . all green.
+Manual: stage pipeline/brief.md; devteam preflight must exit 1 with BLOCKER.
+```
+
+### 14.4 Budget cap warning in driver.js 🔲 feat/run-budget-warning
+
+```
+TASK: Implement plans/phase-14-dogfooding-support.md item 14.4. Read the plan item in full
+first. Branch: feat/run-budget-warning
+
+Goal: When devteam run starts without --budget-usd, write a two-line warning to stderr
+so operators know the run will not halt on spend.
+
+Deliverables:
+1. core/driver.js — after line 445 (const budgetUsd = ...), add the two-line stderr write
+   (verbatim in plan §14.4 Changes). Condition: budgetUsd === null.
+2. tests/driver.test.js — add a test that stderr contains the budget warning when
+   budgetUsd is not set (capture process.stderr.write or spawn subprocess).
+3. changelog.d/run-budget-warning.md — one-bullet fragment.
+
+Verify: npm test / npx eslint . all green.
+Manual: devteam run --feature "test" 2>&1 | head -5 — must show warning.
+```
+
+### 14.5 `docs/guides/dogfooding.md` 🔲 docs/dogfooding-guide
+
+```
+TASK: Implement plans/phase-14-dogfooding-support.md item 14.5. Read the plan item in full
+first. Branch: docs/dogfooding-guide. Blocked on 14.1 and 14.2 merged.
+
+Goal: Write the user-facing dogfooding guide and cross-reference it from docs/user-guide.md.
+
+Deliverables:
+1. docs/guides/dogfooding.md — new file with the verbatim content from the plan §14.5.
+   Sections: Prerequisites, One-time setup, Per-feature workflow, Recommended budget,
+   Infrastructure guard, Failure modes, Re-running doctor after setup.
+2. docs/user-guide.md — add one cross-reference line in the appropriate "Further reading"
+   or related section: "- [Dogfooding guide](guides/dogfooding.md) — running Stagecraft
+   against its own source tree".
+3. changelog.d/dogfooding-guide.md — one-bullet fragment.
+
+Do not weaken or remove any existing content. Only add.
+
+Verify: npm run consistency all green.
 ```
