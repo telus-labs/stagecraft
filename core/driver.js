@@ -443,6 +443,12 @@ async function run(opts = {}) {
   const _merge = opts.mergeWorkstreamGates || mergeWorkstreamGates;
   const maxIterations = Number.isInteger(opts.maxIterations) ? opts.maxIterations : DEFAULT_MAX_ITERATIONS;
   const budgetUsd = typeof opts.budgetUsd === "number" ? opts.budgetUsd : null;
+  if (budgetUsd === null) {
+    process.stderr.write(
+      "[devteam run] Warning: no --budget-usd cap set. The run will not halt on spend.\n" +
+      "              Use --budget-usd <amount> to prevent runaway cost.\n"
+    );
+  }
   const timeoutMs = typeof opts.timeoutMs === "number" ? opts.timeoutMs : undefined;
   const allowStages = new Set(opts.allowStages || []);
   const onEvent = typeof opts.onEvent === "function" ? opts.onEvent : () => {};
