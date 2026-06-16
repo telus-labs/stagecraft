@@ -1,0 +1,1 @@
+- **Fix: `devteam advise` no longer duplicates item text or prints an unparseable Apply hint.** When a `noted_for_followup` entry was a plain string without a short `ID:` prefix, the item label printed the full text twice (separated by ` — `) and the `Apply:` hint was missing shell quoting, making it impossible to run. Both are now corrected in `core/cli/commands/advise.js`.
