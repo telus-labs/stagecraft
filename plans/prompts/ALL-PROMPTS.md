@@ -21,6 +21,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
+| 12 | Git workflow automation (ADR-010) | ⏸ blocked on ADR-010 accepted |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1694,3 +1695,124 @@ Done: npm test / eslint / consistency green.
 policy, transient/structural, content-distinct growth for loop-spew) and `--watch`. Gated on
 the observe-only `stall-detected` data from 11.1, like H3. Re-open a follow-up decision once
 real runs have produced that data.
+
+---
+
+## Phase 12 — Git Workflow Automation (ADR-010)
+
+Removes the two structural git friction points: volatile file management and autonomous-mode
+commit timing. Plan file: `plans/phase-12-git-workflow-automation.md`. Order: 12.0 (ADR
+acceptance gate) → 12.1 → 12.2 → 12.3; 12.4 parallel to 12.2–12.3. **All of 12.1–12.4
+are blocked on ADR-010 being accepted (12.0).** Read `docs/adr/010-git-integration.md` in
+full before starting any item — the five decisions there are the spec.
+
+### 12.0 Accept ADR-010 ⏸ blocked (prerequisite)
+
+No code. File `docs/adr/010-git-integration.md`, review it, raise blockers, change status
+to Accepted, update `docs/adr/README.md`. This unblocks 12.1–12.4.
+
+### 12.1 `devteam init` writes managed gitignore block ⏸ blocked on 12.0 accepted
+
+```
+TASK: Implement plans/phase-12-git-workflow-automation.md item 12.1. Read the plan item and
+ADR-010 §Decision.1 first. Branch: feat/init-gitignore-block
+
+Implement writeGitignoreBlock(projectRoot) in hosts/shared/gitignore.js (new file). The
+function reads .gitignore (or treats missing as empty), locates # BEGIN stagecraft / # END
+stagecraft delimiters, replaces the block (or appends if absent) with the canonical block
+from ADR-010 §Decision.1 verbatim, and writes the result. Preserves content before/after
+the block. Call it from core/cli/commands/init.js after adapter installation; print
+"wrote .gitignore (stagecraft block)" or "updated .gitignore (stagecraft block)". --force
+re-runs unconditionally; without --force, an identical existing block is a no-op.
+[verify-first] how init.js calls adapter install and what post-install step order is.
+
+Also update docs/user-guide.md and docs/git-workflow.md §gitignore to reference devteam init
+rather than enumerating the file list.
+
+Tests: no .gitignore → creates with block; existing without block → appends, preserves
+content; identical block → no-op; outdated block → replaces, preserves surrounding content;
+init flow writes block to temp project.
+Done: npm test / eslint / consistency green; manual smoke: devteam init in temp dir, grep
+"BEGIN stagecraft" .gitignore shows block, grep "run.lock" shows entry, re-run no duplicate.
+```
+
+### 12.2 `devteam commit` command ⏸ blocked on 12.1 merged
+
+```
+TASK: Implement plans/phase-12-git-workflow-automation.md item 12.2. Read the plan item and
+ADR-010 §Decision.2 and §Decision.4 first. Branch: feat/devteam-commit
+
+Implement: (1) core/pipeline/artifacts.js — map stage-id → artifact paths relative to
+pipelineRoot(); [verify-first] core/pipeline/stages.js for full stage list; populate for all
+stages, leave TODO for uncertain ones. (2) core/cli/commands/commit.js — devteam commit
+command. Flags: --all, --dry-run, --message <msg>, --json, --help. Algorithm: read
+run-state.json (stages_advanced + last_committed_stage_index cursor); derive toCommit from
+cursor (or all with --all); derive filesToStage from gate files (PASS/WARN only) + artifacts
+registry; exclude volatile (# BEGIN stagecraft paths); filter to existing files. Empty →
+exit 0 "nothing to commit". Generate message ("pipeline: stages NN-NN PASS" or
+"pipeline(repair): diagnosis + build PASS", reading intent from run-state). Show staged
+files + message; prompt y/n/e (skip prompt in --dry-run). On confirm: git add <by name>,
+git commit with Co-Authored-By: Stagecraft (Claude Sonnet 4.6) <stagecraft@mumit.org>
+trailer. Write last_committed_stage_index to run-state.json after success. (3) Register
+command in bin/devteam and scripts/generate-cli-ref.js COMMANDS array (after run). (4)
+Schema bump: add last_committed_stage_index: null to driver initial run-state; bump
+RUN_SCHEMA_VERSION; add migration (field missing → null on read). (5) In repair mode,
+stage-01 artifact is diagnosis.md not brief.md — read intent from run-state.
+
+Tests: stages_advanced 2 stages + null cursor → stages both gates + artifacts; cursor at
+stage 1 → stages only stage 2 (idempotent second call → nothing to commit); --all ignores
+cursor; --dry-run no git calls; volatile file not staged; missing gate file no error; schema
+migration null-init on old state file.
+Done: npm test / eslint / consistency green; npm run docs:generate picks up new command;
+manual smoke: devteam commit --dry-run in pipeline with completed stages shows right files.
+```
+
+### 12.3 `devteam run --auto-commit` ⏸ blocked on 12.2 merged
+
+```
+TASK: Implement plans/phase-12-git-workflow-automation.md item 12.3. Read the plan item and
+ADR-010 §Decision.5 first. Branch: feat/run-auto-commit
+
+Add --auto-commit boolean flag to core/cli/commands/run.js. After a clean halt, call
+devteam commit programmatically (skip interactive confirmation; print staged file list to
+stderr). Clean halts (fire): halt_action in {"ceiling","until","budget"}. Never fire on:
+fix-and-retry, resolve-escalation, structural-input, merge-failed, max-iterations,
+convergence-exhausted, scope-gate, unconfirmed-track, stoplist.
+[verify-first] halt_action string values in core/driver.js — confirm exact strings for all
+the never-fire cases; do not guess.
+Log auto-commit event: {event:"auto-commit",staged_files:[...],commit_hash:"..."} to
+run-log.jsonl. On commit failure: log auto-commit-failed, warn to stderr, do NOT change the
+halt exit code. Nothing to commit → log auto-commit-skipped, no git call.
+Generate-cli-ref: --auto-commit flag in run table.
+
+Tests: ceiling halt + --auto-commit → fires, stages correct files, logs auto-commit; until
+halt → fires; budget halt → fires; resolve-escalation halt → does NOT fire; --auto-commit
+not passed → never fires; nothing to commit → auto-commit-skipped; commit failure → exit
+code unchanged, auto-commit-failed logged.
+Done: npm test / eslint / consistency green; manual smoke of devteam run --auto-commit
+--until stage-02 --max-iterations 5 in a temp project.
+```
+
+### 12.4 `docs/git-workflow.md` restructure + repair-flow git guidance ⏸ blocked on 12.0 accepted
+
+```
+TASK: Implement plans/phase-12-git-workflow-automation.md item 12.4 (doc-only). Read the
+plan item first. Branch: docs/git-workflow-restructure
+
+Restructure docs/git-workflow.md with sections: §1 Overview, §2 What to commit vs. ignore
+(reference devteam init block, not enumerate list), §3 Interactive mode (update for Phase 12
+commands), §4 Autonomous mode (halt → commit; devteam commit usage; --auto-commit opt-in;
+what each halt_action implies), §5 Repair mode (three natural commit points: after diagnosis
+approval, after failing-first test, after build+scope-gate PASS), §6 PR timing (unchanged),
+§7 CI integration (unchanged). Preserve the what-to-commit table updated for Phase 12.
+
+Add "When to commit in repair mode" to docs/runbooks/repair-flow.md: three commit points
+(gate files + diagnosis.md; gate + spec.feature; gate + note that source files require
+operator git add since Stagecraft does not own application source).
+
+Update docs/git-workflow.md §gitignore to reference devteam init rather than listing files.
+Run npm run docs:generate to confirm devteam commit entry appears in the CLI reference.
+
+Verify: npm run consistency green; npm run docs:generate idempotent; human read of
+restructured doc for narrative coherence.
+```
