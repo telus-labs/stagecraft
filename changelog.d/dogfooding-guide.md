@@ -1,0 +1,1 @@
+- **Docs: dogfooding guide.** Adds `docs/guides/dogfooding.md` — one-time setup with `devteam init --profile dogfood`, per-feature workflow, recommended budget table, infrastructure guard explanation, failure modes, and expected `devteam doctor` output. Cross-referenced from `docs/user-guide.md`.
