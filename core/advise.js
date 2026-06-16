@@ -378,7 +378,7 @@ function runAdvise(cwd, opts = {}) {
   ).length;
 
   if (opts.checkOnly || !opts.apply || opts.apply.size === 0) {
-    return { items, unresolvedBlockers };
+    return { items, unresolvedBlockers, by_tier: groupByTier(items) };
   }
 
   // Apply selections — build new decision lines then write the section once
@@ -439,7 +439,26 @@ function runAdvise(cwd, opts = {}) {
     items: updatedItems,
     unresolvedBlockers: updatedUnresolvedBlockers,
     scaffoldCommands,
+    by_tier: groupByTier(updatedItems),
   };
 }
 
-module.exports = { runAdvise, gatherFollowups, classifyItem, generateOptions };
+// ---------------------------------------------------------------------------
+// groupByTier
+// ---------------------------------------------------------------------------
+// Partitions a classified item array into { addressed, QA_BLOCKER,
+// PEER_REVIEW_RISK, QA_NOISE, INFO, A11Y_FIX } for grouped rendering and
+// machine-readable --json output.
+// ---------------------------------------------------------------------------
+function groupByTier(items) {
+  const tiers = { QA_BLOCKER: [], PEER_REVIEW_RISK: [], QA_NOISE: [], INFO: [], A11Y_FIX: [], addressed: [] };
+  for (const r of items) {
+    if (r.addressed) { tiers.addressed.push(r); continue; }
+    const bucket = tiers[r.classification];
+    if (bucket) bucket.push(r);
+    else tiers.INFO.push(r);
+  }
+  return tiers;
+}
+
+module.exports = { runAdvise, gatherFollowups, classifyItem, generateOptions, groupByTier };

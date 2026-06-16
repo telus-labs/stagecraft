@@ -173,25 +173,51 @@ async function run(positional, _flags) {
     return;
   }
 
-  const riskLabel = { A11Y_FIX: "A11Y FIX", QA_BLOCKER: "QA BLOCKER", PEER_REVIEW_RISK: "PEER-REVIEW RISK", QA_NOISE: "QA NOISE", INFO: "INFO" };
+  const TIER_ORDER = ["A11Y_FIX", "QA_BLOCKER", "PEER_REVIEW_RISK", "QA_NOISE", "INFO"];
+  const TIER_LABEL = {
+    A11Y_FIX: "A11Y FIX", QA_BLOCKER: "QA BLOCKER",
+    PEER_REVIEW_RISK: "PEER-REVIEW RISK", QA_NOISE: "QA NOISE", INFO: "INFO",
+  };
+  const tiers = result.by_tier;
+
   console.log("\nFollow-up items in completed stage gates:\n");
 
-  for (const { item, classification, addressed, options } of result.items) {
-    const desc = item.text || item.summary || "(no summary)";
-    const label = item.id === desc ? item.id : `${item.id} — ${desc}`;
-    if (addressed) {
+  // Addressed summary — one compact line instead of N full blocks
+  if (tiers.addressed.length > 0) {
+    const ids = tiers.addressed.map((r) => r.item.id).join(", ");
+    console.log(`  ✓ ${tiers.addressed.length} addressed: ${ids}\n`);
+  }
+
+  // Scaffold command hints collected while rendering — printed once at end
+  const scaffoldHints = [];
+
+  for (const tier of TIER_ORDER) {
+    const group = tiers[tier] || [];
+    if (group.length === 0) continue;
+    const bar = "─".repeat(Math.max(0, 66 - TIER_LABEL[tier].length - String(group.length).length - 5));
+    console.log(`  ── ${TIER_LABEL[tier]} (${group.length}) ${bar}`);
+    for (const { item, options } of group) {
+      const desc = item.text || item.summary || "(no summary)";
+      const label = item.id === desc ? item.id : `${item.id} — ${desc}`;
       console.log(`  ${label}  [${item._source}]`);
-      console.log(`    Status: ADDRESSED\n`);
-      continue;
+      const recOpt = options.find((o) => o.recommended);
+      console.log(`    Options:`);
+      for (const opt of options) {
+        const rec = opt.recommended ? "  ← recommended" : "";
+        console.log(`      [${opt.id}] ${opt.label.padEnd(12)} — ${opt.description}${rec}`);
+      }
+      // Surface the scaffold command in read mode so stage manager sees it before --apply
+      if (recOpt && recOpt.action === "scaffold") {
+        const cmd = `devteam stage build --workstream qa --patch --skip-preflight`;
+        scaffoldHints.push(`${item.id}: ${cmd}`);
+        console.log(`    ⚠ Scaffold requires follow-up: ${cmd}`);
+      }
+      console.log();
     }
-    console.log(`  ${label}  [${item._source}]`);
-    console.log(`    Risk: ${riskLabel[classification] || classification}`);
-    console.log("    Options:");
-    for (const opt of options) {
-      const rec = opt.recommended ? "  ← recommended" : "";
-      console.log(`      [${opt.id}] ${opt.label.padEnd(12)} — ${opt.description}${rec}`);
-    }
-    console.log();
+  }
+
+  if (scaffoldHints.length > 0) {
+    console.log(`  Note: ${scaffoldHints.length} scaffold item(s) require a follow-up command after --apply.\n`);
   }
 
   const pending = result.items.filter((r) => !r.addressed);
