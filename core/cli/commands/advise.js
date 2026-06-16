@@ -44,12 +44,20 @@ async function run(positional, _flags) {
   // value when present (bare --apply exits 2 "requires a value" in the parser).
   let applyMap = new Map();
   if (_flags.apply) {
-    for (const sel of String(_flags.apply).split(",")) {
-      const [lhs, rhs = "A"] = sel.trim().split("=");
-      const itemId = lhs.trim();
-      const [letter, ticketId] = rhs.trim().split(":");
-      if (!itemId || !letter) continue;
-      applyMap.set(itemId, { letter: letter.toUpperCase(), ticketId });
+    // Accumulate comma-split fragments until the current buffer ends with
+    // =<letter>[:<ticket>], tolerating commas inside item IDs.
+    let current = "";
+    for (const seg of String(_flags.apply).split(",")) {
+      current = current ? `${current},${seg}` : seg;
+      if (!/=[A-Z](?::[^,]+)?$/.test(current.trim())) continue;
+      const lastEq = current.lastIndexOf("=");
+      const itemId = current.slice(0, lastEq).trim();
+      const rhs = current.slice(lastEq + 1).trim();
+      const [letter, ticketId] = rhs.split(":");
+      if (itemId && /^[A-Z]$/.test(letter)) {
+        applyMap.set(itemId, { letter: letter.toUpperCase(), ticketId });
+      }
+      current = "";
     }
   }
 
