@@ -24,6 +24,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 12 | Git workflow automation (ADR-010) | ✅ complete (PRs #154 · #155 · #156 · #157) |
 | 13 | Deploy adapters: Cloud Run + Gizmos | ✅ complete |
 | 14 | Dogfooding support (`--profile dogfood`, doctor checks, preflight guard, budget warning, guide) | ✅ complete (PRs #163 · #164 · #165 · #166 · #167) |
+| 15 | Adapter-aware stage context (`--adapter` flag, conventions injection, gizmos auth fix) | pre-work ✅ (PR #173) · 15.1 ✅ (PR #176) · 🔲 15.2 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -2010,4 +2011,128 @@ Deliverables:
 Do not weaken or remove any existing content. Only add.
 
 Verify: npm run consistency all green.
+```
+
+---
+
+## Phase 15 — Adapter-aware stage context
+
+**Theme:** When `deploy.adapter` is set, stages 01–03 automatically receive platform
+constraints via `pipeline/context.md` — `--feature` strings become pure intent, no
+stack details required.
+
+**Status:** pre-work ✅ `--adapter` flag (PR #173) · 15.1 ✅ gizmos auth fix (PR #176) · 🔲 15.2 ready
+
+**Order:** 15.1 → 15.2.
+
+### Pre-work: `devteam init --adapter` ✅ PR #173
+
+Already merged to main. `devteam init --host claude-code --adapter gizmos` writes
+the `deploy:` block into `.devteam/config.yml` with adapter-specific config hints.
+`KNOWN_DEPLOY_ADAPTERS` exported from `core/config.js`.
+
+### 15.1 Fix `gizmos whoami` in `core/deploy/gizmos.md` ✅ PR #176
+
+Already merged to main. `gizmos whoami` replaced with `GIZMOS_API_KEY` env check
+in both the `## Assumptions` line and Precondition step 1f.
+
+### 15.2 Adapter conventions files + context.md injection 🔲 feat/adapter-conventions
+
+```
+TASK: Implement plans/phase-15-adapter-conventions.md item 15.2.
+Read the plan item in full before touching any code.
+Branch: feat/adapter-conventions. Blocked on 15.1 merged.
+
+PRECONDITION CHECK (run before any code changes):
+1. Confirm core/deploy/gizmos.md does NOT contain "gizmos whoami" — if it
+   does, 15.1 has not merged yet; stop and report.
+2. Confirm core/deploy/gizmos.conventions.md does NOT already exist — if it
+   does, 15.2 may have been partially run; read it and report before proceeding.
+3. Confirm seedDeployContext is NOT already in core/driver.js module.exports.
+
+IMPLEMENTATION (six deliverables, in order):
+
+1. core/config.js — expose config.deploy from loadConfig()
+   In the result object inside loadConfig(), add after the autonomy: key:
+     deploy: (parsed.deploy && typeof parsed.deploy === "object") ? parsed.deploy : null,
+   In the DEFAULTS constant, add: deploy: null
+   This gives seedDeployContext clean access to config.deploy.adapter without
+   reaching into config._raw.
+
+2. core/deploy/gizmos.conventions.md — new file
+   Verbatim content from plan §gizmos.conventions.md (the full markdown block).
+   Do not truncate or paraphrase — copy exactly.
+
+3. core/deploy/cloud-run.conventions.md — new file
+   Verbatim content from plan §cloud-run.conventions.md.
+
+4. core/deploy/README.md — add Conventions files section
+   After the "Built-in adapters" table, add the "## Conventions files" section
+   verbatim from the plan.
+
+5. core/driver.js — add seedDeployContext function + call
+   a. Add the two marker constants immediately before the function:
+        const DEPLOY_CONTEXT_BEGIN = "<!-- devteam:deploy-target:begin -->";
+        const DEPLOY_CONTEXT_END   = "<!-- devteam:deploy-target:end -->";
+   b. Add seedDeployContext() immediately after writeRunBlockers() (plan has full
+      code). Key points:
+      - Accepts (cwd, config, changeId, opts = {}) — opts.frameworkRoot for tests
+      - Resolves conventionsPath as path.join(frameworkRoot, "core", "deploy", `${adapter}.conventions.md`)
+        where frameworkRoot defaults to path.resolve(__dirname, "..")
+      - Uses upsertSection (already imported in driver.js from ./markers)
+      - Uses pipelineRoot (already imported from ./paths)
+      - Returns boolean: true if written, false if skipped
+   c. Add seedDeployContext to module.exports (line ~1195).
+   d. In run(), call seedDeployContext(cwd, config, changeId) immediately after
+      changeId is resolved (after the const changeId = ... assignment, ~line 437).
+      No options arg needed for the production call — frameworkRoot defaults correctly.
+
+6. core/cli/commands/stage.js — call seedDeployContext before 01/02/03 dispatch
+   After cwd is resolved and loadConfig(cwd) is called (around line 107), add:
+     const CONVENTION_STAGES = new Set(["requirements", "design", "build"]);
+     if (CONVENTION_STAGES.has(stageName)) {
+       const { seedDeployContext } = require(path.join(__dirname, "..", "..", "driver"));
+       seedDeployContext(cwd, loadConfig(cwd), null);
+     }
+   null as changeId is correct — stage command uses in-place mode.
+   The require() is lazy (inside the if) to avoid circular dependency risks.
+
+TESTS — tests/deploy-conventions.test.js (new file, 6 tests):
+Full test code is in the plan §tests/deploy-conventions.test.js. The tests use
+makeFrameworkRoot() to create a temp dir with a synthetic conventions file so
+real core/deploy/ is never touched. Tests verify:
+  1. Returns false when config.deploy is null
+  2. Returns false when adapter set but no conventions file exists
+  3. Returns true and writes delimited block with correct content
+  4. Idempotent — two calls produce exactly one begin/end pair
+  5. Updates block when conventions file changes between calls
+  6. Creates pipeline/ directory automatically if absent
+
+CHANGELOG — changelog.d/feat-adapter-conventions.md:
+One bullet: "Feat: adapter conventions auto-injected into pipeline/context.md.
+When deploy.adapter is set, devteam run and devteam stage (requirements/design/build)
+write a deploy-target context block into pipeline/context.md before the first agent
+dispatches. The block is idempotent and adapter-specific (gizmos, cloud-run have
+full conventions files). --feature strings no longer need to repeat stack details
+implied by the deploy adapter."
+
+VERIFY:
+npm test
+CI=true DEVTEAM_HEADLESS_COMMAND=cat npm test
+npx eslint .
+npm run consistency
+
+Manual smoke (in a temp project directory):
+  mkdir /tmp/conv-test && cd /tmp/conv-test && git init -q
+  devteam init --host claude-code --adapter gizmos --cwd /tmp/conv-test
+  # Edit .devteam/config.yml: set gizmos.app to something real
+  node -e "
+    const { seedDeployContext } = require('<REPO>/core/driver');
+    const { loadConfig } = require('<REPO>/core/config');
+    seedDeployContext('/tmp/conv-test', loadConfig('/tmp/conv-test'), null);
+    console.log(require('fs').readFileSync('/tmp/conv-test/pipeline/context.md', 'utf8'));
+  "
+  # Must show <!-- devteam:deploy-target:begin --> block with Gizmos constraints.
+  # Run again — block must appear exactly once (idempotent).
+  cd - && rm -rf /tmp/conv-test
 ```
