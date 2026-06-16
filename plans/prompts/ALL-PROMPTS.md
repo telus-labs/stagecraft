@@ -21,7 +21,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
-| 12 | Git workflow automation (ADR-010) | 🔲 in progress — ADR-010 accepted; 12.1 + 12.4 ready |
+| 12 | Git workflow automation (ADR-010) | 🔲 in progress — 12.1 ✅ managed gitignore (`devteam init`); 12.2 unblocked |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1711,7 +1711,7 @@ full before starting any item — the five decisions there are the spec.
 No code. File `docs/adr/010-git-integration.md`, review it, raise blockers, change status
 to Accepted, update `docs/adr/README.md`. This unblocks 12.1–12.4.
 
-### 12.1 `devteam init` writes managed gitignore block 🔲
+### 12.1 `devteam init` writes managed gitignore block ✅
 
 ```
 TASK: Implement plans/phase-12-git-workflow-automation.md item 12.1. Read the plan item and
@@ -1736,7 +1736,7 @@ Done: npm test / eslint / consistency green; manual smoke: devteam init in temp 
 "BEGIN stagecraft" .gitignore shows block, grep "run.lock" shows entry, re-run no duplicate.
 ```
 
-### 12.2 `devteam commit` command ⏸ blocked on 12.1 merged
+### 12.2 `devteam commit` command 🔲
 
 ```
 TASK: Implement plans/phase-12-git-workflow-automation.md item 12.2. Read the plan item and
