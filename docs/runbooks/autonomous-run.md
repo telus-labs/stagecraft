@@ -65,7 +65,15 @@ devteam run --budget-usd 10       # stop before a dispatch once spend ≥ $10
 devteam run --allow-stage sign-off --allow-stage deploy   # grant the ceiling
 devteam run --resume              # continue after a crash/stop
 devteam run --force               # override a stale lock
+
+# Repair mode (ADR-009) — bug-fix intent, not a feature:
+devteam run --repair "symptom"                                 # hotfix depth default; diagnosis stage runs first
+devteam run --repair "symptom" --track full                    # full pipeline with repair behavior
+devteam run --repair "symptom" --auto-rule diagnosis-approved  # auto-approve the diagnosis gate
+devteam run --repair "symptom" --repair-at src/auth.js:42      # skip diagnosis; seed affected-files directly
 ```
+
+`--repair` and `--feature` are mutually exclusive. See [§ Repair mode](#repair-mode-devteam-run---repair-adr-009) below and [`docs/runbooks/repair-flow.md`](repair-flow.md) for the diagnosis gate, scope-gate FAIL recovery, and tri-state reproduction.
 
 Progress prints to **stderr**; the `--json` summary prints to **stdout**.
 
@@ -107,6 +115,7 @@ Read the `halt_action` (and `failure_class`) in the summary, or the last line of
 | `structural-input` | A stage was dispatched but wrote no gate, and it isn't transient (clean exit with no output, or repeated failure after the transient budget). | Retrying won't help — inspect `pipeline/logs/<workstream>.log` (context overflow, persistent auth/config error). |
 | `merge-failed` | A workstream gate was missing or malformed at merge. | Read the reason; fix or re-run the missing workstream. |
 | `max-iterations` | The loop hit its guard (`--max-iterations`, default 100). | Almost always a stuck stage — inspect `run-log.jsonl`. |
+| `scope-gate` | The build wrote files outside the diagnosed `affected_files` list (ADR-009 structural scope gate). | See [repair-flow.md § Scope-gate FAIL recovery](repair-flow.md#scope-gate-fail-recovery). |
 
 **Non-halt events** you'll see in progress output / `run-log.jsonl` as the driver works autonomously: `fix-retry` (cleared the failing gate + re-dispatching a `code-defect`, up to `autonomy.max_retries`, default 2), `transient-retry` (a no-gate dispatch is being retried after `--retry-delay-ms`, default 30s, up to once before it's deemed structural), and `auto-ruled` (an escalation was auto-resolved under an `--auto-rule` grant — carries `grant_class`, the `ruling`, and `authority`).
 
@@ -186,6 +195,41 @@ Reads `run-state.json` and the tail of `run-log.jsonl`; reports:
 | `last_heartbeat_age_ms` | Ms since the last heartbeat event |
 | `last_event_age_ms` | Ms since any event in run-log.jsonl |
 | `stall_detected` | `true` if the most recent dispatch event was stall-detected |
+
+## Repair mode (`devteam run --repair`) (ADR-009)
+
+`--repair "<symptom>"` is the bug-fix intent flag. It is orthogonal to `--track` and mutually
+exclusive with `--feature`. What changes when you use it:
+
+1. **Diagnosis stage.** Stage-01 (requirements) produces a DIAGNOSIS document instead of a
+   feature brief. The PM role reads the symptom, traces the code path, and writes
+   `pipeline/diagnosis.md` with root cause, proposed fix, and an `affected_files` list.
+   The gate always lands as ESCALATE — it cannot proceed without your explicit approval
+   (`devteam next`) or `--auto-rule diagnosis-approved`.
+
+2. **PATCH-MODE-scoped build.** The build runs with a `⚠️ PATCH MODE — targeted fix only`
+   block injected, scoped to the `affected_files` list. Any file written outside that set
+   causes a `scope-gate` halt. See [repair-flow.md § Scope-gate FAIL recovery](repair-flow.md#scope-gate-fail-recovery).
+
+3. **Failing-first reproduction.** Stage-03b (executable-spec) is injected before build even
+   on hotfix depth. The agent writes a Gherkin scenario that is RED before the fix and GREEN
+   after; the stamp layer verifies. Gate field `reproduced` is tri-state: `true` / `false` /
+   `"unverifiable: <reason>"`. See [repair-flow.md § Tri-state reproduction](repair-flow.md#tri-state-reproduction-reproduced-field).
+
+**Escape hatch.** When you already know the defect location, `--repair-at src/auth.js:42`
+seeds `affected_files` directly and skips the LLM diagnosis dispatch. Combine with `--repair`
+to retain PATCH-MODE scoping and the scope gate.
+
+**Track default.** `--repair` defaults to `hotfix` depth. Override with `--track full` when
+the symptom is broad or the fix is uncertain. Auth/payments/migration symptoms auto-upgrade via
+the stoplist regardless.
+
+**Intent tag.** Every run-state and run-log event carries `intent: "repair"` so repair runs
+are distinguishable from feature runs in history and telemetry.
+
+For the full operator guide, see [`docs/runbooks/repair-flow.md`](repair-flow.md).
+
+---
 
 ## Honest limitations
 
