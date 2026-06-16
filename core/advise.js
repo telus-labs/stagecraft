@@ -191,7 +191,14 @@ function classifyItem(item, cwd, opts = {}) {
 function generateOptions(item, classification) {
   const acRefs = extractAcRefs(item);
   const hasAc = acRefs.length > 0;
-  const ticketHint = hasAc ? ` (ticket: --apply ${item.id}=B:PROJ-XYZ)` : " (--apply <id>=B:PROJ-XYZ)";
+  const needsIdQuote = /[ \t()[\]{};|&]/.test(item.id);
+  const ticketHint = (letter) => {
+    if (hasAc) {
+      const arg = `${item.id}=${letter}:PROJ-XYZ`;
+      return ` (ticket: --apply ${needsIdQuote ? `'${arg}'` : arg})`;
+    }
+    return ` (--apply <id>=${letter}:PROJ-XYZ)`;
+  };
   const trackFor = (item.track_for || "").toLowerCase();
 
   switch (classification) {
@@ -200,7 +207,7 @@ function generateOptions(item, classification) {
         { id: "A", action: "fix",     label: "fix",     recommended: true,
           description: "dispatches the frontend agent headlessly to apply the HTML fix now, then re-runs the accessibility audit to verify" },
         { id: "B", action: "defer",   label: "defer",   recommended: false,
-          description: `defer with ticket — mark DEFERRED in pipeline/context.md${ticketHint}` },
+          description: `defer with ticket — mark DEFERRED in pipeline/context.md${ticketHint("B")}` },
         { id: "C", action: "amend",   label: "amend",   recommended: false,
           description: "flag for PM to remove the accessibility requirement from scope" },
         { id: "D", action: "nothing", label: "nothing", recommended: false,
@@ -212,7 +219,7 @@ function generateOptions(item, classification) {
         { id: "A", action: "scaffold",  label: "scaffold",  recommended: true,
           description: `prints the command to run: devteam stage build --workstream qa --patch (writes SCAFFOLD-PENDING; you run the command)` },
         { id: "B", action: "defer",     label: "defer",     recommended: false,
-          description: `mark as DEFERRED in pipeline/context.md${ticketHint}` },
+          description: `mark as DEFERRED in pipeline/context.md${ticketHint("B")}` },
         { id: "C", action: "amend",     label: "amend",     recommended: false,
           description: `flag for PM to remove or scope-down ${acRefs.join(", ") || "this item"} from the brief` },
         { id: "D", action: "nothing",   label: "nothing",   recommended: false,
@@ -227,14 +234,14 @@ function generateOptions(item, classification) {
           { id: "A", action: "amend",   label: "amend",   recommended: true,
             description: `flag for PM to scope-down or remove ${acRefs.join(", ") || "this item"} from the brief` },
           { id: "B", action: "defer",   label: "defer",   recommended: false,
-            description: `defer with ticket${ticketHint}` },
+            description: `defer with ticket${ticketHint("B")}` },
           { id: "C", action: "nothing", label: "nothing", recommended: false,
             description: "advance as-is; peer-review may flag the untestable AC" },
         ];
       }
       return [
         { id: "A", action: "defer",     label: "defer",     recommended: true,
-          description: `acknowledge in pipeline/context.md${ticketHint}` },
+          description: `acknowledge in pipeline/context.md${ticketHint("A")}` },
         { id: "B", action: "nothing",   label: "nothing",   recommended: false,
           description: "advance as-is; red-team item may surface in peer-review CHANGES_REQUESTED" },
         { id: "C", action: "amend",     label: "amend",     recommended: false,
@@ -268,7 +275,7 @@ function generateOptions(item, classification) {
         { id: "A", action: "nothing",   label: "nothing",   recommended: true,
           description: "no action needed; item is informational" },
         { id: "B", action: "defer",     label: "defer",     recommended: false,
-          description: `attach a ticket reference to this acknowledgement — use when your team requires all findings to be tracked${ticketHint}` },
+          description: `attach a ticket reference to this acknowledgement — use when your team requires all findings to be tracked${ticketHint("B")}` },
       ];
   }
 }
