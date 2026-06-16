@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, cleanup, runCLI } = require("./_helpers");
-const { groupByTier } = require(path.join(REPO_ROOT, "core", "advise"));
+const { groupByTier, runAdvise } = require(path.join(REPO_ROOT, "core", "advise"));
 
 // ---------------------------------------------------------------------------
 // groupByTier unit tests
@@ -146,6 +146,46 @@ describe("devteam advise grouped output", () => {
       assert.doesNotMatch(r.stdout, /── QA BLOCKER/);
       assert.doesNotMatch(r.stdout, /── INFO/);
       assert.match(r.stdout, /PEER-REVIEW RISK/);
+    } finally {
+      cleanup(cwd);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// loadAddressedItems regression — long-text item ids must persist across runs
+// ---------------------------------------------------------------------------
+
+describe("devteam advise addressed-item persistence", () => {
+  it("long-text id items remain addressed after --apply", () => {
+    const cwd = makeTargetProject();
+    try {
+      fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+      // Gate entry with no structured id — full text becomes item.id
+      const longText = "If a future milestone adds a dashboard, stage-06b must be re-run against those surfaces.";
+      fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-06b.json"), JSON.stringify({
+        status: "PASS",
+        noted_for_followup: [longText],
+      }));
+
+      // Apply "nothing" to the long-text item — simulates devteam advise --apply '<text>=A'
+      const contextFile = path.join(cwd, "pipeline", "context.md");
+      fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+      const { runAdvise } = require(path.join(REPO_ROOT, "core", "advise"));
+      const first = runAdvise(cwd, { checkOnly: true });
+      assert.equal(first.items.length, 1, "should find 1 item before apply");
+      const itemId = first.items[0].item.id;
+      assert.equal(itemId, longText, "item.id should be the full text");
+
+      // Apply via runAdvise (mirrors what devteam advise --apply does)
+      const applyMap = new Map([[itemId, { action: "nothing", ticketId: undefined }]]);
+      runAdvise(cwd, { apply: applyMap });
+
+      // Second run — item must now appear as addressed
+      const second = runAdvise(cwd, { checkOnly: true });
+      const record = second.items.find((r) => r.item.id === itemId);
+      assert.ok(record, "item should still appear in second run");
+      assert.equal(record.addressed, true, "item must be addressed after --apply");
     } finally {
       cleanup(cwd);
     }

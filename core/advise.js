@@ -86,10 +86,15 @@ function loadAddressedItems(cwd, opts = {}) {
     const trimmed = line.trim();
     const matchesPrefix = ADDRESSED_PREFIXES.some((p) => trimmed.startsWith(p));
     if (!matchesPrefix) continue;
-    // Extract the token(s) after the colon — may be "AC-10,AC-11" or "RT-3"
+    // Extract the token(s) after the prefix colon — may be "AC-10,AC-11", "RT-3",
+    // or a long text string when the gate entry has no structured id field.
+    // Split on " — " (the applyOption separator) to capture the full id segment
+    // rather than stopping at the first space (which breaks long-text ids).
     const afterColon = trimmed.replace(/^[A-Z-]+:\s*/, "");
-    // Grab everything up to the first space or em-dash or " —"
-    const tokenPart = afterColon.split(/\s|—/)[0];
+    const tokenPart = afterColon.split(" — ")[0].trim();
+    // Always add the full token so long-text ids (which may contain commas) match
+    // item.id exactly.  Also comma-split for "AC-10,AC-11"-style ref lists.
+    if (tokenPart) addressed.add(tokenPart);
     for (const tok of tokenPart.split(",")) {
       const t = tok.trim();
       if (t) addressed.add(t);
