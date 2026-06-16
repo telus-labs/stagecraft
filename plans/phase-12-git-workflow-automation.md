@@ -4,8 +4,7 @@
 git — volatile file management and commit timing in autonomous mode — by giving the tool an
 opinion about its own VCS footprint.
 
-**Decided in:** [ADR-010](../docs/adr/010-git-integration.md) (Proposed; must be Accepted
-before 12.1–12.4 begin).
+**Decided in:** [ADR-010](../docs/adr/010-git-integration.md) (Accepted 2026-06-15).
 
 **Framing (read before starting any item):** this phase is *interface* work, not capability
 work. The pipeline does not change. The stages do not change. The gate schema does not change.

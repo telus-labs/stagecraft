@@ -1,6 +1,6 @@
 # ADR 010 — Git integration: managed gitignore, `devteam commit`, and `--auto-commit`
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-15
 **Authors:** Mumit Khan
 
@@ -227,5 +227,6 @@ run itself still halted cleanly.
 
 ---
 
-*This ADR is the in-repo decision record for git integration. Execution plan:
-[`plans/phase-12-git-workflow-automation.md`](../../plans/phase-12-git-workflow-automation.md).*
+*This ADR is the in-repo decision record for git integration. Accepted 2026-06-15. Execution
+plan: [`plans/phase-12-git-workflow-automation.md`](../../plans/phase-12-git-workflow-automation.md),
+tracking issue: telus-labs/stagecraft#153.*

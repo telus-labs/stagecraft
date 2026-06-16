@@ -21,7 +21,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
-| 12 | Git workflow automation (ADR-010) | ⏸ blocked on ADR-010 accepted |
+| 12 | Git workflow automation (ADR-010) | 🔲 in progress — ADR-010 accepted; 12.1 + 12.4 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1706,12 +1706,12 @@ acceptance gate) → 12.1 → 12.2 → 12.3; 12.4 parallel to 12.2–12.3. **All
 are blocked on ADR-010 being accepted (12.0).** Read `docs/adr/010-git-integration.md` in
 full before starting any item — the five decisions there are the spec.
 
-### 12.0 Accept ADR-010 ⏸ blocked (prerequisite)
+### 12.0 Accept ADR-010 ✅
 
 No code. File `docs/adr/010-git-integration.md`, review it, raise blockers, change status
 to Accepted, update `docs/adr/README.md`. This unblocks 12.1–12.4.
 
-### 12.1 `devteam init` writes managed gitignore block ⏸ blocked on 12.0 accepted
+### 12.1 `devteam init` writes managed gitignore block 🔲
 
 ```
 TASK: Implement plans/phase-12-git-workflow-automation.md item 12.1. Read the plan item and
@@ -1793,7 +1793,7 @@ Done: npm test / eslint / consistency green; manual smoke of devteam run --auto-
 --until stage-02 --max-iterations 5 in a temp project.
 ```
 
-### 12.4 `docs/git-workflow.md` restructure + repair-flow git guidance ⏸ blocked on 12.0 accepted
+### 12.4 `docs/git-workflow.md` restructure + repair-flow git guidance 🔲
 
 ```
 TASK: Implement plans/phase-12-git-workflow-automation.md item 12.4 (doc-only). Read the
