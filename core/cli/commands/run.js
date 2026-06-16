@@ -1,5 +1,6 @@
 "use strict";
 
+const fs   = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 
@@ -7,6 +8,17 @@ const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 // 1.1: adds advisory_blockers_count + advisory_breakdown (ADR-008 Phase 11.2).
 // 1.2: adds stages_advanced + last_committed_stage_index to run-state.json (Phase 12.2).
 const RUN_SCHEMA_VERSION = "1.2";
+
+// Phase 12.3: halt codes that constitute a "clean halt" for --auto-commit.
+// ceiling/until/budget are design-time stops; all other halts signal something
+// that needs a human and should not trigger an unattended commit.
+const AUTO_COMMIT_HALTS = new Set(["ceiling", "until", "budget"]);
+
+function appendRunLog(logPath, entry) {
+  try {
+    fs.appendFileSync(logPath, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + "\n");
+  } catch { /* logging must never break the run */ }
+}
 
 const name = "run";
 
@@ -29,6 +41,7 @@ const flags = {
   // ADR-008: opt-in advisory-blocker exit code. Bare flag uses QA_BLOCKER+A11Y_FIX
   // threshold; =all also includes PEER_REVIEW_RISK. Default (no flag) exits 0.
   "fail-on-advisory": { type: "toggle", description: "Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold)" },
+  "auto-commit":     { type: "boolean", description: "Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)" },
   help:              { type: "boolean", description: "Show this help" },
 };
 
@@ -123,6 +136,30 @@ function run(positional, _flags) {
       const count = (bd.QA_BLOCKER || 0) + (bd.A11Y_FIX || 0)
         + (isAll ? (bd.PEER_REVIEW_RISK || 0) : 0);
       if (count > 0) process.exit(3);
+    }
+    // Phase 12.3: auto-commit on clean halts. Uses the same algorithm as
+    // `devteam commit` (no interactive prompt; unattended). A commit failure
+    // logs auto-commit-failed and emits a loud stderr warning but does NOT
+    // change the halt's exit code — the pipeline result is independent of git.
+    if (_flags.autoCommit && AUTO_COMMIT_HALTS.has(summary.halt_action)) {
+      const runLogFilePath = path.join(cwd, "pipeline", "run-log.jsonl");
+      const { runCommit } = require(path.join(__dirname, "commit"));
+      const acResult = runCommit(cwd);
+      if (acResult.reason === "nothing-to-commit") {
+        appendRunLog(runLogFilePath, { event: "auto-commit-skipped", reason: "nothing-to-commit" });
+      } else if (acResult.committed) {
+        process.stderr.write(`[auto-commit] committed ${acResult.files.length} file(s):\n`);
+        for (const f of acResult.files) process.stderr.write(`  ${f}\n`);
+        appendRunLog(runLogFilePath, {
+          event: "auto-commit",
+          staged_files: acResult.files,
+          commit_hash: acResult.commitHash,
+          at: new Date().toISOString(),
+        });
+      } else {
+        process.stderr.write(`[auto-commit] WARNING: commit failed — ${acResult.reason}\n`);
+        appendRunLog(runLogFilePath, { event: "auto-commit-failed", reason: acResult.reason });
+      }
     }
     process.exit(cleanStop ? 0 : 1);
   }).catch((err) => {

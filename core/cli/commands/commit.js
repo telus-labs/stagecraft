@@ -317,4 +317,100 @@ function run(positional, _flags) {
   });
 }
 
-module.exports = { name, flags, run };
+// Programmatic commit for --auto-commit: same file-selection logic as the CLI
+// command but skips the interactive prompt. Returns a result object instead of
+// calling process.exit so the caller (driver / run command) can handle errors.
+//
+// Returns:
+//   { committed: true,  files, commitHash }  — success
+//   { committed: false, files: [], reason: "nothing-to-commit" }  — nothing staged
+//   { committed: false, files, reason: string, error: Error }     — git failure
+function runCommit(cwd) {
+  const changeId = null; // Phase 12.2: in-place mode only
+  const pRoot    = pipelineRoot(cwd, changeId);
+  const gDir     = gatesDir(cwd, changeId);
+  const runStateFilePath = path.join(pRoot, "run-state.json");
+
+  let runState;
+  try {
+    runState = JSON.parse(fs.readFileSync(runStateFilePath, "utf8"));
+  } catch {
+    return { committed: false, files: [], reason: "cannot read pipeline/run-state.json" };
+  }
+
+  const stagesAdvanced = runState.stages_advanced || [];
+  const cursor = ("last_committed_stage_index" in runState)
+    ? runState.last_committed_stage_index
+    : null;
+  const intent = runState.intent || "feature";
+
+  // Stage everything after the cursor (same as CLI without --all).
+  const startIdx = cursor === null ? 0 : cursor + 1;
+  const toCommit = stagesAdvanced.slice(startIdx);
+
+  if (toCommit.length === 0) {
+    return { committed: false, files: [], reason: "nothing-to-commit" };
+  }
+
+  // Build file list (mirrors the CLI run() logic exactly).
+  const filesToStage = [];
+  for (const stageId of toCommit) {
+    const gateFile = path.join(gDir, `${stageId}.json`);
+    if (fs.existsSync(gateFile)) {
+      try {
+        const gate = JSON.parse(fs.readFileSync(gateFile, "utf8"));
+        if (gate.status === "PASS" || gate.status === "WARN") {
+          filesToStage.push(gateFile);
+        }
+      } catch { /* unreadable gate — skip */ }
+    }
+    for (const absPath of resolveArtifacts(stageId, pRoot, intent)) {
+      filesToStage.push(absPath);
+    }
+  }
+
+  const cwdNorm = cwd.replace(/\\/g, "/").replace(/\/?$/, "/");
+  const seen    = new Set();
+  const staged  = [];
+  for (const absPath of filesToStage) {
+    const norm = absPath.replace(/\\/g, "/");
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    if (!fs.existsSync(absPath)) continue;
+    const rel = norm.startsWith(cwdNorm) ? norm.slice(cwdNorm.length) : norm;
+    if (isVolatile(rel)) continue;
+    staged.push(absPath);
+  }
+
+  if (staged.length === 0) {
+    return { committed: false, files: [], reason: "nothing-to-commit" };
+  }
+
+  const subject  = generateSubject(toCommit, intent);
+  const trailer  = `Co-Authored-By: Stagecraft (Claude Sonnet 4.6) <stagecraft@mumit.org>`;
+  const fullMsg  = `${subject}\n\n[${toCommit.length} stage${toCommit.length === 1 ? "" : "s"}]\n\n${trailer}`;
+  const relFiles = staged.map((p) => path.relative(cwd, p));
+
+  try {
+    execFileSync("git", ["add", "--", ...staged], { cwd, stdio: "pipe" });
+    execFileSync("git", ["commit", "-m", fullMsg],  { cwd, stdio: "pipe" });
+  } catch (err) {
+    return { committed: false, files: relFiles, reason: err.message, error: err };
+  }
+
+  // Advance cursor to last committed stage.
+  try {
+    runState.last_committed_stage_index = stagesAdvanced.length - 1;
+    fs.writeFileSync(runStateFilePath, JSON.stringify(runState, null, 2));
+  } catch { /* best-effort */ }
+
+  let commitHash = "";
+  try {
+    const { execSync } = require("node:child_process");
+    commitHash = execSync("git rev-parse --short HEAD", { cwd }).toString().trim();
+  } catch { /* ignore */ }
+
+  return { committed: true, files: relFiles, commitHash };
+}
+
+module.exports = { name, flags, run, runCommit };

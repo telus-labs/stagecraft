@@ -63,6 +63,7 @@ Bounded autonomous driver: loop next → dispatch → merge until pipeline-compl
 | --force            | bool   | Force-unlock a stale run.lock                                                                        |
 | --json             | bool   | JSON summary on stdout                                                                               |
 | --fail-on-advisory | toggle | Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold) |
+| --auto-commit      | bool   | Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)                |
 
 ### `devteam commit [options]`
 
