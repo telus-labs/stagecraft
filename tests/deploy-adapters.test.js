@@ -66,4 +66,64 @@ describe("deploy adapters", () => {
       assert.ok(content.includes("rollback_executed"), "missing rollback_executed field");
     });
   });
+
+  describe("core/deploy/README.md table vs filesystem — gizmos", () => {
+    it("README lists gizmos adapter", () => {
+      const content = fs.readFileSync(README, "utf8");
+      assert.ok(content.includes("`gizmos`"), "README missing `gizmos` entry");
+    });
+
+    it("README gizmos row references gizmos.md", () => {
+      const content = fs.readFileSync(README, "utf8");
+      assert.ok(content.includes("gizmos.md"), "README missing gizmos.md reference");
+    });
+  });
+
+  describe("core/deploy/gizmos.md", () => {
+    const ADAPTER = path.join(DEPLOY_DIR, "gizmos.md");
+
+    it("file exists", () => {
+      assert.ok(fs.existsSync(ADAPTER), "core/deploy/gizmos.md does not exist");
+    });
+
+    it("contains ## Assumptions", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("## Assumptions"), "missing ## Assumptions section");
+    });
+
+    it("contains ## Config", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("## Config"), "missing ## Config section");
+    });
+
+    it("contains ## Procedure", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("## Procedure"), "missing ## Procedure section");
+    });
+
+    it("contains ## Runbook hooks", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("## Runbook hooks"), "missing ## Runbook hooks section");
+    });
+
+    it("contains ## Platform constraints", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("## Platform constraints"), "missing ## Platform constraints section");
+    });
+
+    it("gate body uses deploy_completed", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("deploy_completed"), "missing deploy_completed field");
+    });
+
+    it("gate body uses smoke_tests_passed", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("smoke_tests_passed"), "missing smoke_tests_passed field");
+    });
+
+    it("gate body uses rollback_executed", () => {
+      const content = fs.readFileSync(ADAPTER, "utf8");
+      assert.ok(content.includes("rollback_executed"), "missing rollback_executed field");
+    });
+  });
 });
