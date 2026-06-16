@@ -20,10 +20,11 @@ function warnIfWindows(platform, write) {
 }
 
 const flags = {
-  host:  { type: "string",  description: "Host adapter(s), comma-separated" },
-  force: { type: "boolean", description: "Overwrite existing config/files" },
-  cwd:   { type: "string",  description: "Target project directory" },
-  help:  { type: "boolean", description: "Show this help" },
+  host:    { type: "string",  description: "Host adapter(s), comma-separated" },
+  force:   { type: "boolean", description: "Overwrite existing config/files" },
+  cwd:     { type: "string",  description: "Target project directory" },
+  profile: { type: "string",  description: "Optional profile: dogfood" },
+  help:    { type: "boolean", description: "Show this help" },
 };
 
 function run(positional, _flags) {
@@ -77,6 +78,89 @@ function run(positional, _flags) {
     console.log("  ✓ wrote .gitignore (stagecraft block)");
   } else {
     console.log("  ✓ updated .gitignore (stagecraft block)");
+  }
+
+  if (_flags.profile === "dogfood") {
+    const { writeDogfoodGitignoreBlock } = require(path.join(__dirname, "..", "..", "gitignore"));
+    const dgr = writeDogfoodGitignoreBlock(cwd);
+    console.log(dgr === "skipped"
+      ? "  ✓ .gitignore dogfood block already up-to-date"
+      : `  ✓ ${dgr === "wrote" ? "wrote" : "updated"} .gitignore (dogfood block)`);
+
+    // Pre-commit infrastructure guard
+    const hookDir  = path.join(cwd, ".git", "hooks");
+    const hookPath = path.join(hookDir, "pre-commit");
+    const GUARD_MARKER = "# stagecraft-dogfood: infrastructure guard";
+    const GUARD_BLOCK = [
+      "#!/bin/bash",
+      "# stagecraft-dogfood: infrastructure guard — managed by devteam init --profile dogfood",
+      'BLOCKED_PREFIXES="core/ bin/devteam pipeline/stages/ roles/ rules/"',
+      'for f in $(git diff --cached --name-only); do',
+      '  for b in $BLOCKED_PREFIXES; do',
+      '    if [[ "$f" == ${b}* ]] || [[ "$f" == "$b" ]]; then',
+      '      echo "ERROR [dogfood guard]: cannot commit changes to Stagecraft infrastructure: $f"',
+      '      echo "       Stagecraft files must not be modified during a dogfood run."',
+      '      echo "       Use \'git restore --staged $f\' to unstage, or fix the root cause."',
+      '      exit 1',
+      '    fi',
+      '  done',
+      'done',
+    ].join("\n");
+
+    if (!fs.existsSync(hookDir)) {
+      console.log("  ⚠ .git/hooks/ not found — is this a git repository?");
+    } else if (fs.existsSync(hookPath) && fs.readFileSync(hookPath, "utf8").includes(GUARD_MARKER)) {
+      console.log("  ✓ pre-commit hook dogfood guard already present");
+    } else if (fs.existsSync(hookPath)) {
+      const existing = fs.readFileSync(hookPath, "utf8");
+      const lines = existing.split("\n");
+      const shebangLine = lines[0].startsWith("#!") ? lines[0] : null;
+      const rest = shebangLine ? lines.slice(1).join("\n") : existing;
+      const guardBody = GUARD_BLOCK.split("\n").slice(1).join("\n"); // skip #!/bin/bash
+      const newContent = shebangLine
+        ? shebangLine + "\n" + guardBody + "\n" + rest
+        : GUARD_BLOCK + "\n" + existing;
+      fs.writeFileSync(hookPath, newContent, "utf8");
+      fs.chmodSync(hookPath, 0o755);
+      console.log("  ✓ pre-commit hook: prepended dogfood infrastructure guard");
+    } else {
+      fs.mkdirSync(hookDir, { recursive: true });
+      fs.writeFileSync(hookPath, GUARD_BLOCK + "\n", "utf8");
+      fs.chmodSync(hookPath, 0o755);
+      console.log("  ✓ wrote pre-commit hook (dogfood infrastructure guard)");
+    }
+
+    // .git/info/exclude entry
+    const infoDir     = path.join(cwd, ".git", "info");
+    const excludePath = path.join(infoDir, "exclude");
+    const EXCLUDE_LINE = "pipeline/stages/deploy.md";
+    if (fs.existsSync(infoDir)) {
+      const exc = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, "utf8") : "";
+      if (!exc.includes(EXCLUDE_LINE)) {
+        const sep = exc.length > 0 && !exc.endsWith("\n") ? "\n" : "";
+        fs.writeFileSync(excludePath, exc + sep + EXCLUDE_LINE + "\n", "utf8");
+        console.log("  ✓ wrote .git/info/exclude (pipeline/stages/deploy.md)");
+      } else {
+        console.log("  ✓ .git/info/exclude already contains deploy.md entry");
+      }
+    } else {
+      console.log("  ⚠ .git/info/ not found — skipping .git/info/exclude");
+    }
+
+    // Write profile marker to config.yml
+    const cfgPath = path.join(cwd, ".devteam", "config.yml");
+    if (fs.existsSync(cfgPath)) {
+      const cfgContent = fs.readFileSync(cfgPath, "utf8");
+      if (!cfgContent.includes("profile: dogfood")) {
+        fs.writeFileSync(cfgPath, `profile: dogfood\n\n${cfgContent}`, "utf8");
+        console.log("  ✓ wrote profile: dogfood to .devteam/config.yml");
+      } else {
+        console.log("  ✓ profile: dogfood already in .devteam/config.yml");
+      }
+    }
+
+    console.log("\n✅ Dogfood profile active. Run 'devteam doctor' to verify the install.");
+    console.log("   Tip: use --budget-usd with devteam run to cap spend during dogfood runs.");
   }
 
   console.log(`\nNext: edit ${path.relative(cwd, configPath(cwd))} if you need custom routing, then \`devteam stage requirements --feature "..."\`.`);

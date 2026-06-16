@@ -1,0 +1,140 @@
+"use strict";
+
+const { describe, it, afterEach } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+
+const { REPO_ROOT, cleanup, runCLI } = require("./_helpers");
+const {
+  writeDogfoodGitignoreBlock,
+  CANONICAL_DOGFOOD_BLOCK,
+  DOGFOOD_BLOCK_BEGIN,
+} = require(path.join(REPO_ROOT, "core", "gitignore"));
+
+let _dirs = [];
+function track(cwd) { _dirs.push(cwd); return cwd; }
+afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
+
+function makeDogfoodProject() {
+  const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+  // Synthetic .git/ with hooks/ and info/ so the hook and exclude writes work
+  fs.mkdirSync(path.join(cwd, ".git", "hooks"), { recursive: true });
+  fs.mkdirSync(path.join(cwd, ".git", "info"), { recursive: true });
+  return cwd;
+}
+
+describe("devteam init --profile dogfood", () => {
+  it("writeDogfoodGitignoreBlock appends the dogfood block to .gitignore", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const giPath = path.join(cwd, ".gitignore");
+
+    const result = writeDogfoodGitignoreBlock(cwd);
+
+    assert.equal(result, "wrote");
+    const content = fs.readFileSync(giPath, "utf8");
+    assert.ok(content.includes(DOGFOOD_BLOCK_BEGIN));
+    assert.ok(content.includes("pipeline/brief.md"));
+    assert.ok(content.includes("pipeline/code-review/"));
+  });
+
+  it("writeDogfoodGitignoreBlock returns 'skipped' when block already matches canonical", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const giPath = path.join(cwd, ".gitignore");
+    fs.writeFileSync(giPath, CANONICAL_DOGFOOD_BLOCK + "\n", "utf8");
+
+    const result = writeDogfoodGitignoreBlock(cwd);
+
+    assert.equal(result, "skipped");
+    assert.equal(fs.readFileSync(giPath, "utf8"), CANONICAL_DOGFOOD_BLOCK + "\n");
+  });
+
+  it("writeDogfoodGitignoreBlock returns 'updated' when block is outdated", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const giPath = path.join(cwd, ".gitignore");
+    const oldBlock = `${DOGFOOD_BLOCK_BEGIN}\npipeline/brief.md\n# END stagecraft-dogfood`;
+    fs.writeFileSync(giPath, oldBlock, "utf8");
+
+    const result = writeDogfoodGitignoreBlock(cwd);
+
+    assert.equal(result, "updated");
+    const content = fs.readFileSync(giPath, "utf8");
+    assert.ok(content.includes("pipeline/code-review/"), "canonical entries must appear");
+    assert.equal((content.match(/# BEGIN stagecraft-dogfood/g) || []).length, 1, "exactly one block");
+  });
+
+  it("devteam init --profile dogfood writes pre-commit hook with guard marker", () => {
+    const cwd = makeDogfoodProject();
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--profile", "dogfood"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+
+    const hookPath = path.join(cwd, ".git", "hooks", "pre-commit");
+    assert.ok(fs.existsSync(hookPath), "pre-commit hook must exist");
+    const content = fs.readFileSync(hookPath, "utf8");
+    assert.ok(content.includes("# stagecraft-dogfood: infrastructure guard"));
+    assert.ok(content.includes("BLOCKED_PREFIXES"));
+    // Hook must be executable
+    assert.doesNotThrow(() => fs.accessSync(hookPath, fs.constants.X_OK));
+  });
+
+  it("devteam init --profile dogfood adds pipeline/stages/deploy.md to .git/info/exclude", () => {
+    const cwd = makeDogfoodProject();
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--profile", "dogfood"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+
+    const excludePath = path.join(cwd, ".git", "info", "exclude");
+    assert.ok(fs.existsSync(excludePath), ".git/info/exclude must exist");
+    const content = fs.readFileSync(excludePath, "utf8");
+    assert.ok(content.includes("pipeline/stages/deploy.md"));
+  });
+
+  it("devteam init --profile dogfood writes profile: dogfood to config.yml", () => {
+    const cwd = makeDogfoodProject();
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--profile", "dogfood"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+
+    const cfgPath = path.join(cwd, ".devteam", "config.yml");
+    assert.ok(fs.existsSync(cfgPath), "config.yml must exist");
+    const content = fs.readFileSync(cfgPath, "utf8");
+    assert.ok(content.includes("profile: dogfood"));
+  });
+
+  it("running --profile dogfood twice is idempotent: hook not duplicated, block not duplicated", () => {
+    const cwd = makeDogfoodProject();
+
+    runCLI(["init", "--host", "generic", "--cwd", cwd, "--profile", "dogfood"]);
+    const r2 = runCLI(["init", "--host", "generic", "--cwd", cwd, "--profile", "dogfood"]);
+    assert.equal(r2.status, 0, `second init failed: ${r2.stderr}`);
+
+    // Dogfood gitignore block: exactly one
+    const giContent = fs.readFileSync(path.join(cwd, ".gitignore"), "utf8");
+    assert.equal(
+      (giContent.match(/# BEGIN stagecraft-dogfood/g) || []).length,
+      1,
+      "gitignore must have exactly one dogfood block",
+    );
+
+    // Hook: guard marker appears exactly once
+    const hookContent = fs.readFileSync(
+      path.join(cwd, ".git", "hooks", "pre-commit"),
+      "utf8",
+    );
+    assert.equal(
+      (hookContent.match(/# stagecraft-dogfood: infrastructure guard/g) || []).length,
+      1,
+      "hook guard marker must appear exactly once",
+    );
+
+    // config.yml: profile: dogfood appears exactly once
+    const cfgContent = fs.readFileSync(path.join(cwd, ".devteam", "config.yml"), "utf8");
+    assert.equal(
+      (cfgContent.match(/profile: dogfood/g) || []).length,
+      1,
+      "config.yml must have profile: dogfood exactly once",
+    );
+  });
+});

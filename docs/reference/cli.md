@@ -182,11 +182,12 @@ Inspect and triage follow-up items (DEFERRED, KNOWN-FLAKY, BRIEF-AMEND-NEEDED) b
 
 Install host adapter(s) into the current project. Writes .devteam/config.yml and creates pipeline/gates/ workspace.
 
-| Flag    | Type   | Description                      |
-| ------- | ------ | -------------------------------- |
-| --host  | string | Host adapter(s), comma-separated |
-| --force | bool   | Overwrite existing config/files  |
-| --cwd   | string | Target project directory         |
+| Flag      | Type   | Description                      |
+| --------- | ------ | -------------------------------- |
+| --host    | string | Host adapter(s), comma-separated |
+| --force   | bool   | Overwrite existing config/files  |
+| --cwd     | string | Target project directory         |
+| --profile | string | Optional profile: dogfood        |
 
 ### `devteam doctor [options]`
 
