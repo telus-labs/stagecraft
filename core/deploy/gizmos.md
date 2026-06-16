@@ -6,7 +6,7 @@ at the edge on first request after push.
 
 ## Assumptions
 
-- `gizmos` CLI is installed and authenticated (`gizmos whoami` exits 0)
+- `gizmos` CLI is installed and `GIZMOS_API_KEY` is set in the environment
 - `wrangler.toml` exists at the project root with a `name` field
 - Source code is TypeScript/JavaScript (Hono recommended) or Python
   (FastAPI via Pyodide) — Gizmos does not support arbitrary runtimes
@@ -55,12 +55,13 @@ e. Confirm required config fields are set: `deploy.gizmos.app`,
    `deploy.gizmos.src`. If empty: write `status: ESCALATE` with reason
    "deploy.gizmos.{field} is required".
 
-f. Confirm Gizmos CLI is authenticated:
+f. Confirm `GIZMOS_API_KEY` is set in the environment. If empty or unset:
+   write `status: ESCALATE` with reason "GIZMOS_API_KEY is not set —
+   export it before deploying (export GIZMOS_API_KEY=gzm_...)". Halt.
+
    ```bash
-   gizmos whoami
+   [ -z "${GIZMOS_API_KEY:-}" ] && echo "GIZMOS_API_KEY not set" && exit 1
    ```
-   Non-zero: `status: ESCALATE` with reason "gizmos CLI is not
-   authenticated — run 'gizmos login' before deploying".
 
 ### 2. Resolve config
 
