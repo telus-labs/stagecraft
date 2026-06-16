@@ -264,9 +264,20 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Pure static analysis — no external processes, no network, no AI. Reads manifests, source files, and config files only
 - Add `docs/project-conventions.md` to your AGENTS.md or readFirst lists to inject discovered conventions into agent prompts
 
+**`devteam commit [--all] [--dry-run] [--message <msg>] [--json]`** — stage exactly the right pipeline artifacts and commit. (Phase 12.2, ADR-010)
+
+- Reads `pipeline/run-state.json` and determines which stages have not yet been committed (via an idempotency cursor, `last_committed_stage_index`)
+- Stages the gate file for each completed stage (PASS or WARN) plus the stage's named output files (brief.md, design-spec.md, spec.feature, code-review/, test-report.md, etc.) — never `git add -A`
+- Volatile runtime files (`run-state.json`, `run.lock`, `run-log.jsonl`, logs/, gates/archive/, etc.) are excluded unconditionally, even if they somehow appear in an artifact slot
+- Generates a commit message: `"pipeline: stages NN–NN PASS"` (or `"pipeline(repair): ..."` for repair runs) with a `Co-Authored-By: Stagecraft` trailer
+- Prompts `y/n/e` before committing; `--dry-run` prints the file list without prompting; `--all` ignores the cursor and re-stages everything; `--message` overrides the generated subject
+- Calling it twice is safe: the second call prints "nothing to commit"
+- Limitation: supports in-place pipeline mode only (changeId=null); bounded-workspace (B9) support is a Phase 12.3+ follow-on
+
 **`devteam init`** — set up a project for the first time.
 
 - Writes `.devteam/config.yml`, lays down role briefs, rules, skills, and the `/devteam` slash command for the chosen host
+- Writes (or updates) a managed `# BEGIN stagecraft` / `# END stagecraft` block in `.gitignore` listing all volatile Stagecraft runtime files — run once and your `.gitignore` is machine-maintained; re-running updates an outdated block
 - `--host claude-code | codex | gemini-cli | generic`
 
 **`devteam doctor`** — verify everything is wired up before you start.
