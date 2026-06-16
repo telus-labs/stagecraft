@@ -49,6 +49,7 @@ Every adapter must:
 | `kubernetes`               | `kubernetes.md`    | K8s clusters via `kubectl` / Helm  |
 | `terraform`                | `terraform.md`     | IaC-managed infra on any cloud     |
 | `cloud-run`                | `cloud-run.md`     | GCP Cloud Run via Artifact Registry + gcloud |
+| `gizmos`                   | `gizmos.md`        | Gizmos platform (Cloudflare Workers, gizmos.run) |
 | `custom`                   | `custom.md`        | Project-specific script (escape hatch) |
 
 ## Writing a new adapter
