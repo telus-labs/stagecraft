@@ -307,6 +307,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Writes `.devteam/config.yml`, lays down role briefs, rules, skills, and the `/devteam` slash command for the chosen host
 - Writes (or updates) a managed `# BEGIN stagecraft` / `# END stagecraft` block in `.gitignore` listing all volatile Stagecraft runtime files — run once and your `.gitignore` is machine-maintained; re-running updates an outdated block
 - `--host claude-code | codex | gemini-cli | generic`
+- **`--profile dogfood`** (Phase 14.1) — when dogfooding Stagecraft against its own source tree, adds four safeguards: a supplemental `# BEGIN stagecraft-dogfood` gitignore block covering generated pipeline documents (`brief.md`, `context.md`, `spec.feature`, `runbook.md`, `test-report.md`, `code-review/`), a pre-commit hook that blocks accidental commits to `core/`, `bin/devteam`, `pipeline/stages/`, `roles/`, or `rules/`, a `pipeline/stages/deploy.md` entry in `.git/info/exclude`, and a `profile: dogfood` marker in `.devteam/config.yml`. All writes are idempotent.
 
 **`devteam doctor`** — verify everything is wired up before you start.
 

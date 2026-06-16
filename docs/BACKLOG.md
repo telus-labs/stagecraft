@@ -78,7 +78,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 | E2 | ~~Web UI for pipeline runs~~ | 4 | 4 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | E3 | **VS Code extension** | 3 | 3 | Sidebar with stage status, "run next stage" button, gate viewer. |
 | E4 | **Live streaming output** | 3 | 2 | Currently `--headless` waits for the host CLI to finish. Stream the LLM's output to the user's terminal as it happens. |
-| E5 | ~~Pre-flight check (`devteam doctor`)~~ | 3 | 1 | ✅ v0.1.0 · [CHANGELOG](../CHANGELOG.md#010--2026-05-26) |
+| E5 | ~~Pre-flight check (`devteam doctor`)~~ | 3 | 1 | ✅ v0.1.0 · [CHANGELOG](../CHANGELOG.md#010--2026-05-26) · Phase 14.2 extends with a "Dogfood mode" section (6 checks) when `profile: dogfood` is set |
 | E6 | ~~`devteam replay <stage-id>`~~ | 3 | 3 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | E7 | ~~`/goal` integration for convergence-shaped stages~~ | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | E8 | ~~Codebase audit feature~~ | 5 | 3 | ✅ v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
