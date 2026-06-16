@@ -780,7 +780,7 @@ devteam memory clear                                   # wipe
 devteam memory reindex                                 # re-embed (after embedder change)
 ```
 
-The local-default embedder (`Xenova/bge-small-en-v1.5` via `@huggingface/transformers`) is ~33MB, lazy-downloaded to `~/.cache/huggingface/`, and runs entirely offline after the first ingest. JSON-backed storage under `.devteam/memory/` is git-friendly, but **add `.devteam/memory/` to your `.gitignore`** unless you have a deliberate sharing strategy (the store contains plaintext copies of brief / design content).
+The local-default embedder (`Xenova/bge-small-en-v1.5` via `@huggingface/transformers`) is ~33MB, lazy-downloaded to `~/.cache/huggingface/`, and runs entirely offline after the first ingest. JSON-backed storage under `.devteam/memory/` is git-friendly, but `.devteam/memory/` is excluded by the managed `.gitignore` block that `devteam init` writes — so it is ignored by default. If you have a deliberate sharing strategy (the store contains plaintext copies of brief / design content), remove that entry from the block.
 
 Opt out per artifact by including the marker `stagecraft-no-memory` anywhere in the file (a comment line works). Stagecraft skips that artifact at ingest.
 
