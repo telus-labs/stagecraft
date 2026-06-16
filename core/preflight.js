@@ -180,6 +180,39 @@ function runDeferredItemsRisk(gatesDirPath) {
 }
 
 // ---------------------------------------------------------------------------
+// Check D — staged pipeline artifacts
+// ---------------------------------------------------------------------------
+// Blocks a PR if any pipeline artifact files appear in the git index.
+// Applies to all projects (not just dogfood mode) — staging these files into
+// a peer-review PR is always a mistake.
+// ---------------------------------------------------------------------------
+function checkStagedPipelineArtifacts(cwd) {
+  const result = spawnSync("git", ["diff", "--cached", "--name-only"], { cwd, encoding: "utf8" });
+  if (result.status !== 0) return []; // not a git repo or no index — skip silently
+  const staged = (result.stdout || "").split("\n").filter(Boolean);
+  const ARTIFACT_PREFIXES = [
+    "pipeline/brief.md",
+    "pipeline/context.md",
+    "pipeline/spec.feature",
+    "pipeline/runbook.md",
+    "pipeline/test-report.md",
+    "pipeline/deploy-log.md",
+    "pipeline/code-review/",
+    "pipeline/gates/",
+    "pipeline/changes/",
+    "pipeline/run-state.json",
+    "pipeline/run-log.jsonl",
+    "pipeline/run.lock",
+    "pipeline/logs/",
+    "pipeline/dispatches/",
+    "pipeline/memory/",
+  ];
+  return staged.filter((f) =>
+    ARTIFACT_PREFIXES.some((p) => p.endsWith("/") ? f.startsWith(p) : f === p)
+  );
+}
+
+// ---------------------------------------------------------------------------
 // runPreflight — orchestrator
 // ---------------------------------------------------------------------------
 function runPreflight(cwd, opts = {}) {
@@ -189,7 +222,17 @@ function runPreflight(cwd, opts = {}) {
   const importPath  = runImportPathCheck(cwd);
   const deferred    = runDeferredItemsRisk(gatesDirPath);
 
-  const allBlockers = [...hygiene.blockers, ...importPath.blockers];
+  const stagedArtifacts = checkStagedPipelineArtifacts(cwd);
+  const stagedBlockers  = stagedArtifacts.length > 0
+    ? [
+        `Pipeline artifacts are staged for commit — these must not appear in a PR: ` +
+        stagedArtifacts.slice(0, 5).join(", ") +
+        (stagedArtifacts.length > 5 ? ` (+${stagedArtifacts.length - 5} more)` : "") +
+        `. Run 'git restore --staged <files>' to unstage.`,
+      ]
+    : [];
+
+  const allBlockers = [...hygiene.blockers, ...importPath.blockers, ...stagedBlockers];
   const allWarnings = [...hygiene.warnings, ...importPath.warnings, ...deferred.warnings];
   const status      = allBlockers.length > 0 ? "FAIL" : "PASS";
 
@@ -215,4 +258,4 @@ function runPreflight(cwd, opts = {}) {
   return { status, blockers: allBlockers, warnings: allWarnings, gate };
 }
 
-module.exports = { runPreflight, runGitHygieneCheck, runImportPathCheck, runDeferredItemsRisk };
+module.exports = { runPreflight, runGitHygieneCheck, runImportPathCheck, runDeferredItemsRisk, checkStagedPipelineArtifacts };
