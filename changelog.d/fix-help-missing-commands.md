@@ -1,0 +1,1 @@
+- **Fix: `devteam help` now lists all current commands.** `devteam commit`, `devteam hook`, and `devteam advise` (shipped in Phases 11–12) were missing from the help output entirely. The `devteam run` synopsis was also missing `--auto-commit`. All four gaps are now documented in `core/cli/commands/help.js`.

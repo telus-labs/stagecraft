@@ -53,10 +53,23 @@ Commands:
                                    [class:] is in the granted allowlist.
       [--resume] [--force] [--json] Halts for a human on escalations, the
       [--fail-on-advisory[=all]]    consequence ceiling (sign-off / deploy),
-                                   a budget cap, or a structural failure.
+      [--auto-commit]               a budget cap, or a structural failure.
                                    --fail-on-advisory exits 3 when advisory
                                    blockers remain (=all adds PEER_REVIEW_RISK).
+                                   --auto-commit commits pipeline artifacts on
+                                   a clean halt (ceiling, --until, budget).
                                    Writes run.lock, run-state.json, run-log.
+  commit [--all]                   Commit pipeline artifacts after a clean
+         [--dry-run]                pipeline stage. Stages only gate-bearing
+         [--message "..."]          files for completed stages (cursor-aware);
+         [--json] [--cwd <dir>]     --all stages all completed stages regardless
+                                   of cursor. --dry-run prints without committing.
+                                   Used automatically by --auto-commit.
+  hook <name>                      Dispatch a framework hook script by name.
+                                   Names: validate, secret-scan, approval-
+                                   derivation. Used by .claude/settings.local.json
+                                   hooks; resolves script paths at runtime so
+                                   the file is portable across machines.
   validate                         Validate the most recent gate in
                                    pipeline/gates/. Exit codes: 0 PASS/WARN,
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
@@ -108,6 +121,13 @@ Commands:
                                    pipeline/context.md and fixes gates, runs stages,
                                    and merges — so devteam next advances. No
                                    hand-editing required.
+  advise [--apply <selections>]    Triage noted_for_followup[] items across all
+         [--feature "..."]          completed gates. Classifies each as
+         [--json] [--cwd <dir>]     QA_BLOCKER, PEER_REVIEW_RISK, QA_NOISE, or
+         [--timeout-ms N]           INFO. --apply writes selections to
+                                   pipeline/context.md (format: AC-11=A,AC-12=B
+                                   or AC-11=A:TICKET-123). Runs automatically at
+                                   pipeline-complete when items are present.
   status [--json]                  Liveness report (ADR-007 Tier 1): reads
                                    run-state.json + run-log.jsonl tail and
                                    reports status / current_stage /
