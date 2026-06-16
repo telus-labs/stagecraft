@@ -134,6 +134,67 @@ test("extractAcsFromBrief: pulls AC-N from a bulleted list", () => {
   assert.match(byId.get("AC-2").body, /Password reset/);
 });
 
+test("extractAcsFromBrief: handles bold markdown **AC-N** format", () => {
+  const text = `
+## Acceptance Criteria
+
+**AC-1** — POST /generate returns 200.
+**AC-2** — POST with empty diff returns 400.
+- **AC-3** — GET /healthz returns ok.
+`;
+  const { ids, byId } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-1", "AC-2", "AC-3"]);
+  assert.match(byId.get("AC-1").body, /POST \/generate/);
+  assert.match(byId.get("AC-3").body, /GET \/healthz/);
+});
+
+test("extractAcsFromBrief: section-scoped — ignores AC references outside the Acceptance Criteria section", () => {
+  // Mirrors the real pattern: PM uses **AC-N** in definitions AND in §9
+  // observability notes. Only the §3 definitions should count.
+  const text = `
+# Brief
+
+## §3 Acceptance Criteria
+
+**AC-1** — Valid diff returns 200.
+**AC-2** — Empty diff returns 400.
+**AC-3** — Large diff returns 413.
+
+## §4 Out of Scope
+
+Nothing here.
+
+## §9 Observability Requirements
+
+- **AC-1/AC-7** (successful generation): log latency.
+- **AC-2/AC-3** (validation errors): log rejection reason.
+- **AC-3** (large diff): no extra logging.
+`;
+  const { ids, duplicates } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-1", "AC-2", "AC-3"]);
+  assert.equal(duplicates.length, 0, "observability references must not register as duplicate definitions");
+});
+
+test("extractAcsFromBrief: falls back to whole-document scan when no section header is found", () => {
+  // Legacy / headerless briefs still work.
+  const text = "- AC-1: a\n- AC-2: b\n- AC-3: c";
+  const { ids } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-1", "AC-2", "AC-3"]);
+});
+
+test("extractAcsFromBrief: handles §N-prefixed section headers (e.g. §3 Acceptance Criteria)", () => {
+  const text = `
+## §3 Acceptance Criteria
+
+**AC-1** — something.
+**AC-2** — another.
+
+## §4 Out of Scope
+`;
+  const { ids } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-1", "AC-2"]);
+});
+
 test("extractAcsFromBrief: flags duplicates", () => {
   const text = `
 - AC-1: first

@@ -47,19 +47,45 @@ const { parse: parseGherkin, allScenarios, acIdsFor } = require("./gherkin");
 //   - AC-2 — Password reset link expires in 15 minutes.
 //   * AC-3. Invalid credentials show a generic error.
 //
-// We tolerate these surroundings (bullet markers, optional colon/dash,
-// indentation) because real briefs have stylistic variation. We
-// require ACs to be uniquely numbered — duplicates surface as a
-// dedicated drift type.
-const AC_LINE_RE = /^\s*(?:[-*+]\s+)?(AC-\d+)\b\s*[.:\-—]?\s*(.+?)\s*$/;
+// We tolerate these surroundings (bullet markers, optional bold
+// markdown wrapping, optional colon/dash, indentation) because real
+// briefs have stylistic variation. We require ACs to be uniquely
+// numbered — duplicates surface as a dedicated drift type.
+//
+// Supported formats:
+//   - AC-1: Users can sign in.         (bullet + bare)
+//   - **AC-2** — Password reset.       (bullet + bold)
+//   **AC-3**: Invalid creds.           (bold, no bullet)
+//   AC-4 — Something else.             (bare, no bullet)
+const AC_LINE_RE = /^\s*(?:[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]?\s*(.+?)\s*$/;
+
+// When a brief uses a dedicated "Acceptance Criteria" section header,
+// extraction is scoped to that section. This prevents AC references in
+// other sections (e.g. Observability, SLO notes) from registering as
+// duplicate definitions. Falls back to whole-document scan when no
+// header is found (backwards-compatible with headerless briefs).
+const AC_SECTION_RE = /^\s*#{1,6}\s+(?:§\d+\s+)?acceptance\s+criteria\b/i;
+const ANY_HEADER_RE = /^\s*#{1,6}\s+/;
 
 function extractAcsFromBrief(text) {
   const ids = [];
   const byId = new Map();
   const duplicates = [];
   const lines = text.split(/\r?\n/);
+  let inSection = false;
+  let sectionFound = false;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
+    if (AC_SECTION_RE.test(line)) {
+      inSection = true;
+      sectionFound = true;
+      continue; // header line itself never contains an AC definition
+    }
+    if (sectionFound && ANY_HEADER_RE.test(line)) {
+      inSection = false;
+      continue; // next section started; header line is not a definition
+    }
+    if (sectionFound && !inSection) continue; // between sections — skip
     const m = line.match(AC_LINE_RE);
     if (!m) continue;
     const id = m[1];
