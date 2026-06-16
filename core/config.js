@@ -100,7 +100,22 @@ function resolveHost(config, stage, role) {
   return routing.default_host;
 }
 
-function renderDefaultConfig(hosts) {
+// Adapter-specific deploy config hints written as comments when --adapter is used.
+const DEPLOY_ADAPTER_HINTS = {
+  gizmos: [
+    "  gizmos:",
+    "    app: my-app          # Gizmos app name (must match wrangler.toml name)",
+    "    src: ./src           # source directory",
+  ],
+  "cloud-run": [
+    "  cloud_run:",
+    "    project: my-project  # GCP project ID",
+    "    region: us-central1  # GCP region",
+    "    service: my-service  # Cloud Run service name",
+  ],
+};
+
+function renderDefaultConfig(hosts, opts = {}) {
   const list = Array.isArray(hosts) ? hosts : [hosts];
   if (list.length === 0) throw new Error("renderDefaultConfig: at least one host required");
   const lines = [
@@ -129,6 +144,15 @@ function renderDefaultConfig(hosts) {
   lines.push("  #   lint_command: \"npm run lint\"   # override; defaults to package.json scripts.lint");
   lines.push("  #   test_command: \"npm test\"      # override; set to null to disable");
   lines.push("");
+  if (opts.adapter) {
+    lines.push("deploy:");
+    lines.push(`  adapter: ${opts.adapter}`);
+    lines.push("  environment: production       # gate label");
+    lines.push("  smoke_test_path: /healthz     # health probe path");
+    const hints = DEPLOY_ADAPTER_HINTS[opts.adapter];
+    if (hints) hints.forEach((h) => lines.push(h));
+    lines.push("");
+  }
   return lines.join("\n");
 }
 
@@ -138,7 +162,7 @@ function writeConfigIfAbsent(cwd, hosts, opts = {}) {
     return { written: false, path: p, reason: "exists" };
   }
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, renderDefaultConfig(hosts), "utf8");
+  fs.writeFileSync(p, renderDefaultConfig(hosts, opts), "utf8");
   return { written: true, path: p };
 }
 
@@ -189,8 +213,11 @@ function checkBoundedFence(config, commandName) {
   );
 }
 
+// Known deploy adapter names. Used by `devteam init --adapter` for validation.
+const KNOWN_DEPLOY_ADAPTERS = ["docker-compose", "kubernetes", "terraform", "cloud-run", "gizmos", "custom"];
+
 module.exports = {
   loadConfig, clearConfigCache, resolveHost, configPath, renderDefaultConfig,
   writeConfigIfAbsent, changeIdFromFeature, changeIdFromSymptom, DEFAULTS,
-  BOUNDED_UNWIRED_COMMANDS, checkBoundedFence,
+  BOUNDED_UNWIRED_COMMANDS, checkBoundedFence, KNOWN_DEPLOY_ADAPTERS,
 };

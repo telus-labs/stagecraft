@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
-const { loadConfig, clearConfigCache, resolveHost, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS } =
+const { loadConfig, clearConfigCache, resolveHost, renderDefaultConfig, writeConfigIfAbsent, DEFAULTS, KNOWN_DEPLOY_ADAPTERS } =
   require(path.join(REPO_ROOT, "core", "config"));
 
 let _tmpDirs = [];
@@ -98,6 +98,53 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     assert.equal(r2.written, true);
     const content = fs.readFileSync(r2.path, "utf8");
     assert.match(content, /default_host: codex/);
+  });
+
+  it("renders deploy section when adapter is specified", () => {
+    const text = renderDefaultConfig(["claude-code"], { adapter: "gizmos" });
+    assert.match(text, /deploy:/);
+    assert.match(text, /adapter: gizmos/);
+    assert.match(text, /environment: production/);
+    assert.match(text, /smoke_test_path: \/healthz/);
+    assert.match(text, /gizmos:/);
+    assert.match(text, /app: my-app/);
+  });
+
+  it("renders cloud-run deploy section with cloud_run hints", () => {
+    const text = renderDefaultConfig(["claude-code"], { adapter: "cloud-run" });
+    assert.match(text, /adapter: cloud-run/);
+    assert.match(text, /cloud_run:/);
+    assert.match(text, /project: my-project/);
+    assert.match(text, /region: us-central1/);
+  });
+
+  it("renders deploy section without hints for adapters without specific hints", () => {
+    const text = renderDefaultConfig(["claude-code"], { adapter: "kubernetes" });
+    assert.match(text, /adapter: kubernetes/);
+    assert.match(text, /environment: production/);
+    assert.ok(!text.includes("gizmos:"), "must not include gizmos hints");
+    assert.ok(!text.includes("cloud_run:"), "must not include cloud_run hints");
+  });
+
+  it("omits deploy section when no adapter specified", () => {
+    const text = renderDefaultConfig(["claude-code"]);
+    assert.ok(!text.includes("deploy:"), "must not include deploy section without adapter");
+  });
+
+  it("writeConfigIfAbsent writes deploy section when adapter opt is set", () => {
+    const cwd = track(makeTargetProject({ config: false }));
+    const r = writeConfigIfAbsent(cwd, ["claude-code"], { adapter: "gizmos" });
+    assert.equal(r.written, true);
+    const content = fs.readFileSync(r.path, "utf8");
+    assert.match(content, /adapter: gizmos/);
+    assert.match(content, /app: my-app/);
+  });
+
+  it("KNOWN_DEPLOY_ADAPTERS includes gizmos and cloud-run", () => {
+    assert.ok(KNOWN_DEPLOY_ADAPTERS.includes("gizmos"));
+    assert.ok(KNOWN_DEPLOY_ADAPTERS.includes("cloud-run"));
+    assert.ok(KNOWN_DEPLOY_ADAPTERS.includes("docker-compose"));
+    assert.ok(KNOWN_DEPLOY_ADAPTERS.includes("custom"));
   });
 });
 

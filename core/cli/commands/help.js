@@ -10,10 +10,14 @@ Usage: devteam <command> [args]
 
 Commands:
   init --host <list> [--force]     Install host adapter(s) into the current
-       [--profile dogfood]          project. <list> is comma-separated, e.g.
-                                   "claude-code" or "claude-code,codex".
+       [--adapter <name>]           project. <list> is comma-separated, e.g.
+       [--profile dogfood]          "claude-code" or "claude-code,codex".
                                    Writes .devteam/config.yml and creates
-                                   pipeline/gates/ workspace. --profile dogfood
+                                   pipeline/gates/ workspace. --adapter sets
+                                   the stage-08 deploy target (gizmos,
+                                   cloud-run, docker-compose, kubernetes,
+                                   terraform, custom) so you don't need to
+                                   hand-edit config.yml. --profile dogfood
                                    installs four dogfooding safeguards: a
                                    supplemental .gitignore block, a pre-commit
                                    infrastructure guard, a .git/info/exclude
