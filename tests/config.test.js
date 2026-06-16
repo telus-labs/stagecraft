@@ -108,7 +108,7 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     assert.match(text, /smoke_test_path: \/healthz/);
     assert.match(text, /gizmos:/);
     assert.match(text, /app: my-app/);
-    assert.ok(!text.match(/^  environment:/m) || text.includes("environment: production"), "environment must be present");
+    assert.ok(!text.match(/^ {2}environment:/m) || text.includes("environment: production"), "environment must be present");
   });
 
   it("renders cloud-run deploy section with environment, smoke_test_path, and cloud_run hints", () => {
