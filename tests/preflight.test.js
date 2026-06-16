@@ -15,6 +15,7 @@ const {
   runGitHygieneCheck,
   runImportPathCheck,
   runDeferredItemsRisk,
+  checkStagedPipelineArtifacts,
 } = require(path.join(REPO_ROOT, "core", "preflight"));
 
 let _tmpDirs = [];
@@ -293,5 +294,105 @@ describe("runPreflight — FAIL on blocker", () => {
     assert.equal(r.status, "PASS");
     assert.equal(r.blockers.length, 0);
     assert.ok(r.warnings.some((w) => w.includes("R-42")));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkStagedPipelineArtifacts
+// ---------------------------------------------------------------------------
+
+describe("checkStagedPipelineArtifacts — non-git directory", () => {
+  it("returns [] when the directory is not a git repo", () => {
+    const cwd = makeTmp();
+    const result = checkStagedPipelineArtifacts(cwd);
+    assert.deepEqual(result, []);
+  });
+});
+
+describe("checkStagedPipelineArtifacts — pipeline/brief.md staged", () => {
+  it("returns the staged artifact path as a match", () => {
+    const cwd = makeTmp();
+    spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "brief.md"), "brief content\n");
+    spawnSync("git", ["add", "pipeline/brief.md"], { cwd, encoding: "utf8" });
+
+    const result = checkStagedPipelineArtifacts(cwd);
+    assert.ok(result.includes("pipeline/brief.md"), `expected pipeline/brief.md in result: ${JSON.stringify(result)}`);
+  });
+});
+
+describe("checkStagedPipelineArtifacts — only non-pipeline files staged", () => {
+  it("returns [] when only non-pipeline files are in the index", () => {
+    const cwd = makeTmp();
+    spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+    fs.writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    spawnSync("git", ["add", "README.md"], { cwd, encoding: "utf8" });
+
+    const result = checkStagedPipelineArtifacts(cwd);
+    assert.deepEqual(result, []);
+  });
+});
+
+describe("checkStagedPipelineArtifacts — pipeline/gates/ file staged", () => {
+  it("matches files under pipeline/gates/ prefix", () => {
+    const cwd = makeTmp();
+    spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+    fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-01.json"), "{}\n");
+    spawnSync("git", ["add", "pipeline/gates/stage-01.json"], { cwd, encoding: "utf8" });
+
+    const result = checkStagedPipelineArtifacts(cwd);
+    assert.ok(result.includes("pipeline/gates/stage-01.json"), `expected gate file in result: ${JSON.stringify(result)}`);
+  });
+});
+
+describe("runPreflight — FAIL on staged pipeline artifacts", () => {
+  it("returns FAIL with a blocker when pipeline/brief.md is staged", () => {
+    const cwd = makeTmp();
+    spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "brief.md"), "brief content\n");
+    spawnSync("git", ["add", "pipeline/brief.md"], { cwd, encoding: "utf8" });
+
+    const r = runPreflight(cwd, { skipWrite: true });
+    assert.equal(r.status, "FAIL");
+    assert.ok(r.blockers.length > 0);
+    assert.ok(
+      r.blockers.some((b) => b.includes("Pipeline artifacts are staged")),
+      `expected staged-artifact blocker: ${JSON.stringify(r.blockers)}`
+    );
+    assert.ok(
+      r.blockers.some((b) => b.includes("pipeline/brief.md")),
+      `expected file name in blocker: ${JSON.stringify(r.blockers)}`
+    );
+    assert.ok(
+      r.blockers.some((b) => b.includes("git restore --staged")),
+      `expected remediation hint in blocker: ${JSON.stringify(r.blockers)}`
+    );
+  });
+
+  it("returns PASS when only non-pipeline files are staged", () => {
+    const cwd = makeTmp();
+    spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    spawnSync("git", ["config", "user.name", "Test"], { cwd });
+    fs.writeFileSync(path.join(cwd, "src.js"), "// code\n");
+    spawnSync("git", ["add", "src.js"], { cwd, encoding: "utf8" });
+
+    const r = runPreflight(cwd, { skipWrite: true });
+    assert.equal(r.status, "PASS");
+    assert.ok(
+      r.blockers.every((b) => !b.includes("Pipeline artifacts are staged")),
+      `unexpected staged-artifact blocker: ${JSON.stringify(r.blockers)}`
+    );
   });
 });

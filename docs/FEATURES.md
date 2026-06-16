@@ -337,6 +337,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 **`devteam preflight`** — run pre-peer-review mechanical checks standalone.
 
 - Runs git hygiene (committed-but-ignored files), import path validation, and deferred-items risk check
+- **Staged pipeline artifact guard** (Phase 14.3) — blocks a PR if any file from the pipeline artifact list (`pipeline/brief.md`, `pipeline/gates/`, `pipeline/code-review/`, etc.) appears in the git index; applies to all projects, not just dogfood mode. Run `git restore --staged <files>` to clear the blocker.
 - Auto-invoked by `devteam stage peer-review`; use standalone for early feedback
 - Writes `pipeline/gates/stage-04e.json`; see [Case 10](runbooks/fix-and-retry.md#case-10-preflight-stage-04e-fail--committed-ignored-files-or-broken-import-path) for fix steps
 
