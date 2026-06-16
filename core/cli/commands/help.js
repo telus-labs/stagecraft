@@ -10,10 +10,15 @@ Usage: devteam <command> [args]
 
 Commands:
   init --host <list> [--force]     Install host adapter(s) into the current
-                                   project. <list> is comma-separated, e.g.
+       [--profile dogfood]          project. <list> is comma-separated, e.g.
                                    "claude-code" or "claude-code,codex".
                                    Writes .devteam/config.yml and creates
-                                   pipeline/gates/ workspace.
+                                   pipeline/gates/ workspace. --profile dogfood
+                                   installs four dogfooding safeguards: a
+                                   supplemental .gitignore block, a pre-commit
+                                   infrastructure guard, a .git/info/exclude
+                                   entry for deploy.md, and a profile: dogfood
+                                   config marker. See docs/guides/dogfooding.md.
   stage <name> [--feature "..."]   Render stage prompt(s) for <name>. With
         [--headless]                 --headless, drives each workstream's
         [--timeout-ms N]             host CLI non-interactively (claude --print,
