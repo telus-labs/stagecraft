@@ -35,19 +35,23 @@ Commands:
                                    to do next: run a stage, continue a
                                    partial multi-role stage, merge, fix a
                                    FAIL, resolve an ESCALATE, or done.
-  run [--track <t>] [--until <s>]  Bounded autonomous driver: loop next →
-      [--max-iterations N]          dispatch → merge until pipeline-complete.
-      [--budget-usd X]              Auto-fixes code-defect FAILs (clear gate,
-      [--timeout-ms N]              propagate blockers, re-dispatch) and retries
-      [--retry-delay-ms N]          transient dispatch failures with backoff.
-      [--auto-rule <classes>]       With --auto-rule, auto-applies Principal
-      [--allow-stage <s>]           rulings whose [class:] is in the granted
-                                   allowlist (never cannot-decide / ceiling).
-                                   Halts for a human on escalations, the
-      [--resume] [--force] [--json] consequence ceiling (sign-off / deploy —
-                                   needs --allow-stage), a budget cap, or a
-                                   structural dispatch failure. Writes pipeline/
-                                   run.lock, run-state.json, run-log.jsonl.
+  run [--feature "..."]            Bounded autonomous driver: loop next →
+      [--repair "symptom"]          dispatch → merge until pipeline-complete.
+      [--repair-at <file:line>]     --feature for additive work; --repair for
+      [--track <t>] [--until <s>]  bug fixes (ADR-009, hotfix depth default;
+      [--max-iterations N]          diagnosis stage + PATCH-MODE-scoped build
+      [--budget-usd X]              + failing-first reproduction). --repair-at
+      [--timeout-ms N]              skips diagnosis, seeds affected-files.
+      [--retry-delay-ms N]          Auto-fixes code-defect FAILs and retries
+      [--auto-rule <classes>]       transient failures. With --auto-rule,
+      [--allow-stage <s>]           auto-applies Principal rulings whose
+                                   [class:] is in the granted allowlist.
+      [--resume] [--force] [--json] Halts for a human on escalations, the
+      [--fail-on-advisory[=all]]    consequence ceiling (sign-off / deploy),
+                                   a budget cap, or a structural failure.
+                                   --fail-on-advisory exits 3 when advisory
+                                   blockers remain (=all adds PEER_REVIEW_RISK).
+                                   Writes run.lock, run-state.json, run-log.
   validate                         Validate the most recent gate in
                                    pipeline/gates/. Exit codes: 0 PASS/WARN,
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
