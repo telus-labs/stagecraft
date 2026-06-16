@@ -28,6 +28,7 @@ const _preflightCmd       = require(path.join(__dirname, "..", "core", "cli", "c
 const _adviseCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "advise"));
 const _nextCmd            = require(path.join(__dirname, "..", "core", "cli", "commands", "next"));
 const _runCmd             = require(path.join(__dirname, "..", "core", "cli", "commands", "run"));
+const _commitCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "commit"));
 const _validateCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "validate"));
 const _verifyChainCmd     = require(path.join(__dirname, "..", "core", "cli", "commands", "verify-chain"));
 const _stampChainCmd      = require(path.join(__dirname, "..", "core", "cli", "commands", "stamp-chain"));
@@ -61,7 +62,7 @@ for (const cmd of [
   _deriveApprovalsCmd, _restartCmd, _rulingCmd, _fixEscalationCmd,
   _initCmd, _uiCmd, _memoryCmd, _architectureCmd, _reproduceCmd,
   _verifyCmd, _replayCmd, _ciCmd, _specCmd, _consistencyCmd,
-  _assessCmd, _standardsCmd, _hookCmd, _statusCmd,
+  _assessCmd, _standardsCmd, _hookCmd, _statusCmd, _commitCmd,
 ]) {
   _registry[cmd.name] = cmd;
 }

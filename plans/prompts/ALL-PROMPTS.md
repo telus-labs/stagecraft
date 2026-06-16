@@ -21,7 +21,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 9 | Evidence-gated capabilities | ✅ complete (PRs #128 · #129 · #131 · #133) |
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
-| 12 | Git workflow automation (ADR-010) | 🔲 in progress — 12.1 ✅ managed gitignore (`devteam init`); 12.2 unblocked |
+| 12 | Git workflow automation (ADR-010) | 🔲 in progress — 12.1 ✅ managed gitignore (`devteam init`); 12.2 ✅ `devteam commit`; 12.3 unblocked |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1736,7 +1736,7 @@ Done: npm test / eslint / consistency green; manual smoke: devteam init in temp 
 "BEGIN stagecraft" .gitignore shows block, grep "run.lock" shows entry, re-run no duplicate.
 ```
 
-### 12.2 `devteam commit` command 🔲
+### 12.2 `devteam commit` command ✅
 
 ```
 TASK: Implement plans/phase-12-git-workflow-automation.md item 12.2. Read the plan item and
@@ -1767,7 +1767,7 @@ Done: npm test / eslint / consistency green; npm run docs:generate picks up new 
 manual smoke: devteam commit --dry-run in pipeline with completed stages shows right files.
 ```
 
-### 12.3 `devteam run --auto-commit` ⏸ blocked on 12.2 merged
+### 12.3 `devteam run --auto-commit` 🔲
 
 ```
 TASK: Implement plans/phase-12-git-workflow-automation.md item 12.3. Read the plan item and

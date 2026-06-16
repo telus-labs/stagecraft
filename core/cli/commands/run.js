@@ -5,7 +5,8 @@ const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 
 // Version of the `devteam run --json` summary schema. Bump on breaking changes.
 // 1.1: adds advisory_blockers_count + advisory_breakdown (ADR-008 Phase 11.2).
-const RUN_SCHEMA_VERSION = "1.1";
+// 1.2: adds stages_advanced + last_committed_stage_index to run-state.json (Phase 12.2).
+const RUN_SCHEMA_VERSION = "1.2";
 
 const name = "run";
 

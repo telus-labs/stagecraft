@@ -3,7 +3,7 @@
 
 # CLI Reference
 
-Full `devteam` command reference. 31 commands.
+Full `devteam` command reference. 32 commands.
 Derived from the per-command flag schemas in `core/cli/commands/`.
 Run `npm run docs:generate` to regenerate after adding or changing flags.
 
@@ -63,6 +63,18 @@ Bounded autonomous driver: loop next → dispatch → merge until pipeline-compl
 | --force            | bool   | Force-unlock a stale run.lock                                                                        |
 | --json             | bool   | JSON summary on stdout                                                                               |
 | --fail-on-advisory | toggle | Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold) |
+
+### `devteam commit [options]`
+
+Stage exactly the right pipeline artifacts for completed stages and generate a meaningful commit message. Tracks a cursor so repeated calls are idempotent.
+
+| Flag      | Type   | Description                                        |
+| --------- | ------ | -------------------------------------------------- |
+| --all     | bool   | Stage all gate-bearing stages regardless of cursor |
+| --dry-run | bool   | Print what would be staged without committing      |
+| --message | string | Override generated commit message                  |
+| --json    | bool   | Machine-readable output                            |
+| --cwd     | string | Target project directory                           |
 
 ### `devteam validate [options]`
 
