@@ -30,7 +30,7 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-04  | build                     | qa         | 11,785      | 2,718        | 14,503     | 3626    |
 | stage-04a | pre-review                | platform   | 11,785      | 2,400        | 14,185     | 3547    |
 | stage-04b | security-review           | security   | 11,785      | 7,303        | 19,088     | 4772    |
-| stage-04c | red-team                  | red-team   | 11,785      | 12,726       | 24,511     | 6128    |
+| stage-04c | red-team                  | red-team   | 11,785      | 13,675       | 25,460     | 6365    |
 | stage-04d | migration-safety          | migrations | 11,785      | 8,272        | 20,057     | 5015    |
 | stage-05  | peer-review               | reviewer   | 11,785      | 6,330        | 18,115     | 4529    |
 | stage-06  | qa                        | qa         | 11,785      | 2,718        | 14,503     | 3626    |
@@ -47,8 +47,8 @@ Multi-role stages appear once per dispatched role. The CI advisory
 
 | File                | Bytes  | Tokens~ |
 | ------------------- | ------ | ------- |
+| roles/red-team.md   | 13,675 | 3419    |
 | roles/principal.md  | 12,736 | 3184    |
-| roles/red-team.md   | 12,726 | 3182    |
 | roles/verifier.md   | 9,089  | 2273    |
 | roles/pm.md         | 8,832  | 2208    |
 | roles/migrations.md | 8,272  | 2068    |
@@ -72,7 +72,7 @@ stage-03b,20617
 stage-04,19315
 stage-04a,14185
 stage-04b,19088
-stage-04c,24511
+stage-04c,25460
 stage-04d,20057
 stage-05,18115
 stage-06,14503
