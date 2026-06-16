@@ -44,7 +44,7 @@ If you're evaluating Stagecraft, this is the fastest path to a working answer:
    devteam stage requirements --feature "a one-paragraph feature you understand" --headless
    devteam next   # tells you the next command to run
    ```
-   Walk forward through design, build, peer-review, qa, sign-off. For deploy, pick a deploy adapter in `.devteam/config.yml` (`cloud-run`, `kubernetes`, `terraform`, `docker-compose`, or `custom`) — or write the gate by hand to skip the deploy step: `echo '{"stage":"stage-08","status":"PASS","track":"full","timestamp":"'$(date -u +%FT%TZ)'","blockers":[],"warnings":[]}' > pipeline/gates/stage-08.json`.
+   Walk forward through design, build, peer-review, qa, sign-off. For deploy, pick a deploy adapter in `.devteam/config.yml` (`cloud-run`, `gizmos`, `kubernetes`, `terraform`, `docker-compose`, or `custom`) — or write the gate by hand to skip the deploy step: `echo '{"stage":"stage-08","status":"PASS","track":"full","timestamp":"'$(date -u +%FT%TZ)'","blockers":[],"warnings":[]}' > pipeline/gates/stage-08.json`.
 5. **(5 min) Inspect the audit trail.** `ls pipeline/gates/` — every stage's outcome on disk. `cat pipeline/brief.md`, `pipeline/design-spec.md`, `pipeline/code-review/by-*.md`. The pipeline is reconstructable from these files alone.
 
 If after 30 minutes you can see how this would help your team, run a 2-week pilot ([adoption-guide.md](docs/adoption-guide.md) has the script). If you can't, it may not be the right tool for your team.

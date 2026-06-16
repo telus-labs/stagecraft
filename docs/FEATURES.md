@@ -109,7 +109,7 @@ deploy:
   smoke_test_path: /healthz
 ```
 
-Four adapters ship in v0.7.0. Two new ones land in v0.8.0:
+Six adapters ship:
 
 | Adapter | Suits |
 |---|---|
@@ -117,12 +117,12 @@ Four adapters ship in v0.7.0. Two new ones land in v0.8.0:
 | `kubernetes` | K8s clusters via `kubectl` / Helm |
 | `terraform` | IaC-managed infra on any cloud |
 | `cloud-run` *(Phase 13.1)* | GCP Cloud Run via Artifact Registry + `gcloud` |
-| `gizmos` *(Phase 13.2, upcoming)* | Gizmos platform (Cloudflare Workers, `gizmos.run`) |
+| `gizmos` *(Phase 13.2)* | Gizmos platform (Cloudflare Workers, `gizmos.run`) |
 | `custom` | Project-specific script (escape hatch) |
 
 Every adapter follows the same contract: read the PM sign-off gate, build and deploy, run smoke tests, write `pipeline/gates/stage-08.json` with `deploy_completed`, `smoke_tests_passed`, and `rollback_executed`, and reference `pipeline/runbook.md` for recovery. On failure: write a `FAIL` gate with a blocker, never auto-rollback.
 
-The `cloud-run` adapter builds a Docker image, pushes to GCP Artifact Registry, deploys a new Cloud Run revision, smoke-tests the live URL via `curl`, and records the active revision name for rollback.
+The `cloud-run` adapter builds a Docker image, pushes to GCP Artifact Registry, deploys a new Cloud Run revision, smoke-tests the live URL via `curl`, and records the active revision name for rollback. The `gizmos` adapter pushes source code to the Gizmos platform (Cloudflare Workers, `gizmos.run`) via `gizmos push` — no Docker image required. Precondition checks include `wrangler.toml` existence, `app`/`name` field match, runbook `§Rollback` presence, and `gizmos whoami` auth. Platform constraints (TS/JS or Python only, no persistent filesystem, stateless `fetch()` handler) are documented in `core/deploy/gizmos.md §Platform constraints`.
 
 See [`core/deploy/README.md`](../core/deploy/README.md) for the full adapter contract and instructions for writing project-specific adapters.
 
