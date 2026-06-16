@@ -86,10 +86,15 @@ function loadAddressedItems(cwd, opts = {}) {
     const trimmed = line.trim();
     const matchesPrefix = ADDRESSED_PREFIXES.some((p) => trimmed.startsWith(p));
     if (!matchesPrefix) continue;
-    // Extract the token(s) after the colon — may be "AC-10,AC-11" or "RT-3"
+    // Extract the token(s) after the prefix colon — may be "AC-10,AC-11", "RT-3",
+    // or a long text string when the gate entry has no structured id field.
+    // Split on " — " (the applyOption separator) to capture the full id segment
+    // rather than stopping at the first space (which breaks long-text ids).
     const afterColon = trimmed.replace(/^[A-Z-]+:\s*/, "");
-    // Grab everything up to the first space or em-dash or " —"
-    const tokenPart = afterColon.split(/\s|—/)[0];
+    const tokenPart = afterColon.split(" — ")[0].trim();
+    // Always add the full token so long-text ids (which may contain commas) match
+    // item.id exactly.  Also comma-split for "AC-10,AC-11"-style ref lists.
+    if (tokenPart) addressed.add(tokenPart);
     for (const tok of tokenPart.split(",")) {
       const t = tok.trim();
       if (t) addressed.add(t);
@@ -378,7 +383,7 @@ function runAdvise(cwd, opts = {}) {
   ).length;
 
   if (opts.checkOnly || !opts.apply || opts.apply.size === 0) {
-    return { items, unresolvedBlockers };
+    return { items, unresolvedBlockers, by_tier: groupByTier(items) };
   }
 
   // Apply selections — build new decision lines then write the section once
@@ -439,7 +444,26 @@ function runAdvise(cwd, opts = {}) {
     items: updatedItems,
     unresolvedBlockers: updatedUnresolvedBlockers,
     scaffoldCommands,
+    by_tier: groupByTier(updatedItems),
   };
 }
 
-module.exports = { runAdvise, gatherFollowups, classifyItem, generateOptions };
+// ---------------------------------------------------------------------------
+// groupByTier
+// ---------------------------------------------------------------------------
+// Partitions a classified item array into { addressed, QA_BLOCKER,
+// PEER_REVIEW_RISK, QA_NOISE, INFO, A11Y_FIX } for grouped rendering and
+// machine-readable --json output.
+// ---------------------------------------------------------------------------
+function groupByTier(items) {
+  const tiers = { QA_BLOCKER: [], PEER_REVIEW_RISK: [], QA_NOISE: [], INFO: [], A11Y_FIX: [], addressed: [] };
+  for (const r of items) {
+    if (r.addressed) { tiers.addressed.push(r); continue; }
+    const bucket = tiers[r.classification];
+    if (bucket) bucket.push(r);
+    else tiers.INFO.push(r);
+  }
+  return tiers;
+}
+
+module.exports = { runAdvise, gatherFollowups, classifyItem, generateOptions, groupByTier };
