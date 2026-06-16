@@ -122,7 +122,18 @@ Six adapters ship:
 
 Every adapter follows the same contract: read the PM sign-off gate, build and deploy, run smoke tests, write `pipeline/gates/stage-08.json` with `deploy_completed`, `smoke_tests_passed`, and `rollback_executed`, and reference `pipeline/runbook.md` for recovery. On failure: write a `FAIL` gate with a blocker, never auto-rollback.
 
-The `cloud-run` adapter builds a Docker image, pushes to GCP Artifact Registry, deploys a new Cloud Run revision, smoke-tests the live URL via `curl`, and records the active revision name for rollback. The `gizmos` adapter pushes source code to the Gizmos platform (Cloudflare Workers, `gizmos.run`) via `gizmos push` — no Docker image required. Precondition checks include `wrangler.toml` existence, `app`/`name` field match, runbook `§Rollback` presence, and `gizmos whoami` auth. Platform constraints (TS/JS or Python only, no persistent filesystem, stateless `fetch()` handler) are documented in `core/deploy/gizmos.md §Platform constraints`.
+The `cloud-run` adapter builds a Docker image, pushes to GCP Artifact Registry, deploys a new Cloud Run revision, smoke-tests the live URL via `curl`, and records the active revision name for rollback. The `gizmos` adapter pushes source code to the Gizmos platform (Cloudflare Workers, `gizmos.run`) via `gizmos push` — no Docker image required. Precondition checks include `wrangler.toml` existence, `app`/`name` field match, runbook `§Rollback` presence, and `GIZMOS_API_KEY` env var. Platform constraints (TS/JS or Python only, no persistent filesystem, stateless `fetch()` handler) are documented in `core/deploy/gizmos.md §Platform constraints`.
+
+#### Adapter conventions — platform constraints injected into `pipeline/context.md` (Phase 15.2)
+
+When `deploy.adapter` is set, Stagecraft automatically writes a deploy-target context block into `pipeline/context.md` before stages 01 (requirements), 02 (design), and 03 (build) dispatch — via both `devteam run` and `devteam stage`. This means `--feature` strings can express pure intent ("URL shortener with KV storage") rather than repeating stack details already implied by the adapter config.
+
+The block is written by `seedDeployContext()` in `core/driver.js`, is idempotent (a second call replaces rather than duplicates the block), and is scoped between `<!-- devteam:deploy-target:begin -->` / `<!-- devteam:deploy-target:end -->` markers. Two adapters have companion conventions files:
+
+- `core/deploy/gizmos.conventions.md` — language/runtime, required file structure (`src/index.ts`, `wrangler.toml`), no-build-step rule, `git ls-files` tracking requirement, secrets model (Gizmos Hub UI only), and health check requirements (`GET /` and `GET /healthz`)
+- `core/deploy/cloud-run.conventions.md` — runtime (any Docker-supported language), required `Dockerfile`, `PORT` env var, state/persistence model (Cloud SQL/Spanner/GCS/Memorystore), and health check requirement (`GET /healthz`)
+
+Additional adapters can add a `core/deploy/<adapter>.conventions.md` file to participate in auto-injection.
 
 See [`core/deploy/README.md`](../core/deploy/README.md) for the full adapter contract and instructions for writing project-specific adapters.
 
@@ -307,6 +318,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Writes `.devteam/config.yml`, lays down role briefs, rules, skills, and the `/devteam` slash command for the chosen host
 - Writes (or updates) a managed `# BEGIN stagecraft` / `# END stagecraft` block in `.gitignore` listing all volatile Stagecraft runtime files — run once and your `.gitignore` is machine-maintained; re-running updates an outdated block
 - `--host claude-code | codex | gemini-cli | generic`
+- **`--adapter <name>`** (Phase 15 pre-work, PR #173) — sets `deploy.adapter` in `.devteam/config.yml` and writes adapter-specific config hints (`gizmos`, `cloud-run`, `docker-compose`, `kubernetes`, `terraform`, `custom`). Combined with Phase 15.2, this means `devteam init --adapter gizmos` immediately enables automatic conventions injection into `pipeline/context.md` for all subsequent runs.
 - **`--profile dogfood`** (Phase 14.1) — when dogfooding Stagecraft against its own source tree, adds four safeguards: a supplemental `# BEGIN stagecraft-dogfood` gitignore block covering generated pipeline documents (`brief.md`, `context.md`, `spec.feature`, `runbook.md`, `test-report.md`, `code-review/`), a pre-commit hook that blocks accidental commits to `core/`, `bin/devteam`, `pipeline/stages/`, `roles/`, or `rules/`, a `pipeline/stages/deploy.md` entry in `.git/info/exclude`, and a `profile: dogfood` marker in `.devteam/config.yml`. All writes are idempotent.
 
 **`devteam doctor`** — verify everything is wired up before you start.
