@@ -48,6 +48,7 @@ Every adapter must:
 | `docker-compose` (default) | `docker-compose.md` | Local dev, demo, single-host deploy |
 | `kubernetes`               | `kubernetes.md`    | K8s clusters via `kubectl` / Helm  |
 | `terraform`                | `terraform.md`     | IaC-managed infra on any cloud     |
+| `cloud-run`                | `cloud-run.md`     | GCP Cloud Run via Artifact Registry + gcloud |
 | `custom`                   | `custom.md`        | Project-specific script (escape hatch) |
 
 ## Writing a new adapter
