@@ -52,6 +52,23 @@ Every adapter must:
 | `gizmos`                   | `gizmos.md`        | Gizmos platform (Cloudflare Workers, gizmos.run) |
 | `custom`                   | `custom.md`        | Project-specific script (escape hatch) |
 
+## Conventions files
+
+Each adapter may have a companion `core/deploy/<adapter>.conventions.md` file.
+When `deploy.adapter` is set in `.devteam/config.yml`, devteam writes the
+conventions as a delimited block into `pipeline/context.md` before stages 01–03
+dispatch (via `devteam run` or `devteam stage`). This makes deployment target
+constraints visible to requirements, design, and build agents without repeating
+them in every `--feature` string.
+
+The block is idempotent — writing it twice does not duplicate it. If the adapter
+changes, `devteam restart stage-01 --cascade` clears pipeline state; the next
+run seeds fresh conventions.
+
+Keep conventions files focused on what design and build agents need: language,
+runtime, required file structure, state options, and health check requirements.
+Do not duplicate the deployment procedure from `<adapter>.md`.
+
 ## Writing a new adapter
 
 To add a new adapter (e.g. `nomad`, `ecs`, `cloudfoundry`):

@@ -24,7 +24,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 12 | Git workflow automation (ADR-010) | ✅ complete (PRs #154 · #155 · #156 · #157) |
 | 13 | Deploy adapters: Cloud Run + Gizmos | ✅ complete |
 | 14 | Dogfooding support (`--profile dogfood`, doctor checks, preflight guard, budget warning, guide) | ✅ complete (PRs #163 · #164 · #165 · #166 · #167) |
-| 15 | Adapter-aware stage context (`--adapter` flag, conventions injection, gizmos auth fix) | pre-work ✅ (PR #173) · 15.1 ✅ (PR #176) · 🔲 15.2 ready |
+| 15 | Adapter-aware stage context (`--adapter` flag, conventions injection, gizmos auth fix) | ✅ complete (PRs #173 · #176 · feat/adapter-conventions) |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -2021,7 +2021,7 @@ Verify: npm run consistency all green.
 constraints via `pipeline/context.md` — `--feature` strings become pure intent, no
 stack details required.
 
-**Status:** pre-work ✅ `--adapter` flag (PR #173) · 15.1 ✅ gizmos auth fix (PR #176) · 🔲 15.2 ready
+**Status:** ✅ complete — pre-work `--adapter` flag (PR #173) · 15.1 gizmos auth fix (PR #176) · 15.2 conventions injection (feat/adapter-conventions)
 
 **Order:** 15.1 → 15.2.
 
@@ -2036,7 +2036,7 @@ the `deploy:` block into `.devteam/config.yml` with adapter-specific config hint
 Already merged to main. `gizmos whoami` replaced with `GIZMOS_API_KEY` env check
 in both the `## Assumptions` line and Precondition step 1f.
 
-### 15.2 Adapter conventions files + context.md injection 🔲 feat/adapter-conventions
+### 15.2 Adapter conventions files + context.md injection ✅ feat/adapter-conventions
 
 ```
 TASK: Implement plans/phase-15-adapter-conventions.md item 15.2.

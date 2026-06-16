@@ -239,6 +239,45 @@ function writeRunBlockers(cwd, stageName, blockers, changeId) {
   } catch { /* best-effort */ }
 }
 
+const DEPLOY_CONTEXT_BEGIN = "<!-- devteam:deploy-target:begin -->";
+const DEPLOY_CONTEXT_END   = "<!-- devteam:deploy-target:end -->";
+
+/**
+ * If deploy.adapter is configured and a conventions file exists, write a
+ * deploy-target context block into pipeline/context.md before the first
+ * stage dispatch. Uses upsertSection so it is idempotent — the block is
+ * replaced on each call, never duplicated.
+ *
+ * Exported for use by the stage command and for unit testing.
+ * opts.frameworkRoot overrides the resolved package root (for tests).
+ */
+function seedDeployContext(cwd, config, changeId, opts = {}) {
+  const adapter = config.deploy && config.deploy.adapter;
+  if (!adapter) return false;
+
+  const frameworkRoot = opts.frameworkRoot || path.resolve(__dirname, "..");
+  const conventionsPath = path.join(frameworkRoot, "core", "deploy", `${adapter}.conventions.md`);
+  if (!fs.existsSync(conventionsPath)) return false;
+
+  const conventions = fs.readFileSync(conventionsPath, "utf8");
+  const contextPath = path.join(pipelineRoot(cwd, changeId), "context.md");
+
+  const section = [
+    DEPLOY_CONTEXT_BEGIN,
+    "<!-- written by devteam before first stage dispatch; reflects deploy.adapter config -->",
+    conventions.trim(),
+    DEPLOY_CONTEXT_END,
+  ].join("\n");
+
+  let existing = "";
+  try { existing = fs.readFileSync(contextPath, "utf8"); } catch { /* none yet */ }
+  try {
+    fs.mkdirSync(path.dirname(contextPath), { recursive: true });
+    fs.writeFileSync(contextPath, upsertSection(existing, DEPLOY_CONTEXT_BEGIN, DEPLOY_CONTEXT_END, section));
+    return true;
+  } catch { return false; }
+}
+
 function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 // ADR-007 Tier 1: observe-only stall probe. Runs fire-and-forget alongside
@@ -435,6 +474,8 @@ async function run(opts = {}) {
     : (isolation === "bounded"
         ? (opts.repair ? changeIdFromSymptom(opts.repair || "") : changeIdFromFeature(opts.feature || ""))
         : null);
+
+  seedDeployContext(cwd, config, changeId);
 
   // Dependencies are injectable for deterministic testing of the loop without
   // spawning host CLIs; production passes none and gets the real orchestrator.
@@ -1192,4 +1233,4 @@ async function run(opts = {}) {
   return summary;
 }
 
-module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, runStatePath, runLogPath };
+module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, runStatePath, runLogPath, seedDeployContext };

@@ -43,6 +43,7 @@ const DEFAULTS = {
     // Off by default — opt in via .devteam/config.yml autonomy.require_confirmed_track.
     require_confirmed_track: false,
   },
+  deploy: null,
 };
 
 function configPath(cwd) {
@@ -84,6 +85,7 @@ function loadConfig(cwd = process.cwd()) {
         // ADR-006: explicit opt-in flag; not CI=true (CI is already overloaded)
         require_confirmed_track: parsed.autonomy?.require_confirmed_track === true,
       },
+      deploy: (parsed.deploy && typeof parsed.deploy === "object") ? parsed.deploy : null,
       _source: "file",
       _path: p,
       _raw: parsed,
