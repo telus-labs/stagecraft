@@ -59,4 +59,47 @@ function writeGitignoreBlock(projectRoot) {
   return "wrote";
 }
 
-module.exports = { writeGitignoreBlock, CANONICAL_BLOCK, BLOCK_BEGIN, BLOCK_END };
+const DOGFOOD_BLOCK_BEGIN = "# BEGIN stagecraft-dogfood — managed by devteam init --profile dogfood; do not edit manually";
+const DOGFOOD_BLOCK_END   = "# END stagecraft-dogfood";
+
+const CANONICAL_DOGFOOD_BLOCK = `${DOGFOOD_BLOCK_BEGIN}
+pipeline/brief.md
+pipeline/context.md
+pipeline/spec.feature
+pipeline/runbook.md
+pipeline/test-report.md
+pipeline/code-review/
+pipeline/changes/*/brief.md
+pipeline/changes/*/context.md
+pipeline/changes/*/spec.feature
+pipeline/changes/*/runbook.md
+pipeline/changes/*/test-report.md
+pipeline/changes/*/code-review/
+${DOGFOOD_BLOCK_END}`;
+
+/**
+ * Writes or updates the supplemental dogfood gitignore block.
+ * Returns "wrote", "updated", or "skipped".
+ */
+function writeDogfoodGitignoreBlock(projectRoot) {
+  const giPath = path.join(projectRoot, ".gitignore");
+  const existing = fs.existsSync(giPath) ? fs.readFileSync(giPath, "utf8") : "";
+
+  const beginIdx = existing.indexOf(DOGFOOD_BLOCK_BEGIN);
+  const endIdx   = existing.indexOf(DOGFOOD_BLOCK_END);
+
+  if (beginIdx !== -1 && endIdx !== -1 && endIdx > beginIdx) {
+    const currentBlock = existing.slice(beginIdx, endIdx + DOGFOOD_BLOCK_END.length);
+    if (currentBlock === CANONICAL_DOGFOOD_BLOCK) return "skipped";
+    const before = existing.slice(0, beginIdx);
+    const after  = existing.slice(endIdx + DOGFOOD_BLOCK_END.length);
+    fs.writeFileSync(giPath, before + CANONICAL_DOGFOOD_BLOCK + after, "utf8");
+    return "updated";
+  }
+
+  const separator = (existing.length > 0 && !existing.endsWith("\n\n")) ? "\n" : "";
+  fs.writeFileSync(giPath, existing + separator + CANONICAL_DOGFOOD_BLOCK + "\n", "utf8");
+  return "wrote";
+}
+
+module.exports = { writeGitignoreBlock, writeDogfoodGitignoreBlock, CANONICAL_BLOCK, BLOCK_BEGIN, BLOCK_END, CANONICAL_DOGFOOD_BLOCK, DOGFOOD_BLOCK_BEGIN, DOGFOOD_BLOCK_END };

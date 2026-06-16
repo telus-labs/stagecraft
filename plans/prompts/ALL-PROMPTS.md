@@ -1893,7 +1893,7 @@ running any item. GitHub tracking issue: #130.
 
 Order: 14.1 → 14.2 → 14.3 → 14.4 (independent of each other after 14.1) → 14.5 (after 14.1 and 14.2 merged).
 
-### 14.1 `devteam init --profile dogfood` 🔲 feat/init-profile-dogfood
+### 14.1 `devteam init --profile dogfood` ✅ feat/init-profile-dogfood
 
 ```
 TASK: Implement plans/phase-14-dogfooding-support.md item 14.1. Read the plan item in full
