@@ -22,6 +22,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
 | 12 | Git workflow automation (ADR-010) | ✅ complete (PRs #154 · #155 · #156 · #157) |
+| 13 | Deploy adapters: Cloud Run + Gizmos | 🔲 13.1 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1815,4 +1816,69 @@ Run npm run docs:generate to confirm devteam commit entry appears in the CLI ref
 
 Verify: npm run consistency green; npm run docs:generate idempotent; human read of
 restructured doc for narrative coherence.
+```
+
+---
+
+## Phase 13 — Deploy Adapters: GCP Cloud Run and Gizmos
+
+Two new built-in deploy adapters for stage-08. Plan file:
+`plans/phase-13-deploy-adapters.md` — read it in full before starting any item; it
+contains the verbatim content of both adapter files, the config schema decision, and the
+gate body shape that must match `core/gates/schemas/stage-08.schema.json`. Order:
+13.1 → 13.2. No ADR — additive work on an existing extension point.
+
+**Before starting 13.1:** read `core/deploy/docker-compose.md` to absorb the section
+format and `core/deploy/README.md` for the adapter contract and table. Read
+`core/gates/schemas/stage-08.schema.json` for the three required gate fields
+(`deploy_completed`, `smoke_tests_passed`, `rollback_executed`).
+
+### 13.1 GCP Cloud Run adapter 🔲
+
+```
+TASK: Implement plans/phase-13-deploy-adapters.md item 13.1. Read the plan item in full
+first — it contains the verbatim adapter content to place. Branch: feat/deploy-cloud-run
+
+Deliverables:
+1. core/deploy/cloud-run.md — create with the verbatim content from the plan §13.1.
+   The file must have all sections: Assumptions, Config, Procedure (steps 1–10),
+   Runbook hooks. Procedure step 10 (gate body) must use the three schema-required
+   fields: deploy_completed, smoke_tests_passed, rollback_executed.
+2. core/deploy/README.md — add cloud-run row to the Built-in adapters table:
+   | `cloud-run` | `cloud-run.md` | GCP Cloud Run via Artifact Registry + gcloud |
+3. Tests — [verify-first] does tests/deploy-adapters.test.js or similar exist?
+   If yes: add cloud-run.md to any adapter-existence or section-header tests.
+   If no: check whether any test validates core/deploy/README.md table vs filesystem
+   files; add such a test (it catches future adapter drift). The test must:
+   - Confirm core/deploy/cloud-run.md exists
+   - Confirm it contains ## Assumptions, ## Config, ## Procedure, ## Runbook hooks
+   - Confirm the README table lists cloud-run
+4. changelog.d/deploy-cloud-run.md — one-bullet fragment.
+
+Config schema decision (already decided — do not revisit): universal fields
+(environment, smoke_test_path) live under deploy:, adapter-specific under deploy.cloud_run:.
+Existing adapters are unaffected.
+
+Verify: npm test / npx eslint . / npm run consistency all green.
+Manual: confirm cloud-run appears in core/deploy/README.md table.
+```
+
+### 13.2 Gizmos adapter ⏸ blocked on 13.1 merged
+
+```
+TASK: Implement plans/phase-13-deploy-adapters.md item 13.2. Read the plan item in full
+first — it contains the verbatim adapter content to place. Branch: feat/deploy-gizmos
+
+Deliverables:
+1. core/deploy/gizmos.md — create with the verbatim content from the plan §13.2.
+   Must include all sections: Assumptions, Config, Procedure (steps 1–6),
+   Runbook hooks, Platform constraints. Gate body must use deploy_completed,
+   smoke_tests_passed, rollback_executed (schema-required fields).
+2. core/deploy/README.md — add gizmos row to the Built-in adapters table:
+   | `gizmos` | `gizmos.md` | Gizmos platform (Cloudflare Workers, gizmos.run) |
+3. Tests — extend the adapter-existence/section-header test from 13.1 to cover gizmos.md.
+4. changelog.d/deploy-gizmos.md — one-bullet fragment.
+
+Verify: npm test / npx eslint . / npm run consistency all green.
+Manual: confirm gizmos appears in core/deploy/README.md table.
 ```
