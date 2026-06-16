@@ -1158,6 +1158,7 @@ Custom edits to the target's installed files (`.claude/agents/`, `.devteam/rules
 
 ## What's not covered here
 
+- [Dogfooding guide](guides/dogfooding.md) — running Stagecraft against its own source tree.
 - The host-adapter contract — [`core/adapters/host-adapter.md`](../core/adapters/host-adapter.md).
 - 11 locked design decisions — [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 - Backlog of next ideas — [`docs/BACKLOG.md`](BACKLOG.md).

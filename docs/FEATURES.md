@@ -355,6 +355,8 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - **`--repair-at <file>:<line>`** — escape hatch for when you already know the defect location. Comma-separated `file:line` pairs (e.g. `src/auth.js:42,src/session.js:18`) seed the affected-files list directly, write a synthetic PASS stage-01 gate, and skip the LLM diagnosis dispatch entirely. Combine with `--repair` to bypass the diagnosis stage while retaining PATCH MODE scoping and the scope gate.
 - **Budget cap warning (Phase 14.4)** — when `devteam run` starts without `--budget-usd`, a two-line advisory is written to stderr before the first dispatch: `[devteam run] Warning: no --budget-usd cap set. The run will not halt on spend.` / `Use --budget-usd <amount> to prevent runaway cost.` Does not affect pipeline behavior or exit codes.
 
+**Dogfooding guide — Phase 14.5. Phase 14 complete.** [`docs/guides/dogfooding.md`](guides/dogfooding.md) covers the complete workflow for running Stagecraft against its own source tree: prerequisites, one-time setup with `devteam init --host claude-code --profile dogfood`, per-feature workflow (branch → `devteam run --budget-usd` → review → commit → clean up), recommended budget table by pipeline depth, explanation of the pre-commit infrastructure guard, failure-mode table, and expected `devteam doctor` output for the "Dogfood mode" section.
+
 ### Repair mode diagnosis stage — stage-01 produces a DIAGNOSIS in repair mode (ADR-009 Phase 2)
 
 When `devteam run --repair` is used, stage-01 (requirements) switches its artifact from a feature brief to a **DIAGNOSIS** document. Same stage, same gate file path, fix-aware output — no new stages, no parallel pipeline.

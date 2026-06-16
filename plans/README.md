@@ -2,7 +2,7 @@
 
 Phase plans produced from the 2026-06-10 full-framework review. Each phase is a set of
 PR-sized work items with file/line anchors, acceptance criteria, and verification commands,
-written to be executed by Claude (Sonnet) one item at a time. **Phase 14 (dogfooding support) is in progress.**
+written to be executed by Claude (Sonnet) one item at a time. **All phases complete through Phase 14.**
 
 | Phase | Plan | Prompts | Theme | Status |
 |---|---|---|---|---|
@@ -20,7 +20,7 @@ written to be executed by Claude (Sonnet) one item at a time. **Phase 14 (dogfoo
 | 11 | [phase-11-autonomy-polish.md](phase-11-autonomy-polish.md) | [prompts](prompts/ALL-PROMPTS.md) | Autonomy polish (ADR-006/007/008): track provenance, liveness heartbeat (observe-first), advise-aware exit semantics | ✅ complete — 11.1 ✅ liveness heartbeat (ADR-007 Tier 1) · 11.2 ✅ advise-aware exit (ADR-008) · 11.3 ✅ track provenance (ADR-006) |
 | 12 | [phase-12-git-workflow-automation.md](phase-12-git-workflow-automation.md) | [prompts](prompts/ALL-PROMPTS.md) | Git workflow automation (ADR-010): managed gitignore, `devteam commit`, `--auto-commit`, git-workflow.md restructure | ✅ complete — 12.1 ✅ managed gitignore (PR #154) · 12.2 ✅ `devteam commit` (PR #155) · 12.3 ✅ `--auto-commit` (PR #156) · 12.4 ✅ docs restructure (PR #157) |
 | 13 | [phase-13-deploy-adapters.md](phase-13-deploy-adapters.md) | [prompts](prompts/ALL-PROMPTS.md) | Deploy adapters: GCP Cloud Run and Gizmos (Cloudflare Workers) for stage-08 | ✅ complete — 13.1 ✅ cloud-run (PR #160) · 13.2 ✅ gizmos (feat/deploy-gizmos) |
-| 14 | [phase-14-dogfooding-support.md](phase-14-dogfooding-support.md) | [prompts](prompts/ALL-PROMPTS.md) | Dogfooding support: `devteam init --profile dogfood`, doctor checks, preflight staged-artifact guard, budget warning, guide | ✅ 14.1 complete (PR #163) · ✅ 14.2 complete (PR #164) · ✅ 14.3 complete (PR #165) · ✅ 14.4 complete (PR #166) · 14.5 blocked on 14.2 |
+| 14 | [phase-14-dogfooding-support.md](phase-14-dogfooding-support.md) | [prompts](prompts/ALL-PROMPTS.md) | Dogfooding support: `devteam init --profile dogfood`, doctor checks, preflight staged-artifact guard, budget warning, guide | ✅ complete — 14.1 ✅ `--profile dogfood` (PR #163) · 14.2 ✅ doctor dogfood checks (PR #164) · 14.3 ✅ preflight artifact guard (PR #165) · 14.4 ✅ budget warning (PR #166) · 14.5 ✅ dogfooding guide |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status

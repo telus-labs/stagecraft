@@ -1,0 +1,112 @@
+# Dogfooding Stagecraft
+
+Running Stagecraft against its own source tree ("dogfooding") lets you use the framework
+to develop new Stagecraft features. This guide covers the one-time setup and the per-feature
+workflow.
+
+## Prerequisites
+
+- A dedicated Stagecraft clone — do **not** dogfood in your primary install.
+- Node.js 18+.
+- Claude Code or another supported host CLI, authenticated.
+
+```bash
+git clone <stagecraft-repo> ~/Development/stagecraft-dogfood
+cd ~/Development/stagecraft-dogfood
+npm install
+npm link          # puts 'devteam' on PATH pointing to this clone
+```
+
+## One-time setup
+
+Run `devteam init` with the dogfood profile:
+
+```bash
+devteam init --host claude-code --profile dogfood
+devteam doctor
+```
+
+This writes four safeguards:
+
+| Safeguard | What it does |
+|---|---|
+| `.gitignore` stagecraft block | Excludes volatile runtime files |
+| `.gitignore` stagecraft-dogfood block | Excludes generated pipeline documents |
+| `.git/hooks/pre-commit` guard | Blocks commits to framework infrastructure files |
+| `.git/info/exclude` entry | Hides `pipeline/stages/deploy.md` locally |
+
+If `devteam doctor` shows all green under "Dogfood mode", you are ready.
+
+## Per-feature workflow
+
+For each Stagecraft feature or fix you want to dogfood:
+
+```bash
+# 1. Create a branch for the feature
+git checkout -b feat/my-new-feature
+
+# 2. Run the pipeline with a budget cap (required in dogfood mode)
+devteam run --feature "describe the feature" --budget-usd 15
+
+# 3. When the pipeline completes or halts for sign-off, review pipeline/gates/
+devteam summary
+
+# 4. If the generated code passes review, commit normally
+git add <specific-source-files>
+git commit
+
+# 5. Clean up pipeline artifacts before switching features
+git restore pipeline/  # or: devteam restart stage-01 --cascade
+```
+
+### Recommended budget
+
+| Phase | Budget |
+|---|---|
+| Requirements + design only | $3–5 |
+| Through build | $8–12 |
+| Full pipeline (sign-off + deploy allowed) | $15–25 |
+
+Use `--allow-stage sign-off,deploy` only when you intend to run the full pipeline.
+
+## Infrastructure guard
+
+The pre-commit hook installed by `devteam init --profile dogfood` will reject any commit
+that touches `core/`, `bin/devteam`, `pipeline/stages/`, `roles/`, or `rules/`. This is
+intentional — framework files must only be changed by you, not by an agent run.
+
+If you need to commit a legitimate framework change (e.g. applying a fix that the agent
+proposed in a file), do it manually:
+
+```bash
+git restore --staged pipeline/brief.md   # unstage pipeline artifacts first
+git add core/specific-file.js            # stage only what you mean to commit
+git commit
+```
+
+## Failure modes
+
+| Symptom | Resolution |
+|---|---|
+| Agent tries to commit `pipeline/brief.md` | Normal — pre-commit hook blocks it; pipeline continues |
+| Run stalls after sign-off | Use `--allow-stage sign-off` if intentional |
+| Budget exhausted before design | Raise `--budget-usd`; start from `devteam restart stage-01 --cascade` |
+| Pipeline artifacts appear in PR | `git restore --staged pipeline/` before pushing |
+
+## Re-running doctor after setup
+
+```bash
+devteam doctor
+```
+
+Expected output includes a "Dogfood mode" section:
+
+```
+Dogfood mode
+  ✓ pre-commit infrastructure guard
+  ✓ pre-commit hook is executable
+  ✓ .gitignore dogfood block present
+  ✓ .git/info/exclude: deploy.md entry
+  ✓ no npm publish script
+  ℹ budget-usd reminder  — always use --budget-usd with devteam run to cap spend
+```

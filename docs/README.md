@@ -33,6 +33,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 
 ## Contributor — I change Stagecraft
 
+- [guides/dogfooding.md](guides/dogfooding.md) — running Stagecraft against its own source tree: one-time setup, per-feature workflow, budget guidance
 - [concepts.md](concepts.md) — six pipeline primitives (stage, role, workstream, host, gate, track) in one table
 - [methodology.md](methodology.md) — ATDD loop, phase-gate progression, adversarial layer, four coding principles
 - [FEATURES.md](FEATURES.md) — every shipped feature organized by area
