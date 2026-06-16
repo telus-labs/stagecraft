@@ -169,12 +169,14 @@ async function run(positional, _flags) {
   console.log("\nFollow-up items in completed stage gates:\n");
 
   for (const { item, classification, addressed, options } of result.items) {
+    const desc = item.text || item.summary || "(no summary)";
+    const label = item.id === desc ? item.id : `${item.id} — ${desc}`;
     if (addressed) {
-      console.log(`  ${item.id} — ${item.text || item.summary || "(no summary)"}  [${item._source}]`);
+      console.log(`  ${label}  [${item._source}]`);
       console.log(`    Status: ADDRESSED\n`);
       continue;
     }
-    console.log(`  ${item.id} — ${item.text || item.summary || "(no summary)"}  [${item._source}]`);
+    console.log(`  ${label}  [${item._source}]`);
     console.log(`    Risk: ${riskLabel[classification] || classification}`);
     console.log("    Options:");
     for (const opt of options) {
@@ -189,7 +191,9 @@ async function run(positional, _flags) {
     const rec = r.options.find((o) => o.recommended);
     return `${r.item.id}=${rec ? rec.id : "A"}`;
   }).join(",");
-  console.log(`Apply: devteam advise --apply ${selExample}\n`);
+  const needsQuote = /[ \t()[\]{};|&]/.test(selExample);
+  const applyArg = needsQuote ? `'${selExample}'` : selExample;
+  console.log(`Apply: devteam advise --apply ${applyArg}\n`);
 
   process.exit(result.unresolvedBlockers > 0 ? 1 : 0);
 }
