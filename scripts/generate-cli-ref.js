@@ -40,6 +40,11 @@ const COMMANDS = [
     description: "Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.",
   },
   {
+    name:        "commit",
+    synopsis:    "devteam commit [options]",
+    description: "Stage exactly the right pipeline artifacts for completed stages and generate a meaningful commit message. Tracks a cursor so repeated calls are idempotent.",
+  },
+  {
     name:        "validate",
     synopsis:    "devteam validate [options]",
     description: "Validate the most recent gate in pipeline/gates/. Exit codes: 0 PASS/WARN, 1 malformed, 2 FAIL, 3 ESCALATE.",

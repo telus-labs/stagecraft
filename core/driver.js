@@ -93,7 +93,13 @@ function acquireLock(cwd, { force = false } = {}, changeId) {
 function releaseLock(cwd, changeId) { try { fs.unlinkSync(lockPath(cwd, changeId)); } catch { /* already gone */ } }
 
 function loadRunState(cwd, changeId) {
-  try { return JSON.parse(fs.readFileSync(runStatePath(cwd, changeId), "utf8")); } catch { return null; }
+  try {
+    const state = JSON.parse(fs.readFileSync(runStatePath(cwd, changeId), "utf8"));
+    // Phase 12.2 migration: ensure commit-cursor fields exist in resumed states.
+    if (!Array.isArray(state.stages_advanced)) state.stages_advanced = [];
+    if (!("last_committed_stage_index" in state)) state.last_committed_stage_index = null;
+    return state;
+  } catch { return null; }
 }
 function saveRunState(cwd, changeId, state) {
   try {
@@ -514,6 +520,9 @@ async function run(opts = {}) {
     iterations: 0,
     retries: {},
     started_at: nowTs,
+    // Phase 12.2: commit-cursor fields for `devteam commit`.
+    stages_advanced: [],              // stage IDs advanced in pipeline order
+    last_committed_stage_index: null, // index of last committed stage in stages_advanced
   };
   // Correlation id (ADR-009 §Decision.7): on resume, record the prior run's identity
   // so a re-classified re-run is linkable to its predecessor in the run log.
@@ -526,6 +535,9 @@ async function run(opts = {}) {
   state.autoRule = state.autoRule || {};          // auto-rule attempts per stage
   state.transient = state.transient || {};        // no-gate transient retries per stage
   state.srcFingerprints = state.srcFingerprints || {}; // content hashes for no-source-change detection
+  // Phase 12.2: commit-cursor fields (resilient to resumed pre-12.2 states).
+  if (!Array.isArray(state.stages_advanced)) state.stages_advanced = [];
+  if (!("last_committed_stage_index" in state)) state.last_committed_stage_index = null;
 
   const summary = {
     completed: false,
@@ -1068,6 +1080,8 @@ async function run(opts = {}) {
         // any non-zero/null (timeout) collapses to 1 for classification.
         const exitCode = nonSkipped.length > 0 && nonSkipped.every((x) => x.exitCode === 0) ? 0 : 1;
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
+        // Phase 12.2: track stage IDs in state for `devteam commit` cursor.
+        if (r.stage && !state.stages_advanced.includes(r.stage)) state.stages_advanced.push(r.stage);
         saveRunState(cwd, changeId, state);
         if (!summary.stages_advanced.includes(r.name)) summary.stages_advanced.push(r.name);
         logEvent(cwd, changeId, {
