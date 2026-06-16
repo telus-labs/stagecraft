@@ -38,7 +38,8 @@ describe("devteam init --adapter", () => {
     const content = fs.readFileSync(cfgPath, "utf8");
     assert.ok(content.includes("adapter: gizmos"), "config.yml must contain adapter: gizmos");
     assert.ok(content.includes("deploy:"), "config.yml must contain deploy: section");
-    assert.ok(content.includes("app: my-app"), "config.yml must contain gizmos app hint");
+    assert.ok(content.includes("gizmos:"), "config.yml must contain gizmos: subkey block");
+    assert.ok(content.includes("TODO"), "placeholder values must be marked TODO");
   });
 
   it("writes deploy section to config.yml when --adapter cloud-run is specified", () => {

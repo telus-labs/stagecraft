@@ -100,7 +100,7 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     assert.match(content, /default_host: codex/);
   });
 
-  it("renders deploy section when adapter is specified", () => {
+  it("renders gizmos deploy section with environment, smoke_test_path, and app hint", () => {
     const text = renderDefaultConfig(["claude-code"], { adapter: "gizmos" });
     assert.match(text, /deploy:/);
     assert.match(text, /adapter: gizmos/);
@@ -108,22 +108,55 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     assert.match(text, /smoke_test_path: \/healthz/);
     assert.match(text, /gizmos:/);
     assert.match(text, /app: my-app/);
+    assert.ok(!text.match(/^  environment:/m) || text.includes("environment: production"), "environment must be present");
   });
 
-  it("renders cloud-run deploy section with cloud_run hints", () => {
+  it("renders cloud-run deploy section with environment, smoke_test_path, and cloud_run hints", () => {
     const text = renderDefaultConfig(["claude-code"], { adapter: "cloud-run" });
     assert.match(text, /adapter: cloud-run/);
+    assert.match(text, /environment: production/);
+    assert.match(text, /smoke_test_path: \/healthz/);
     assert.match(text, /cloud_run:/);
     assert.match(text, /project: my-project/);
     assert.match(text, /region: us-central1/);
   });
 
-  it("renders deploy section without hints for adapters without specific hints", () => {
+  it("renders kubernetes deploy section with kubernetes subkeys; no environment or smoke_test_path", () => {
     const text = renderDefaultConfig(["claude-code"], { adapter: "kubernetes" });
     assert.match(text, /adapter: kubernetes/);
-    assert.match(text, /environment: production/);
+    assert.match(text, /kubernetes:/);
+    assert.match(text, /strategy: manifests/);
+    assert.match(text, /namespace:/);
+    assert.ok(!text.includes("smoke_test_path"), "kubernetes must not include smoke_test_path");
+    assert.ok(!text.includes("environment: production"), "kubernetes must not include environment");
     assert.ok(!text.includes("gizmos:"), "must not include gizmos hints");
     assert.ok(!text.includes("cloud_run:"), "must not include cloud_run hints");
+  });
+
+  it("renders docker-compose deploy section with docker_compose subkeys; no environment or smoke_test_path", () => {
+    const text = renderDefaultConfig(["claude-code"], { adapter: "docker-compose" });
+    assert.match(text, /adapter: docker-compose/);
+    assert.match(text, /docker_compose:/);
+    assert.match(text, /compose_file:/);
+    assert.ok(!text.includes("smoke_test_path"), "docker-compose must not include smoke_test_path");
+    assert.ok(!text.includes("environment: production"), "docker-compose must not include environment");
+  });
+
+  it("renders terraform deploy section with terraform subkeys", () => {
+    const text = renderDefaultConfig(["claude-code"], { adapter: "terraform" });
+    assert.match(text, /adapter: terraform/);
+    assert.match(text, /terraform:/);
+    assert.match(text, /working_dir:/);
+    assert.match(text, /workspace:/);
+    assert.ok(!text.includes("smoke_test_path"), "terraform must not include smoke_test_path");
+  });
+
+  it("renders custom deploy section with custom subkeys", () => {
+    const text = renderDefaultConfig(["claude-code"], { adapter: "custom" });
+    assert.match(text, /adapter: custom/);
+    assert.match(text, /custom:/);
+    assert.match(text, /script:/);
+    assert.ok(!text.includes("smoke_test_path"), "custom must not include smoke_test_path");
   });
 
   it("omits deploy section when no adapter specified", () => {
@@ -137,7 +170,9 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     assert.equal(r.written, true);
     const content = fs.readFileSync(r.path, "utf8");
     assert.match(content, /adapter: gizmos/);
-    assert.match(content, /app: my-app/);
+    assert.match(content, /gizmos:/);
+    assert.match(content, /app:/);
+    assert.match(content, /TODO/);
   });
 
   it("KNOWN_DEPLOY_ADAPTERS includes gizmos and cloud-run", () => {

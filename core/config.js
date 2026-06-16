@@ -100,18 +100,58 @@ function resolveHost(config, stage, role) {
   return routing.default_host;
 }
 
-// Adapter-specific deploy config hints written as comments when --adapter is used.
+// Adapter-specific deploy config hints. Each entry is an array of YAML lines
+// appended under the deploy: block. Required project-specific values are
+// marked # TODO so the agent won't use placeholder text verbatim.
+// environment and smoke_test_path are included only for the adapters that
+// actually define and use them (gizmos and cloud-run).
 const DEPLOY_ADAPTER_HINTS = {
+  "docker-compose": [
+    "  docker_compose:",
+    "    compose_file: docker-compose.yml  # or docker-compose.yaml",
+    "    build_no_cache: true",
+    "    smoke_test_timeout_s: 30",
+  ],
+  kubernetes: [
+    "  kubernetes:",
+    "    strategy: manifests             # or: helm",
+    "    namespace: my-app-prod          # TODO: replace with your namespace",
+    "    context: prod-cluster           # TODO: must match a kubectl context",
+    "    manifests_dir: k8s/manifests",
+    "    image_repository: registry.example.com/my-app  # TODO",
+    "    image_tag_from: git_sha         # or: env:IMAGE_TAG, or: fixed",
+    "    rollout_timeout_s: 300",
+  ],
+  terraform: [
+    "  terraform:",
+    "    binary: terraform               # or: tofu",
+    "    working_dir: infra              # TODO: directory containing HCL",
+    "    workspace: prod                 # TODO: Terraform workspace",
+    "    auto_approve: false",
+    "    plan_output_path: pipeline/terraform-plan.bin",
+    "    drift_check: true",
+  ],
   gizmos: [
+    "  environment: production           # gate label",
+    "  smoke_test_path: /healthz         # health probe path",
     "  gizmos:",
-    "    app: my-app          # Gizmos app name (must match wrangler.toml name)",
-    "    src: ./src           # source directory",
+    "    app: my-app                     # TODO: Gizmos app name (must match wrangler.toml)",
+    "    src: ./src                      # source directory",
   ],
   "cloud-run": [
+    "  environment: production           # gate label",
+    "  smoke_test_path: /healthz         # health probe path",
     "  cloud_run:",
-    "    project: my-project  # GCP project ID",
-    "    region: us-central1  # GCP region",
-    "    service: my-service  # Cloud Run service name",
+    "    project: my-project             # TODO: GCP project ID",
+    "    region: us-central1             # TODO: GCP region",
+    "    service: my-service             # TODO: Cloud Run service name",
+  ],
+  custom: [
+    "  custom:",
+    "    script: scripts/deploy.sh       # TODO: path relative to project root; must be executable",
+    "    timeout_s: 1200",
+    "    # args: []                      # optional args passed to script",
+    "    # smoke_commands: []            # optional shell commands run after script",
   ],
 };
 
@@ -147,8 +187,6 @@ function renderDefaultConfig(hosts, opts = {}) {
   if (opts.adapter) {
     lines.push("deploy:");
     lines.push(`  adapter: ${opts.adapter}`);
-    lines.push("  environment: production       # gate label");
-    lines.push("  smoke_test_path: /healthz     # health probe path");
     const hints = DEPLOY_ADAPTER_HINTS[opts.adapter];
     if (hints) hints.forEach((h) => lines.push(h));
     lines.push("");
