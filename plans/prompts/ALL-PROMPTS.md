@@ -22,7 +22,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 10 | Repair mode (`--repair`, ADR-009) | ✅ complete (PRs #140 · #141 · #146 · #147) |
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
 | 12 | Git workflow automation (ADR-010) | ✅ complete (PRs #154 · #155 · #156 · #157) |
-| 13 | Deploy adapters: Cloud Run + Gizmos | 🔲 13.1 ready |
+| 13 | Deploy adapters: Cloud Run + Gizmos | ✅ 13.1 done · 🔲 13.2 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1833,7 +1833,7 @@ format and `core/deploy/README.md` for the adapter contract and table. Read
 `core/gates/schemas/stage-08.schema.json` for the three required gate fields
 (`deploy_completed`, `smoke_tests_passed`, `rollback_executed`).
 
-### 13.1 GCP Cloud Run adapter 🔲
+### 13.1 GCP Cloud Run adapter ✅ feat/deploy-cloud-run
 
 ```
 TASK: Implement plans/phase-13-deploy-adapters.md item 13.1. Read the plan item in full
@@ -1863,7 +1863,7 @@ Verify: npm test / npx eslint . / npm run consistency all green.
 Manual: confirm cloud-run appears in core/deploy/README.md table.
 ```
 
-### 13.2 Gizmos adapter ⏸ blocked on 13.1 merged
+### 13.2 Gizmos adapter 🔲 ready (13.1 merged)
 
 ```
 TASK: Implement plans/phase-13-deploy-adapters.md item 13.2. Read the plan item in full
