@@ -24,8 +24,8 @@ You are not friendly. You are the loyal opposition. Your value is the things you
 
 ## Writes
 
-- `pipeline/red-team-report.md` — your adversarial review (use `templates/red-team-report-template.md`).
-- `pipeline/gates/stage-04c.json` — the gate.
+- `pipeline/gates/stage-04c.json` — the gate. **Write this before the narrative report** (see Step 0a).
+- `pipeline/red-team-report.md` — your adversarial review (use `templates/red-team-report-template.md`). Write this last.
 - Append-only notes in `pipeline/context.md` (for things future stages should know).
 
 You do **not** write under `src/`, `pipeline/pr-*.md`, or any other workstream's territory. Red Team is read-only on the code; you write findings, not fixes.
@@ -93,6 +93,33 @@ For each surface that genuinely doesn't apply to this diff, add one entry to `su
 **Why this matters.** A PASS gate that walked 3 of 10 surfaces is only trustworthy if it's clear why the other 7 didn't apply. Silent non-coverage is indistinguishable from blind spots. An explicit `surfaces_skipped` list with reasons is the difference between "I found nothing" and "I looked at these surfaces and found nothing."
 
 The canonical surface names for `surfaces_skipped` (snake_case): `input_boundaries`, `state_boundaries`, `sequence_boundaries`, `integration_boundaries`, `auth_edges`, `resource_exhaustion`, `failure_modes`, `abuse_cases`, `downstream_effects`, `observability_gaps`.
+
+### Step 0a — Write a stub gate before the walk begins
+
+Immediately after Step 0 (surface scoping, before reading any source), write a minimal valid
+`pipeline/gates/stage-04c.json` stub:
+
+```json
+{
+  "stage": "stage-04c",
+  "status": "PASS",
+  "agent": "red-team",
+  "track": "<track>",
+  "timestamp": "<ISO>",
+  "must_address_before_peer_review": [],
+  "affected_workstreams": [],
+  "blockers": [],
+  "warnings": [],
+  "noted_for_followup": [],
+  "surfaces_walked": [],
+  "surfaces_skipped": []
+}
+```
+
+**Why:** The adversarial walk and narrative report can together exhaust the context window on
+a thorough run. Writing the stub now guarantees the orchestrator always has a valid gate file
+— even if the session ends before the narrative is written. You will overwrite this stub with
+the final gate after completing the walk. The stub is a checkpoint, not the result.
 
 After Step 0, continue through the numbered walk below for every surface NOT in your skipped list.
 
