@@ -12,6 +12,7 @@ const {
   CANONICAL_DOGFOOD_BLOCK,
   DOGFOOD_BLOCK_BEGIN,
 } = require(path.join(REPO_ROOT, "core", "gitignore"));
+const { KNOWN_DEPLOY_ADAPTERS } = require(path.join(REPO_ROOT, "core", "config"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -24,6 +25,60 @@ function makeDogfoodProject() {
   fs.mkdirSync(path.join(cwd, ".git", "info"), { recursive: true });
   return cwd;
 }
+
+describe("devteam init --adapter", () => {
+  it("writes deploy section to config.yml when --adapter gizmos is specified", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "gizmos"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+
+    const cfgPath = path.join(cwd, ".devteam", "config.yml");
+    assert.ok(fs.existsSync(cfgPath), "config.yml must exist");
+    const content = fs.readFileSync(cfgPath, "utf8");
+    assert.ok(content.includes("adapter: gizmos"), "config.yml must contain adapter: gizmos");
+    assert.ok(content.includes("deploy:"), "config.yml must contain deploy: section");
+    assert.ok(content.includes("gizmos:"), "config.yml must contain gizmos: subkey block");
+    assert.ok(content.includes("TODO"), "placeholder values must be marked TODO");
+  });
+
+  it("writes deploy section to config.yml when --adapter cloud-run is specified", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "cloud-run"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+
+    const content = fs.readFileSync(path.join(cwd, ".devteam", "config.yml"), "utf8");
+    assert.ok(content.includes("adapter: cloud-run"));
+    assert.ok(content.includes("cloud_run:"));
+    assert.ok(content.includes("project: my-project"));
+  });
+
+  it("exits 2 with error message for unknown adapter", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "bogus-adapter"]);
+    assert.equal(r.status, 2, "must exit 2 for unknown adapter");
+    assert.ok(r.stderr.includes("Unknown deploy adapter"), "stderr must explain the error");
+    assert.ok(r.stderr.includes("bogus-adapter"), "stderr must name the bad adapter");
+  });
+
+  it("omits deploy section when --adapter is not specified", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+
+    const content = fs.readFileSync(path.join(cwd, ".devteam", "config.yml"), "utf8");
+    assert.ok(!content.includes("deploy:"), "config.yml must not contain deploy: without --adapter");
+  });
+
+  it("KNOWN_DEPLOY_ADAPTERS lists at least gizmos, cloud-run, docker-compose, custom", () => {
+    for (const name of ["gizmos", "cloud-run", "docker-compose", "custom"]) {
+      assert.ok(KNOWN_DEPLOY_ADAPTERS.includes(name), `KNOWN_DEPLOY_ADAPTERS must include ${name}`);
+    }
+  });
+});
 
 describe("devteam init --profile dogfood", () => {
   it("writeDogfoodGitignoreBlock appends the dogfood block to .gitignore", () => {

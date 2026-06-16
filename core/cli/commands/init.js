@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "..", "router"));
-const { writeConfigIfAbsent, configPath } = require(path.join(__dirname, "..", "..", "config"));
+const { writeConfigIfAbsent, configPath, KNOWN_DEPLOY_ADAPTERS } = require(path.join(__dirname, "..", "..", "config"));
 const { writeGitignoreBlock } = require(path.join(__dirname, "..", "..", "gitignore"));
 
 const name = "init";
@@ -21,6 +21,7 @@ function warnIfWindows(platform, write) {
 
 const flags = {
   host:    { type: "string",  description: "Host adapter(s), comma-separated" },
+  adapter: { type: "string",  description: `Deploy adapter for stage-08: ${KNOWN_DEPLOY_ADAPTERS.join(", ")}` },
   force:   { type: "boolean", description: "Overwrite existing config/files" },
   cwd:     { type: "string",  description: "Target project directory" },
   profile: { type: "string",  description: "Optional profile: dogfood" },
@@ -45,10 +46,18 @@ function run(positional, _flags) {
     process.exit(2);
   }
 
+  const adapter = _flags.adapter || null;
+  if (adapter && !KNOWN_DEPLOY_ADAPTERS.includes(adapter)) {
+    console.error(`Unknown deploy adapter: ${adapter}`);
+    console.error(`Known adapters: ${KNOWN_DEPLOY_ADAPTERS.join(", ")}`);
+    process.exit(2);
+  }
+
   console.log(`Initializing devteam in: ${cwd}`);
   console.log(`Host(s): ${hosts.join(", ")}`);
+  if (adapter) console.log(`Deploy adapter: ${adapter}`);
 
-  const cfg = writeConfigIfAbsent(cwd, hosts, { force: !!_flags.force });
+  const cfg = writeConfigIfAbsent(cwd, hosts, { force: !!_flags.force, adapter });
   console.log(cfg.written
     ? `  ✓ wrote ${path.relative(cwd, cfg.path)}`
     : `  - skipped ${path.relative(cwd, cfg.path)} (${cfg.reason}; use --force to overwrite)`);
