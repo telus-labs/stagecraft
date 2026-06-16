@@ -315,6 +315,7 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 - Prints a green/red checklist; fix what's red before running a stage
 - Reports local embedding availability as informational (`ℹ`) — absence is not a failure; run `npm install @huggingface/transformers` to enable `devteam memory` with the default local embedder
 - Prints a warning (not a hard exit) when run on Windows (`process.platform === "win32"`) — Stagecraft is POSIX-only; WSL2 is the supported path on Windows
+- **Dogfood mode section** (Phase 14.2) — when `.devteam/config.yml` contains `profile: dogfood`, a "Dogfood mode" section appears after the Adapters section with six checks: pre-commit infrastructure guard present, hook executable, `# BEGIN stagecraft-dogfood` block in `.gitignore`, `pipeline/stages/deploy.md` in `.git/info/exclude`, no `npm publish` script (⚠ warn), and a budget-usd reminder (ℹ info). Absent when the profile is not set.
 
 **`devteam next [--json] [--skip-advise]`** — find out what to do next.
 
