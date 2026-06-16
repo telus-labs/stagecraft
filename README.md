@@ -240,7 +240,7 @@ For multi-host (`--host claude-code,codex`): both surfaces installed side-by-sid
 | `devteam log [--follow] [--json]` | Chronological event timeline: every gate + every artifact write, mtime-sorted, with per-stage key fields. `--follow` polls at 1s for live tailing. Works in headless and user-driven modes. |
 | `devteam stages` | List all stages and their stage IDs |
 | `devteam hosts` | List available host adapters |
-| `devteam doctor` | Check that the install is healthy: hooks wired, agent files present, host CLIs on PATH |
+| `devteam doctor` | Check that the install is healthy: hooks wired, agent files present, host CLIs on PATH. When `profile: dogfood` is set, adds a "Dogfood mode" section with six checks (pre-commit guard, hook executable, gitignore dogfood block, `.git/info/exclude` deploy.md entry, no npm publish script, budget-usd reminder). |
 | `devteam reproduce <stage-id> [--json]` | Read a past gate and report replay readiness — which reproducibility fields are recorded, what's missing, whether the current prompt's hash matches what the gate captured. |
 | `devteam replay <stage-id> [--dry-run] [--json]` | Re-run a recorded stage against the current config; diff the result across status, blockers, cost, tokens, duration, reproducibility fields. New gate goes to `pipeline/gates/replay/`. |
 | `devteam ci install [--ci github-actions] [--out <dir>] [--force]` | Drop a CI workflow template into the target project's `.github/workflows/`. The workflow validates gates and posts each as a GitHub check run on PRs. Does NOT run the LLM pipeline in CI by design. |

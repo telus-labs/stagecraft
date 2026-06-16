@@ -107,6 +107,56 @@ function run(positional, _flags) {
     }
   }
 
+  // Dogfood mode checks: only shown when profile: dogfood is set in config.yml
+  const profile = config._raw?.profile;
+  if (profile === "dogfood") {
+    console.log("\nDogfood mode");
+
+    // 1. Pre-commit hook present and contains guard
+    const hookPath    = path.join(cwd, ".git", "hooks", "pre-commit");
+    const hookExists  = fs.existsSync(hookPath);
+    const hookContent = hookExists ? fs.readFileSync(hookPath, "utf8") : "";
+    const guardOk = hookExists && hookContent.includes("# stagecraft-dogfood");
+    check("pre-commit infrastructure guard", guardOk,
+      guardOk ? null : hookExists ? "guard marker missing — re-run devteam init --profile dogfood" : "hook missing — run devteam init --profile dogfood");
+
+    // 2. Hook is executable (only checked when hook exists)
+    if (hookExists) {
+      let hookExecutable = false;
+      try { fs.accessSync(hookPath, fs.constants.X_OK); hookExecutable = true; } catch { /* */ }
+      check("pre-commit hook is executable", hookExecutable,
+        hookExecutable ? null : "run: chmod +x .git/hooks/pre-commit");
+    }
+
+    // 3. Dogfood gitignore block present
+    const giPath = path.join(cwd, ".gitignore");
+    const giContent = fs.existsSync(giPath) ? fs.readFileSync(giPath, "utf8") : "";
+    const giOk = giContent.includes("# BEGIN stagecraft-dogfood");
+    check(".gitignore dogfood block present", giOk,
+      giOk ? null : "run: devteam init --profile dogfood");
+
+    // 4. pipeline/stages/deploy.md in .git/info/exclude
+    const excludePath = path.join(cwd, ".git", "info", "exclude");
+    const excludeContent = fs.existsSync(excludePath) ? fs.readFileSync(excludePath, "utf8") : "";
+    const excludeOk = excludeContent.includes("pipeline/stages/deploy.md");
+    check(".git/info/exclude: deploy.md entry", excludeOk,
+      excludeOk ? null : "run: devteam init --profile dogfood");
+
+    // 5. No npm publish script (anti-pattern for dogfooding)
+    const pkgPath = path.join(cwd, "package.json");
+    if (fs.existsSync(pkgPath)) {
+      let pkg = {};
+      try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")); } catch { /* */ }
+      const hasPublish = !!(pkg.scripts && pkg.scripts.publish);
+      check("no npm publish script", hasPublish ? "warn" : true,
+        hasPublish ? "dogfood mode on a publishable package — double-check you are in the right project" : null);
+    }
+
+    // 6. Budget reminder (advisory — always shown in dogfood mode)
+    check("budget-usd reminder", "info",
+      "always use --budget-usd with devteam run to cap spend");
+  }
+
   console.log("");
   if (criticalFailures > 0) {
     console.log(`❌ ${criticalFailures} critical failure(s), ${warnings} warning(s)`);

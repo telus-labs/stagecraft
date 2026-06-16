@@ -23,7 +23,7 @@ Status legend: ✅ executed and merged · 🔲 ready to run · ⏸ blocked (see 
 | 11 | Autonomy polish (ADR-006/007/008) | ✅ complete (PRs #148 · #149 · feat/track-provenance) |
 | 12 | Git workflow automation (ADR-010) | ✅ complete (PRs #154 · #155 · #156 · #157) |
 | 13 | Deploy adapters: Cloud Run + Gizmos | ✅ complete |
-| 14 | Dogfooding support (`--profile dogfood`, doctor checks, preflight guard, budget warning) | 🔲 ready |
+| 14 | Dogfooding support (`--profile dogfood`, doctor checks, preflight guard, budget warning) | ✅ 14.1 complete · ✅ 14.2 complete · 🔲 14.3–14.5 ready |
 
 Lessons already baked into the preamble from Phase 1–2 execution: mirror CI's env when
 testing (`CI=true DEVTEAM_HEADLESS_COMMAND=cat`), never let tests read/write repo-root
@@ -1922,7 +1922,7 @@ Verify: npm test / npx eslint . all green.
 Manual integration test (verbatim in plan §14.1 Verify block).
 ```
 
-### 14.2 Doctor dogfood-mode checks 🔲 feat/doctor-dogfood-checks
+### 14.2 Doctor dogfood-mode checks ✅ feat/doctor-dogfood-checks
 
 ```
 TASK: Implement plans/phase-14-dogfooding-support.md item 14.2. Read the plan item in full
