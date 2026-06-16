@@ -104,6 +104,11 @@ function run(positional, _flags) {
       `     devteam init --host claude-code --cwd "${cwd}"\n\n`,
     );
   }
+  const CONVENTION_STAGES = new Set(["requirements", "design", "build"]);
+  if (CONVENTION_STAGES.has(stageName)) {
+    const { seedDeployContext } = require(path.join(__dirname, "..", "..", "driver"));
+    seedDeployContext(cwd, loadConfig(cwd), null);
+  }
   const track = _flags.track || loadConfig(cwd).pipeline.default_track;
   if (STOPLIST_GUARDED_TRACKS.has(track) && !_flags.force) {
     const matches = checkStoplist({ description: _flags.feature || "", cwd });
