@@ -34,7 +34,7 @@ function buildVolatilePatterns() {
 // Handles exact paths, directory prefixes (trailing "/"), and "*" wildcards.
 function patternToRegex(pattern) {
   // Escape all special regex chars except backslash (which we'll handle last)
-  let escaped = pattern.replace(/[.+?^${}()|[\]]/g, "\\$&");
+  let escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
   if (pattern.endsWith("/")) {
     // Directory: match anything that starts with this prefix
     return new RegExp("^" + escaped);
@@ -75,7 +75,7 @@ function resolveArtifacts(stageId, pRoot, intent) {
       }
     } else if (pattern.includes("*")) {
       // Glob: match files in pRoot against the pattern
-      const re = new RegExp("^" + pattern.replace(/[.+?^${}()|[\]]/g, "\\$&").replace(/\*/g, "[^/]+") + "$");
+      const re = new RegExp("^" + pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, "[^/]+") + "$");
       if (fs.existsSync(pRoot)) {
         try {
           for (const entry of fs.readdirSync(pRoot, { withFileTypes: true })) {
