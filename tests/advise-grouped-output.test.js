@@ -169,9 +169,7 @@ describe("devteam advise addressed-item persistence", () => {
       }));
 
       // Apply "nothing" to the long-text item — simulates devteam advise --apply '<text>=A'
-      const contextFile = path.join(cwd, "pipeline", "context.md");
       fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
-      const { runAdvise } = require(path.join(REPO_ROOT, "core", "advise"));
       const first = runAdvise(cwd, { checkOnly: true });
       assert.equal(first.items.length, 1, "should find 1 item before apply");
       const itemId = first.items[0].item.id;
