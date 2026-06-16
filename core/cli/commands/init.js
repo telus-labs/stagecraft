@@ -5,6 +5,7 @@ const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "..", "router"));
 const { writeConfigIfAbsent, configPath } = require(path.join(__dirname, "..", "..", "config"));
+const { writeGitignoreBlock } = require(path.join(__dirname, "..", "..", "gitignore"));
 
 const name = "init";
 
@@ -67,6 +68,15 @@ function run(positional, _flags) {
     const r = adapter.install(cwd, { force: !!_flags.force });
     console.log(`  written: ${r.written.length}, skipped: ${r.skipped.length}`);
     for (const f of r.warnings) console.log(`  ⚠️  ${f}`);
+  }
+
+  const giResult = writeGitignoreBlock(cwd);
+  if (giResult === "skipped") {
+    // block already matches canonical; no output needed
+  } else if (giResult === "wrote") {
+    console.log("  ✓ wrote .gitignore (stagecraft block)");
+  } else {
+    console.log("  ✓ updated .gitignore (stagecraft block)");
   }
 
   console.log(`\nNext: edit ${path.relative(cwd, configPath(cwd))} if you need custom routing, then \`devteam stage requirements --feature "..."\`.`);

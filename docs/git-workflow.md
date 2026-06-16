@@ -60,12 +60,10 @@ Commit `pipeline/` alongside `src/`. These files are the pipeline's audit trail 
 | `pipeline/pre-review-output.txt` | optional | Large raw output; useful for audits |
 | `pipeline/lint-output.txt` | optional | Same |
 
-Add this to your project's `.gitignore`:
-
-```
-pipeline/logs/
-pipeline/gates/replay/
-```
+Run `devteam init --host <x>` once to write the managed `.gitignore` block. The block is the
+canonical list of volatile Stagecraft files; do not duplicate it in prose. To update the block
+after a Stagecraft upgrade, re-run `devteam init --host <x>` (without `--force` — it replaces
+an outdated block automatically).
 
 ---
 
