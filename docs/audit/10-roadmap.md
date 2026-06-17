@@ -131,21 +131,21 @@ Three small structural items + one defer.
 **Effort:** M (~2 hours).
 **Risk:** low — mechanical split; tests cover the contract.
 
-### PR 3.2 — Dead-export sweep
+### PR 3.2 — Dead-export sweep — CLOSED
 
 | # | Item | Effort | Verification |
 |---|---|---|---|
-| 1 | **P3-4**: Remove or activate `adapterPath`, `clearConfigCache`, `DEFAULT_TIMEOUT_MS` | XS | Exports either gone OR have at least one external consumer |
+| 1 | **P3-4**: Remove or activate `adapterPath`, `clearConfigCache`, `DEFAULT_TIMEOUT_MS` | Done | `clearConfigCache` has external consumers; `adapterPath` and verify runner `DEFAULT_TIMEOUT_MS` are private. |
 
-**Effort:** XS (~15 min).
+**Status:** closed.
 
-### PR 3.3 — Per-stage rules-coverage decision
+### PR 3.3 — Per-stage rules-coverage decision — CLOSED
 
 | # | Item | Effort | Verification |
 |---|---|---|---|
-| 1 | **P3-3**: Either complete the per-stage rules split for stages 1-3b/4c/4d/6c/6d/9, OR document the asymmetric coverage in `rules/pipeline-build.md` index | S (one-liner) or M (full split) | Either ~9 new files OR an explicit one-line note in the index |
+| 1 | **P3-3**: Document the per-stage rule-file coverage shape in `rules/pipeline-build.md` and `rules/pipeline.md` | Done | Rules index now explains why stages 3 and 03b stay in `pipeline-core.md` plus role/skill guidance. |
 
-**Effort:** S (recommended path: document the asymmetry).
+**Status:** closed.
 **Risk:** low.
 
 ### PR 3.4 — `devteam log --json` event schema doc (deferred)

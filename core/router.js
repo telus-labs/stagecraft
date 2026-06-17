@@ -44,4 +44,4 @@ function resolveAdapter(config, stage, role) {
   return { hostName, adapter: loadAdapter(hostName) };
 }
 
-module.exports = { resolveAdapter, loadAdapter, listHosts, adapterPath };
+module.exports = { resolveAdapter, loadAdapter, listHosts };

@@ -38,15 +38,15 @@ For services that expose APIs (HTTP, gRPC, CLI, library):
 
 References to things that no longer exist — file paths, APIs, commands, version numbers.
 
-| Doc | Reference | What's wrong | Suggested fix |
-|---|---|---|---|
-| `README.md:42` | `scripts/audit.js` | file doesn't exist | remove or update |
+| Doc | Reference | What's wrong | Suggested fix | Verified by |
+|---|---|---|---|---|
+| `README.md:42` | `scripts/audit.js` | file doesn't exist | remove or update | <command / code inspection + observed result> |
 
 ## Onboarding test
 
 Run the install + run + test commands from `00-project-context.md` mentally (or actually). Where would a new developer get stuck?
 
-- <friction point>
+- <friction point> — **Verified by:** <command / code inspection + observed result>
 - <friction point>
 
 ## Project-Specific

@@ -1,0 +1,1 @@
+- Clarify the per-stage rule-file coverage shape so stages 3 and 03b are documented as intentional `pipeline-core.md` guidance rather than missing rule files.

@@ -88,7 +88,15 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| C9 | **Verify-before-promoting enforcement in audit skill** `[hist-c]` | 3 | 2 | The 2026-05-28 audit codified a "verify before promoting" rule (after S5); the 2026-06-03 audit failed to apply it (the C-1 retraction in PR #32). Codifying the rule once textually isn't enough. Add a `verified_by` field requirement to each finding in `skills/audit/SKILL.md` Phase 1/2 — must include the grep/code-inspection command that confirmed the cited symbol exists. Structural enforcement, not textual guidance. |
+| C1 | ~~Filesystem-level `allowedWrites` enforcement~~ | 4 | 4 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C2 | ~~Secret scanning hook~~ | 4 | 1 | ✅ v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| C3 | ~~License compatibility gate~~ | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C4 | ~~Reproducible runs (recording half)~~ | 4 | 4 | ✅ v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
+| C5 | ~~Capability-required permissions~~ | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C6 | ~~Tamper-evident gate chain~~ | 3 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C7 | ~~`eslint-plugin-security`~~ `[hist-a]` | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C8 | ~~CHANGELOG-per-PR fragments~~ `[hist-b]` | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| C9 | ~~**Verify-before-promoting enforcement in audit skill** `[hist-c]`~~ | 3 | 2 | ✅ Unreleased · Phase 1/2 audit findings now require `verified_by` evidence, templates expose verification slots, and structural tests lock the contract. |
 
 ## D. Observability & learning — telemetry, metrics, persistent learning
 

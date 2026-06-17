@@ -126,4 +126,4 @@ function resolveCommands(cwd, config) {
   };
 }
 
-module.exports = { runCommand, discoverScripts, resolveCommands, DEFAULT_TIMEOUT_MS };
+module.exports = { runCommand, discoverScripts, resolveCommands };

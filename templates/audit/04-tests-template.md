@@ -29,20 +29,20 @@ Where the tests are vs. where the code is.
 
 Business logic, error handling, integrations with zero or near-zero coverage. Each is a concrete risk.
 
-- `path/to/file.ext` — <what this code does> — <why missing tests matter>
+- `path/to/file.ext` — <what this code does> — <why missing tests matter> — **Verified by:** <command / code inspection + observed result>
 
 ## Test quality issues
 
-Findings about *how* tests are written, not just whether they exist.
+Findings about *how* tests are written, not just whether they exist. Every finding includes direct verification evidence.
 
-| Finding | Where | Why it matters |
-|---|---|---|
-| Empty / trivial assertions | | |
-| Implementation coupling (mocks dictate interface) | | |
-| Overbroad mocks (mocking what you shouldn't) | | |
-| External service calls in tests | | |
-| Missing edge cases | | |
-| Order dependencies | | |
+| Finding | Where | Why it matters | Verified by |
+|---|---|---|---|
+| Empty / trivial assertions | | | |
+| Implementation coupling (mocks dictate interface) | | | |
+| Overbroad mocks (mocking what you shouldn't) | | | |
+| External service calls in tests | | | |
+| Missing edge cases | | | |
+| Order dependencies | | | |
 
 ## What's well-tested
 
