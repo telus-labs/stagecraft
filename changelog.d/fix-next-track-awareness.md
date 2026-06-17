@@ -1,0 +1,1 @@
+- `devteam next` now reads the active track from `pipeline/run-state.json` (written by `devteam run`) so it sequences against the correct track instead of always falling back to the full track. A new `--track` flag allows manual override. Fixes #220.

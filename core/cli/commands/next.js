@@ -17,6 +17,7 @@ const name = "next";
 const flags = {
   cwd:           { type: "string",  description: "Target project directory" },
   feature:       { type: "string",  description: "Feature name (bounded isolation mode)" },
+  track:         { type: "string",  description: "Override the pipeline track (default: read from run-state.json, then config)" },
   json:          { type: "boolean", description: "JSON output" },
   "skip-advise": { type: "boolean", description: "Suppress unresolved follow-up advisory warning" },
   help:          { type: "boolean", description: "Show this help" },
@@ -31,6 +32,23 @@ function run(positional, _flags) {
   checkBoundedFence(config, "next");
   const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
   const changeId = resolveChangeId(_flags, config);
+  const { pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
+  const fs = require("node:fs");
+
+  // Resolve the active track: explicit --track flag > persisted run-state.json > config/orchestrator default.
+  // run-state.json is written by `devteam run` at start-of-run and is the shared source of truth
+  // for which track is in progress. Without this, `devteam next` always falls back to the full
+  // track, misreporting stages that don't exist on lighter tracks (e.g. quick, nano).
+  let resolvedTrack = _flags.track || null;
+  if (!resolvedTrack) {
+    try {
+      const rsPath = path.join(pipelineRoot(cwd, changeId), "run-state.json");
+      if (fs.existsSync(rsPath)) {
+        const rs = JSON.parse(fs.readFileSync(rsPath, "utf8"));
+        if (rs.track && typeof rs.track === "string") resolvedTrack = rs.track;
+      }
+    } catch { /* non-fatal — fall through to orchestrator default */ }
+  }
 
   // Advisory check — non-blocking; warn when unresolved BLOCKER-risk follow-up items exist
   if (!_flags.json && !_flags.skipAdvise) {
@@ -51,7 +69,7 @@ function run(positional, _flags) {
     }
   }
 
-  let result = next({ cwd, changeId });
+  let result = next({ cwd, changeId, track: resolvedTrack || undefined });
 
   // fold-sign-off: orchestrator detected a clean AC→test mapping; write the
   // gate here (caller's responsibility) then re-run next() so the user sees
