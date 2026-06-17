@@ -818,6 +818,23 @@ async function run(opts = {}) {
       // (next() will re-dispatch). Bounded by a driver-side retry ceiling, the
       // authoritative backstop (next()'s convergence-exhausted relies on the
       // agent bumping retry_number, which the driver does not control).
+
+      // Write an ESCALATE gate so convergence-exhausted is visible on disk,
+      // not only in run-state.json / run-log.jsonl. Best-effort; never blocks halt.
+      const _writeConvergenceEscalate = (stageId, stageName, reason) => {
+        try {
+          const p = path.join(gatesDir(cwd, changeId), `${stageId}.json`);
+          if (!fs.existsSync(p)) return;
+          const g = JSON.parse(fs.readFileSync(p, "utf8"));
+          g.status = "ESCALATE";
+          g.escalation_reason = reason;
+          g.decision_needed =
+            `Add fix instructions to pipeline/context.md above devteam markers, `
+            + `then: devteam restart ${stageName} && devteam run`;
+          fs.writeFileSync(p, JSON.stringify(g, null, 2) + "\n", "utf8");
+        } catch { /* best-effort */ }
+      };
+
       if (r.action === "fix-and-retry" && r.failure_class === "code-defect") {
         const attempts = state.fixRetries[r.name] || 0;
         if (attempts >= maxRetries) {
@@ -828,6 +845,7 @@ async function run(opts = {}) {
           summary.blockers = r.blockers || [];
           logEvent(cwd, changeId, { ...base, outcome: "convergence-halt" });
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
+          _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
         // Archive the failed attempt's stage gate before it's cleared/overwritten.
@@ -850,6 +868,7 @@ async function run(opts = {}) {
           summary.no_progress_evidence = evidence;
           logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_progress_evidence: evidence, archived: archived || null });
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_progress_evidence: evidence });
+          _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
 
@@ -868,6 +887,7 @@ async function run(opts = {}) {
           summary.no_source_change_evidence = evidence;
           logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_source_change_evidence: evidence, archived: archived || null });
           onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_source_change_evidence: evidence });
+          _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
 

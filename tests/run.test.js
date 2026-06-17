@@ -312,6 +312,25 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.equal(s.halt_failure_class, "convergence-exhausted");
   });
 
+  it("writes ESCALATE to the gate file when convergence-exhausted fires", async () => {
+    const cwd = track(makeTargetProject());
+    // Pre-seed the stage gate so _writeConvergenceEscalate has something to update.
+    seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["still failing"] });
+    await run({
+      cwd,
+      next: () => ({
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: ["still failing"], fix_steps: [],
+      }),
+    });
+    const gate = JSON.parse(fs.readFileSync(
+      path.join(cwd, "pipeline", "gates", "stage-04.json"), "utf8"));
+    assert.equal(gate.status, "ESCALATE", "gate must be rewritten to ESCALATE on convergence-exhausted");
+    assert.ok(gate.escalation_reason, "escalation_reason must be populated");
+    assert.ok(gate.decision_needed, "decision_needed must be populated");
+    assert.match(gate.decision_needed, /devteam restart build/, "decision_needed must name the stage");
+  });
+
   it("halts (structural-input) immediately when recipe targets gates that don't exist", async () => {
     const cwd = track(makeTargetProject());
     // clear_gates names a gate that is absent → clearGates returns []

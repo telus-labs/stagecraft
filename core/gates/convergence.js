@@ -151,6 +151,7 @@ function noProgressEvidence(stuckBlockers, attempts) {
  * Returns { noSourceChange: false } in all safe-fallback cases:
  *   - fewer than 1 archive exists
  *   - no blocker in the archive has a `file` field
+ *   - any blocker file is unreadable (absent files hash as "" — indistinguishable from unchanged)
  *   - any unexpected I/O error
  *
  * @param {string} cwd        project root
@@ -186,12 +187,20 @@ function detectNoSourceChange(cwd, gatesDir, stageId, runState) {
     const sortedFiles = [...fileSet].sort();
 
     // Hash the current content of each blocker-referenced file.
-    // Missing/unreadable files contribute an empty string (best-effort).
-    const parts = sortedFiles.map((rel) => {
-      let content = "";
-      try { content = fs.readFileSync(path.join(cwd, rel), "utf8"); } catch { /* absent → "" */ }
-      return `${rel}:${crypto.createHash("sha256").update(content).digest("hex")}`;
-    });
+    // If any file is unreadable, skip the check entirely: an absent file hashes
+    // as "" which is indistinguishable from an unchanged file, producing a false
+    // no-source-change halt. Returning false here lets the count-based ceiling
+    // (fixRetries) act as the backstop instead.
+    const parts = [];
+    for (const rel of sortedFiles) {
+      let content;
+      try {
+        content = fs.readFileSync(path.join(cwd, rel), "utf8");
+      } catch {
+        return { noSourceChange: false };
+      }
+      parts.push(`${rel}:${crypto.createHash("sha256").update(content).digest("hex")}`);
+    }
     const fingerprint = parts.join("\n");
 
     const prior = runState.srcFingerprints[stageId];

@@ -154,14 +154,27 @@ describe("detectNoSourceChange: safe-fallback cases", () => {
     assert.deepEqual(detectNoSourceChange(cwd, gd(cwd), "stage-04", state), { noSourceChange: false });
   });
 
-  it("blocker references a missing file → no crash, first call stores baseline and returns false", () => {
+  it("blocker references a missing file → returns false without storing a fingerprint", () => {
     const cwd = track(makeTargetProject());
     seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "missing", file: "nonexistent.txt" }] });
     const state = { srcFingerprints: {} };
     let r;
     assert.doesNotThrow(() => { r = detectNoSourceChange(cwd, gd(cwd), "stage-04", state); });
-    assert.equal(r.noSourceChange, false, "first call stores baseline; returns false regardless");
-    assert.ok(state.srcFingerprints["stage-04"], "fingerprint still stored even for a missing file");
+    assert.equal(r.noSourceChange, false, "unreadable file → safe-fallback false");
+    assert.equal(state.srcFingerprints["stage-04"], undefined,
+      "no fingerprint stored when file is unreadable (avoids accumulating false positives)");
+  });
+
+  it("two consecutive calls with unreadable file → both return false (no false halt)", () => {
+    // Regression test for the e3b0c44 bug: an absent file hashed as "" on both
+    // iterations, producing identical fingerprints and a spurious noSourceChange halt.
+    const cwd = track(makeTargetProject());
+    seedArchive(cwd, "stage-04", 1, { blockers: [{ text: "missing", file: "src/does-not-exist.js" }] });
+    const state = { srcFingerprints: {} };
+    const r1 = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    const r2 = detectNoSourceChange(cwd, gd(cwd), "stage-04", state);
+    assert.equal(r1.noSourceChange, false, "first call: false (file absent)");
+    assert.equal(r2.noSourceChange, false, "second call: still false (no accumulated fingerprint)");
   });
 });
 
