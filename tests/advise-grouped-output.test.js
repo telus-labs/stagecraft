@@ -188,4 +188,33 @@ describe("devteam advise addressed-item persistence", () => {
       cleanup(cwd);
     }
   });
+
+  it("repairs orphaned advise begin marker without losing context", () => {
+    const cwd = makeTargetProject();
+    try {
+      fs.mkdirSync(path.join(cwd, "pipeline", "gates"), { recursive: true });
+      fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04c.json"), JSON.stringify({
+        status: "PASS",
+        noted_for_followup: [{ id: "RT-01", text: "follow-up", severity: "high" }],
+      }));
+      fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+      fs.writeFileSync(
+        path.join(cwd, "pipeline", "context.md"),
+        "# Context\n\nBefore orphan.\n\n<!-- devteam:advise:begin -->\norphaned decision\n\nAfter orphan that should survive.\n",
+      );
+
+      runAdvise(cwd, { apply: new Map([["RT-01", { action: "nothing" }]]) });
+
+      const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+      assert.match(ctx, /Advisory decisions/);
+      assert.match(ctx, /NOTED: RT-01/);
+      assert.match(ctx, /Before orphan/);
+      assert.match(ctx, /orphaned decision/);
+      assert.match(ctx, /After orphan that should survive/);
+      assert.equal((ctx.match(/devteam:advise:begin/g) || []).length, 1, "only one begin marker");
+      assert.equal((ctx.match(/devteam:advise:end/g) || []).length, 1, "only one end marker");
+    } finally {
+      cleanup(cwd);
+    }
+  });
 });

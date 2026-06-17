@@ -4,14 +4,14 @@
  * Both functions operate on text strings; callers own file I/O.
  *
  * Semantics:
- *   upsertSection(text, begin, end, body)
- *     If begin is absent: appends body (preserving existing trailing whitespace).
+ *   upsertSection(text, begin, end, body, opts?)
+ *     If begin is absent: inserts body. Default is append; pass
+ *       { insert: "prepend" } for context sections that must stay prominent.
  *     If both markers are present and begin precedes end: replaces the region
  *       [begin, end+end.length) with body (normal round-trip).
  *     Corrupt input (end missing, or end appears before begin in the text):
- *       replaces from the begin-marker to EOF with body and warns on stderr.
- *       This fixes the verified bug in the original upsertSection where inverted
- *       or missing end markers caused a duplicate section to be appended.
+ *       removes the orphaned begin marker, inserts a fresh body, preserves the
+ *       surrounding content, and warns on stderr.
  *
  *   stripSection(text, begin, end)
  *     If begin is absent: returns text unchanged (idempotent no-op).
@@ -33,17 +33,27 @@ function _warn(msg) {
  * @param {string} begin  Begin marker
  * @param {string} end    End marker
  * @param {string} body   Replacement block (caller includes markers in body)
+ * @param {object} opts
+ * @param {"append"|"prepend"} opts.insert Where to insert when no valid pair exists
  * @returns {string}
  */
-function upsertSection(text, begin, end, body) {
+function upsertSection(text, begin, end, body, opts = {}) {
+  const insert = opts.insert === "prepend" ? "prepend" : "append";
+  const insertBody = (base) => {
+    if (!base) return body + "\n";
+    if (insert === "prepend") return body + "\n\n" + base.replace(/^\n+/, "");
+    return base.replace(/\s*$/, "") + "\n\n" + body + "\n";
+  };
+
   const b = text.indexOf(begin);
   if (b === -1) {
-    return (text ? text.replace(/\s*$/, "") + "\n\n" : "") + body + "\n";
+    return insertBody(text);
   }
   const e = text.indexOf(end);
   if (e === -1 || e < b) {
-    _warn(`corrupt marker section (${e === -1 ? "missing end marker" : "end before begin"}) — replacing from begin-marker to EOF`);
-    return text.slice(0, b) + body + "\n";
+    _warn(`corrupt marker section (${e === -1 ? "missing end marker" : "end before begin"}) — removing orphan begin marker and reinserting section`);
+    const base = text.slice(0, b) + text.slice(b + begin.length).replace(/^\n?/, "");
+    return insertBody(base);
   }
   return text.slice(0, b) + body + text.slice(e + end.length);
 }

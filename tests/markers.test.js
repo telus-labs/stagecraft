@@ -31,6 +31,13 @@ describe("upsertSection — normal cases", () => {
     assert.ok(out.includes(body));
   });
 
+  it("prepends body when requested and no markers exist", () => {
+    const existing = "some existing content";
+    const body = `${BEGIN}\nnew section\n${END}`;
+    const out = upsertSection(existing, BEGIN, END, body, { insert: "prepend" });
+    assert.equal(out, `${body}\n\nsome existing content`);
+  });
+
   it("replaces existing section when markers are in correct order", () => {
     const existing = `before\n${BEGIN}\nold body\n${END}\nafter`;
     const body = `${BEGIN}\nnew body\n${END}`;
@@ -47,25 +54,31 @@ describe("upsertSection — normal cases", () => {
 });
 
 describe("upsertSection — corrupt input", () => {
-  it("handles inverted markers (end before begin) — replaces begin-to-EOF, warns", () => {
+  it("handles inverted markers (end before begin) — removes orphan begin, appends fresh section, warns", () => {
     // end appears in the text before begin (e.g. hand-edited file)
     const text = `preamble\n${END}\nmiddle\n${BEGIN}\ntail`;
     const body = `${BEGIN}\nfresh\n${END}`;
     const { result, warnings } = capturingWarn(() => upsertSection(text, BEGIN, END, body));
-    // everything before the begin marker is preserved
-    assert.ok(result.startsWith(`preamble\n${END}\nmiddle\n`));
-    // body replaces from begin to EOF
-    assert.ok(result.includes(body));
-    assert.ok(!result.endsWith("tail\n") || result.includes("fresh"));
+    assert.equal(result, `preamble\n${END}\nmiddle\ntail\n\n${body}\n`);
     assert.ok(warnings.some((w) => w.includes("[markers] warning")));
     assert.ok(warnings.some((w) => w.includes("end before begin")));
   });
 
-  it("handles missing end marker — replaces begin-to-EOF, warns", () => {
+  it("handles missing end marker — removes orphan begin, appends fresh section, warns", () => {
     const text = `preamble\n${BEGIN}\norphaned content`;
     const body = `${BEGIN}\nreplacement\n${END}`;
     const { result, warnings } = capturingWarn(() => upsertSection(text, BEGIN, END, body));
-    assert.equal(result, `preamble\n${body}\n`);
+    assert.equal(result, `preamble\norphaned content\n\n${body}\n`);
+    assert.ok(warnings.some((w) => w.includes("missing end marker")));
+  });
+
+  it("handles missing end marker with prepend insertion without losing content", () => {
+    const text = `preamble\n${BEGIN}\norphaned content`;
+    const body = `${BEGIN}\nreplacement\n${END}`;
+    const { result, warnings } = capturingWarn(() =>
+      upsertSection(text, BEGIN, END, body, { insert: "prepend" }),
+    );
+    assert.equal(result, `${body}\n\npreamble\norphaned content`);
     assert.ok(warnings.some((w) => w.includes("missing end marker")));
   });
 

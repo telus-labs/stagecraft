@@ -1,0 +1,1 @@
+- **Fix marker-section replacement when an end marker is missing.** Stagecraft now uses the shared marker helper for `context.md` blocker/advisory upserts and preserves surrounding content when a managed section has an orphaned begin marker instead of silently slicing the file at the wrong offset.

@@ -30,7 +30,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { loadConfig } = require("../config.js");
 const { TRACKS } = require("../pipeline/stages.js");
-const { stripSection } = require("../markers.js");
+const { stripSection, upsertSection } = require("../markers.js");
 
 // --strict mode: the validator exits 1 on unknown internal errors instead of
 // treating them as PASS. Also activated when the CI=true env var is set.
@@ -229,14 +229,13 @@ function injectRedTeamBlockers(gate, cwd) {
     END,
   ].join("\n");
 
-  let content = fs.readFileSync(contextPath, "utf8");
-  if (content.includes(BEGIN)) {
-    const startIdx = content.indexOf(BEGIN);
-    const endIdx   = content.indexOf(END) + END.length;
-    content = content.slice(0, startIdx) + section + content.slice(endIdx);
-  } else {
-    content = section + "\n\n" + content;
-  }
+  const content = upsertSection(
+    fs.readFileSync(contextPath, "utf8"),
+    BEGIN,
+    END,
+    section,
+    { insert: "prepend" },
+  );
 
   fs.writeFileSync(contextPath, content, "utf8");
   console.log(
@@ -281,14 +280,13 @@ function injectQABuildBlockers(gate, cwd) {
     END,
   ].join("\n");
 
-  let content = fs.readFileSync(contextPath, "utf8");
-  if (content.includes(BEGIN)) {
-    const startIdx = content.indexOf(BEGIN);
-    const endIdx   = content.indexOf(END) + END.length;
-    content = content.slice(0, startIdx) + section + content.slice(endIdx);
-  } else {
-    content = section + "\n\n" + content;
-  }
+  const content = upsertSection(
+    fs.readFileSync(contextPath, "utf8"),
+    BEGIN,
+    END,
+    section,
+    { insert: "prepend" },
+  );
 
   fs.writeFileSync(contextPath, content, "utf8");
   console.log(
