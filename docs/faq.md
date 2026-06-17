@@ -102,7 +102,7 @@ The key is that `x-api-key is explicitly excluded` and `not /v1/messages` make t
 
 **2. Seed `pipeline/context.md` with a binding constraints block before running**
 
-All agents — PM, Principal, backend, QA — read `pipeline/context.md` on every dispatch. Write non-negotiable implementation decisions there *before* `devteam run`:
+All agents — PM, Principal, backend, QA — read `pipeline/context.md` on every dispatch. Write non-negotiable implementation decisions there *before* `devteam run`. **Place the block above any `<!-- devteam: -->` marker lines** — content inside those markers is managed by Stagecraft and will be overwritten on each run; anything above the first marker is yours and is preserved.
 
 ```markdown
 ## Binding implementation constraints
@@ -122,7 +122,7 @@ Even if the PM softens the wording in the brief, design and build agents see thi
 
 **After the build has already run with the wrong implementation:**
 
-Add the binding constraints block to `pipeline/context.md` (so the build agent reads it when it re-runs), then open a blocker on the backend build gate:
+Add the binding constraints block to `pipeline/context.md` above any `<!-- devteam: -->` markers (so the build agent reads it when it re-runs), then open a blocker on the backend build gate:
 
 1. Open `pipeline/gates/stage-04.backend.json`. Set `"status": "FAIL"`. Add the issue to `must_address_before_peer_review` and set `affected_workstreams: ["backend"]`:
 
@@ -139,6 +139,8 @@ Add the binding constraints block to `pipeline/context.md` (so the build agent r
 2. Run `devteam run`. The orchestrator detects the FAIL gate and re-dispatches the backend workstream. The build agent reads both the gate blocker (what to fix) and `pipeline/context.md` (the binding constraint explaining why), applies the fix, and re-writes the gate.
 
 The blocker description can stay at intent level — you don't need to spell out every header name if you've already put the technical detail in context.md.
+
+For static project-wide context (architecture, platform, team conventions) that should apply to every pipeline run — not just a single feature — see [Seed project context](adoption-guide.md#seed-project-context) in the adoption guide.
 
 ### How do I fix a bug instead of adding a feature?
 

@@ -86,19 +86,44 @@ A 2-week pilot answers most adoption questions at low cost.
 
 3. **Adjust the config.** Routing, default track, deploy adapter. ~15 minutes. Make these decisions explicit so the team isn't relitigating them per change.
 
-4. **Skim the role briefs.** `roles/*.md`. Each is the source of truth for what that role does, reads, and writes. Adjust ROLE_FRONTMATTER in the host adapter if your team has different model preferences per role.
+4. **Seed project context.** Before the first pipeline run, write the project's static facts into `pipeline/context.md`. This is a one-time step, not per-feature — it covers things all agents should know for every run:
 
-5. **Run one full pipeline on a small real feature.** It does not need to ship. Note friction points: stages that felt mechanical, gates that fired false-positively, agent behaviors that needed correction. These notes drive Week 2 customization.
+   - **Architecture** — service boundaries, data flow, the key invariants the system maintains
+   - **Platform / runtime** — where it deploys (Cloud Run, ECS, Cloudflare Workers), the Node/Python/Go version, any IaC tooling
+   - **Locked-in technology choices** — specific env var names, non-default API endpoints, authentication schemes, libraries that are non-negotiable
+   - **Compliance / security constraints** — PII handling rules, regulated data boundaries, required encryption standards
+   - **Integration points** — internal services, third-party APIs, message queues; include base URLs and auth mechanisms
+   - **Team conventions** — naming patterns, test framework, code style constraints the PM or Principal can't infer from the code
+
+   Write this content **above** any `<!-- devteam: -->` marker blocks in the file. Content inside those markers is managed by Stagecraft and will be overwritten on each pipeline run. Anything outside the markers is yours and is preserved.
+
+   A well-seeded context.md for a payments service might start:
+
+   ```markdown
+   ## Project context
+
+   **Service:** `payments-api` — Node 20, deployed to Cloud Run (us-central1), backed by Cloud Spanner.
+   **Auth:** Internal services use service-account JWT (header: `Authorization: Bearer <token>`). External clients use OAuth 2.0 PKCE via the internal IdP at `https://auth.internal`.
+   **Env vars:** `SPANNER_INSTANCE`, `SPANNER_DATABASE`, `PUBSUB_TOPIC` — all injected by Cloud Run; do not hardcode.
+   **Constraints:** No PII in logs. All monetary amounts in minor units (integer cents). Idempotency keys required on all write endpoints.
+   **Test framework:** Vitest. Integration tests in `tests/integration/` hit a real Spanner emulator — no mocks for database operations.
+   ```
+
+   Project context is distinct from per-run binding constraints (a specific API endpoint a single feature must use). For per-run constraints, see [Preserving implementation constraints through the PM layer](faq.md#my---feature-string-specified-implementation-details-env-var-names-a-specific-api-endpoint-but-the-pm-rewrote-them-how-do-i-preserve-them) in the FAQ.
+
+5. **Skim the role briefs.** `roles/*.md`. Each is the source of truth for what that role does, reads, and writes. Adjust ROLE_FRONTMATTER in the host adapter if your team has different model preferences per role.
+
+6. **Run one full pipeline on a small real feature.** It does not need to ship. Note friction points: stages that felt mechanical, gates that fired false-positively, agent behaviors that needed correction. These notes drive Week 2 customization.
 
 ### Week 2: real use
 
-6. **Use Stagecraft for every new feature for one week.** Run it even when it feels heavy. Bypassed runs produce no signal. Track:
+7. **Use Stagecraft for every new feature for one week.** Run it even when it feels heavy. Bypassed runs produce no signal. Track:
    - **Time-to-merge before vs after.** Often increases by 10–30% in week one (overhead) and decreases by 20–40% by month two (audit trail prevents re-work).
    - **Number of bugs caught at peer-review or security-review** that would have shipped otherwise. This is the single biggest "is it earning its keep" metric.
    - **Number of times the pipeline blocked something valid** (false-positive stoplist matches, over-strict gate validation). High numbers mean you need to customize.
    - **Engineer sentiment per stage:** one-line "this stage was useful" / "this stage was friction" per stage. Use these for week-3 customization decisions.
 
-7. **Decision.** At end of week 2:
+8. **Decision.** At end of week 2:
    - **Adopt:** the value showed up. Roll out to the team. Do not roll out before you have evidence; adoption driven by assumption rather than observation rarely holds.
    - **Adapt:** the value is there but the defaults are not right. Identify what to customize (stoplist, role briefs, tracks, routing) before broader rollout.
    - **Drop:** the overhead did not pay off. That is a valid outcome. Recognizing it at week 2 is better than at month 6.
