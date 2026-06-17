@@ -165,3 +165,30 @@ test("the audit skill defines all four phases (0 through 3) and 11 outputs", () 
     assert.ok(text.includes(f), `audit skill doesn't reference ${f}`);
   }
 });
+
+test("the audit skill requires verified_by evidence for Phase 1 and Phase 2 findings", () => {
+  const text = fs.readFileSync(path.join(REPO_ROOT, "skills", "audit", "SKILL.md"), "utf8");
+  assert.match(text, /## Finding evidence contract/);
+  assert.match(text, /Every Phase 1 and Phase 2 finding must include a `verified_by` field/);
+  assert.match(text, /No promotion without proof/);
+  assert.match(text, /findings above LOW confidence without direct `verified_by` evidence are invalid/);
+  assert.match(text, /Unverified findings stay LOW/);
+  assert.match(text, /set `verified_by: not verified/i);
+  assert.match(text, /## Phase 1[\s\S]*`verified_by` evidence/);
+  assert.match(text, /## Phase 2[\s\S]*Every Phase 2 finding must include the `verified_by` field/);
+});
+
+test("Phase 1 and Phase 2 audit templates include verification evidence slots", () => {
+  const dir = path.join(REPO_ROOT, "templates", "audit");
+  for (const name of [
+    "03-compliance-template.md",
+    "04-tests-template.md",
+    "05-documentation-template.md",
+    "06-security-template.md",
+    "07-performance-template.md",
+    "08-code-quality-template.md",
+  ]) {
+    const text = fs.readFileSync(path.join(dir, name), "utf8");
+    assert.match(text, /Verified by/i, `${name} must include a verification evidence slot`);
+  }
+});

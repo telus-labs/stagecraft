@@ -49,6 +49,16 @@ All under `docs/audit/` in the target project:
 
 The sections to produce in each file are detailed in the phase definitions below. The Stagecraft framework also keeps blank templates under `templates/audit/` as reference — you can look at them if the framework is reachable, but the phase definitions in this skill are sufficient on their own.
 
+## Finding evidence contract
+
+Every Phase 1 and Phase 2 finding must include a `verified_by` field. This field is the structural proof that the finding was checked before it was promoted.
+
+- **Format:** `verified_by: <command, code inspection, test run, or live check>; observed <specific result>`.
+- **Direct evidence only:** `verified_by` must name what was checked. Good examples: `rg -n "functionName" src/`, `node --test tests/foo.test.js`, `curl ... returned 403`, or `read src/auth.js:42-91 and traced caller in src/routes.js:18`.
+- **Unverified findings stay LOW:** if direct verification is not possible in the current audit, set `verified_by: not verified — <what would be needed>` and keep **Confidence: LOW**.
+- **No promotion without proof:** findings above LOW confidence without direct `verified_by` evidence are invalid and must not be promoted to Phase 3 backlog items.
+- **Roadmap carry-forward:** when Phase 3 promotes a finding into `09-backlog.md` or `10-roadmap.md`, preserve the source finding ID and its verification evidence in the item notes.
+
 ## Status tracking
 
 Write `docs/audit/status.json` at the start of any audit and update it after every phase:
@@ -196,6 +206,7 @@ For each finding, capture:
 - The convention or dominant pattern.
 - How this code deviates.
 - Suggested fix.
+- `verified_by` evidence from the finding evidence contract.
 - **Confidence:** HIGH / MEDIUM / LOW.
 
 Group findings by category: naming, error handling, architecture, logging, dependency usage.
@@ -211,8 +222,8 @@ Read `docs/audit/01-architecture.md`.
 Produce `docs/audit/04-tests.md`. Capture:
 
 1. **Coverage map** — table: component | test count | test types (unit / integration / e2e) | notes.
-2. **Untested critical paths** — business logic, error handling, integrations with no coverage.
-3. **Test quality issues** — empty assertions, implementation coupling, overbroad mocks, external service calls in tests, missing edge cases, order dependencies.
+2. **Untested critical paths** — business logic, error handling, integrations with no coverage. Each finding must include `verified_by` evidence.
+3. **Test quality issues** — empty assertions, implementation coupling, overbroad mocks, external service calls in tests, missing edge cases, order dependencies. Each finding must include `verified_by` evidence.
 4. **Test infrastructure** — runner configured? CI runs tests? Currently passing? Coverage tool wired up?
 5. **What's well-tested** — positive examples worth replicating.
 
@@ -226,8 +237,8 @@ Produce `docs/audit/05-documentation.md`. Capture:
 2. **Component docs** — which sub-modules have docs, which don't.
 3. **API documentation** — endpoints / interfaces documented? Accurate vs. the code?
 4. **Inline documentation** — complex logic explained? Places you had to read 3× to understand?
-5. **Stale docs** — references to things that no longer exist (dangling file refs, removed APIs, old version numbers).
-6. **Onboarding test** — what would a new developer struggle with? Run the install commands from §0.1 mentally and flag friction.
+5. **Stale docs** — references to things that no longer exist (dangling file refs, removed APIs, old version numbers). Each finding must include `verified_by` evidence.
+6. **Onboarding test** — what would a new developer struggle with? Run the install commands from §0.1 mentally and flag friction. Each finding must include `verified_by` evidence.
 
 ### End of Phase 1
 
@@ -250,6 +261,8 @@ For `/audit-quick`, stop here. The user can run `/audit --resume` later to conti
 
 Three steps. These can produce findings that surprise the user — be specific, cite line numbers, attach confidence ratings.
 
+Every Phase 2 finding must include the `verified_by` field from the finding evidence contract. Do not promote a Phase 2 finding above LOW confidence unless the cited evidence directly verifies the claim.
+
 ### 2.1 — Security review
 
 Read `docs/audit/00-project-context.md` and `docs/audit/01-architecture.md`.
@@ -266,6 +279,7 @@ Adapt to the project's language and framework. Cover:
 Rate each finding:
 - **Severity:** critical / high / medium / low.
 - **Confidence:** HIGH / MEDIUM / LOW.
+- `verified_by` evidence from the finding evidence contract.
 
 Output: `docs/audit/06-security.md`.
 
@@ -282,6 +296,11 @@ Focus on highest-churn components and components with the most external integrat
 5. **Scaling concerns** — in-memory state, unbounded queues, O(n²) algorithms on user input, missing pagination.
 6. **Observability** — structured logging, metrics, tracing, health checks. (Cross-references Stagecraft's stage-06c observability gate philosophy.)
 7. **Graceful degradation** — what happens when a dependency is down? Circuit breakers? Fallback paths?
+
+Rate each finding:
+- **Impact:** high / medium / low.
+- **Confidence:** HIGH / MEDIUM / LOW.
+- `verified_by` evidence from the finding evidence contract.
 
 Output: `docs/audit/07-performance.md`.
 
@@ -302,6 +321,7 @@ Rate each finding:
 - **Effort to fix:** small / medium / large.
 - **Impact if fixed:** high / medium / low.
 - **Confidence:** HIGH / MEDIUM / LOW.
+- `verified_by` evidence from the finding evidence contract.
 
 Output: `docs/audit/08-code-quality.md`.
 
@@ -422,6 +442,8 @@ Per-subsystem audit outputs go in `docs/audit/<service-name>/` rather than the t
 ## Process discipline — verify before promoting
 
 A finding's severity / confidence / "needs fix" status is a **claim about reality**, and claims about reality have to be checked. This is especially true in Phase 2 (security, performance, code quality) where it's tempting to reason from a function signature, a route definition, or a regex pattern without actually running the code.
+
+The structural enforcement for this discipline is the `verified_by` field required on every Phase 1 and Phase 2 finding. A finding above LOW confidence without that field is incomplete.
 
 **Discipline:**
 

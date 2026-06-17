@@ -21,7 +21,7 @@ For each category, name the source of truth.
 
 ## Findings
 
-Each finding cites file + line, the convention or dominant pattern, how the code deviates, the suggested fix, and a confidence rating.
+Each finding cites file + line, the convention or dominant pattern, how the code deviates, the suggested fix, direct verification evidence, and a confidence rating.
 
 ### Naming
 
@@ -31,6 +31,7 @@ Each finding cites file + line, the convention or dominant pattern, how the code
 - **Convention:** <stated or implied>
 - **Deviation:** <how this code differs>
 - **Suggested fix:** <what to change>
+- **Verified by:** <command / code inspection + observed result>
 - **Confidence:** HIGH / MEDIUM / LOW
 - **Notes:** <optional context>
 
