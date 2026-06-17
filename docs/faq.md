@@ -140,6 +140,8 @@ Add the binding constraints block to `pipeline/context.md` (so the build agent r
 
 The blocker description can stay at intent level — you don't need to spell out every header name if you've already put the technical detail in context.md.
 
+For static project-wide context (architecture, platform, team conventions) that should apply to every pipeline run — not just a single feature — see [Seed project context](adoption-guide.md#seed-project-context) in the adoption guide.
+
 ### How do I fix a bug instead of adding a feature?
 
 Use `devteam run --repair "<symptom>"` rather than `--feature`:
