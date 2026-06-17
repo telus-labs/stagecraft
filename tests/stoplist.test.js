@@ -60,4 +60,30 @@ describe("stoplist: explanation", () => {
     assert.match(text, /safety stoplist/i);
     assert.match(text, /--force/);
   });
+
+  it("shows only the matching line, not the entire source document", () => {
+    const brief = Array.from({ length: 50 }, (_, i) => `Line ${i + 1} of content here.`).join("\n")
+      + "\nThis line mentions auth for testing.\n"
+      + Array.from({ length: 50 }, (_, i) => `Trailing line ${i + 1}.`).join("\n");
+    const { findStoplistMatches, STOPLIST_PATTERNS } = require(path.join(REPO_ROOT, "core", "guards", "stoplist"));
+    const matches = findStoplistMatches([brief], STOPLIST_PATTERNS);
+    assert.ok(matches.length > 0, "should match auth");
+    const text = explainMatches(matches);
+    // The explanation must not contain lines from unrelated parts of the document.
+    assert.doesNotMatch(text, /Line 1 of content/, "must not dump entire document");
+    assert.doesNotMatch(text, /Trailing line 50/, "must not dump entire document");
+    // It must still identify the matched term.
+    assert.match(text, /auth/);
+  });
+
+  it("truncates a very long matching line to 120 characters", () => {
+    const longLine = "auth " + "x".repeat(200);
+    const { findStoplistMatches, STOPLIST_PATTERNS } = require(path.join(REPO_ROOT, "core", "guards", "stoplist"));
+    const matches = findStoplistMatches([longLine], STOPLIST_PATTERNS);
+    const text = explainMatches(matches);
+    const reasonLine = text.split("\n").find((l) => l.includes("authentication"));
+    assert.ok(reasonLine, "should have a reason line");
+    assert.ok(reasonLine.length <= 200, "reason line should be reasonably short");
+    assert.match(text, /…/, "truncated line must end with ellipsis");
+  });
 });

@@ -121,13 +121,19 @@ function checkStoplist({ description, cwd } = {}) {
   return findStoplistMatches(candidates);
 }
 
+// Extract the line from source that contains the matched token.
+function matchingLine(source, matched) {
+  const line = source.split(/\r?\n/).find((l) => l.includes(matched)) || source.slice(0, 120);
+  return line.length > 120 ? line.slice(0, 117) + "…" : line;
+}
+
 // Format matches for display to the user. Returns a multi-line string.
 function explainMatches(matches) {
   const lines = [];
   lines.push("This change matches the safety stoplist. Use /pipeline instead.");
   lines.push("Reasons:");
   for (const m of matches) {
-    lines.push(`  - ${m.name}: matched "${m.matched}" in: ${m.source}`);
+    lines.push(`  - ${m.name}: matched "${m.matched}" in: ${matchingLine(m.source, m.matched)}`);
   }
   lines.push("");
   lines.push("If this is a false positive, re-run with --force to bypass.");
