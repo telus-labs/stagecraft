@@ -10,6 +10,11 @@
 
 ## API / Interfaces
 
+## File Ownership
+
+| Path | Owner | Notes |
+|------|-------|-------|
+
 ## UX Notes
 
 ## Security Considerations
@@ -21,4 +26,3 @@
 ## Open Technical Questions
 
 ## ADRs
-

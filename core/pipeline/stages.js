@@ -72,6 +72,7 @@ const STAGES = {
       adr_count: 0,
       adrs_consulted: [],
       adrs_superseded: [],
+      file_ownership: {},
     },
   },
   clarification: {

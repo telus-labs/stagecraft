@@ -5,6 +5,7 @@
 //   - ADR template carries a Supersedes field.
 //   - design stage's gate has adrs_consulted + adrs_superseded fields.
 //   - stage-02 schema declares those fields as optional.
+//   - stage-02 carries a machine-readable file_ownership map for Stage 4 routing.
 //   - devteam architecture lookup runs against the org store.
 
 const test = require("node:test");
@@ -42,15 +43,19 @@ test("design stage's gate skeleton includes adrs_consulted + adrs_superseded", (
   const design = getStage("design");
   assert.ok(Array.isArray(design.gate.adrs_consulted), "design gate should declare adrs_consulted: []");
   assert.ok(Array.isArray(design.gate.adrs_superseded), "design gate should declare adrs_superseded: []");
+  assert.deepEqual(design.gate.file_ownership, {}, "design gate should declare file_ownership: {}");
 });
 
-test("stage-02 schema declares adrs_consulted + adrs_superseded as optional properties", () => {
+test("stage-02 schema declares adrs_consulted, adrs_superseded, and file_ownership as optional properties", () => {
   const schema = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "core", "gates", "schemas", "stage-02.schema.json"), "utf8"));
   assert.ok(schema.properties.adrs_consulted, "stage-02 schema must declare adrs_consulted");
   assert.ok(schema.properties.adrs_superseded, "stage-02 schema must declare adrs_superseded");
+  assert.ok(schema.properties.file_ownership, "stage-02 schema must declare file_ownership");
+  assert.deepEqual(schema.properties.file_ownership.additionalProperties.enum, ["backend", "frontend", "platform", "qa"]);
   // Optional — not in required[].
   assert.ok(!schema.required.includes("adrs_consulted"));
   assert.ok(!schema.required.includes("adrs_superseded"));
+  assert.ok(!schema.required.includes("file_ownership"));
 });
 
 test("`devteam architecture lookup` shows usage when no topic is given", () => {

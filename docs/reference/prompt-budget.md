@@ -21,7 +21,7 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | Stage     | Name                      | Role       | Framework B | Role brief B | Dispatch B | Tokens~ |
 | --------- | ------------------------- | ---------- | ----------- | ------------ | ---------- | ------- |
 | stage-01  | requirements              | pm         | 11,785      | 8,832        | 20,617     | 5155    |
-| stage-02  | design                    | principal  | 11,785      | 12,736       | 24,521     | 6131    |
+| stage-02  | design                    | principal  | 11,785      | 13,129       | 24,914     | 6229    |
 | stage-03  | clarification             | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-03b | executable-spec           | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-04  | build                     | backend    | 11,785      | 7,530        | 19,315     | 4829    |
@@ -41,14 +41,14 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-07  | sign-off                  | pm         | 11,785      | 8,832        | 20,617     | 5155    |
 | stage-07  | sign-off                  | platform   | 11,785      | 2,400        | 14,185     | 3547    |
 | stage-08  | deploy                    | platform   | 11,785      | 2,400        | 14,185     | 3547    |
-| stage-09  | retrospective             | principal  | 11,785      | 12,736       | 24,521     | 6131    |
+| stage-09  | retrospective             | principal  | 11,785      | 13,129       | 24,914     | 6229    |
 
 ## Top 5 heaviest framework files
 
 | File                | Bytes  | Tokens~ |
 | ------------------- | ------ | ------- |
 | roles/red-team.md   | 13,675 | 3419    |
-| roles/principal.md  | 12,736 | 3184    |
+| roles/principal.md  | 13,129 | 3283    |
 | roles/verifier.md   | 9,089  | 2273    |
 | roles/pm.md         | 8,832  | 2208    |
 | roles/migrations.md | 8,272  | 2068    |
@@ -66,7 +66,7 @@ Advisories are non-blocking (they print but do not fail CI).
 
 <!-- budget-data
 stage-01,20617
-stage-02,24521
+stage-02,24914
 stage-03,20617
 stage-03b,20617
 stage-04,19315
@@ -82,6 +82,6 @@ stage-06d,20874
 stage-06e,14503
 stage-07,20617
 stage-08,14185
-stage-09,24521
+stage-09,24914
 -->
 <!-- /generated -->

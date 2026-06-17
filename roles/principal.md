@@ -129,6 +129,22 @@ After writing each ADR, append one line to `pipeline/adr/index.md`:
 Change spec status from DRAFT to APPROVED.
 Update `pipeline/gates/stage-02.json` with `"arch_approved": true`.
 
+Also copy the `## File Ownership` table into the gate as a machine-readable
+`file_ownership` object. Use repo-relative paths or glob patterns as keys and
+the owning Stage 4 workstream as the value:
+
+```json
+{
+  "file_ownership": {
+    "src/backend/**": "backend",
+    "src/frontend/**": "frontend",
+    "tests/**": "qa",
+    "Dockerfile": "platform",
+    "package.json": "platform"
+  }
+}
+```
+
 ## On a Code Review Escalation
 
 Read:

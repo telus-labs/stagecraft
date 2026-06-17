@@ -290,11 +290,22 @@ After stage-02 finishes:
   "warnings": [],
   "arch_approved": true,
   "pm_approved": true,
-  "adr_count": 2
+  "adr_count": 2,
+  "file_ownership": {
+    "src/backend/**": "backend",
+    "src/frontend/**": "frontend",
+    "tests/**": "qa",
+    "Dockerfile": "platform",
+    "package.json": "platform"
+  }
 }
 ```
 
 If `arch_approved: false`, the Principal has open architectural questions that need resolution. If `pm_approved: false`, the PM hasn't confirmed the design addresses every brief AC. Either flag halts the pipeline pending Stage 3.
+
+`file_ownership` is the gate's machine-readable copy of the design spec's
+`## File Ownership` table. It gives later orchestration code a stable way to
+route blocker-named files back to the Stage 4 workstream that owns them.
 
 ## Common review feedback
 
