@@ -179,9 +179,12 @@ If `runbook_complete: false`, the runbook has missing sections and Stage 8 (depl
 Stage 8 (deploy, Platform role) doesn't write the runbook; it follows it. The deploy gate carries:
 
 - `runbook_referenced: true` — confirms the deployer read the runbook before deploying.
-- `smoke_test_passed: true` — confirms the smoke test from the runbook actually ran and passed.
+- `smoke_tests_passed: true` — confirms the smoke test from the runbook actually ran and passed.
 - `deploy_adapter: "kubernetes"` (or whatever) — names the deploy adapter used.
 - `rollback_executed: false` — confirms no rollback was needed (or `true` if it was, with details).
+- `cost_delta_estimated: true` — confirms the deployer estimated recurring cost before deploy.
+- `cost_delta_multiplier: 1` — estimated recurring cost relative to the pre-change baseline; `10` or higher requires an explicit override.
+- `cost_gate_override: false` — set to `true` only with `cost_gate_override_reason` when a human approved a 10x-or-greater cost increase.
 
 A `rollback_executed: true` deploy gate is still a PASS if the rollback succeeded — but it's a clear signal for the retrospective (Stage 9) that something went sideways.
 

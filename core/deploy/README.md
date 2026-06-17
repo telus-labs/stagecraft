@@ -30,14 +30,21 @@ Every adapter must:
    (HTTP `/health`, a `kubectl rollout status`, a Terraform output
    diff, etc.) — and report pass/fail per service in
    `pipeline/deploy-log.md`.
-4. Write `pipeline/gates/stage-08.json` with required baseline fields
-   plus `adapter: "<name>"`, `environment: "<env>"`,
-   `smoke_test_passed: true | false`, and an adapter-specific extras
-   block under `adapter_result`.
-5. Require `pipeline/runbook.md` to exist before the gate passes.
+4. Estimate the recurring infrastructure/cloud cost delta relative to
+   the pre-change baseline. A `cost_delta_multiplier` of `1` means no
+   meaningful change; `2.5` means 2.5x the previous recurring cost.
+   A 10x-or-greater increase must FAIL unless a human explicitly
+   approved the deploy and the gate records `cost_gate_override: true`
+   plus `cost_gate_override_reason`.
+5. Write `pipeline/gates/stage-08.json` with required baseline fields
+   plus `deploy_adapter: "<name>"`, `environment: "<env>"`,
+   `smoke_tests_passed: true | false`, `cost_delta_estimated`,
+   `cost_delta_multiplier`, `cost_gate_override`, and an
+   adapter-specific extras block under `adapter_result`.
+6. Require `pipeline/runbook.md` to exist before the gate passes.
    Rationale: every deploy needs a named rollback/recovery procedure.
    See `templates/runbook-template.md` for the canonical blank form.
-6. On failure: do NOT auto-rollback. Leave the environment in its
+7. On failure: do NOT auto-rollback. Leave the environment in its
    failed state so the user can inspect, and write clear instructions
    in the deploy log pointing to the runbook's recovery section.
 

@@ -7,7 +7,10 @@
   "required": [
     "deploy_completed",
     "smoke_tests_passed",
-    "rollback_executed"
+    "rollback_executed",
+    "cost_delta_estimated",
+    "cost_delta_multiplier",
+    "cost_gate_override"
   ],
   "properties": {
     "deploy_completed": {
@@ -21,6 +24,23 @@
     "rollback_executed": {
       "type": "boolean",
       "description": "True if the role rolled back during deploy (per the adapter's procedure). PASS allowed only when this is false; a rollback halts the pipeline."
+    },
+    "cost_delta_estimated": {
+      "type": "boolean",
+      "description": "True when the deployer estimated the recurring infrastructure/cloud cost delta before deploy."
+    },
+    "cost_delta_multiplier": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Estimated recurring cost multiplier relative to the pre-change baseline. Use 1 for no meaningful cost change."
+    },
+    "cost_gate_override": {
+      "type": "boolean",
+      "description": "True only when a human explicitly approved deploying despite cost_delta_multiplier >= 10."
+    },
+    "cost_gate_override_reason": {
+      "type": "string",
+      "description": "Required by validator when cost_gate_override is true; cite the approving person or artifact."
     },
     "deploy_adapter": {
       "type": "string",
