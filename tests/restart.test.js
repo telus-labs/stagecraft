@@ -280,6 +280,68 @@ describe("restart: archive cleanup", () => {
   });
 });
 
+describe("restart: brief.md clearing", () => {
+  function briefPath(cwd) {
+    return path.join(cwd, "pipeline", "brief.md");
+  }
+  function seedBrief(cwd) {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(briefPath(cwd), "# Brief\n\nOld feature.\n");
+  }
+
+  it("deletes pipeline/brief.md when restarting requirements", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedBrief(cwd);
+
+    const r = run(["restart", "requirements"], { cwd });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(briefPath(cwd)), "brief.md must be removed when requirements is restarted");
+  });
+
+  it("deletes pipeline/brief.md when cascading from requirements", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedGate(cwd, "stage-02", { status: "PASS" });
+    seedBrief(cwd);
+
+    const r = run(["restart", "requirements", "--cascade"], { cwd });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(briefPath(cwd)), "brief.md must be removed by cascade from requirements");
+    assert.ok(!fs.existsSync(gatePath(cwd, "stage-01")), "stage-01 gate also removed");
+    assert.ok(!fs.existsSync(gatePath(cwd, "stage-02")), "stage-02 gate also removed by cascade");
+  });
+
+  it("does NOT delete brief.md when restarting a later stage", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "FAIL" });
+    seedBrief(cwd);
+
+    run(["restart", "build"], { cwd });
+
+    assert.ok(fs.existsSync(briefPath(cwd)), "brief.md must survive restart of a non-requirements stage");
+  });
+
+  it("--dry-run lists brief.md deletion without acting", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedBrief(cwd);
+
+    const r = run(["restart", "requirements", "--dry-run"], { cwd });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /brief\.md/, "dry-run must mention brief.md");
+    assert.ok(fs.existsSync(briefPath(cwd)), "dry-run must NOT delete brief.md");
+  });
+
+  it("succeeds cleanly when brief.md does not exist (idempotent)", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+
+    const r = run(["restart", "requirements"], { cwd });
+    assert.equal(r.status, 0);
+  });
+});
+
 describe("restart: fixRetries reset", () => {
   function runStatePath(cwd) {
     return path.join(cwd, "pipeline", "run-state.json");

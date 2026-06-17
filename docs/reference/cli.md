@@ -45,26 +45,25 @@ Inspect pipeline/gates/ and report what to do next: run a stage, merge, fix a FA
 
 Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.
 
-| Flag               | Type   | Description                                                                                                                                 |
-| ------------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| --cwd              | string | Target project directory                                                                                                                    |
-| --feature          | string | Feature description                                                                                                                         |
-| --repair           | string | Bug symptom for repair mode (exclusive with --feature; ADR-009)                                                                             |
-| --repair-at        | string | Skip diagnosis: seed affected-files from file:line location(s) (comma-separated; ADR-009 Phase 2)                                           |
-| --track            | string | Override the pipeline track                                                                                                                 |
-| --until            | string | Stop before this stage                                                                                                                      |
-| --max-iterations   | number | Iteration cap                                                                                                                               |
-| --budget-usd       | number | Cost cap in USD                                                                                                                             |
-| --timeout-ms       | number | Per-dispatch timeout (ms)                                                                                                                   |
-| --retry-delay-ms   | number | Backoff delay between transient retries (ms)                                                                                                |
-| --auto-rule        | list   | Auto-apply Principal rulings of these classes (comma-separated)                                                                             |
-| --allow-stage      | list   | Grant consequence-ceiling approval for this stage (repeatable, comma-separated)                                                             |
-| --resume           | bool   | Resume an interrupted run                                                                                                                   |
-| --force            | bool   | Force-unlock a stale run.lock                                                                                                               |
-| --json             | bool   | JSON summary on stdout                                                                                                                      |
-| --fail-on-advisory | toggle | Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold)                                        |
-| --auto-commit      | bool   | Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)                                                       |
-| --reset            | bool   | Clear all gate files and pipeline/brief.md before dispatching (requires --feature; use when starting a new feature on a completed pipeline) |
+| Flag               | Type   | Description                                                                                          |
+| ------------------ | ------ | ---------------------------------------------------------------------------------------------------- |
+| --cwd              | string | Target project directory                                                                             |
+| --feature          | string | Feature description                                                                                  |
+| --repair           | string | Bug symptom for repair mode (exclusive with --feature; ADR-009)                                      |
+| --repair-at        | string | Skip diagnosis: seed affected-files from file:line location(s) (comma-separated; ADR-009 Phase 2)    |
+| --track            | string | Override the pipeline track                                                                          |
+| --until            | string | Stop before this stage                                                                               |
+| --max-iterations   | number | Iteration cap                                                                                        |
+| --budget-usd       | number | Cost cap in USD                                                                                      |
+| --timeout-ms       | number | Per-dispatch timeout (ms)                                                                            |
+| --retry-delay-ms   | number | Backoff delay between transient retries (ms)                                                         |
+| --auto-rule        | list   | Auto-apply Principal rulings of these classes (comma-separated)                                      |
+| --allow-stage      | list   | Grant consequence-ceiling approval for this stage (repeatable, comma-separated)                      |
+| --resume           | bool   | Resume an interrupted run                                                                            |
+| --force            | bool   | Force-unlock a stale run.lock                                                                        |
+| --json             | bool   | JSON summary on stdout                                                                               |
+| --fail-on-advisory | toggle | Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold) |
+| --auto-commit      | bool   | Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)                |
 
 ### `devteam commit [options]`
 
