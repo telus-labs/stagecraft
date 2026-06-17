@@ -20,6 +20,7 @@
 const fs   = require("node:fs");
 const path = require("node:path");
 const { gatesDir: getGatesDir } = require("./paths");
+const { upsertSection } = require("./markers");
 
 const ADVISE_BEGIN = "<!-- devteam:advise:begin -->";
 const ADVISE_END   = "<!-- devteam:advise:end -->";
@@ -345,13 +346,7 @@ function writeAdviseSection(cwd, decisionLines, opts = {}) {
     content = fs.readFileSync(contextFile, "utf8");
   }
 
-  if (content.includes(ADVISE_BEGIN)) {
-    const start = content.indexOf(ADVISE_BEGIN);
-    const end   = content.indexOf(ADVISE_END) + ADVISE_END.length;
-    content = content.slice(0, start) + section + content.slice(end);
-  } else {
-    content = content ? content + "\n\n" + section : section;
-  }
+  content = upsertSection(content, ADVISE_BEGIN, ADVISE_END, section);
 
   fs.mkdirSync(path.dirname(contextFile), { recursive: true });
   fs.writeFileSync(contextFile, content, "utf8");

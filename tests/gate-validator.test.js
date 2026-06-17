@@ -205,6 +205,29 @@ describe("gate-validator: QA build blocker injection", () => {
     assert.equal((ctx.match(/qa-build-blockers:begin/g) || []).length, 1, "only one begin marker");
   });
 
+  it("repairs orphaned qa-build-blockers begin marker without losing context", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd,
+      "# Context\n\n" +
+      "Before orphan.\n\n" +
+      "<!-- devteam:qa-build-blockers:begin -->\n" +
+      "orphaned stale blocker text\n\n" +
+      "After orphan that should survive.\n");
+    seedGate(cwd, "stage-04.qa", {
+      stage: "stage-04", workstream: "qa", status: "FAIL",
+      blockers: ["new bug"],
+    });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.match(ctx, /QA Build Failures/);
+    assert.match(ctx, /new bug/);
+    assert.match(ctx, /Before orphan/);
+    assert.match(ctx, /orphaned stale blocker text/);
+    assert.match(ctx, /After orphan that should survive/);
+    assert.equal((ctx.match(/qa-build-blockers:begin/g) || []).length, 1, "only one begin marker");
+    assert.equal((ctx.match(/qa-build-blockers:end/g) || []).length, 1, "only one end marker");
+  });
+
   it("does not inject when status is PASS", () => {
     const cwd = track(makeTargetProject());
     makeProjectWithContext(cwd);
@@ -248,6 +271,40 @@ describe("gate-validator: QA build blocker injection", () => {
     });
     const r = runValidator(cwd);
     assert.match(r.stdout, /QA build blockers \(2\) written to pipeline\/context\.md/);
+  });
+});
+
+describe("gate-validator: red-team blocker injection", () => {
+  function makeProjectWithContext(cwd, contextContent = "# Context\n\nProject notes.\n") {
+    fs.mkdirSync(path.join(cwd, "pipeline"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "pipeline", "context.md"), contextContent);
+  }
+
+  it("repairs orphaned red-team begin marker without losing context", () => {
+    const cwd = track(makeTargetProject());
+    makeProjectWithContext(cwd,
+      "# Context\n\n" +
+      "Before orphan.\n\n" +
+      "<!-- devteam:red-team-blockers:begin -->\n" +
+      "orphaned stale finding\n\n" +
+      "After orphan that should survive.\n");
+    seedGate(cwd, "stage-04c", {
+      stage: "stage-04c",
+      status: "FAIL",
+      must_address_before_peer_review: [
+        { id: "RT-01", severity: "high", likelihood: "likely", summary: "new finding" },
+      ],
+    });
+    runValidator(cwd);
+    const ctx = fs.readFileSync(path.join(cwd, "pipeline", "context.md"), "utf8");
+    assert.match(ctx, /Red-Team Blockers/);
+    assert.match(ctx, /RT-01/);
+    assert.match(ctx, /new finding/);
+    assert.match(ctx, /Before orphan/);
+    assert.match(ctx, /orphaned stale finding/);
+    assert.match(ctx, /After orphan that should survive/);
+    assert.equal((ctx.match(/red-team-blockers:begin/g) || []).length, 1, "only one begin marker");
+    assert.equal((ctx.match(/red-team-blockers:end/g) || []).length, 1, "only one end marker");
   });
 });
 
