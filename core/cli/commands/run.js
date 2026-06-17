@@ -42,6 +42,7 @@ const flags = {
   // threshold; =all also includes PEER_REVIEW_RISK. Default (no flag) exits 0.
   "fail-on-advisory": { type: "toggle", description: "Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold)" },
   "auto-commit":     { type: "boolean", description: "Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)" },
+  reset:             { type: "boolean", description: "Clear all gate files and pipeline/brief.md before dispatching (requires --feature; use when starting a new feature on a completed pipeline)" },
   help:              { type: "boolean", description: "Show this help" },
 };
 
@@ -57,7 +58,63 @@ function run(positional, _flags) {
     console.error("devteam run: --repair and --feature are mutually exclusive — a run is either a bug fix or a feature, not both");
     process.exit(1);
   }
+  if (_flags.reset && !_flags.feature) {
+    console.error("devteam run: --reset requires --feature (clearing only makes sense when starting a new feature run)");
+    process.exit(1);
+  }
   const cwd = _flags.cwd || process.cwd();
+
+  if (_flags.reset) {
+    const { loadConfig } = require(path.join(__dirname, "..", "..", "config"));
+    const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
+    const { gatesDir: getGatesDir, pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
+    const { getStage, orderedStageNamesForTrack } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
+    const { listArchives } = require(path.join(__dirname, "..", "..", "gates", "archive"));
+    const config = loadConfig(cwd);
+    const changeId = resolveChangeId(_flags, config);
+    const gDir = getGatesDir(cwd, changeId);
+    const pRoot = pipelineRoot(cwd, changeId);
+    const track = _flags.track || config.pipeline.default_track || "full";
+    const toDelete = [];
+    if (fs.existsSync(gDir)) {
+      for (const n of orderedStageNamesForTrack(track)) {
+        const def = getStage(n);
+        if (!def) continue;
+        const merged = path.join(gDir, `${def.stage}.json`);
+        if (fs.existsSync(merged)) toDelete.push(merged);
+        for (const role of def.roles) {
+          const ws = path.join(gDir, `${def.stage}.${role}.json`);
+          if (fs.existsSync(ws)) toDelete.push(ws);
+        }
+        for (const { file } of listArchives(gDir, def.stage)) toDelete.push(file);
+      }
+    }
+    const briefPath = path.join(pRoot, "brief.md");
+    const hasBrief = fs.existsSync(briefPath);
+    for (const f of toDelete) { fs.unlinkSync(f); }
+    if (hasBrief) fs.unlinkSync(briefPath);
+    // Reset fixRetries so the driver doesn't immediately re-halt on a
+    // previously exhausted stage.
+    const rsPath = path.join(pRoot, "run-state.json");
+    if (fs.existsSync(rsPath)) {
+      try {
+        const rs = JSON.parse(fs.readFileSync(rsPath, "utf8"));
+        if (rs.fixRetries && Object.keys(rs.fixRetries).length > 0) {
+          rs.fixRetries = {};
+          fs.writeFileSync(rsPath, JSON.stringify(rs, null, 2) + "\n", "utf8");
+        }
+      } catch { /* non-fatal */ }
+    }
+    const cleared = toDelete.length + (hasBrief ? 1 : 0);
+    if (cleared === 0) {
+      process.stderr.write("--reset: nothing to clear (no gate files or brief.md found)\n");
+    } else {
+      process.stderr.write(
+        `--reset: cleared ${toDelete.length} gate file(s)${hasBrief ? " and pipeline/brief.md" : ""} — starting fresh\n`,
+      );
+    }
+  }
+
   const { run: runDriver } = require(path.join(__dirname, "..", "..", "driver"));
   const jsonMode = Boolean(_flags.json);
 
