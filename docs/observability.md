@@ -7,6 +7,7 @@ Stagecraft emits [OpenTelemetry](https://opentelemetry.io) spans for every pipel
 - [Environment variables](#environment-variables)
 - [What gets traced](#what-gets-traced)
 - [What's NOT traced (yet)](#whats-not-traced-yet)
+- [Pipeline log JSON](#pipeline-log-json)
 - [Backend-specific cookbooks](#backend-specific-cookbooks)
 - [Testing your instrumentation](#testing-your-instrumentation)
 - [Cost / overhead](#cost--overhead)
@@ -87,6 +88,42 @@ Exceptions are captured automatically. If anything throws, the span gets `status
 - **LLM calls themselves** — Stagecraft does not make these. The host (Claude Code, Codex) does, and their tracing surface is their own. Stagecraft observes what they wrote to gate files.
 
 These spans are consumed by the shipped analytics tools — see `scripts/dashboard.js` (`--view cost`, `--view performance`) and `scripts/routing-suggest.js`.
+
+## Pipeline log JSON
+
+`devteam log --json` emits newline-delimited JSON (NDJSON): one event object per line, ordered by event mtime. This is intended for lightweight dashboards and shell pipelines that do not need full OpenTelemetry ingestion.
+
+Every event has these fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `ts` | string | Event mtime as an ISO-8601 timestamp. |
+| `kind` | string | Event type: `gate` or `artifact`. |
+| `path` | string | Project-relative path with `/` separators. |
+
+Gate events add:
+
+| Field | Type | Description |
+|---|---|---|
+| `stage` | string | Gate `stage` field, for example `stage-04`. |
+| `workstream` | string or null | Gate `workstream` field when present. Stage-level merged gates may omit it. |
+| `status` | string | Gate status such as `PASS`, `WARN`, `FAIL`, or `ESCALATE`. |
+
+Artifact events add:
+
+| Field | Type | Description |
+|---|---|---|
+| `owner` | string or null | Inferred owner role, when known. |
+| `artifactKind` | string | Artifact category, for example `brief`, `pr`, `review`, or `adr`. |
+
+Example:
+
+```json
+{"ts":"2026-06-02T10:00:00.000Z","kind":"gate","path":"pipeline/gates/stage-01.json","stage":"stage-01","workstream":"pm","status":"PASS"}
+{"ts":"2026-06-02T10:01:00.000Z","kind":"artifact","path":"pipeline/brief.md","owner":"pm","artifactKind":"brief"}
+```
+
+When `--follow` is combined with `--json`, newly discovered events use the same object shape. Consumers should parse line-by-line and ignore unknown future fields.
 
 ## Backend-specific cookbooks
 
