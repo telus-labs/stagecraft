@@ -521,9 +521,30 @@ agent cannot write code to change a dependency's license.
 ```bash
 # 1. Read the findings
 cat pipeline/gates/stage-04a.json | jq '.license_findings[]'
-# → { "package": "some-lib@2.3.0", "license": "GPL-3.0", "severity": "critical",
-#     "reason": "GPL-3.0 is not on the SPDX allowlist" }
+# → { "package": "@img/sharp-libvips-darwin-arm64", "license": "LGPL-3.0-or-later", "policy": "denied" }
 ```
+
+**First: trace the dependency chain.**
+
+The denied package is often not a direct dependency — it's a transitive optional native binary
+that was installed alongside a higher-level package (e.g. `sharp`, `canvas`, `better-sqlite3`).
+The parent package may be MIT-licensed; only its optional native layer carries the LGPL/GPL identifier.
+
+```bash
+# Identify which direct dep pulled it in:
+npm ls <denied-package-name>
+# e.g. npm ls @img/sharp-libvips-darwin-arm64
+# → reveals the chain: your-project → some-parent → sharp → @img/sharp-libvips-darwin-arm64
+
+# If it's an optional transitive dep, prune it without removing the parent:
+npm install --omit=optional
+# or add to .npmrc:  omit=optional
+# then re-run npm install and verify node_modules no longer contains it
+```
+
+If the parent package is genuinely needed and `sharp` (or equivalent) is its optional native
+accelerator, drop the parent in favour of an alternative that doesn't pull in LGPL native
+binaries — or take Path B below.
 
 **Two resolution paths — neither is `--patch`:**
 
