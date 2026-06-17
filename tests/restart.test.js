@@ -279,3 +279,40 @@ describe("restart: archive cleanup", () => {
     assert.ok(fs.existsSync(archivePath(cwd, "stage-04", 1)), "dry-run must NOT delete archive");
   });
 });
+
+describe("restart: fixRetries reset", () => {
+  function runStatePath(cwd) {
+    return path.join(cwd, "pipeline", "run-state.json");
+  }
+
+  it("clears fixRetries for the named stage in run-state.json", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04c", { stage: "stage-04c", status: "FAIL" });
+    fs.writeFileSync(runStatePath(cwd),
+      JSON.stringify({ fixRetries: { "red-team": 2, "build": 1 } }, null, 2));
+
+    const r = run(["restart", "red-team"], { cwd });
+    assert.equal(r.status, 0);
+
+    const rs = JSON.parse(fs.readFileSync(runStatePath(cwd), "utf8"));
+    assert.equal(rs.fixRetries["red-team"], undefined,
+      "red-team retry budget must be cleared after restart");
+    assert.equal(rs.fixRetries["build"], 1,
+      "unrelated stage retry budget must be preserved");
+  });
+
+  it("--cascade clears fixRetries for all cascaded stages", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "FAIL" });
+    seedGate(cwd, "stage-04c", { stage: "stage-04c", status: "FAIL" });
+    fs.writeFileSync(runStatePath(cwd),
+      JSON.stringify({ fixRetries: { "build": 2, "red-team": 2 } }, null, 2));
+
+    const r = run(["restart", "build", "--cascade"], { cwd });
+    assert.equal(r.status, 0);
+
+    const rs = JSON.parse(fs.readFileSync(runStatePath(cwd), "utf8"));
+    assert.equal(rs.fixRetries["build"], undefined, "build retry budget cleared by cascade");
+    assert.equal(rs.fixRetries["red-team"], undefined, "red-team retry budget cleared by cascade");
+  });
+});

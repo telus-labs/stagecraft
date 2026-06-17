@@ -82,9 +82,10 @@ function run(positional, _flags) {
   // If the stage isn't on the active track, we still allow restart of
   // just that stage's files (no cascade target list). Cascade only
   // makes sense within the active track.
-  const stagesToClear = (_flags.cascade && startIdx >= 0)
-    ? trackStages.slice(startIdx).map((n) => getStage(n))
-    : [stageDef];
+  const stageNamesToClear = (_flags.cascade && startIdx >= 0)
+    ? trackStages.slice(startIdx)
+    : [stageName];
+  const stagesToClear = stageNamesToClear.map((n) => getStage(n));
 
   const { listArchives } = require(path.join(__dirname, "..", "..", "gates", "archive"));
 
@@ -144,6 +145,20 @@ function run(positional, _flags) {
     fs.unlinkSync(f);
     console.log(`Removed ${path.relative(cwd, f)}`);
   }
+
+  // Reset the driver's retry budget for cleared stages so `devteam run`
+  // doesn't immediately re-halt after a convergence-exhausted restart.
+  const rsPath = path.join(pipelineRoot(cwd, changeId), "run-state.json");
+  if (fs.existsSync(rsPath)) {
+    try {
+      const rs = JSON.parse(fs.readFileSync(rsPath, "utf8"));
+      if (rs.fixRetries) {
+        for (const n of stageNamesToClear) delete rs.fixRetries[n];
+        fs.writeFileSync(rsPath, JSON.stringify(rs, null, 2) + "\n", "utf8");
+      }
+    } catch { /* non-fatal — run-state may not exist on a fresh pipeline */ }
+  }
+
   for (const section of toStrip) {
     const stripped = stripMarkedSection(
       contextPath,
