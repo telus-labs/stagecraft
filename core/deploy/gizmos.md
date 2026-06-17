@@ -174,3 +174,8 @@ this adapter. Surface them during the Stage 01 (design) phase:
 - **Request model**: Stateless `fetch()` handler. Long-lived connections
   require Durable Objects.
 - **CPU time**: ~30s per request (Cloudflare Worker limit).
+- **Secrets**: `gizmos push` has no flag to set environment variables or
+  secrets. After the first deploy, go to the Gizmos hub UI → your app →
+  Settings → Secrets and add them there. The app will fail on the very
+  first request if it depends on secrets at startup — this is expected;
+  add secrets, then retry.
