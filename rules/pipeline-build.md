@@ -5,10 +5,14 @@ review, test, sign-off, and deploy. Each stage's rules live in its own
 `stage-NN.md` file so the orchestrator (and any agent following a
 specific stage) can load only what it needs.
 
-Stages 1–3 + 9 + durations live in `pipeline-core.md`. Track routing
-and the safety stoplist live in `pipeline-tracks.md`. The full index is
-in `pipeline.md`. Gate schemas (required fields, validator behavior,
-retry protocol) live in `gates-core.md`.
+Stages 1, 2, and 9 also have dedicated `stage-NN.md` files because they
+carry artifact or gate details worth loading independently. Stage 3
+(clarification) and stage 03b (executable spec) stay in `pipeline-core.md`
+and their role/skill guidance because they are lightweight routing steps,
+not broad procedural rule files. Track routing and the safety stoplist live
+in `pipeline-tracks.md`. The full index is in `pipeline.md`. Gate schemas
+(required fields, validator behavior, retry protocol) live in
+`gates-core.md`.
 
 ## Stage index
 
