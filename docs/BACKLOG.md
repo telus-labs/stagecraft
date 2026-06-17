@@ -49,6 +49,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | D | D7 | Persistent project memory (embeddings index) | 5 | 4 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | E | E1 | `devteam status` rich CLI output | 3 | 1 | v0.1.0 as `devteam summary`; Phase 11.1-11.3 updates · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | E | E2 | Web UI for pipeline runs | 4 | 4 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| E | E4 | Live streaming output | 3 | 2 | landed in shared headless invoke helper · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | E | E5 | Pre-flight check (`devteam doctor`) | 3 | 1 | v0.1.0 plus Phase 14.2-14.3 updates · [CHANGELOG](../CHANGELOG.md#010--2026-05-26) |
 | E | E6 | `devteam replay <stage-id>` | 3 | 3 | v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | E | E7 | `/goal` integration for convergence-shaped stages | 3 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
@@ -109,7 +110,6 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
 | E3 | **VS Code extension** | 3 | 3 | Sidebar with stage status, "run next stage" button, gate viewer. |
-| E4 | **Live streaming output** | 3 | 2 | Currently `--headless` waits for the host CLI to finish. Stream the LLM's output to the user's terminal as it happens. |
 | E9 | **Conversational stage mode** `[cmp-E-4]` | 3 | 3 | `devteam stage requirements --interactive` opens a conversation with the PM subagent to refine the brief through Q&A before producing the artifact. Useful specifically for upstream stages (requirements, design, clarification) where the artifact benefits from refinement before being rendered. Architecture supports it (adapters could expose streaming-conversation alongside one-shot render). Implement if user feedback indicates the gate-driven loop is too rigid for upstream stages. Related to E7 but different mechanism: E7 is host-loops-until-condition; E9 is stage-manager-converses-with-agent. |
 
 ## F. Integrations — where the team plugs in
