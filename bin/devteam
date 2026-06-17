@@ -16,55 +16,56 @@ const path = require("node:path");
 
 const { parseFlags } = require(path.join(__dirname, "..", "core", "cli", "flags"));
 
-// --- All commands dispatched via registry ---
-const _helpCmd            = require(path.join(__dirname, "..", "core", "cli", "commands", "help"));
-const _stagesCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "stages"));
-const _hostsCmd           = require(path.join(__dirname, "..", "core", "cli", "commands", "hosts"));
-const _doctorCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "doctor"));
-const _summaryCmd         = require(path.join(__dirname, "..", "core", "cli", "commands", "summary"));
-const _logCmd             = require(path.join(__dirname, "..", "core", "cli", "commands", "log"));
-const _stageCmd           = require(path.join(__dirname, "..", "core", "cli", "commands", "stage"));
-const _preflightCmd       = require(path.join(__dirname, "..", "core", "cli", "commands", "preflight"));
-const _adviseCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "advise"));
-const _nextCmd            = require(path.join(__dirname, "..", "core", "cli", "commands", "next"));
-const _runCmd             = require(path.join(__dirname, "..", "core", "cli", "commands", "run"));
-const _commitCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "commit"));
-const _validateCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "validate"));
-const _verifyChainCmd     = require(path.join(__dirname, "..", "core", "cli", "commands", "verify-chain"));
-const _stampChainCmd      = require(path.join(__dirname, "..", "core", "cli", "commands", "stamp-chain"));
-const _mergeCmd           = require(path.join(__dirname, "..", "core", "cli", "commands", "merge"));
-const _deriveApprovalsCmd = require(path.join(__dirname, "..", "core", "cli", "commands", "derive-approvals"));
-const _restartCmd         = require(path.join(__dirname, "..", "core", "cli", "commands", "restart"));
-const _rulingCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "ruling"));
-const _fixEscalationCmd   = require(path.join(__dirname, "..", "core", "cli", "commands", "fix-escalation"));
+// Keep command discovery cheap: map command names to module names, then require
+// only the selected command after argv tells us what the user requested.
+const COMMAND_MODULES = Object.freeze({
+  help: "help",
+  stages: "stages",
+  hosts: "hosts",
+  doctor: "doctor",
+  summary: "summary",
+  log: "log",
+  stage: "stage",
+  preflight: "preflight",
+  advise: "advise",
+  next: "next",
+  run: "run",
+  commit: "commit",
+  validate: "validate",
+  "verify-chain": "verify-chain",
+  "stamp-chain": "stamp-chain",
+  merge: "merge",
+  "derive-approvals": "derive-approvals",
+  restart: "restart",
+  ruling: "ruling",
+  "fix-escalation": "fix-escalation",
+  init: "init",
+  ui: "ui",
+  memory: "memory",
+  architecture: "architecture",
+  reproduce: "reproduce",
+  verify: "verify",
+  replay: "replay",
+  ci: "ci",
+  spec: "spec",
+  consistency: "consistency",
+  assess: "assess",
+  standards: "standards",
+  hook: "hook",
+  status: "status",
+});
 
-const _initCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "init"));
-const _uiCmd            = require(path.join(__dirname, "..", "core", "cli", "commands", "ui"));
-const _memoryCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "memory"));
-const _architectureCmd  = require(path.join(__dirname, "..", "core", "cli", "commands", "architecture"));
-const _reproduceCmd     = require(path.join(__dirname, "..", "core", "cli", "commands", "reproduce"));
-const _verifyCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "verify"));
-const _replayCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "replay"));
-const _ciCmd            = require(path.join(__dirname, "..", "core", "cli", "commands", "ci"));
-const _specCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "spec"));
-const _consistencyCmd   = require(path.join(__dirname, "..", "core", "cli", "commands", "consistency"));
-const _assessCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "assess"));
-const _standardsCmd     = require(path.join(__dirname, "..", "core", "cli", "commands", "standards"));
-const _hookCmd          = require(path.join(__dirname, "..", "core", "cli", "commands", "hook"));
-const _statusCmd        = require(path.join(__dirname, "..", "core", "cli", "commands", "status"));
+const commandCache = Object.create(null);
 
-
-const _registry = Object.create(null);
-for (const cmd of [
-  _helpCmd, _stagesCmd, _hostsCmd, _doctorCmd, _summaryCmd, _logCmd,
-  _stageCmd, _preflightCmd, _adviseCmd, _nextCmd, _runCmd,
-  _validateCmd, _verifyChainCmd, _stampChainCmd, _mergeCmd,
-  _deriveApprovalsCmd, _restartCmd, _rulingCmd, _fixEscalationCmd,
-  _initCmd, _uiCmd, _memoryCmd, _architectureCmd, _reproduceCmd,
-  _verifyCmd, _replayCmd, _ciCmd, _specCmd, _consistencyCmd,
-  _assessCmd, _standardsCmd, _hookCmd, _statusCmd, _commitCmd,
-]) {
-  _registry[cmd.name] = cmd;
+function loadCommand(commandName) {
+  const moduleName = COMMAND_MODULES[commandName];
+  if (!moduleName) return null;
+  if (!commandCache[commandName]) {
+    commandCache[commandName] = require(path.join(
+      __dirname, "..", "core", "cli", "commands", moduleName,
+    ));
+  }
+  return commandCache[commandName];
 }
 
 function main() {
@@ -72,17 +73,17 @@ function main() {
 
   // Help aliases bypass the registry lookup (no flag parsing needed).
   if (command === "-h" || command === "--help" || command === undefined) {
-    return _registry.help.run([], {});
+    return loadCommand("help").run([], {});
   }
 
-  if (_registry[command]) {
-    const cmd = _registry[command];
+  const cmd = loadCommand(command);
+  if (cmd) {
     const { positional, flags } = parseFlags(rest, cmd.flags);
     return cmd.run(positional, flags);
   }
 
   console.error(`Unknown command: ${command}`);
-  _registry.help.run([], {});
+  loadCommand("help").run([], {});
   process.exit(2);
 }
 
