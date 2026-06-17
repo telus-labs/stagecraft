@@ -363,8 +363,8 @@ async function stampStage03b(cwd, gatePath) {
     stamp.runs.spec_generate = { skipped: "spec.feature already exists" };
   }
 
-  // Run verify (corresponds to devteam spec verify).
-  const report = specVerify(cwd, { pipelineDir });
+  // Run verify (brief↔spec only — test-report alignment is stage-06's job).
+  const report = specVerify(cwd, { pipelineDir, skipTestPhase: true });
   stamp.runs.spec_verify = {
     drift: report.drift,
     criteria_count: report.criteria.length,
@@ -372,6 +372,8 @@ async function stampStage03b(cwd, gatePath) {
     orphan_criteria_count: report.orphan_criteria.length,
     orphan_scenarios_count: report.orphan_scenarios.length,
     duplicate_criteria_count: report.duplicate_criteria.length,
+    orphan_in_tests_count: report.orphan_in_tests.length,
+    unknown_in_tests_count: report.unknown_in_tests.length,
   };
 
   // Build criteria_to_scenario_mapping from the report's scenario objects.

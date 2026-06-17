@@ -216,7 +216,7 @@ function verifyTexts({ briefText, specText, testText, opts = {} }) {
   }
 
   // -- Test-report side ----------------------------------------------
-  if (report.test_phase_complete) {
+  if (report.test_phase_complete && !opts.skipTestPhase) {
     const testRefs = extractAcRefsFromTestReport(testText);
     report.test_refs = Array.from(testRefs.keys());
     for (const id of briefIds) {

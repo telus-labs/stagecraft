@@ -313,6 +313,35 @@ describe("verify/stamp: stampStage03b — spec drift detection", () => {
     assert.ok(fs.existsSync(path.join(cwd, "pipeline", "spec.feature")));
   });
 
+  it("does NOT drift when a stale test-report.md from a prior feature run is present", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, BRIEF_2ACS);
+    seedSpec(cwd, SPEC_2ACS);
+    // Stale test-report from a previous feature referencing ACs that don't match the new brief
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "test-report.md"),
+      "| AC-9 | old feature test | PASS |\n| AC-10 | old feature test | PASS |\n",
+    );
+    const gatePath = seedGate03b(cwd);
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    assert.equal(r.gate.drift, false, "stale test-report must not cause drift in stage-03b");
+    assert.equal(r.gate.status, "PASS", "status must remain PASS");
+    assert.equal(r.gate._orchestrator_stamped.runs.spec_verify.orphan_in_tests_count, 0);
+    assert.equal(r.gate._orchestrator_stamped.runs.spec_verify.unknown_in_tests_count, 0);
+  });
+
+  it("records orphan_in_tests_count and unknown_in_tests_count in spec_verify run (always zero in 03b)", async () => {
+    const cwd = track(makeTargetProject());
+    seedBrief(cwd, BRIEF_2ACS);
+    seedSpec(cwd, SPEC_2ACS);
+    const gatePath = seedGate03b(cwd);
+    const r = await stampStage03b(cwd, gatePath);
+    assert.equal(r.ok, true);
+    assert.equal(typeof r.gate._orchestrator_stamped.runs.spec_verify.orphan_in_tests_count, "number");
+    assert.equal(typeof r.gate._orchestrator_stamped.runs.spec_verify.unknown_in_tests_count, "number");
+  });
+
   it("skips brief-dependent logic when pipeline/brief.md is absent", async () => {
     const cwd = track(makeTargetProject());
     // No brief.md, no spec.feature
