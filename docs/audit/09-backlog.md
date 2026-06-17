@@ -245,14 +245,11 @@ Month 2+.
 - **Resolution:** `rules/pipeline-build.md` and `rules/pipeline.md` now document the intentional coverage shape: stages 1, 2, 4-8, and 9 have dedicated `stage-NN.md` files; stage 3 and stage 03b remain in `pipeline-core.md` plus role/skill guidance because they are lightweight routing/spec-authoring steps.
 - **Confidence:** HIGH.
 
-### P3-4: Tidy 3 dead exports
+### P3-4: Tidy dead exports — CLOSED
 
 - **Theme:** Code structure.
 - **Source:** Finding Q-3.
-- **Description:** `core/router.js:adapterPath`, `core/config.js:clearConfigCache`, `core/verify/runner.js:DEFAULT_TIMEOUT_MS` are exported but never imported externally. Decide: remove (demote to private) or find a real consumer (e.g., `devteam doctor` could surface `adapterPath` diagnostically).
-- **Effort:** XS (~15 min).
-- **Risk of change:** very low.
-- **Risk of NOT changing:** trivial (extra API surface).
+- **Resolution:** `clearConfigCache` is now a real external testing/command hook, so it stays exported. `adapterPath` and verify runner `DEFAULT_TIMEOUT_MS` had no external consumers and were demoted to private module details.
 - **Confidence:** HIGH.
 
 ### P3-5: BACKLOG.md noise reduction
