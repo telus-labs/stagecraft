@@ -88,6 +88,25 @@ function run(positional, _flags) {
   const stagesToClear = stageNamesToClear.map((n) => getStage(n));
 
   const { listArchives } = require(path.join(__dirname, "..", "..", "gates", "archive"));
+  const { STAGE_ARTIFACTS } = require(path.join(__dirname, "..", "..", "pipeline", "artifacts"));
+  const pRoot = pipelineRoot(cwd, changeId);
+
+  // Resolve an artifact pattern (exact file, "dir/", or "glob-*.md") to
+  // the list of existing absolute paths under pipelineRoot.
+  function resolveArtifact(pattern) {
+    if (pattern.endsWith("/")) {
+      const dir = path.join(pRoot, pattern);
+      if (!fs.existsSync(dir)) return [];
+      return fs.readdirSync(dir).map((f) => path.join(dir, f));
+    }
+    if (pattern.includes("*")) {
+      if (!fs.existsSync(pRoot)) return [];
+      const re = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+      return fs.readdirSync(pRoot).filter((f) => re.test(f)).map((f) => path.join(pRoot, f));
+    }
+    const full = path.join(pRoot, pattern);
+    return fs.existsSync(full) ? [full] : [];
+  }
 
   const toDelete = [];
   for (const def of stagesToClear) {
@@ -104,14 +123,10 @@ function run(positional, _flags) {
     for (const { file } of listArchives(gatesDir, def.stage)) {
       toDelete.push(file);
     }
+    for (const pattern of (STAGE_ARTIFACTS[def.stage] || [])) {
+      toDelete.push(...resolveArtifact(pattern));
+    }
   }
-
-  // brief.md is written by the requirements stage (stage-01). Clear it
-  // whenever requirements is in the set being restarted so the next run
-  // produces a fresh brief for the new feature.
-  const pRoot = pipelineRoot(cwd, changeId);
-  const briefPath = path.join(pRoot, "brief.md");
-  const clearBrief = stageNamesToClear.includes("requirements") && fs.existsSync(briefPath);
 
   // Decide which injected sections to strip. Each known injection
   // is owned by a specific stage; we only strip when the stage being
@@ -137,9 +152,8 @@ function run(positional, _flags) {
   if (_flags.dryRun) {
     console.log(`Would restart: ${stageName} (${stageDef.stage})${_flags.cascade ? " — with cascade" : ""}`);
     console.log("Would delete:");
-    if (toDelete.length === 0 && !clearBrief) console.log("  (no gate files for these stages)");
+    if (toDelete.length === 0) console.log("  (no files for these stages)");
     for (const f of toDelete) console.log(`  rm ${path.relative(cwd, f)}`);
-    if (clearBrief) console.log(`  rm ${path.relative(cwd, briefPath)}`);
     if (toStrip.length > 0) {
       console.log(`Would strip from pipeline/context.md:`);
       for (const s of toStrip) console.log(`  - ${s} section`);
@@ -153,11 +167,6 @@ function run(positional, _flags) {
     fs.unlinkSync(f);
     console.log(`Removed ${path.relative(cwd, f)}`);
   }
-  if (clearBrief) {
-    fs.unlinkSync(briefPath);
-    console.log(`Removed ${path.relative(cwd, briefPath)}`);
-  }
-
   // Reset the driver's retry budget for cleared stages so `devteam run`
   // doesn't immediately re-halt after a convergence-exhausted restart.
   const rsPath = path.join(pRoot, "run-state.json");
@@ -179,7 +188,7 @@ function run(positional, _flags) {
     );
     if (stripped) console.log(`Stripped ${section} section from pipeline/context.md`);
   }
-  if (toDelete.length === 0 && toStrip.length === 0 && !clearBrief) {
+  if (toDelete.length === 0 && toStrip.length === 0) {
     console.log(`Nothing to clear: stage ${stageName} has no gates and no injected blockers.`);
   } else {
     console.log("");
