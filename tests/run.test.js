@@ -1085,6 +1085,26 @@ describe("run CLI: advisory loud line + --fail-on-advisory exit code (ADR-008)",
   // Tests run the CLI as a subprocess so exit codes and stderr output are observable.
   // All stages are pre-seeded PASS so no dispatch occurs — these complete quickly.
 
+  it("run reads --feature-file before enforcing repair/feature mutual exclusion", () => {
+    const cwd = track(makeTargetProject());
+    const featureFile = path.join(cwd, "feature-brief.md");
+    fs.writeFileSync(featureFile, "Feature from file\n");
+
+    const r = runCLI(["run", "--cwd", cwd, "--feature-file", featureFile, "--repair", "bug"]);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /--repair and --feature are mutually exclusive/);
+  });
+
+  it("run rejects --feature with --feature-file", () => {
+    const cwd = track(makeTargetProject());
+    const featureFile = path.join(cwd, "feature-brief.md");
+    fs.writeFileSync(featureFile, "Feature from file\n");
+
+    const r = runCLI(["run", "--cwd", cwd, "--feature", "inline", "--feature-file", featureFile]);
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--feature and --feature-file are mutually exclusive/);
+  });
+
   it("QA_BLOCKER noted_for_followup → default exit 0, loud line on stderr, advisory_blockers_count in --json", () => {
     const cwd = track(makeTargetProject());
     seedAllPass(cwd);

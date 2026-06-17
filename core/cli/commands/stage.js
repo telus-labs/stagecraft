@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
+const { applyFeatureFile } = require(path.join(__dirname, "..", "feature-file"));
 const { getOrchestrator } = require(path.join(__dirname, "..", "get-orchestrator"));
 const { getStage } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
 const { loadConfig } = require(path.join(__dirname, "..", "..", "config"));
@@ -17,6 +18,7 @@ const name = "stage";
 
 const flags = {
   feature:           { type: "string",  description: "Feature description passed to the prompt" },
+  "feature-file":    { type: "string",  description: "Read feature description from a UTF-8 text file" },
   track:             { type: "string",  description: "Override the pipeline track" },
   cwd:               { type: "string",  description: "Target project directory" },
   headless:          { type: "boolean", description: "Drive host CLI non-interactively" },
@@ -31,6 +33,12 @@ const flags = {
   help:              { type: "boolean", description: "Show this help" },
 };
 
+function featureArg(_flags) {
+  if (_flags.featureFile) return ` --feature-file "${_flags.featureFile}"`;
+  if (_flags.feature) return ` --feature "${_flags.feature}"`;
+  return "";
+}
+
 // Onboarding hint printed before the rendered prompt in user-driven mode.
 // Suppressed under --headless (the prompt is piped to a host CLI) and
 // under --json (currently a no-op for stage but reserved). The framing
@@ -43,6 +51,7 @@ function printStagePreamble(result, _flags) {
   const name2 = result.name;
   const wsCount = result.roles.length;
   const wsWord = wsCount === 1 ? "workstream" : "workstreams";
+  const featurePart = featureArg(_flags);
   const lines = [
     "",
     "═══════════════════════════════════════════════════════════════════════",
@@ -55,9 +64,9 @@ function printStagePreamble(result, _flags) {
     "",
     "  To run this stage, pick one:",
     "    1. Inside Claude Code: paste the prompt, OR type",
-    `         /devteam stage ${name2}${_flags.feature ? ` --feature "${_flags.feature}"` : ""}`,
+    `         /devteam stage ${name2}${featurePart}`,
     "    2. Headless from terminal:",
-    `         devteam stage ${name2}${_flags.feature ? ` --feature "${_flags.feature}"` : ""} --headless`,
+    `         devteam stage ${name2}${featurePart} --headless`,
     "       (orchestrator pipes the prompt to `claude --print` and waits)",
     "",
     `  When done, each workstream writes pipeline/gates/${stage}*.json.`,
@@ -83,6 +92,7 @@ function printStagePostamble(result, _flags) {
 
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam stage <name> [options]", flags)); process.exit(0); }
+  applyFeatureFile(_flags, "stage");
   const { runStage, runStageHeadless } = getOrchestrator();
   const stageName = positional[0];
   if (!stageName) {

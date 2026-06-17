@@ -82,6 +82,33 @@ describe("cli: stage", () => {
     assert.match(r.stdout, /test feature/);
   });
 
+  it("stage reads the feature prompt from --feature-file", () => {
+    const cwd = track(makeTargetProject());
+    const featureFile = path.join(cwd, "feature-brief.md");
+    fs.writeFileSync(featureFile, "Feature from file\n\n- AC-1: works from disk\n");
+    const r = runCLI(["stage", "requirements", "--feature-file", featureFile], { cwd });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /Feature from file/);
+    assert.match(r.stdout, /AC-1: works from disk/);
+    assert.match(r.stdout, /devteam stage requirements --feature-file/);
+  });
+
+  it("stage rejects --feature with --feature-file", () => {
+    const cwd = track(makeTargetProject());
+    const featureFile = path.join(cwd, "feature-brief.md");
+    fs.writeFileSync(featureFile, "Feature from file\n");
+    const r = runCLI(["stage", "requirements", "--feature", "inline", "--feature-file", featureFile], { cwd });
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /--feature and --feature-file are mutually exclusive/);
+  });
+
+  it("stage reports a clear error when --feature-file cannot be read", () => {
+    const cwd = track(makeTargetProject());
+    const r = runCLI(["stage", "requirements", "--feature-file", path.join(cwd, "missing.md")], { cwd });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /could not read --feature-file/);
+  });
+
   it("stage prints an onboarding preamble + postamble in user-driven mode", () => {
     const cwd = track(makeTargetProject());
     const r = runCLI(["stage", "requirements", "--feature", "test feature"], { cwd });

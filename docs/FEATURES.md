@@ -38,6 +38,8 @@ Six tracks control which stages run. `full` runs all 18 stages; lighter tracks s
 
 Pick at `devteam stage requirements --feature "..." --track full`.
 
+For longer briefs, use `--feature-file <path>` with `devteam stage` or `devteam run` to read the feature description from a UTF-8 text file instead of squeezing it into a shell argument.
+
 ### Parallel workstreams within a stage
 
 Build and peer-review can run parallel workstreams — frontend, backend, and infra simultaneously — within a single stage. Each workstream writes its own gate; they merge into one stage-level gate.

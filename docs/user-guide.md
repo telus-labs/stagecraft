@@ -343,6 +343,8 @@ The CLI renders a prompt for the routed host. Run it by invoking the named subag
 
 ```bash
 devteam stage requirements --feature "Add SMS notification opt-in"
+# For longer briefs:
+devteam stage requirements --feature-file ./feature-brief.md
 ```
 
 In user-driven mode (the default), the output includes a preamble explaining what to do with the prompt and a postamble pointing at the next action:
