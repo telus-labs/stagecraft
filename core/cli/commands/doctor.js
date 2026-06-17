@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { TRACKS } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
+const { splitCommand } = require(path.join(__dirname, "..", "..", "command-line"));
 
 const FRAMEWORK_ROOT = path.join(__dirname, "..", "..", "..");
 
@@ -100,7 +101,13 @@ function run(positional, _flags) {
     const status = adapter.status(cwd);
     check(`host "${h}" install`, status.ok, status.ok ? null : `${status.missing.length} missing file(s)`);
     if (adapter.capabilities && adapter.capabilities.headless && adapter.capabilities.headlessCommand) {
-      const bin = adapter.capabilities.headlessCommand.split(/\s+/)[0];
+      let bin;
+      try {
+        ({ bin } = splitCommand(adapter.capabilities.headlessCommand, "headlessCommand"));
+      } catch (err) {
+        check(`  headlessCommand parses`, "warn", err.message);
+        continue;
+      }
       const found = findOnPath(bin);
       check(`  ${bin} on PATH (for --headless)`, found ? true : "warn",
         found ? found : `${bin} not found; --headless will fail`);

@@ -65,6 +65,11 @@ Capability semantics:
 | `enforces.network` | `true` if the agent can make outbound network requests. | Orchestrator refuses dispatch with a named error. |
 | `goalLoop`       | Host supports a session-level convergence directive (`/goal "condition"`). When `true`, the orchestrator prepends `/goal "…"` to the prompt for stages that declare `goalCondition`. | Prompt is sent as-is; no goal loop. |
 
+`headlessCommand` is parsed into an executable plus argument vector and passed
+directly to `spawn()`; Stagecraft does not invoke a shell. Quote arguments or
+absolute executable paths that contain spaces, for example
+`"C:\Program Files\Vendor\agent.exe" --print`.
+
 ## adapter.js methods
 
 ```ts

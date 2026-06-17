@@ -3,8 +3,8 @@
 // Coverage:
 //   - warnIfWindows(platform) in doctor.js and init.js: emits on "win32", silent otherwise
 //   - findOnPath(bin, pathVar) in doctor.js: pure-Node PATH probe, no subprocess
-//   - runHeadless rejects on quoted DEVTEAM_HEADLESS_COMMAND
-//   - dispatchToPrincipal throws on quoted DEVTEAM_HEADLESS_COMMAND
+//   - runHeadless accepts quoted DEVTEAM_HEADLESS_COMMAND
+//   - dispatchToPrincipal accepts quoted DEVTEAM_HEADLESS_COMMAND
 
 "use strict";
 
@@ -111,10 +111,10 @@ describe("findOnPath", () => {
 });
 
 // ---------------------------------------------------------------------------
-// headless.js — quote guard
+// headless.js — quoted command support
 // ---------------------------------------------------------------------------
 
-describe("runHeadless: quote guard", () => {
+describe("runHeadless: quoted command support", () => {
   function makeAdapter({ headlessCommand = "true", name = "test-host" } = {}) {
     return {
       capabilities: { name, headlessCommand },
@@ -133,29 +133,27 @@ describe("runHeadless: quote guard", () => {
     return { stage: "stage-01", workstreamId: "stage-01", allowedWrites: [] };
   }
 
-  it("rejects with a clear message when headlessCommand contains single quotes", async () => {
+  it("runs a headlessCommand with quoted args", async () => {
     const ctx = makeCtx();
     const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
-    process.env.DEVTEAM_HEADLESS_COMMAND = "claude '--print'";
+    process.env.DEVTEAM_HEADLESS_COMMAND = `node -e "process.exit(9)"`;
     try {
-      await assert.rejects(
-        () => runHeadless(makeAdapter(), makeDescriptor(), ctx),
-        /quote characters/,
-      );
+      const r = await runHeadless(makeAdapter(), makeDescriptor(), ctx);
+      assert.equal(r.exitCode, 9);
     } finally {
       if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
       else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
     }
   });
 
-  it("rejects with a clear message when headlessCommand contains double quotes", async () => {
+  it("rejects malformed quoted headlessCommand syntax", async () => {
     const ctx = makeCtx();
     const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
-    process.env.DEVTEAM_HEADLESS_COMMAND = `claude "--print"`;
+    process.env.DEVTEAM_HEADLESS_COMMAND = `node -e "process.exit(9)`;
     try {
       await assert.rejects(
         () => runHeadless(makeAdapter(), makeDescriptor(), ctx),
-        /quote characters/,
+        /unterminated double quote/,
       );
     } finally {
       if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
@@ -178,21 +176,19 @@ describe("runHeadless: quote guard", () => {
 });
 
 // ---------------------------------------------------------------------------
-// escalation.js — quote guard in dispatchToPrincipal
+// escalation.js — quoted command support in dispatchToPrincipal
 // ---------------------------------------------------------------------------
 
-describe("dispatchToPrincipal: quote guard", () => {
-  it("throws with a clear message when DEVTEAM_HEADLESS_COMMAND contains quotes", () => {
+describe("dispatchToPrincipal: quoted command support", () => {
+  it("runs a quoted DEVTEAM_HEADLESS_COMMAND", async () => {
     const cwd = track(makeTargetProject({
       config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n",
     }));
     const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
-    process.env.DEVTEAM_HEADLESS_COMMAND = `claude "--print"`;
+    process.env.DEVTEAM_HEADLESS_COMMAND = `node -e "process.exit(0)"`;
     try {
-      assert.throws(
-        () => dispatchToPrincipal(cwd, "prompt"),
-        /quote characters/,
-      );
+      const result = await dispatchToPrincipal(cwd, "prompt");
+      assert.equal(result.exitCode, 0);
     } finally {
       if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
       else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;

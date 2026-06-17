@@ -19,6 +19,7 @@
 const fs   = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { splitCommand } = require("./command-line");
 
 function loadDeps() {
   const { loadConfig }   = require("./config");
@@ -203,7 +204,17 @@ async function fixA11yBlockers(cwd, blockers, opts = {}) {
   }
 
   const prompt = buildA11yFixPrompt(blockers);
-  const [bin, ...args] = cmdString.split(/\s+/);
+  let bin, args;
+  try {
+    ({ bin, args } = splitCommand(cmdString, "headlessCommand"));
+  } catch (err) {
+    return {
+      status:            "dispatch-failed",
+      remainingBlockers: blockers,
+      exitCode:          1,
+      reason:            `invalid headlessCommand "${cmdString}": ${err.message}`,
+    };
+  }
 
   process.stderr.write(`[devteam] dispatching frontend → ${hostName} (a11y fix, headless)\n`);
 
