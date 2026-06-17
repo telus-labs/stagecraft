@@ -82,6 +82,64 @@ Use the highest-risk read that applies:
 
 When in doubt, `full`. The cost of a falsely-skipped stage is usually higher than the cost of running an unnecessary one. `devteam next` skips stages that aren't needed (conditional stages) automatically, so `full` doesn't mean you always run all 18 manually.
 
+### My `--feature` string specified implementation details (env var names, a specific API endpoint) but the PM rewrote them. How do I preserve them?
+
+The PM agent treats `--feature` as product intent — its job is to convert it into a product brief (problem statement, user stories, acceptance criteria). In doing so, it applies its training knowledge about standard patterns. Specific implementation choices like non-default env var names, alternative API endpoints, or explicit "NOT X" constraints may be normalised away or dropped, because the PM reads them as how-to details rather than what-must-be-true requirements.
+
+**Before running — two options:**
+
+**1. Phrase constraints as observable behaviours in `--feature`**
+
+The PM preserves what it can write as a testable AC. Phrasing a constraint as an observable behaviour rather than an implementation decision makes it stick:
+
+| Drops out | Survives |
+|---|---|
+| `"use ANTHROPIC_AUTH_TOKEN"` | `"auth header MUST be Authorization: Bearer \${ANTHROPIC_AUTH_TOKEN} — x-api-key is explicitly excluded"` |
+| `"call the Chat Completions API"` | `"MUST POST to \${ANTHROPIC_BASE_URL}/v1/chat/completions — not /v1/messages"` |
+| `"read model from env"` | `"model name MUST be read from ANTHROPIC_MODEL at runtime; do not hardcode"` |
+
+The key is that `x-api-key is explicitly excluded` and `not /v1/messages` make the constraint testable. The PM can write "AC: the outgoing request uses Authorization: Bearer, never x-api-key" directly from that phrasing.
+
+**2. Seed `pipeline/context.md` with a binding constraints block before running**
+
+All agents — PM, Principal, backend, QA — read `pipeline/context.md` on every dispatch. Write non-negotiable implementation decisions there *before* `devteam run`:
+
+```markdown
+## Binding implementation constraints
+
+**Anthropic integration:** Use the OpenAI-compatible Chat Completions endpoint
+via our internal proxy — not the native Anthropic Messages API.
+Three env vars configure it:
+- `ANTHROPIC_BASE_URL` — proxy base URL
+- `ANTHROPIC_AUTH_TOKEN` — Bearer token; header is `Authorization: Bearer <token>`, NOT `x-api-key`
+- `ANTHROPIC_MODEL` — model name, read at runtime; do not hardcode
+
+Call: `POST ${ANTHROPIC_BASE_URL}/v1/chat/completions`. Do not use
+`https://api.anthropic.com/v1/messages` or the `anthropic-version` header.
+```
+
+Even if the PM softens the wording in the brief, design and build agents see this block and apply it. Use both approaches together for maximum reliability: AC-phrased language in `--feature` so the brief captures it, and context.md so design can't contradict it.
+
+**After the build has already run with the wrong implementation:**
+
+Add the binding constraints block to `pipeline/context.md` (so the build agent reads it when it re-runs), then open a blocker on the backend build gate:
+
+1. Open `pipeline/gates/stage-04.backend.json`. Set `"status": "FAIL"`. Add the issue to `must_address_before_peer_review` and set `affected_workstreams: ["backend"]`:
+
+```json
+{
+  "id": "FIX-01",
+  "assigned_to": "backend",
+  "severity": "high",
+  "file": "src/lib/claude.ts",
+  "scenario": "Uses native Messages API (POST /v1/messages, x-api-key header). Must switch to Chat Completions endpoint via proxy: POST ${ANTHROPIC_BASE_URL}/v1/chat/completions with Authorization: Bearer ${ANTHROPIC_AUTH_TOKEN}. Model from ANTHROPIC_MODEL. No changes to endpoint interface or rate-limiting."
+}
+```
+
+2. Run `devteam run`. The orchestrator detects the FAIL gate and re-dispatches the backend workstream. The build agent reads both the gate blocker (what to fix) and `pipeline/context.md` (the binding constraint explaining why), applies the fix, and re-writes the gate.
+
+The blocker description can stay at intent level — you don't need to spell out every header name if you've already put the technical detail in context.md.
+
 ### How do I fix a bug instead of adding a feature?
 
 Use `devteam run --repair "<symptom>"` rather than `--feature`:
