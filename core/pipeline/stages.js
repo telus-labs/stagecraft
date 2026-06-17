@@ -438,6 +438,9 @@ const STAGES = {
       deploy_completed: false,
       smoke_tests_passed: false,
       rollback_executed: false,
+      cost_delta_estimated: false,
+      cost_delta_multiplier: 1,
+      cost_gate_override: false,
     },
   },
   retrospective: {

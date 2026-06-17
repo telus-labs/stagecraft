@@ -369,6 +369,31 @@ function retryValidationError(gate) {
   return null;
 }
 
+function deployCostGateError(gate) {
+  if (gate.stage !== "stage-08") return null;
+  if (gate.status !== "PASS" && gate.status !== "WARN") return null;
+
+  if (gate.cost_delta_estimated !== true) {
+    return "stage-08 PASS/WARN requires cost_delta_estimated: true";
+  }
+
+  if (typeof gate.cost_delta_multiplier !== "number" || !Number.isFinite(gate.cost_delta_multiplier)) {
+    return "stage-08 PASS/WARN requires numeric cost_delta_multiplier";
+  }
+
+  if (gate.cost_delta_multiplier < 10) return null;
+
+  if (gate.cost_gate_override !== true) {
+    return "stage-08 cost_delta_multiplier >= 10 requires cost_gate_override: true or status FAIL";
+  }
+
+  if (typeof gate.cost_gate_override_reason !== "string" || gate.cost_gate_override_reason.trim() === "") {
+    return "stage-08 cost_gate_override requires non-empty cost_gate_override_reason";
+  }
+
+  return null;
+}
+
 /**
  * Scan all gate files for unresolved escalations.
  *
@@ -582,6 +607,15 @@ function main() {
     console.error(`[gate-validator] INVALID GATE ${latest.name}: ${retryErr}`);
     console.error(
       `[gate-validator] See .devteam/rules/gates-core.md §Retry Protocol`,
+    );
+    process.exit(1);
+  }
+
+  const deployCostErr = deployCostGateError(gate);
+  if (deployCostErr) {
+    console.error(`[gate-validator] INVALID GATE ${latest.name}: ${deployCostErr}`);
+    console.error(
+      `[gate-validator] See .devteam/rules/stage-08.md §Cost Gate`,
     );
     process.exit(1);
   }

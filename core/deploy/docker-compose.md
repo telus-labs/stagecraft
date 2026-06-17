@@ -147,13 +147,20 @@ Both outputs go into `pipeline/deploy-log.md`.
 {
   "stage": "stage-08",
   "status": "PASS",
-  "agent": "dev-platform",
   "track": "<track>",
   "timestamp": "<ISO>",
-  "adapter": "docker-compose",
+  "orchestrator": "devteam@<version>",
+  "workstream": "platform",
+  "host": "<host>",
+  "deploy_completed": true,
+  "smoke_tests_passed": true,
+  "rollback_executed": false,
+  "deploy_adapter": "docker-compose",
   "environment": "local",
-  "smoke_test_passed": true,
   "runbook_referenced": true,
+  "cost_delta_estimated": true,
+  "cost_delta_multiplier": 1,
+  "cost_gate_override": false,
   "adapter_result": {
     "compose_file": "docker-compose.yml",
     "services_started": ["<list>"]

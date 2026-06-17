@@ -110,6 +110,78 @@ describe("gate-validator: exit codes", () => {
   });
 });
 
+describe("gate-validator: stage-08 cost gate", () => {
+  it("rejects a PASS deploy gate when the cost estimate is missing", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-08", {
+      stage: "stage-08",
+      status: "PASS",
+      deploy_completed: true,
+      smoke_tests_passed: true,
+      rollback_executed: false,
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /cost_delta_estimated/);
+  });
+
+  it("rejects a PASS deploy gate with a 10x cost increase and no override", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-08", {
+      stage: "stage-08",
+      status: "PASS",
+      deploy_completed: true,
+      smoke_tests_passed: true,
+      rollback_executed: false,
+      cost_delta_estimated: true,
+      cost_delta_multiplier: 10,
+      cost_gate_override: false,
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /cost_delta_multiplier >= 10/);
+  });
+
+  it("accepts a PASS deploy gate below the 10x threshold", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-08", {
+      stage: "stage-08",
+      status: "PASS",
+      deploy_completed: true,
+      smoke_tests_passed: true,
+      rollback_executed: false,
+      cost_delta_estimated: true,
+      cost_delta_multiplier: 2.5,
+      cost_gate_override: false,
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /GATE PASS/);
+  });
+
+  it("accepts a 10x deploy cost increase only with an override reason", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-08", {
+      stage: "stage-08",
+      status: "PASS",
+      deploy_completed: true,
+      smoke_tests_passed: true,
+      rollback_executed: false,
+      cost_delta_estimated: true,
+      cost_delta_multiplier: 12,
+      cost_gate_override: true,
+      cost_gate_override_reason: "Approved by platform lead in release review",
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /GATE PASS/);
+  });
+});
+
 describe("gate-validator: contract F required fields", () => {
   it("auto-injects orchestrator when missing and passes", () => {
     const cwd = track(makeTargetProject());
