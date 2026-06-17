@@ -101,7 +101,7 @@ function run(positional, _flags) {
     }
     if (pattern.includes("*")) {
       if (!fs.existsSync(pRoot)) return [];
-      const re = new RegExp("^" + pattern.replace(/\./g, "\\.").replace(/\*/g, ".*") + "$");
+      const re = new RegExp("^" + pattern.replace(/[\\^$.|?+()[\]{}]/g, "\\$&").replace(/\*/g, ".*") + "$");
       return fs.readdirSync(pRoot).filter((f) => re.test(f)).map((f) => path.join(pRoot, f));
     }
     const full = path.join(pRoot, pattern);
