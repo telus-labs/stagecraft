@@ -195,6 +195,27 @@ test("extractAcsFromBrief: handles §N-prefixed section headers (e.g. §3 Accept
   assert.deepEqual(ids, ["AC-1", "AC-2"]);
 });
 
+test("extractAcsFromBrief: handles N.-prefixed section headers (e.g. 3. Acceptance Criteria)", () => {
+  // Briefs written by PM model sometimes use "## 3. Acceptance Criteria" rather
+  // than "## §3 Acceptance Criteria". Without this, AC references in later sections
+  // (e.g. "## 9. Observability") would be counted as duplicate definitions.
+  const text = `
+## 3. Acceptance Criteria
+
+- **AC-1:** Something important.
+- **AC-2:** Another thing.
+
+---
+
+## 9. Observability Requirements
+
+- **AC-1 signal:** Tests run in CI on every push.
+`;
+  const { ids, duplicates } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-1", "AC-2"]);
+  assert.equal(duplicates.length, 0, "AC-1 signal in §9 must not register as duplicate");
+});
+
 test("extractAcsFromBrief: flags duplicates", () => {
   const text = `
 - AC-1: first
