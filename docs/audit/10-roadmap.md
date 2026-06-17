@@ -131,13 +131,13 @@ Three small structural items + one defer.
 **Effort:** M (~2 hours).
 **Risk:** low — mechanical split; tests cover the contract.
 
-### PR 3.2 — Dead-export sweep
+### PR 3.2 — Dead-export sweep — CLOSED
 
 | # | Item | Effort | Verification |
 |---|---|---|---|
-| 1 | **P3-4**: Remove or activate `adapterPath`, `clearConfigCache`, `DEFAULT_TIMEOUT_MS` | XS | Exports either gone OR have at least one external consumer |
+| 1 | **P3-4**: Remove or activate `adapterPath`, `clearConfigCache`, `DEFAULT_TIMEOUT_MS` | Done | `clearConfigCache` has external consumers; `adapterPath` and verify runner `DEFAULT_TIMEOUT_MS` are private. |
 
-**Effort:** XS (~15 min).
+**Status:** closed.
 
 ### PR 3.3 — Per-stage rules-coverage decision
 

@@ -248,14 +248,11 @@ Month 2+.
 - **Risk of NOT changing:** low (asymmetry is cosmetic).
 - **Confidence:** MEDIUM.
 
-### P3-4: Tidy 3 dead exports
+### P3-4: Tidy dead exports — CLOSED
 
 - **Theme:** Code structure.
 - **Source:** Finding Q-3.
-- **Description:** `core/router.js:adapterPath`, `core/config.js:clearConfigCache`, `core/verify/runner.js:DEFAULT_TIMEOUT_MS` are exported but never imported externally. Decide: remove (demote to private) or find a real consumer (e.g., `devteam doctor` could surface `adapterPath` diagnostically).
-- **Effort:** XS (~15 min).
-- **Risk of change:** very low.
-- **Risk of NOT changing:** trivial (extra API surface).
+- **Resolution:** `clearConfigCache` is now a real external testing/command hook, so it stays exported. `adapterPath` and verify runner `DEFAULT_TIMEOUT_MS` had no external consumers and were demoted to private module details.
 - **Confidence:** HIGH.
 
 ### P3-5: BACKLOG.md noise reduction

@@ -1,0 +1,1 @@
+- Demote unused `adapterPath` and verify runner timeout exports to private module details.
