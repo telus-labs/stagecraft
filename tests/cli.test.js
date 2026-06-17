@@ -9,6 +9,17 @@ function track(cwd) { _dirs.push(cwd); return cwd; }
 afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
 
 describe("cli: help + listing", () => {
+  it("entrypoint lazy-loads command modules", () => {
+    const entrypoint = fs.readFileSync(path.join(__dirname, "..", "bin", "devteam"), "utf8");
+    assert.match(entrypoint, /COMMAND_MODULES/);
+    assert.match(entrypoint, /function loadCommand/);
+    assert.doesNotMatch(
+      entrypoint,
+      /const\s+_[A-Za-z0-9]+Cmd\s*=\s*require\(/,
+      "bin/devteam should not eagerly require every command module at startup",
+    );
+  });
+
   it("help exits 0 and lists subcommands", () => {
     const r = runCLI(["help"]);
     assert.equal(r.status, 0);
