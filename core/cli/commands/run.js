@@ -3,6 +3,7 @@
 const fs   = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
+const { applyFeatureFile } = require(path.join(__dirname, "..", "feature-file"));
 
 // Version of the `devteam run --json` summary schema. Bump on breaking changes.
 // 1.1: adds advisory_blockers_count + advisory_breakdown (ADR-008 Phase 11.2).
@@ -25,6 +26,7 @@ const name = "run";
 const flags = {
   cwd:               { type: "string",  description: "Target project directory" },
   feature:           { type: "string",  description: "Feature description" },
+  "feature-file":    { type: "string",  description: "Read feature description from a UTF-8 text file" },
   repair:            { type: "string",  description: "Bug symptom for repair mode (exclusive with --feature; ADR-009)" },
   "repair-at":       { type: "string",  description: "Skip diagnosis: seed affected-files from file:line location(s) (comma-separated; ADR-009 Phase 2)" },
   track:             { type: "string",  description: "Override the pipeline track" },
@@ -52,6 +54,7 @@ const flags = {
 // auto-rule yet — that is PR-B / Phase 2.
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam run [options]", flags)); process.exit(0); }
+  applyFeatureFile(_flags, "run");
   // ADR-009: --repair and --feature are mutually exclusive intents.
   if (_flags.repair && _flags.feature) {
     console.error("devteam run: --repair and --feature are mutually exclusive — a run is either a bug fix or a feature, not both");

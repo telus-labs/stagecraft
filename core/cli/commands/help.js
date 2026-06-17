@@ -24,7 +24,9 @@ Commands:
                                    entry for deploy.md, and a profile: dogfood
                                    config marker. See docs/guides/dogfooding.md.
   stage <name> [--feature "..."]   Render stage prompt(s) for <name>. With
-        [--headless]                 --headless, drives each workstream's
+        [--feature-file <path>]       --feature-file reads the feature brief
+                                   from a UTF-8 text file.
+        [--headless]                 With --headless, drives each workstream's
         [--timeout-ms N]             host CLI non-interactively (claude --print,
         [--patch [--from <stage>]]   codex exec) and reports exit codes +
         [--skip-completed]           gate paths. --timeout-ms caps each
@@ -45,8 +47,10 @@ Commands:
                                    partial multi-role stage, merge, fix a
                                    FAIL, resolve an ESCALATE, or done.
   run [--feature "..."]            Bounded autonomous driver: loop next →
-      [--repair "symptom"]          dispatch → merge until pipeline-complete.
-      [--repair-at <file:line>]     --feature for additive work; --repair for
+      [--feature-file <path>]       dispatch → merge until pipeline-complete.
+                                   --feature-file reads the feature brief
+      [--repair "symptom"]          from a UTF-8 text file. --feature for
+      [--repair-at <file:line>]     additive work; --repair for
       [--track <t>] [--until <s>]  bug fixes (ADR-009, hotfix depth default;
       [--max-iterations N]          diagnosis stage + PATCH-MODE-scoped build
       [--budget-usd X]              + failing-first reproduction). --repair-at

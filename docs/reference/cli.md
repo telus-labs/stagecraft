@@ -18,6 +18,7 @@ Render stage prompt(s) for <name>, or drive the host CLI non-interactively with 
 | Flag             | Type   | Description                                         |
 | ---------------- | ------ | --------------------------------------------------- |
 | --feature        | string | Feature description passed to the prompt            |
+| --feature-file   | string | Read feature description from a UTF-8 text file     |
 | --track          | string | Override the pipeline track                         |
 | --cwd            | string | Target project directory                            |
 | --headless       | bool   | Drive host CLI non-interactively                    |
@@ -49,6 +50,7 @@ Bounded autonomous driver: loop next → dispatch → merge until pipeline-compl
 | ------------------ | ------ | ---------------------------------------------------------------------------------------------------- |
 | --cwd              | string | Target project directory                                                                             |
 | --feature          | string | Feature description                                                                                  |
+| --feature-file     | string | Read feature description from a UTF-8 text file                                                      |
 | --repair           | string | Bug symptom for repair mode (exclusive with --feature; ADR-009)                                      |
 | --repair-at        | string | Skip diagnosis: seed affected-files from file:line location(s) (comma-separated; ADR-009 Phase 2)    |
 | --track            | string | Override the pipeline track                                                                          |
