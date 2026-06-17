@@ -498,6 +498,47 @@ describe("next: track filtering", () => {
     assert.equal(r.workstreams.length, 1, "nano peer-review should fan out to 1 workstream");
     assert.equal(r.workstreams[0].role, "backend", "scoped reviewer is the backend slot");
   });
+
+  // Issue #220: next() with explicit track skips full-only stages
+  it("quick track skips design (full-only): after requirements PASS → executable-spec", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    // Without track, full track → next is design (stage-02)
+    const rFull = next({ cwd });
+    assert.equal(rFull.name, "design", "sanity: full track goes to design after requirements");
+    // With quick track → design is not on the track; next is executable-spec (stage-03b)
+    const rQuick = next({ cwd, track: "quick" });
+    assert.equal(rQuick.action, "run-stage");
+    assert.equal(rQuick.name, "executable-spec", "quick track skips design and goes to executable-spec");
+  });
+
+  // Issue #220: CLI reads persisted track from run-state.json
+  it("devteam next --json reads track from run-state.json when no --track flag", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    // Persist "quick" as the active track (written by `devteam run --track quick`)
+    const rsPath = require("node:path").join(cwd, "pipeline", "run-state.json");
+    require("node:fs").writeFileSync(rsPath, JSON.stringify({ track: "quick" }), "utf8");
+    const r = runCLI(["next", "--json"], { cwd });
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}\n${r.stderr}`);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.action, "run-stage");
+    assert.equal(out.name, "executable-spec", "persisted quick track skips design");
+  });
+
+  // Issue #220: explicit --track flag overrides persisted run-state.json track
+  it("devteam next --track quick overrides full track in run-state.json", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    // run-state.json says "full" but operator passes --track quick
+    const rsPath = require("node:path").join(cwd, "pipeline", "run-state.json");
+    require("node:fs").writeFileSync(rsPath, JSON.stringify({ track: "full" }), "utf8");
+    const r = runCLI(["next", "--track", "quick", "--json"], { cwd });
+    assert.equal(r.status, 0, `expected exit 0, got ${r.status}\n${r.stderr}`);
+    const out = JSON.parse(r.stdout);
+    assert.equal(out.action, "run-stage");
+    assert.equal(out.name, "executable-spec", "--track flag overrides run-state.json");
+  });
 });
 
 describe("next: stage-05 per-area fix steps", () => {

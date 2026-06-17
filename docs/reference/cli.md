@@ -35,12 +35,13 @@ Render stage prompt(s) for <name>, or drive the host CLI non-interactively with 
 
 Inspect pipeline/gates/ and report what to do next: run a stage, merge, fix a FAIL, resolve an ESCALATE, or done.
 
-| Flag          | Type   | Description                                    |
-| ------------- | ------ | ---------------------------------------------- |
-| --cwd         | string | Target project directory                       |
-| --feature     | string | Feature name (bounded isolation mode)          |
-| --json        | bool   | JSON output                                    |
-| --skip-advise | bool   | Suppress unresolved follow-up advisory warning |
+| Flag          | Type   | Description                                                                  |
+| ------------- | ------ | ---------------------------------------------------------------------------- |
+| --cwd         | string | Target project directory                                                     |
+| --feature     | string | Feature name (bounded isolation mode)                                        |
+| --track       | string | Override the pipeline track (default: read from run-state.json, then config) |
+| --json        | bool   | JSON output                                                                  |
+| --skip-advise | bool   | Suppress unresolved follow-up advisory warning                               |
 
 ### `devteam run [options]`
 
