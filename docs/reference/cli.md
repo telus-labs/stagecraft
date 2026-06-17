@@ -275,12 +275,13 @@ Orchestrator-stamped verification: run configured commands and rewrite gate fiel
 
 Re-run a recorded stage with current config and diff the result against the original gate.
 
-| Flag      | Type   | Description                           |
-| --------- | ------ | ------------------------------------- |
-| --cwd     | string | Target project directory              |
-| --feature | string | Feature name (bounded isolation mode) |
-| --json    | bool   | JSON output                           |
-| --dry-run | bool   | Print plan without invoking host      |
+| Flag             | Type   | Description                                |
+| ---------------- | ------ | ------------------------------------------ |
+| --cwd            | string | Target project directory                   |
+| --feature        | string | Feature name (bounded isolation mode)      |
+| --json           | bool   | JSON output                                |
+| --dry-run        | bool   | Print plan without invoking host           |
+| --restore-backup | bool   | Restore leftover replay backup(s) and exit |
 
 ### `devteam ci <install|show> [options]`
 

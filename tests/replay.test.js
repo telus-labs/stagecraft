@@ -298,3 +298,41 @@ test("leftover backup from crashed replay triggers warning and non-zero exit", (
     "should warn about leftover backup in stderr",
   );
 });
+
+test("`devteam replay --restore-backup` restores leftover backups without a stage", () => {
+  const cwd = track(makeTargetProject({
+    config: "routing:\n  default_host: claude-code\npipeline:\n  default_track: full\n",
+  }));
+
+  const originalPath = path.join(cwd, "pipeline", "gates", "stage-01.json");
+  seedGate(cwd, "stage-01", {
+    workstream: "pm", host: "claude-code", status: "PASS", model: "claude-opus-4-7",
+    cost_usd: 0.05,
+  });
+
+  const backupDir = path.join(cwd, "pipeline", "gates", ".replay-backup");
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(backupDir, "stage-01.json"),
+    JSON.stringify({ stage: "stage-01", status: "PASS", _note: "original-backup" }),
+  );
+  fs.writeFileSync(
+    originalPath,
+    JSON.stringify({ stage: "stage-01", status: "PASS", _note: "overwritten-during-crash" }),
+  );
+
+  const r = runCLI(["replay", "--restore-backup"], { cwd });
+  assert.equal(r.status, 0, `restore failed: ${r.stderr}\n---\n${r.stdout}`);
+  assert.match(r.stdout, /Restored 1 replay backup/);
+
+  const restored = JSON.parse(fs.readFileSync(originalPath, "utf8"));
+  assert.equal(restored._note, "original-backup");
+  assert.equal(fs.existsSync(path.join(backupDir, "stage-01.json")), false);
+});
+
+test("`devteam replay --restore-backup --json` reports no-op when no backups exist", () => {
+  const cwd = track(makeTargetProject());
+  const r = runCLI(["replay", "--restore-backup", "--json"], { cwd });
+  assert.equal(r.status, 0, `restore no-op failed: ${r.stderr}\n---\n${r.stdout}`);
+  assert.deepEqual(JSON.parse(r.stdout), { restored: 0, backups: [] });
+});

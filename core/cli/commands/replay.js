@@ -18,6 +18,7 @@ const flags = {
   feature:   { type: "string",  description: "Feature name (bounded isolation mode)" },
   json:      { type: "boolean", description: "JSON output" },
   "dry-run": { type: "boolean", description: "Print plan without invoking host" },
+  "restore-backup": { type: "boolean", description: "Restore leftover replay backup(s) and exit" },
   help:      { type: "boolean", description: "Show this help" },
 };
 
@@ -33,6 +34,44 @@ function run(positional, _flags) {
   const { resolveChangeId } = require(path.join(__dirname, "..", "resolve-change-id"));
   const changeId = resolveChangeId(_flags, config);
   const { gatesDir: getGatesDir } = require(path.join(__dirname, "..", "..", "paths"));
+  const gatesDir = getGatesDir(cwd, changeId);
+
+  if (_flags.restoreBackup) {
+    const leftovers = findLeftoverBackups(gatesDir);
+    if (leftovers.length === 0) {
+      if (_flags.json) {
+        console.log(JSON.stringify({ restored: 0, backups: [] }, null, 2));
+      } else {
+        console.log("No replay backups to restore.");
+      }
+      return;
+    }
+
+    const restored = [];
+    for (const b of leftovers) {
+      if (restoreFromBackup(gatesDir, b.name, b.originalPath)) {
+        restored.push(b);
+      }
+    }
+
+    if (_flags.json) {
+      console.log(JSON.stringify({
+        restored: restored.length,
+        backups: restored.map((b) => ({
+          name: b.name,
+          original_path: b.originalPath,
+          backup_path: b.backupPath,
+        })),
+      }, null, 2));
+    } else {
+      for (const b of restored) {
+        console.log(`Restored ${path.relative(cwd, b.originalPath)} from ${path.relative(cwd, b.backupPath)}`);
+      }
+      console.log(`Restored ${restored.length} replay backup(s).`);
+    }
+    return;
+  }
+
   const stageId = positional[0];
   if (!stageId) {
     console.error("Usage: devteam replay <stage-id> [--dry-run] [--json]");
@@ -42,8 +81,6 @@ function run(positional, _flags) {
     console.error("check without invoking the host CLI.");
     process.exit(2);
   }
-
-  const gatesDir = getGatesDir(cwd, changeId);
 
   // On startup, warn if a previous replay left an unfinished backup (crash
   // between dispatch and restore). Offer to restore before proceeding.
