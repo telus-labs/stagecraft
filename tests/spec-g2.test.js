@@ -352,6 +352,28 @@ Feature: x
   assert.equal(strict.drift, true);
 });
 
+test("verifyTexts: skipTestPhase suppresses test-side drift even when test-report exists", () => {
+  const briefText = "- AC-1: a\n- AC-2: b";
+  const specText = `
+Feature: x
+  @AC-1
+  Scenario: AC-1
+    Then ok
+  @AC-2
+  Scenario: AC-2
+    Then ok
+`;
+  // Stale test-report references an AC that no longer exists in the brief
+  const testText = "| AC-1 | x | y | PASS |\n| AC-9 | x | y | PASS |";
+  const withPhase = verifyTexts({ briefText, specText, testText });
+  assert.equal(withPhase.drift, true, "without skipTestPhase, stale report causes drift");
+
+  const skipped = verifyTexts({ briefText, specText, testText, opts: { skipTestPhase: true } });
+  assert.equal(skipped.drift, false, "skipTestPhase suppresses test-side drift");
+  assert.equal(skipped.orphan_in_tests.length, 0, "orphan_in_tests not populated when skipped");
+  assert.equal(skipped.unknown_in_tests.length, 0, "unknown_in_tests not populated when skipped");
+});
+
 test("verifyTexts: missing test-report degrades gracefully (no false drift on test side)", () => {
   const briefText = "- AC-1: a";
   const specText = `
