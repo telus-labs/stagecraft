@@ -1,8 +1,33 @@
-const { describe, it } = require("node:test");
+const { afterEach, describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { REPO_ROOT } = require("./_helpers");
 const { listHosts, loadAdapter, resolveAdapter } = require(path.join(REPO_ROOT, "core", "router"));
+
+const ORIGINAL_CWD = process.cwd();
+
+afterEach(() => {
+  process.chdir(ORIGINAL_CWD);
+});
+
+function writeExternalAdapterFixture(hostName) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "stagecraft-router-"));
+  const packageDir = path.join(tmp, "node_modules", "@devteam", `host-${hostName}`);
+  fs.mkdirSync(packageDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packageDir, "adapter.js"),
+    `module.exports = {
+  capabilities: { name: ${JSON.stringify(hostName)}, headless: false },
+  install() { return { written: [], skipped: [], warnings: [] }; },
+  renderStagePrompt() { return "external adapter prompt"; },
+  status() { return { ok: true, missing: [], stale: [], notes: [] }; },
+  uninstall() {},
+};\n`,
+  );
+  return tmp;
+}
 
 describe("router: listHosts", () => {
   it("includes claude-code, codex, generic", () => {
@@ -10,6 +35,13 @@ describe("router: listHosts", () => {
     assert.ok(hosts.includes("claude-code"));
     assert.ok(hosts.includes("codex"));
     assert.ok(hosts.includes("generic"));
+  });
+
+  it("includes external @devteam/host-* adapters installed under node_modules", () => {
+    const tmp = writeExternalAdapterFixture("acme");
+    process.chdir(tmp);
+
+    assert.ok(listHosts().includes("acme"));
   });
 });
 
@@ -23,6 +55,15 @@ describe("router: loadAdapter", () => {
 
   it("throws a helpful error for an unknown adapter", () => {
     assert.throws(() => loadAdapter("nope"), /No adapter found for host "nope"/);
+  });
+
+  it("loads an external @devteam/host-* adapter", () => {
+    const tmp = writeExternalAdapterFixture("acme-load");
+    process.chdir(tmp);
+
+    const adapter = loadAdapter("acme-load");
+    assert.equal(adapter.capabilities.name, "acme-load");
+    assert.equal(adapter.renderStagePrompt(), "external adapter prompt");
   });
 });
 
@@ -47,5 +88,18 @@ describe("router: resolveAdapter", () => {
   it("throws when the resolved adapter doesn't exist", () => {
     const broken = { routing: { default_host: "imaginary-host", roles: {}, stages: {} } };
     assert.throws(() => resolveAdapter(broken, "stage-01", "pm"), /No adapter found/);
+  });
+
+  it("resolves routing to an external @devteam/host-* adapter", () => {
+    const tmp = writeExternalAdapterFixture("acme-route");
+    process.chdir(tmp);
+
+    const routed = resolveAdapter(
+      { routing: { default_host: "acme-route", roles: {}, stages: {} } },
+      "stage-01",
+      "pm",
+    );
+    assert.equal(routed.hostName, "acme-route");
+    assert.equal(routed.adapter.capabilities.name, "acme-route");
   });
 });

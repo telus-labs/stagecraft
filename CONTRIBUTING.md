@@ -42,6 +42,11 @@ TMPDIR=$(mktemp -d)
 
 You want to add support for a new AI tool (e.g. Gemini CLI, Cursor, Aider).
 
+Adapters can live in this repository under `hosts/<name>/` or in an installed
+npm package named `@devteam/host-<name>`. Use the repository layout for
+first-party adapters. Use the package layout for community or private adapters
+that should not require a Stagecraft fork.
+
 1. **Create the directory and capabilities.**
    ```bash
    mkdir -p hosts/<name>/install
@@ -64,7 +69,13 @@ You want to add support for a new AI tool (e.g. Gemini CLI, Cursor, Aider).
 
 4. **Mirror `installRoles`, `installRules`, `installSkills`** from an existing adapter. Each adapter is responsible for laying down the host-specific copies of the shared `roles/`, `rules/`, and `skills/` directories.
 
-5. **Verify locally.**
+5. **For an external package, export the same adapter object.** Package
+   `@devteam/host-foo` should expose either `adapter.js` at the package root or
+   a package entrypoint that exports the adapter contract. With the package
+   installed in a target project's `node_modules`, use `foo` as the routing and
+   init host name.
+
+6. **Verify locally.**
    ```bash
    ./bin/devteam hosts                    # new host appears
    TMPDIR=$(mktemp -d)
@@ -72,7 +83,7 @@ You want to add support for a new AI tool (e.g. Gemini CLI, Cursor, Aider).
    find "$TMPDIR" -type f                 # expected files landed
    ```
 
-6. **Add a tier-1 contract assertion**: your adapter must export `capabilities`, `install`, `renderStagePrompt`, `status`, `uninstall` — same shape as `tests/adapter-contract.test.js` asserts. Run `npm test` to verify.
+7. **Add a tier-1 contract assertion**: your adapter must export `capabilities`, `install`, `renderStagePrompt`, `status`, `uninstall` — same shape as `tests/adapter-contract.test.js` asserts. Run `npm test` to verify.
 
 Examples to copy from:
 - `hosts/generic/` — minimal; install is a no-op.
