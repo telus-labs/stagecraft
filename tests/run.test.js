@@ -350,6 +350,96 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.equal(dispatchOpts[0].patchItems, undefined);
   });
 
+  it("targets a build workstream from stage-02 file_ownership when multiple gates are cleared", async () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-02", {
+      status: "PASS",
+      file_ownership: {
+        "src/backend/**": "backend",
+        "src/frontend/**": "frontend",
+        "Dockerfile": "platform",
+      },
+    });
+    fs.mkdirSync(path.join(cwd, "src", "backend"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "backend", "api.js"), "module.exports = {}\n");
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.backend.json"), "{}");
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.frontend.json"), "{}");
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.json"), "{}");
+    const dispatchOpts = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "route handler still fails", file: "src/backend/api.js" }],
+        clear_gates: [
+          "pipeline/gates/stage-04.backend.json",
+          "pipeline/gates/stage-04.frontend.json",
+          "pipeline/gates/stage-04.json",
+        ],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async (_stageName, opts) => {
+        dispatchOpts.push(opts);
+        return [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true);
+    assert.deepEqual(dispatchOpts[0].workstream, ["backend"]);
+    assert.deepEqual(dispatchOpts[0].patchItems, ["Fix src/backend/api.js: route handler still fails"]);
+  });
+
+  it("does not target build when file_ownership maps blockers to multiple owners", async () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-02", {
+      status: "PASS",
+      file_ownership: {
+        "src/backend/**": "backend",
+        "src/frontend/**": "frontend",
+      },
+    });
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.backend.json"), "{}");
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.frontend.json"), "{}");
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.json"), "{}");
+    const dispatchOpts = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [
+          { text: "API contract mismatch", file: "src/backend/api.js" },
+          { text: "client call mismatch", file: "src/frontend/client.js" },
+        ],
+        clear_gates: [
+          "pipeline/gates/stage-04.backend.json",
+          "pipeline/gates/stage-04.frontend.json",
+          "pipeline/gates/stage-04.json",
+        ],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async (_stageName, opts) => {
+        dispatchOpts.push(opts);
+        return [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true);
+    assert.equal(dispatchOpts[0].workstream, undefined);
+    assert.equal(dispatchOpts[0].patchItems, undefined);
+  });
+
   it("archives the failed attempt's gate before clearing it", async () => {
     const cwd = track(makeTargetProject());
     seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["build broke"] });

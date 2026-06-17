@@ -1,0 +1,1 @@
+- Taught autonomous fix retries to use the Stage 2 `file_ownership` map when routing blocker-named files back to a single owning build workstream.
