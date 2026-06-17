@@ -56,7 +56,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 | C6 | ~~Tamper-evident gate chain~~ | 3 | 3 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C7 | ~~`eslint-plugin-security`~~ `[hist-a]` | 3 | 1 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | C8 | ~~CHANGELOG-per-PR fragments~~ `[hist-b]` | 3 | 2 | ✅ v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
-| C9 | **Verify-before-promoting enforcement in audit skill** `[hist-c]` | 3 | 2 | The 2026-05-28 audit codified a "verify before promoting" rule (after S5); the 2026-06-03 audit failed to apply it (the C-1 retraction in PR #32). Codifying the rule once textually isn't enough. Add a `verified_by` field requirement to each finding in `skills/audit/SKILL.md` Phase 1/2 — must include the grep/code-inspection command that confirmed the cited symbol exists. Structural enforcement, not textual guidance. |
+| C9 | ~~**Verify-before-promoting enforcement in audit skill** `[hist-c]`~~ | 3 | 2 | ✅ Unreleased · Phase 1/2 audit findings now require `verified_by` evidence, templates expose verification slots, and structural tests lock the contract. |
 
 ## D. Observability & learning — telemetry, metrics, persistent learning
 

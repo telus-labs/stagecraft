@@ -17,6 +17,8 @@ Connection / client reuse, leaks, missing cleanup.
 - **Where:** `path/to/file.ext:NN`
 - **Issue:** <e.g. database connection opened per request, never closed>
 - **Impact:** <connection pool exhaustion / memory leak / file-descriptor exhaustion / …>
+- **Confidence:** HIGH / MEDIUM / LOW
+- **Verified by:** <command / test run / code inspection + observed result>
 - **Suggested fix:** <pooling / `using` / context manager / cleanup hook / …>
 
 ### Concurrency
@@ -35,9 +37,9 @@ Swallowed exceptions, catch-alls, leaked internals in error messages, missing re
 
 Missing timeouts on external calls. Default timeouts that are too generous.
 
-| Site | Has timeout? | Value | Notes |
-|---|---|---|---|
-| | yes / no | | |
+| Site | Has timeout? | Value | Notes | Verified by |
+|---|---|---|---|---|
+| | yes / no | | | |
 
 ### Scaling concerns
 

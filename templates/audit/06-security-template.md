@@ -1,6 +1,6 @@
 # 06 — Security review
 
-> Phase 2.1 output. Read `00-project-context.md` and `01-architecture.md` first. Adapt to the project's language and framework. Every finding gets a Severity AND a Confidence rating.
+> Phase 2.1 output. Read `00-project-context.md` and `01-architecture.md` first. Adapt to the project's language and framework. Every finding gets a Severity rating, Confidence rating, and Verified by evidence.
 
 ## Summary
 
@@ -21,6 +21,7 @@ One paragraph: the security posture of this codebase. Are there obvious holes, o
 - **Issue:** <hardcoded API key / token in source / credential in error message / …>
 - **Severity:** critical / high / medium / low
 - **Confidence:** HIGH / MEDIUM / LOW
+- **Verified by:** <command / live check / code inspection + observed result>
 - **Suggested fix:** <move to env var / vault / .env.gitignored / …>
 
 ### Input handling
