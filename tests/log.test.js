@@ -291,3 +291,14 @@ describe("devteam log CLI", () => {
     assert.match(r.stdout, /🚨.*stage-03/);
   });
 });
+
+describe("devteam log documentation", () => {
+  it("documents the --json NDJSON event shape", () => {
+    const doc = fs.readFileSync(path.join(REPO_ROOT, "docs", "observability.md"), "utf8");
+    assert.match(doc, /## Pipeline log JSON/);
+    for (const field of ["`ts`", "`kind`", "`path`", "`stage`", "`workstream`", "`status`", "`owner`", "`artifactKind`"]) {
+      assert.match(doc, new RegExp(field.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&")));
+    }
+    assert.match(doc, /newline-delimited JSON \(NDJSON\)/);
+  });
+});
