@@ -124,6 +124,74 @@ function singleBuildWorkstreamFromClearGates(clearGates) {
   return ws.size === 1 ? [...ws][0] : null;
 }
 
+function blockerFiles(blockers) {
+  const files = [];
+  for (const b of blockers || []) {
+    if (!b || typeof b !== "object") continue;
+    const file = b.file || b.path || b.filename;
+    if (file && typeof file === "string" && file.trim()) files.push(file.trim());
+  }
+  return [...new Set(files)];
+}
+
+function normalizeOwnershipPath(p) {
+  return String(p || "")
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "");
+}
+
+function globPatternToRegExp(pattern) {
+  let out = "^";
+  const s = normalizeOwnershipPath(pattern);
+  for (let i = 0; i < s.length; i += 1) {
+    const ch = s[i];
+    if (ch === "*") {
+      if (s[i + 1] === "*") {
+        out += ".*";
+        i += 1;
+      } else {
+        out += "[^/]*";
+      }
+    } else {
+      out += ch.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+    }
+  }
+  return new RegExp(`${out}$`);
+}
+
+function ownershipPatternMatches(pattern, file) {
+  const p = normalizeOwnershipPath(pattern);
+  const f = normalizeOwnershipPath(file);
+  if (!p || !f) return false;
+  if (p === f) return true;
+  if (p.endsWith("/")) return f.startsWith(p);
+  if (!p.includes("*")) return f.startsWith(`${p}/`);
+  return globPatternToRegExp(p).test(f);
+}
+
+function loadFileOwnership(cwd, changeId) {
+  try {
+    const gate = JSON.parse(fs.readFileSync(path.join(gatesDir(cwd, changeId), "stage-02.json"), "utf8"));
+    return gate && typeof gate.file_ownership === "object" && !Array.isArray(gate.file_ownership)
+      ? gate.file_ownership
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function workstreamFromFileOwnership(fileOwnership, files) {
+  const owners = new Set();
+  const entries = Object.entries(fileOwnership || {});
+  for (const file of files || []) {
+    for (const [pattern, owner] of entries) {
+      if (ownershipPatternMatches(pattern, file)) owners.add(owner);
+    }
+  }
+  return owners.size === 1 ? [...owners][0] : null;
+}
+
 function blockerPatchItems(blockers) {
   const items = [];
   for (const b of blockers || []) {
@@ -141,8 +209,12 @@ function blockerPatchItems(blockers) {
   return [...new Set(items)].filter(Boolean);
 }
 
-function targetedBuildFixFromRetry(retryAction) {
-  const workstream = singleBuildWorkstreamFromClearGates(retryAction.clear_gates || []);
+function targetedBuildFixFromRetry(cwd, changeId, retryAction) {
+  const workstream = singleBuildWorkstreamFromClearGates(retryAction.clear_gates || [])
+    || workstreamFromFileOwnership(
+      loadFileOwnership(cwd, changeId),
+      blockerFiles(retryAction.blockers)
+    );
   if (!workstream) return null;
   const patchItems = blockerPatchItems(retryAction.blockers || []);
   if (patchItems.length === 0) return null;
@@ -966,7 +1038,7 @@ async function run(opts = {}) {
           break;
         }
         writeRunBlockers(cwd, r.name, r.blockers, changeId);
-        state.targetedFix = targetedBuildFixFromRetry(r);
+        state.targetedFix = targetedBuildFixFromRetry(cwd, changeId, r);
         state.fixRetries[r.name] = attempts + 1;
         saveRunState(cwd, changeId, state);
         const target = state.targetedFix
