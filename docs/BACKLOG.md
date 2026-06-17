@@ -24,6 +24,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | Bucket | # | Item | I | E | Shipped |
 |---|---|---|---|---|---|
 | A | A1 | Gemini CLI adapter | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
+| A | A4 | Pluggable adapter discovery | 3 | 2 | landed · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | B | B1 | Accessibility audit stage | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B | B2 | Performance budget stage | 4 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B4 | Observability gate | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
@@ -72,7 +73,6 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 |---|---|---|---|---|
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
 | A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs the stage on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). |
-| A4 | **Pluggable adapter discovery** | 3 | 2 | `npm install @devteam/host-foo` and the orchestrator auto-loads. Makes the ecosystem extensible without forking. |
 | A5 | **API-direct adapter** (no host CLI; talks to Anthropic / OpenAI / Google APIs directly) | 3 | 3 | For users who don't want to install claude-code or codex but still want orchestration. Lighter dependency footprint. |
 | A6 | **Windows native port** | 2 | 4 | Stagecraft is currently POSIX-only (decided 2026-06-11, phase-3.5). Three known breakage points: (1) `devteam doctor` used `spawnSync("which", ...)` to probe PATH — replaced in 3.5 with a Node-level PATH probe, but the probe itself still uses POSIX path separators and `fs.existsSync` without `.exe` extension awareness; (2) headless command splitter in `core/adapters/headless.js` and `core/escalation.js` splits on `\s+` — a path like `C:\Program Files\claude\claude.exe` would be split at the space, silently invoking the wrong binary; (3) fix-step command strings (produced by `core/pipeline/fix-recipes.js` after 3.2) contain POSIX `rm -f pipeline/gates/...` — Windows has no `rm`. A correct port needs: command quoting/parsing (e.g. `node-shell-quote`), SIGTERM/SIGKILL signal handling on win32, and POSIX path normalization across fix steps. Low demand observed so far; revisit if adoption grows on Windows. |
 

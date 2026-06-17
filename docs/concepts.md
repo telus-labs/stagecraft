@@ -57,7 +57,7 @@ A practical consequence: a Stage 5 FAIL with no `BLOCKER:` content anywhere and 
 
 - **Adding a new specialist seat at the team?** Add a **role** under `roles/<name>.md`.
 - **Adding a new phase of work?** Add a **stage** to `core/pipeline/stages.js`, with a matching schema under `core/gates/schemas/`.
-- **Plugging in a new AI tool?** Add a **host adapter** under `hosts/<name>/`. The contract is in `core/adapters/host-adapter.md`.
+- **Plugging in a new AI tool?** Add a **host adapter** under `hosts/<name>/`, or install one as `@devteam/host-<name>`. The contract is in `core/adapters/host-adapter.md`.
 - **Routing a specific role to a specific host?** Edit `routing` in `.devteam/config.yml` (`stages > roles > default_host` — most specific wins).
 - **Want a subset of stages for a particular change size?** Pick a **track**, or define a new one in `STAGES_BY_TRACK`.
 - **Need to record a non-standard outcome?** Add a field to the stage's schema. The validator enforces required fields; everything else is free-form.

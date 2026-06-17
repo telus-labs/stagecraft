@@ -8,7 +8,8 @@ A project may have one or more adapters installed simultaneously. The orchestrat
 
 ## Shape
 
-A host adapter is a directory under `hosts/<name>/` containing at minimum:
+A built-in host adapter is a directory under `hosts/<name>/` containing at
+minimum:
 
 ```
 hosts/<name>/
@@ -16,6 +17,14 @@ hosts/<name>/
 ├── capabilities.json    ← what this host supports
 └── install/             ← files laid down in target project at `devteam init`
 ```
+
+External adapters use the same exported `adapter.js` contract and may be
+installed as npm packages named `@devteam/host-<name>`. For example,
+`npm install @devteam/host-acme` makes the `acme` host discoverable to
+`devteam hosts`, `devteam init --host acme`, and normal routing resolution
+when the package is installed under the current project's `node_modules`.
+The package may expose either `adapter.js` at its package root or a package
+entrypoint that exports the adapter object.
 
 ## capabilities.json
 
