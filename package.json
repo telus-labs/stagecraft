@@ -29,7 +29,7 @@
     "@opentelemetry/sdk-trace-base": "~2.8.0",
     "@opentelemetry/sdk-trace-node": "~2.8.0",
     "@opentelemetry/semantic-conventions": "~1.28.0",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.2.0"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^4.2.0"
