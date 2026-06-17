@@ -275,6 +275,81 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.ok(!fs.existsSync(victim), "structured clear_gates cleared the gate in-process");
   });
 
+  it("targets the owning build workstream after a single-workstream fix-and-retry", async () => {
+    const cwd = track(makeTargetProject());
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.platform.json");
+    fs.writeFileSync(victim, "{}");
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+    const events = [];
+    const dispatchOpts = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "EOL base image", file: "Dockerfile" }],
+        clear_gates: ["pipeline/gates/stage-04.platform.json", "pipeline/gates/stage-04.json"],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      onEvent: (ev) => events.push(ev),
+      runStageHeadless: async (_stageName, opts) => {
+        dispatchOpts.push(opts);
+        return [{ role: "platform", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true);
+    assert.deepEqual(dispatchOpts[0].workstream, ["platform"]);
+    assert.deepEqual(dispatchOpts[0].patchItems, ["Fix Dockerfile: EOL base image"]);
+    assert.ok(events.some((ev) =>
+      ev.type === "fix-retry" &&
+      ev.target &&
+      ev.target.workstream === "platform" &&
+      ev.target.patch_items === 1
+    ));
+    const state = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "run-state.json"), "utf8"));
+    assert.equal(state.targetedFix, null, "targeted fix hint is one-shot and cleared after dispatch");
+  });
+
+  it("does not target build when fix-and-retry clears multiple workstream gates", async () => {
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.backend.json"), "{}");
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.frontend.json"), "{}");
+    const dispatchOpts = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "cross-cutting failure", file: "package.json" }],
+        clear_gates: [
+          "pipeline/gates/stage-04.backend.json",
+          "pipeline/gates/stage-04.frontend.json",
+          "pipeline/gates/stage-04.json",
+        ],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async (_stageName, opts) => {
+        dispatchOpts.push(opts);
+        return [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true);
+    assert.equal(dispatchOpts[0].workstream, undefined);
+    assert.equal(dispatchOpts[0].patchItems, undefined);
+  });
+
   it("archives the failed attempt's gate before clearing it", async () => {
     const cwd = track(makeTargetProject());
     seedGate(cwd, "stage-04", { status: "FAIL", blockers: ["build broke"] });
