@@ -115,6 +115,47 @@ function logEvent(cwd, changeId, entry) {
   } catch { /* logging must never break the run */ }
 }
 
+function singleBuildWorkstreamFromClearGates(clearGates) {
+  const ws = new Set();
+  for (const rel of clearGates || []) {
+    const m = String(rel).match(/^pipeline\/gates\/stage-04\.([^./]+)\.json$/);
+    if (m) ws.add(m[1]);
+  }
+  return ws.size === 1 ? [...ws][0] : null;
+}
+
+function blockerPatchItems(blockers) {
+  const items = [];
+  for (const b of blockers || []) {
+    if (typeof b === "string") {
+      if (b.trim()) items.push(b.trim());
+      continue;
+    }
+    if (!b || typeof b !== "object") continue;
+    const file = b.file || b.path || b.filename;
+    const text = b.text || b.summary || b.description || "";
+    if (file && text) items.push(`Fix ${file}: ${text}`);
+    else if (file) items.push(`Fix ${file}`);
+    else if (text) items.push(text);
+  }
+  return [...new Set(items)].filter(Boolean);
+}
+
+function targetedBuildFixFromRetry(retryAction) {
+  const workstream = singleBuildWorkstreamFromClearGates(retryAction.clear_gates || []);
+  if (!workstream) return null;
+  const patchItems = blockerPatchItems(retryAction.blockers || []);
+  if (patchItems.length === 0) return null;
+  return {
+    stage: "stage-04",
+    name: "build",
+    workstream,
+    patchItems,
+    source_stage: retryAction.stage,
+    source_name: retryAction.name,
+  };
+}
+
 // Sum cost_usd across all stage gates, avoiding double-counting for multi-role
 // stages. Strategy per gate file:
 //
@@ -582,6 +623,7 @@ async function run(opts = {}) {
   state.autoRule = state.autoRule || {};          // auto-rule attempts per stage
   state.transient = state.transient || {};        // no-gate transient retries per stage
   state.srcFingerprints = state.srcFingerprints || {}; // content hashes for no-source-change detection
+  state.targetedFix = state.targetedFix || null;  // one-shot fix-and-retry dispatch hint
   // Phase 12.2: commit-cursor fields (resilient to resumed pre-12.2 states).
   if (!Array.isArray(state.stages_advanced)) state.stages_advanced = [];
   if (!("last_committed_stage_index" in state)) state.last_committed_stage_index = null;
@@ -924,10 +966,14 @@ async function run(opts = {}) {
           break;
         }
         writeRunBlockers(cwd, r.name, r.blockers, changeId);
+        state.targetedFix = targetedBuildFixFromRetry(r);
         state.fixRetries[r.name] = attempts + 1;
         saveRunState(cwd, changeId, state);
-        logEvent(cwd, changeId, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null });
-        onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length });
+        const target = state.targetedFix
+          ? { workstream: state.targetedFix.workstream, patch_items: state.targetedFix.patchItems.length }
+          : null;
+        logEvent(cwd, changeId, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null, target });
+        onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length, target });
         continue;
       }
 
@@ -1122,6 +1168,11 @@ async function run(opts = {}) {
           sleep: _sleep,
         });
         let runResult;
+        const targetedFix = state.targetedFix
+          && state.targetedFix.stage === r.stage
+          && state.targetedFix.name === r.name
+          ? state.targetedFix
+          : null;
         try {
           runResult = await _runStageHeadless(r.name, {
             cwd,
@@ -1132,11 +1183,25 @@ async function run(opts = {}) {
             skipCompleted: r.action === "continue-stage",
             // ADR-009 §Decision.2: repair builds run in PATCH MODE (renderPatchBlock).
             // After 10.2 diagnosis, repairPatchItems holds structured per-file items.
-            ...(repairPatchItems ? { patchItems: repairPatchItems } : {}),
+            ...(targetedFix ? { workstream: [targetedFix.workstream] } : {}),
+            ...(repairPatchItems
+              ? { patchItems: repairPatchItems }
+              : targetedFix ? { patchItems: targetedFix.patchItems } : {}),
           });
         } finally {
           // Dispatch settled — cancel the probe so it never fires a stale event.
           cancelStallProbe();
+        }
+        if (targetedFix) {
+          state.targetedFix = null;
+          saveRunState(cwd, changeId, state);
+          logEvent(cwd, changeId, {
+            ...base,
+            outcome: "targeted-fix-dispatch",
+            workstream: targetedFix.workstream,
+            patch_items: targetedFix.patchItems.length,
+            source_stage: targetedFix.source_stage,
+          });
         }
         const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
         const durationMs = Date.now() - t0;
