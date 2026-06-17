@@ -238,15 +238,12 @@ Month 2+.
 - **Risk of NOT changing:** low until external integration emerges.
 - **Confidence:** MEDIUM.
 
-### P3-3: Split per-stage rules for stages 1-3b, 4c, 4d, 6c, 6d, 9
+### P3-3: Document per-stage rules coverage — CLOSED
 
 - **Theme:** Documentation completeness.
 - **Source:** Findings C-2, D-5.
-- **Description:** Current per-stage `rules/stage-NN.md` files cover stages 4-8 only. The pre-build stages (1, 2, 3, 3b) and conditionals (4c, 4d, 6c, 6d) plus retrospective (9) live in role briefs and `rules/pipeline.md`. Either complete the split (~9 new files) or document the asymmetric coverage with a one-liner in `rules/pipeline-build.md` (the now-30-line index). The latter is cheaper and probably right — pre-build stages have less procedural depth.
-- **Effort:** S (one-line note) or M (full split).
-- **Risk of change:** low.
-- **Risk of NOT changing:** low (asymmetry is cosmetic).
-- **Confidence:** MEDIUM.
+- **Resolution:** `rules/pipeline-build.md` and `rules/pipeline.md` now document the intentional coverage shape: stages 1, 2, 4-8, and 9 have dedicated `stage-NN.md` files; stage 3 and stage 03b remain in `pipeline-core.md` plus role/skill guidance because they are lightweight routing/spec-authoring steps.
+- **Confidence:** HIGH.
 
 ### P3-4: Tidy 3 dead exports
 

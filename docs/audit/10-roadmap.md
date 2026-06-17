@@ -139,13 +139,13 @@ Three small structural items + one defer.
 
 **Effort:** XS (~15 min).
 
-### PR 3.3 — Per-stage rules-coverage decision
+### PR 3.3 — Per-stage rules-coverage decision — CLOSED
 
 | # | Item | Effort | Verification |
 |---|---|---|---|
-| 1 | **P3-3**: Either complete the per-stage rules split for stages 1-3b/4c/4d/6c/6d/9, OR document the asymmetric coverage in `rules/pipeline-build.md` index | S (one-liner) or M (full split) | Either ~9 new files OR an explicit one-line note in the index |
+| 1 | **P3-3**: Document the per-stage rule-file coverage shape in `rules/pipeline-build.md` and `rules/pipeline.md` | Done | Rules index now explains why stages 3 and 03b stay in `pipeline-core.md` plus role/skill guidance. |
 
-**Effort:** S (recommended path: document the asymmetry).
+**Status:** closed.
 **Risk:** low.
 
 ### PR 3.4 — `devteam log --json` event schema doc (deferred)
