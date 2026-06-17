@@ -28,7 +28,14 @@ Gate file: `pipeline/gates/stage-02.json`.
   "pm_approved": true,
   "adr_count": 2,
   "adrs_consulted": ["PADR-1", "PADR-2"],
-  "adrs_superseded": []
+  "adrs_superseded": [],
+  "file_ownership": {
+    "src/backend/**": "backend",
+    "src/frontend/**": "frontend",
+    "tests/**": "qa",
+    "Dockerfile": "platform",
+    "package.json": "platform"
+  }
 }
 ```
 
@@ -36,6 +43,11 @@ Gate file: `pipeline/gates/stage-02.json`.
 `adr_count` is the number of ADRs written or updated in this stage.
 `adrs_consulted` lists prior ADR IDs reviewed; `adrs_superseded` lists any
 that this design explicitly overrides.
+`file_ownership` mirrors `pipeline/design-spec.md` §File Ownership in
+machine-readable form: keys are repo-relative file paths or glob patterns, and
+values are Stage 4 workstreams (`backend`, `frontend`, `platform`, `qa`). This
+lets the driver route targeted auto-fix retries to the workstream that owns a
+blocker-named file.
 
 The example uses `PADR-N` (project ADR) IDs to distinguish project-level
 architectural decisions from the Stagecraft framework's own ADR namespace

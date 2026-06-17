@@ -40,6 +40,18 @@
         "additionalProperties": true
       },
       "description": "Optional (G8). Prior ADRs this design explicitly retires. Silent disagreement with prior ADRs is forbidden; this array is the audit trail."
+    },
+    "file_ownership": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["backend", "frontend", "platform", "qa"]
+      },
+      "description": "Optional machine-readable copy of design-spec.md §File Ownership. Keys are repo-relative file paths or glob patterns; values are the owning Stage 4 workstream. Used by driver auto-fix routing to target the workstream that owns a blocker-named file."
     }
   },
   "additionalProperties": true
