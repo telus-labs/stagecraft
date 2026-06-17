@@ -1,0 +1,1 @@
+- `devteam restart requirements [--cascade]` now also deletes `pipeline/brief.md` so a follow-on `devteam run --feature "..."` or `devteam stage requirements --feature "..."` starts completely fresh without manual cleanup.

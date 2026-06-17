@@ -106,11 +106,18 @@ function run(positional, _flags) {
     }
   }
 
+  // brief.md is written by the requirements stage (stage-01). Clear it
+  // whenever requirements is in the set being restarted so the next run
+  // produces a fresh brief for the new feature.
+  const pRoot = pipelineRoot(cwd, changeId);
+  const briefPath = path.join(pRoot, "brief.md");
+  const clearBrief = stageNamesToClear.includes("requirements") && fs.existsSync(briefPath);
+
   // Decide which injected sections to strip. Each known injection
   // is owned by a specific stage; we only strip when the stage being
   // restarted owns the section. context.md lives under pipelineRoot so
   // bounded runs strip from the right file (same invariant as driver.js).
-  const contextPath = path.join(pipelineRoot(cwd, changeId), "context.md");
+  const contextPath = path.join(pRoot, "context.md");
   const toStrip = [];
   if (!_flags.keepContext) {
     const stripCandidates = [
@@ -130,8 +137,9 @@ function run(positional, _flags) {
   if (_flags.dryRun) {
     console.log(`Would restart: ${stageName} (${stageDef.stage})${_flags.cascade ? " — with cascade" : ""}`);
     console.log("Would delete:");
-    if (toDelete.length === 0) console.log("  (no gate files for these stages)");
+    if (toDelete.length === 0 && !clearBrief) console.log("  (no gate files for these stages)");
     for (const f of toDelete) console.log(`  rm ${path.relative(cwd, f)}`);
+    if (clearBrief) console.log(`  rm ${path.relative(cwd, briefPath)}`);
     if (toStrip.length > 0) {
       console.log(`Would strip from pipeline/context.md:`);
       for (const s of toStrip) console.log(`  - ${s} section`);
@@ -145,10 +153,14 @@ function run(positional, _flags) {
     fs.unlinkSync(f);
     console.log(`Removed ${path.relative(cwd, f)}`);
   }
+  if (clearBrief) {
+    fs.unlinkSync(briefPath);
+    console.log(`Removed ${path.relative(cwd, briefPath)}`);
+  }
 
   // Reset the driver's retry budget for cleared stages so `devteam run`
   // doesn't immediately re-halt after a convergence-exhausted restart.
-  const rsPath = path.join(pipelineRoot(cwd, changeId), "run-state.json");
+  const rsPath = path.join(pRoot, "run-state.json");
   if (fs.existsSync(rsPath)) {
     try {
       const rs = JSON.parse(fs.readFileSync(rsPath, "utf8"));
@@ -167,7 +179,7 @@ function run(positional, _flags) {
     );
     if (stripped) console.log(`Stripped ${section} section from pipeline/context.md`);
   }
-  if (toDelete.length === 0 && toStrip.length === 0) {
+  if (toDelete.length === 0 && toStrip.length === 0 && !clearBrief) {
     console.log(`Nothing to clear: stage ${stageName} has no gates and no injected blockers.`);
   } else {
     console.log("");
