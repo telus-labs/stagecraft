@@ -280,6 +280,95 @@ describe("restart: archive cleanup", () => {
   });
 });
 
+describe("restart: stage artifact deletion", () => {
+  function artifactPath(cwd, rel) {
+    return path.join(cwd, "pipeline", rel);
+  }
+  function seedArtifact(cwd, rel, content = "# artifact\n") {
+    const full = artifactPath(cwd, rel);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content);
+  }
+
+  it("deletes spec.feature when restarting executable-spec", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-03b", { stage: "stage-03b", status: "PASS" });
+    seedArtifact(cwd, "spec.feature");
+
+    const r = run(["restart", "executable-spec"], { cwd });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(artifactPath(cwd, "spec.feature")), "spec.feature must be removed");
+  });
+
+  it("deletes spec.feature when cascading from requirements", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedGate(cwd, "stage-03b", { stage: "stage-03b", status: "PASS" });
+    seedArtifact(cwd, "brief.md");
+    seedArtifact(cwd, "spec.feature");
+
+    const r = run(["restart", "requirements", "--cascade"], { cwd });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(artifactPath(cwd, "brief.md")), "brief.md removed by cascade");
+    assert.ok(!fs.existsSync(artifactPath(cwd, "spec.feature")), "spec.feature removed by cascade");
+  });
+
+  it("does not delete spec.feature when restarting an unrelated earlier stage", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedArtifact(cwd, "spec.feature");
+
+    run(["restart", "requirements"], { cwd });
+
+    assert.ok(fs.existsSync(artifactPath(cwd, "spec.feature")), "spec.feature must survive restart of requirements");
+  });
+
+  it("deletes glob-matched artifacts (pr-*.md) when restarting build", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-04", { stage: "stage-04", status: "PASS" });
+    seedArtifact(cwd, "pr-backend.md");
+    seedArtifact(cwd, "pr-frontend.md");
+    seedArtifact(cwd, "build-plan.md");
+
+    const r = run(["restart", "build"], { cwd });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(artifactPath(cwd, "pr-backend.md")), "pr-backend.md removed");
+    assert.ok(!fs.existsSync(artifactPath(cwd, "pr-frontend.md")), "pr-frontend.md removed");
+    assert.ok(!fs.existsSync(artifactPath(cwd, "build-plan.md")), "build-plan.md removed");
+  });
+
+  it("deletes directory artifacts (code-review/) when restarting peer-review", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-05", { stage: "stage-05", status: "PASS" });
+    seedArtifact(cwd, "code-review/by-alice.md");
+    seedArtifact(cwd, "code-review/by-bob.md");
+
+    const r = run(["restart", "peer-review"], { cwd });
+    assert.equal(r.status, 0);
+    assert.ok(!fs.existsSync(artifactPath(cwd, "code-review/by-alice.md")), "by-alice.md removed");
+    assert.ok(!fs.existsSync(artifactPath(cwd, "code-review/by-bob.md")), "by-bob.md removed");
+  });
+
+  it("--dry-run lists artifact files without deleting them", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-03b", { stage: "stage-03b", status: "PASS" });
+    seedArtifact(cwd, "spec.feature");
+
+    const r = run(["restart", "executable-spec", "--dry-run"], { cwd });
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /spec\.feature/, "dry-run must list spec.feature");
+    assert.ok(fs.existsSync(artifactPath(cwd, "spec.feature")), "dry-run must NOT delete spec.feature");
+  });
+
+  it("succeeds cleanly when artifact files do not exist (idempotent)", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-03b", { stage: "stage-03b", status: "PASS" });
+
+    const r = run(["restart", "executable-spec"], { cwd });
+    assert.equal(r.status, 0);
+  });
+});
+
 describe("restart: brief.md clearing", () => {
   function briefPath(cwd) {
     return path.join(cwd, "pipeline", "brief.md");
