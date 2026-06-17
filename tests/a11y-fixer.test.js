@@ -312,10 +312,12 @@ function makeDevteamProject() {
 // Write a node script that writes a gate file to ./pipeline/gates/stage-06b.json
 // relative to CWD when invoked, then exits 0.
 function writeGateScript(dir, gate) {
-  const p = path.join(dir, "write-gate.js");
+  const scriptDir = path.join(dir, "script dir");
+  fs.mkdirSync(scriptDir, { recursive: true });
+  const p = path.join(scriptDir, "write gate.js");
   fs.writeFileSync(p, [
-    "const fs = require('fs');",
-    "const path = require('path');",
+    "const fs = require('node:fs');",
+    "const path = require('node:path');",
     "const gdir = path.join(process.cwd(), 'pipeline', 'gates');",
     "fs.mkdirSync(gdir, { recursive: true });",
     `fs.writeFileSync(path.join(gdir, 'stage-06b.json'), ${JSON.stringify(JSON.stringify(gate))});`,
@@ -344,9 +346,8 @@ describe("fixA11yBlockers — success path: dispatch exits 0 + audit re-run writ
   it("returns status PASS and exitCode 0 when the re-run gate shows no blockers", async () => {
     const cwd = makeDevteamProject();
     const scriptPath = writeGateScript(cwd, { status: "PASS", blockers: [] });
-    // Verify no spaces in scriptPath — the headless command is split on whitespace.
-    assert.ok(!scriptPath.includes(" "), `scriptPath must not contain spaces: ${scriptPath}`);
-    const cmd = `${process.execPath} ${scriptPath}`;
+    assert.ok(scriptPath.includes(" "), `scriptPath must contain spaces: ${scriptPath}`);
+    const cmd = `"${process.execPath}" "${scriptPath}"`;
 
     const blockers = [{ id: "A-1", description: "Remediation: Add aria-label." }];
     const { result } = await captureStderrAsync(() =>
@@ -363,8 +364,8 @@ describe("fixA11yBlockers — success path: dispatch exits 0 + audit re-run writ
     const cwd = makeDevteamProject();
     const remaining = [{ id: "A-2", description: "Still failing" }];
     const scriptPath = writeGateScript(cwd, { status: "FAIL", blockers: remaining });
-    assert.ok(!scriptPath.includes(" "), `scriptPath must not contain spaces: ${scriptPath}`);
-    const cmd = `${process.execPath} ${scriptPath}`;
+    assert.ok(scriptPath.includes(" "), `scriptPath must contain spaces: ${scriptPath}`);
+    const cmd = `"${process.execPath}" "${scriptPath}"`;
 
     const blockers = [{ id: "A-2", description: "Remediation: Add alt text." }];
     const { result } = await captureStderrAsync(() =>

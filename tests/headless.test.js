@@ -169,17 +169,29 @@ test("swallows stdin EPIPE when the child exits before reading the prompt", asyn
   }
 });
 
-test("splits the headlessCommand on whitespace and passes the tail as args", async () => {
-  // `node -e process.exit(42)` survives a naive split(/\s+/) because the JS
-  // script contains no whitespace. Verifies the split + arg-propagation
-  // contract that real host commands depend on (`claude --print`,
-  // `codex exec`, `gemini`).
+test("parses headlessCommand quotes and passes the tail as args", async () => {
   const ctx = makeCtx();
   try {
-    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "node -e process.exit(42)", () =>
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", `node -e "process.exit(42)"`, () =>
       runHeadless(makeAdapter(), makeDescriptor(), ctx),
     );
     assert.equal(r.exitCode, 42);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("supports quoted script paths that contain spaces", async () => {
+  const ctx = makeCtx();
+  const scriptDir = path.join(ctx.cwd, "script dir");
+  const scriptPath = path.join(scriptDir, "exit code.js");
+  fs.mkdirSync(scriptDir, { recursive: true });
+  fs.writeFileSync(scriptPath, "process.exit(7);\n");
+  try {
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", `"${process.execPath}" "${scriptPath}"`, () =>
+      runHeadless(makeAdapter(), makeDescriptor(), ctx),
+    );
+    assert.equal(r.exitCode, 7);
   } finally {
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }
