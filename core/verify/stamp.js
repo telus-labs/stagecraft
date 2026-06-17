@@ -416,8 +416,12 @@ async function stampStage03b(cwd, gatePath) {
   if (!orchAllMapped || orchDrift) {
     const orphCritStr = orchOrphanCriteria.join(", ") || "none";
     const orphScenCount = report.orphan_scenarios.length;
+    const dupCount = report.duplicate_criteria.length;
+    const dupStr = dupCount > 0
+      ? `, duplicate_criteria=${dupCount} (${report.duplicate_criteria.map((d) => d.id).join(", ")})`
+      : "";
     blockers.push(
-      `spec drift: orphan_criteria=[${orphCritStr}], orphan_scenarios=${orphScenCount}`
+      `spec drift: orphan_criteria=[${orphCritStr}], orphan_scenarios=${orphScenCount}${dupStr}`
     );
   }
 

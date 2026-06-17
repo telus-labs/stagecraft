@@ -64,7 +64,13 @@ const AC_LINE_RE = /^\s*(?:[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]?\s*(.+
 // other sections (e.g. Observability, SLO notes) from registering as
 // duplicate definitions. Falls back to whole-document scan when no
 // header is found (backwards-compatible with headerless briefs).
-const AC_SECTION_RE = /^\s*#{1,6}\s+(?:§\d+\s+)?acceptance\s+criteria\b/i;
+//
+// The optional prefix handles common numbering styles:
+//   ## Acceptance Criteria            (no prefix)
+//   ## §3 Acceptance Criteria         (§N prefix)
+//   ## 3. Acceptance Criteria         (N. prefix)
+//   ## 3 Acceptance Criteria          (N prefix)
+const AC_SECTION_RE = /^\s*#{1,6}\s+(?:\S+\s+)?acceptance\s+criteria\b/i;
 const ANY_HEADER_RE = /^\s*#{1,6}\s+/;
 
 function extractAcsFromBrief(text) {
