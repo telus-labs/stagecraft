@@ -614,6 +614,8 @@ devteam run --auto-rule formatting-only,doc-only          # auto-resolve bounded
 
 It never advances into `sign-off`/`deploy` without `--allow-stage`, and by default halts on every escalation (the Principal isn't dispatched unless you pass `--auto-rule`). It writes `pipeline/run.lock`, a resumable `run-state.json` (`--resume`), and an audit-trail `run-log.jsonl`. See [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md) for the full launch guide, halt reasons, and limitations.
 
+**Iteration budget.** Each call to `devteam next` — one examine-and-act cycle, regardless of what it does — counts as one iteration. The default cap is **100** (`--max-iterations N` to override). Hitting the cap halts with `halt_action: "max-iterations"`. For most pipelines this is invisible: a clean full-track run is roughly 20–25 iterations. Where it matters is the fix-and-retry loop: when a stage FAILs with a `code-defect`, the driver clears its gates, injects the blockers into `context.md`, and re-dispatches — each such cycle consumes approximately 3 iterations (dispatch → fix dispatch → merge). A stage that exhausts its entire per-stage retry budget (default 2 retries, configurable via `autonomy.max_retries` in `.devteam/config.yml`) before escalating costs ~6–9 iterations on its own. Lower `--max-iterations` in CI to bound spend; raise it (or increase `max_retries`) only when you want the driver to attempt more self-correction before escalating.
+
 ### Running in repair mode (`--repair`)
 
 For bug fixes — when existing behavior is wrong, not when new capability is needed — use
