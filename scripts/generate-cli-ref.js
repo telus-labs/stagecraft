@@ -45,6 +45,11 @@ const COMMANDS = [
     description: "Stage exactly the right pipeline artifacts for completed stages and generate a meaningful commit message. Tracks a cursor so repeated calls are idempotent.",
   },
   {
+    name:        "compact",
+    synopsis:    "devteam compact [options]",
+    description: "Remove all devteam-managed marker sections from pipeline/context.md. Sections are regenerated on the next run when still needed. Use to prune context.md after a long pipeline run or before switching to bounded isolation.",
+  },
+  {
     name:        "validate",
     synopsis:    "devteam validate [options]",
     description: "Validate the most recent gate in pipeline/gates/. Exit codes: 0 PASS/WARN, 1 malformed, 2 FAIL, 3 ESCALATE.",

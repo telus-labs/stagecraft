@@ -3,7 +3,7 @@
 
 # CLI Reference
 
-Full `devteam` command reference. 32 commands.
+Full `devteam` command reference. 33 commands.
 Derived from the per-command flag schemas in `core/cli/commands/`.
 Run `npm run docs:generate` to regenerate after adding or changing flags.
 
@@ -79,6 +79,16 @@ Stage exactly the right pipeline artifacts for completed stages and generate a m
 | --message | string | Override generated commit message                  |
 | --json    | bool   | Machine-readable output                            |
 | --cwd     | string | Target project directory                           |
+
+### `devteam compact [options]`
+
+Remove all devteam-managed marker sections from pipeline/context.md. Sections are regenerated on the next run when still needed. Use to prune context.md after a long pipeline run or before switching to bounded isolation.
+
+| Flag      | Type   | Description                                             |
+| --------- | ------ | ------------------------------------------------------- |
+| --dry-run | bool   | Show what would be removed without modifying context.md |
+| --json    | bool   | Machine-readable output                                 |
+| --cwd     | string | Target project directory                                |
 
 ### `devteam validate [options]`
 

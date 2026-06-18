@@ -31,6 +31,7 @@ const COMMAND_MODULES = Object.freeze({
   next: "next",
   run: "run",
   commit: "commit",
+  compact: "compact",
   validate: "validate",
   "verify-chain": "verify-chain",
   "stamp-chain": "stamp-chain",
