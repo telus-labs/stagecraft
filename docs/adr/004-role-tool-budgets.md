@@ -4,6 +4,12 @@
 **Date:** 2026-06-11
 **Authors:** Mumit Khan
 
+**Amended 2026-06-14:** The host-neutral `ROLE_TOOLS` table in `core/roles.js` is now
+the canonical declaration. Claude Code's `ROLE_FRONTMATTER` retains only host-specific
+subagent metadata and renders the canonical budget into `tools:` frontmatter. This
+amendment supersedes the original declaration-location decision below; enforcement,
+degradation, and audit-trail decisions are unchanged.
+
 ## Context
 
 Every role in a Stagecraft pipeline today has three control surfaces: a role brief (the
@@ -48,11 +54,12 @@ host-native tool pinning first ("ship the seam, not the server").
 
 ## Decision
 
-### 1. Declaration: role frontmatter via the existing ROLE_FRONTMATTER mechanism
+### 1. Declaration: host-neutral role table
 
-Tool budgets are declared in the `ROLE_FRONTMATTER` map in `hosts/claude-code/adapter.js`
-using the `tools:` field that already exists there. Each role's entry is the authoritative
-budget for that role when dispatched to claude-code. Existing entries, as written today:
+Tool budgets are declared in the `ROLE_TOOLS` table in `core/roles.js`. The orchestrator
+resolves the budget before host routing and carries it on the dispatch descriptor. Claude
+Code renders that list into the subagent's `tools:` YAML field; prompt-only adapters render
+the same host-neutral list as advisory instructions. Current entries:
 
 | Role | Declared tool budget |
 |---|---|
@@ -69,14 +76,9 @@ budget for that role when dispatched to claude-code. Existing entries, as writte
 | migrations | Read, Glob, Grep, Bash, Write |
 | verifier | Read, Glob, Grep, Bash, Write |
 
-No new declaration syntax is introduced. The `tools:` field is promoted from an
-undocumented implementation detail to a formal part of the host adapter contract.
-
-For cross-host use, the orchestrator extracts the tool list into a canonical `toolBudget`
-field on the dispatch descriptor (alongside `allowedWrites`), so non-claude-code adapters
-can read the declared budget and render it without coupling to claude-code internals.
-Claude-code remains the reference implementation; other adapters apply it as instructed
-under enforcement level "prompt-only" (see §2).
+The dispatch descriptor's `toolBudget` field is the canonical cross-host representation.
+This avoids coupling every adapter's budget behavior to Claude Code internals while
+preserving its native enforcement mechanism (see §2).
 
 ### 2. Cross-host degradation: follow the C1 enforcement-level pattern
 
@@ -133,7 +135,7 @@ The base gate schema gains one new optional field on workstream gates:
   "type": ["array", "null"],
   "items": { "type": "string" },
   "description": "Tool names declared available to this role at dispatch time, drawn
-    from ROLE_FRONTMATTER (claude-code) or equivalent. null means no budget was
+    from core/roles.js. null means no budget was
     declared (full host surface applies). Present on workstream gates; absent on
     merged stage gates."
 }
@@ -155,8 +157,8 @@ chain and is detectable by `devteam verify-chain`.
 - Closes the gap between role description and enforced behavior on claude-code. Today the
   reviewer's description says "READ-ONLY during a review invocation" (`adapter.js:51`);
   nothing prevents a Bash call. Under this ADR the `tools:` line enforces that boundary.
-- Zero new machinery for the reference host: ROLE_FRONTMATTER already carries `tools:`
-  for every role. The implementation formalizes a working pattern into a tested contract.
+- One host-neutral budget table drives every adapter while Claude Code retains its native
+  `tools:` enforcement mechanism.
 - The dispatch plan and audit trail gain a new column: what the workstream was *permitted*
   to do, not just what it wrote. Combined with C6 and C4, this is a materially more
   complete audit record.
@@ -170,7 +172,7 @@ chain and is detectable by `devteam verify-chain`.
   will not be stopped. Stagecraft's `allowed_writes` post-hoc audit (C1) can detect file
   violations after the fact, but it cannot detect tool-call violations beyond what the
   model self-reports in its output.
-- `ROLE_FRONTMATTER` is claude-code-specific. Translating a tool list ("Read, Glob") into
+- Tool names originate in Claude Code's vocabulary. Translating a list ("Read, Glob") into
   a meaningful instruction for codex or gemini-cli is host-specific and imprecise — those
   hosts do not expose the same named-tool API, so the prompt injection says "these are
   your tools" without any guarantee the model maps the names correctly.
@@ -181,12 +183,9 @@ chain and is detectable by `devteam verify-chain`.
 
 **What now needs to be true:**
 
-- Every `ROLE_FRONTMATTER` entry has an explicit `tools:` field (currently satisfied —
-  all twelve roles have one; no gaps to close today).
+- Every role that participates in dispatch has an entry in `core/roles.js`.
 - `capabilities.json` for all four hosts declares `enforces.tool_budget`.
-- The orchestrator populates `descriptor.toolBudget` from `ROLE_FRONTMATTER[role].tools`
-  (split on `, `) for claude-code dispatches; `null` for hosts where the budget is not
-  expressed in ROLE_FRONTMATTER.
+- The orchestrator populates `descriptor.toolBudget` from `core/roles.js` before routing.
 - The orchestrator stamps `dispatched_tool_budget` on every workstream gate.
 - `assertCapabilities` emits a plan-time warning (not a throw) when a budget-carrying
   descriptor is routed to a prompt-only host.
@@ -216,11 +215,10 @@ chain and is detectable by `devteam verify-chain`.
    enforcement level is surfaced in the dispatch plan; operator responsibility covers the
    enforcement gap.
 
-4. **Separate tool budget file (`roles/<role>.tools.yaml` or a root-level mapping).**
-   Rejected: ROLE_FRONTMATTER is already the authority on per-role metadata for
-   claude-code. A second file creates a sync hazard (budget and frontmatter diverge on the
-   next edit) and a second source of truth. The dispatch descriptor's `toolBudget` field
-   is the canonical cross-host representation; no additional file is needed.
+4. **Separate tool budget file (`roles/<role>.tools.yaml`).** Rejected because a file per
+   role would create synchronization overhead. A single host-neutral table in
+   `core/roles.js` was later adopted by the 2026-06-14 amendment after cross-host rendering
+   made Claude-specific authorship untenable.
 
 5. **Named profiles instead of explicit tool lists** (`read-only`, `full`, `shell-free`).
    Simpler operator interface, but less precise. The existing ROLE_FRONTMATTER uses
@@ -244,8 +242,8 @@ capability plumbing; (b) docs and contract tests.
 3. `hosts/gemini-cli/capabilities.json` — add `"tool_budget": "prompt-only"` to `enforces`.
 4. `hosts/generic/capabilities.json` — add `"tool_budget": "prompt-only"` to `enforces`.
 5. `core/gates/schemas/gate.schema.json` — add `dispatched_tool_budget` property (additive).
-6. `core/orchestrator.js` — populate `descriptor.toolBudget` from ROLE_FRONTMATTER for
-   claude-code; stamp `dispatched_tool_budget` on workstream gates; extend
+6. `core/orchestrator.js` — populate `descriptor.toolBudget` from `core/roles.js`; stamp
+   `dispatched_tool_budget` on workstream gates; extend
    `assertCapabilities` with warn-not-throw for `tool_budget` and document the distinction.
 7. `hosts/claude-code/adapter.js` — expose `toolBudget` on the descriptor in
    `buildDescriptor` / `frontmatterFor` (the `tools:` field is already rendered; this
@@ -255,7 +253,7 @@ capability plumbing; (b) docs and contract tests.
 9. `docs/FEATURES.md` — add "Role tool budgets" row.
 10. `docs/concepts.md` — add tool budget column to the role table.
 
-## Questions for reviewers
+## Original review questions
 
 1. **Warn vs block for prompt-only hosts.** This ADR recommends a warn (not block) when
    a budget-carrying role is routed to codex or gemini-cli. Is that the right default, or
@@ -270,10 +268,6 @@ capability plumbing; (b) docs and contract tests.
    map, or omit the budget from the prompt for hosts where the names don't correspond?
    This requires knowledge of each host's tool-naming convention that may not be stable.
 
-3. **Scope of ROLE_FRONTMATTER as the canonical source.** ROLE_FRONTMATTER lives in
-   `hosts/claude-code/adapter.js` — it is currently claude-code-specific. Making it the
-   canonical budget declaration (with other hosts reading via the dispatch descriptor) is
-   a convenient reuse but it means the budget contract for *all* hosts is authored in the
-   claude-code adapter. Is this acceptable, or should the budget live in a host-neutral
-   location (`core/roles.js`, a `roles/<name>.yaml` metadata file, or `.devteam/config.yml`
-   per-role routing entries)?
+3. **Scope of ROLE_FRONTMATTER as the canonical source.** Resolved by the 2026-06-14
+   amendment: budgets live in `core/roles.js`; `ROLE_FRONTMATTER` remains Claude-specific
+   rendering metadata.

@@ -212,7 +212,7 @@ Every PR that touches `core/`, `bin/`, `hosts/`, `rules/`, `roles/`, or `skills/
 ## Testing your change
 
 ```bash
-npm test                  # ~1 200 tests, ~5s — run after every change
+npm test                  # full offline suite — run after every change
 npm run consistency       # cross-artifact lint (stage names, gate filenames, track counts, …)
 ```
 

@@ -1,18 +1,10 @@
-// Bounded autonomous driver (ADR-003 / BACKLOG H2, Phase 1 PR-A).
+// Bounded autonomous driver (ADR-003, ADR-006, ADR-009).
 //
-// `devteam run` advances the pipeline unattended on the happy path and HALTS
-// cleanly at the first thing that needs a human — it does not auto-fix or
-// auto-rule yet (that is PR-B / Phase 2). The driver is deterministic CODE; the
-// only LLMs in the loop are the dispatched workstream agents inside
-// runStageHeadless.
-//
-// The loop is a thin switch over next()'s action + failure_class:
-//   run-stage / continue-stage → dispatch (in-process via runStageHeadless)
-//   merge                       → mergeWorkstreamGates
-//   fold-sign-off               → write stage-07.json, log the event, loop
-//   fix-and-retry               → HALT and surface failure_class (PR-B acts)
-//   resolve-escalation          → HALT for a human ruling/grant
-//   pipeline-complete           → done
+// `devteam run` advances the pipeline through dispatch, merge, targeted repair,
+// derived gate clearing, and granted rulings. Count, progress, consequence, cost,
+// and iteration ceilings keep autonomy bounded; judgment and external blockers
+// halt for a human. The driver is deterministic code. Models run only inside
+// dispatched host workstreams and principal rulings.
 //
 // next() never writes files; fold-sign-off is the mechanism by which the
 // driver persists the auto-fold gate and makes it visible in the audit log.
@@ -802,10 +794,8 @@ async function run(opts = {}) {
     return true; // halted
   }
 
-  // ADR-009 §Decision.1: patchItems for repair mode. Populated from the symptom
-  // until 10.2's diagnosis supplies an affected-files list + structured items.
-  // 10.2: made mutable — updated from the diagnosis gate's affected_files once
-  // stage-01 PASSes, so the build stage receives a structured list not just the symptom.
+  // Repair mode starts with the reported symptom, then replaces it with the
+  // diagnosis gate's affected_files after stage-01 passes.
   let repairPatchItems = opts.repair ? [opts.repair] : null;
 
   try {

@@ -35,9 +35,9 @@ async function getEmbedder(opts = {}) {
   switch (provider) {
     case "local":  _cached = await makeLocal(opts);  return _cached;
     case "stub":   _cached = makeStub(opts);          return _cached;
-    case "openai": throw new Error("openai embedding provider not yet implemented (planned for v0.3); set DEVTEAM_EMBEDDING_PROVIDER=local for now");
-    case "cohere": throw new Error("cohere embedding provider not yet implemented (planned for v0.3); set DEVTEAM_EMBEDDING_PROVIDER=local for now");
-    default:       throw new Error(`Unknown DEVTEAM_EMBEDDING_PROVIDER: ${provider}`);
+    case "openai": throw new Error("Unsupported embedding provider \"openai\"; supported providers: local, stub");
+    case "cohere": throw new Error("Unsupported embedding provider \"cohere\"; supported providers: local, stub");
+    default:       throw new Error(`Unknown DEVTEAM_EMBEDDING_PROVIDER: ${provider}; supported providers: local, stub`);
   }
 }
 
