@@ -161,7 +161,7 @@ function renderDefaultConfig(hosts, opts = {}) {
   const list = Array.isArray(hosts) ? hosts : [hosts];
   if (list.length === 0) throw new Error("renderDefaultConfig: at least one host required");
   const lines = [
-    "# ai-dev-team configuration",
+    "# stagecraft configuration",
     "#",
     "# routing.default_host  fallback host for any (stage, role) not matched below",
     "# routing.roles         per-role overrides; key = role name, value = host name",

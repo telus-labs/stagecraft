@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// devteam — CLI entrypoint for the ai-dev-team orchestrator.
+// devteam — CLI entrypoint for the stagecraft orchestrator.
 //
 // Subcommands (MVP):
 //   stage <name> [--feature "..."]    Render the stage prompt(s) for the

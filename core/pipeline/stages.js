@@ -1,4 +1,4 @@
-// Stage definitions for the ai-dev-team pipeline.
+// Stage definitions for the stagecraft pipeline.
 //
 // Each stage carries `roles: string[]` (1+). The orchestrator decomposes
 // multi-role stages into one workstream dispatch per role; single-role

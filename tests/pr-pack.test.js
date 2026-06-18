@@ -23,7 +23,7 @@ test("buildPRBody on empty pipeline produces a placeholder body", () => {
   const body = buildPRBody(cwd);
   assert.match(body, /Pipeline-produced PR/);
   assert.match(body, /no pipeline\/brief\.md found/);
-  assert.match(body, /Produced by ai-dev-team/);
+  assert.match(body, /Produced by stagecraft/);
 });
 
 test("buildPRBody pulls the title from the brief's H1", () => {

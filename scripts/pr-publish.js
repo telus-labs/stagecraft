@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pr-publish.js — publish ai-dev-team pipeline state to a GitHub PR.
+// pr-publish.js — publish stagecraft pipeline state to a GitHub PR.
 //
 // Two modes:
 //
@@ -250,7 +250,7 @@ function publish(args) {
 }
 
 function usage() {
-  console.log(`pr-publish — publish ai-dev-team pipeline state to a GitHub PR
+  console.log(`pr-publish — publish stagecraft pipeline state to a GitHub PR
 
 Usage:
   node scripts/pr-publish.js [--pr N] [--repo owner/repo] [--mode body|checks|all] [--dry-run]

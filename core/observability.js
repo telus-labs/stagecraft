@@ -21,7 +21,7 @@
 
 const otel = require("@opentelemetry/api");
 
-const TRACER_NAME = "ai-dev-team";
+const TRACER_NAME = "stagecraft";
 const TRACER_VERSION = (() => {
   try { return require("../package.json").version; } catch { return "0.0.0"; }
 })();

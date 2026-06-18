@@ -122,7 +122,7 @@ function buildPRBody(cwd) {
   // Trailer
   out.push("---");
   out.push("");
-  out.push(`Produced by ai-dev-team. Pipeline artifacts in \`pipeline/\`; gates in \`pipeline/gates/\`.`);
+  out.push(`Produced by stagecraft. Pipeline artifacts in \`pipeline/\`; gates in \`pipeline/gates/\`.`);
 
   return out.join("\n") + "\n";
 }
