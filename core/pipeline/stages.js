@@ -423,6 +423,9 @@ const STAGES = {
       pm_signoff: false,
       deploy_requested: false,
       runbook_referenced: false,
+      docs_surface_affected: false,
+      docs_updated: null,
+      docs_skipped_reason: "",
     },
   },
   deploy: {

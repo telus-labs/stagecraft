@@ -8,6 +8,7 @@ const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { run } = require(path.join(REPO_ROOT, "core", "driver"));
@@ -15,6 +16,12 @@ const { run } = require(path.join(REPO_ROOT, "core", "driver"));
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
 afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
+
+function initGit(cwd) {
+  spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+  spawnSync("git", ["config", "user.email", "test@example.com"], { cwd, encoding: "utf8" });
+  spawnSync("git", ["config", "user.name", "Test"], { cwd, encoding: "utf8" });
+}
 
 function seedAll(cwd, _untilSignOff = true) {
   // Seed every stage on the full track up to and including stage-06 as PASS,
@@ -76,6 +83,9 @@ describe("auto-fold: stage-07 auto-authored when stage-06 satisfies contract", (
     assert.equal(r.gate_content.pm_signoff, true);
     assert.equal(r.gate_content.deploy_requested, true);
     assert.equal(r.gate_content.status, "PASS");
+    assert.equal(r.gate_content.docs_surface_affected, false);
+    assert.equal(r.gate_content.docs_updated, null);
+    assert.match(r.gate_content.docs_skipped_reason, /git status unavailable|no changed files|internal-only/);
     assert.equal(r.gate_content.auto_fold.ac_count, 2);
     assert.deepEqual(r.gate_content.auto_fold.criteria, ["AC-1", "AC-2"]);
     assert.equal(r.acCount, 2);
@@ -108,6 +118,37 @@ describe("auto-fold: stage-07 auto-authored when stage-06 satisfies contract", (
     const stage07 = JSON.parse(fs.readFileSync(r.gate_path, "utf8"));
     assert.equal(stage07.runbook_referenced, false);
     assert.ok(stage07.warnings.some((w) => /runbook/i.test(w)));
+  });
+
+  it("does NOT fold when a user-visible source file changed without docs evidence", () => {
+    const cwd = track(makeTargetProject());
+    seedAll(cwd);
+    initGit(cwd);
+    fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "api.js"), "export const version = 2;\n");
+
+    const r = next({ cwd });
+    assert.equal(r.action, "run-stage");
+    assert.equal(r.name, "sign-off", "PM must resolve the documentation gate");
+    assert.ok(!fs.existsSync(path.join(cwd, "pipeline", "gates", "stage-07.json")));
+  });
+
+  it("folds when a user-visible source file changed and docs evidence is present", () => {
+    const cwd = track(makeTargetProject());
+    seedAll(cwd);
+    initGit(cwd);
+    fs.mkdirSync(path.join(cwd, "src"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "api.js"), "export const version = 2;\n");
+    fs.mkdirSync(path.join(cwd, "changelog.d"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "changelog.d", "api.md"), "## Unreleased\n\n- Documented the API-visible change.\n");
+
+    const r = next({ cwd });
+    assert.equal(r.action, "fold-sign-off");
+    assert.equal(r.gate_content.docs_surface_affected, true);
+    assert.equal(r.gate_content.docs_updated, true);
+    assert.equal(r.gate_content.docs_skipped_reason, null);
+    assert.deepEqual(r.gate_content.docs_gate.surface_files, ["src/api.js"]);
+    assert.deepEqual(r.gate_content.docs_gate.doc_files, ["changelog.d/api.md"]);
   });
 });
 
@@ -197,7 +238,8 @@ describe("auto-fold: refuses when contract not satisfied", () => {
 
 describe("auto-fold: fold-sign-off payload validates as stage-07 gate", () => {
   it("gate_content carries all stage-07 schema required fields", () => {
-    // stage-07.schema.json requires: pm_signoff, deploy_requested, runbook_referenced
+    // stage-07.schema.json requires: pm_signoff, deploy_requested, runbook_referenced,
+    // docs_surface_affected, docs_updated, and docs_skipped_reason
     // (plus base fields: stage, status, orchestrator, track, timestamp, blockers, warnings)
     const cwd = track(makeTargetProject());
     seedAll(cwd);
@@ -217,6 +259,9 @@ describe("auto-fold: fold-sign-off payload validates as stage-07 gate", () => {
     assert.equal(typeof g.pm_signoff, "boolean");
     assert.equal(typeof g.deploy_requested, "boolean");
     assert.equal(typeof g.runbook_referenced, "boolean");
+    assert.equal(typeof g.docs_surface_affected, "boolean");
+    assert.ok(g.docs_updated === null || typeof g.docs_updated === "boolean");
+    assert.equal(typeof g.docs_skipped_reason, "string");
   });
 });
 
@@ -232,6 +277,8 @@ describe("auto-fold: driver writes gate and run-log event, run proceeds", () => 
       timestamp: new Date().toISOString(),
       blockers: [], warnings: [],
       pm_signoff: true, deploy_requested: true, runbook_referenced: false,
+      docs_surface_affected: false, docs_updated: null,
+      docs_skipped_reason: "test fixture has no user-visible surface",
       auto_from_stage_06: true,
       auto_fold: { ac_count: 2, criteria: ["AC-1", "AC-2"], stamped_at: new Date().toISOString(), stamper: "devteam@test" },
     };
@@ -283,6 +330,8 @@ describe("auto-fold: cmdNext e2e reaches pipeline-complete on a nano run", () =>
     seedGate(cwd, "stage-07", {
       stage: "stage-07", status: "PASS",
       pm_signoff: true, deploy_requested: true, runbook_referenced: false,
+      docs_surface_affected: false, docs_updated: null,
+      docs_skipped_reason: "test fixture has no user-visible surface",
       auto_from_stage_06: true,
     });
     seedGate(cwd, "stage-08", { stage: "stage-08", status: "PASS" });

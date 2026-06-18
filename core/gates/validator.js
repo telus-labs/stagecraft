@@ -394,6 +394,32 @@ function deployCostGateError(gate) {
   return null;
 }
 
+function documentationGateError(gate) {
+  if (gate.stage !== "stage-07") return null;
+  if (gate.status !== "PASS" && gate.status !== "WARN") return null;
+
+  if (typeof gate.docs_surface_affected !== "boolean") {
+    return "stage-07 PASS/WARN requires boolean docs_surface_affected";
+  }
+
+  if (gate.docs_surface_affected) {
+    if (gate.docs_updated !== true) {
+      return "stage-07 docs_surface_affected=true requires docs_updated: true or status FAIL";
+    }
+    return null;
+  }
+
+  if (gate.docs_updated !== null) {
+    return "stage-07 docs_surface_affected=false requires docs_updated: null";
+  }
+
+  if (typeof gate.docs_skipped_reason !== "string" || gate.docs_skipped_reason.trim() === "") {
+    return "stage-07 docs_surface_affected=false requires non-empty docs_skipped_reason";
+  }
+
+  return null;
+}
+
 /**
  * Scan all gate files for unresolved escalations.
  *
@@ -616,6 +642,15 @@ function main() {
     console.error(`[gate-validator] INVALID GATE ${latest.name}: ${deployCostErr}`);
     console.error(
       `[gate-validator] See .devteam/rules/stage-08.md §Cost Gate`,
+    );
+    process.exit(1);
+  }
+
+  const documentationErr = documentationGateError(gate);
+  if (documentationErr) {
+    console.error(`[gate-validator] INVALID GATE ${latest.name}: ${documentationErr}`);
+    console.error(
+      `[gate-validator] See .devteam/rules/stage-07.md §Documentation gate`,
     );
     process.exit(1);
   }
