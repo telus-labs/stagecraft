@@ -20,7 +20,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { runHeadless, rotateLog } = require("../core/adapters/headless");
+const { runHeadless, rotateLog, createTranscriptWriter } = require("../core/adapters/headless");
 
 function makeAdapter({ headlessCommand = "true", name = "test-host" } = {}) {
   return {
@@ -290,6 +290,59 @@ test("writes pipeline/logs/<workstreamId>.log by default (tee behavior)", async 
     // Trailer
     assert.match(content, /# Ended:/);
     assert.match(content, /# Exit: 0/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("streams transcript bytes before the child exits", async () => {
+  const ctx = makeCtx();
+  const scriptPath = path.join(ctx.cwd, "delayed-output.js");
+  fs.writeFileSync(
+    scriptPath,
+    'process.stdout.write("stream-visible-before-close\\n"); setTimeout(() => process.exit(0), 1000);\n',
+  );
+  try {
+    const pending = withEnv(
+      "DEVTEAM_HEADLESS_COMMAND",
+      `"${process.execPath}" "${scriptPath}"`,
+      () => runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+    );
+    const logPath = path.join(ctx.cwd, "pipeline", "logs", "stage-01.log");
+    const deadline = Date.now() + 750;
+    while (
+      Date.now() < deadline &&
+      (!fs.existsSync(logPath) || !fs.readFileSync(logPath, "utf8").includes("stream-visible-before-close"))
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.ok(fs.existsSync(logPath), "log file should exist while the child is running");
+    assert.match(
+      fs.readFileSync(logPath, "utf8"),
+      /stream-visible-before-close/,
+      "child output should be durable before process close",
+    );
+    const result = await pending;
+    assert.equal(result.exitCode, 0);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("streams high-volume transcripts without retaining or truncating chunks", () => {
+  const ctx = makeCtx();
+  const payloadBytes = 2 * 1024 * 1024;
+  try {
+    const logsPath = path.join(ctx.cwd, "pipeline", "logs");
+    fs.mkdirSync(logsPath, { recursive: true });
+    const logPath = path.join(logsPath, "stage-01.log");
+    const writer = createTranscriptWriter(logPath, "# header\n");
+    const chunk = Buffer.alloc(64 * 1024, "x");
+    for (let written = 0; written < payloadBytes; written += chunk.length) writer.append(chunk);
+    writer.end("\n# Exit: 0\n");
+    const content = fs.readFileSync(logPath);
+    assert.ok(content.length > payloadBytes, "header, full payload, and trailer should be present");
+    assert.ok(content.includes(Buffer.from("# Exit: 0")), "trailer should be flushed before resolution");
   } finally {
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }
