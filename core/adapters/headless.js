@@ -26,7 +26,7 @@
 //
 // Timeout: ctx.timeoutMs caps the child's wall-clock. Default 10 min
 // (600_000 ms). Pass 0 (or any non-positive number) for no timeout.
-// On timeout, the child is SIGTERM'd and the returned exitCode is
+// On timeout, the child is terminated and the returned exitCode is
 // null with timedOut: true.
 
 const fs = require("node:fs");
@@ -35,6 +35,7 @@ const { spawn } = require("node:child_process");
 const { gatesDir, logsDir } = require("../paths");
 const { snapshotWritables, auditWrites } = require("../guards/write-audit");
 const { splitCommand } = require("../command-line");
+const { terminateChild } = require("../process-kill");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -159,10 +160,7 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
     if (timeoutMs > 0) {
       timer = setTimeout(() => {
         timedOut = true;
-        // SIGTERM first; the host CLI gets a chance to flush.
-        try { child.kill("SIGTERM"); } catch { /* already dead */ }
-        // SIGKILL after a 5s grace window in case the child ignores SIGTERM.
-        setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* */ } }, 5000).unref();
+        terminateChild(child, { graceMs: 5000 });
       }, timeoutMs);
       timer.unref();
     }

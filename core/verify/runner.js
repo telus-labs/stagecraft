@@ -19,6 +19,7 @@
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
+const { terminateChild } = require("../process-kill");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 min; lint and tests should fit easily
 
@@ -49,9 +50,7 @@ function runCommand(command, opts = {}) {
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      // Hard-kill after 2s grace
-      setTimeout(() => child.kill("SIGKILL"), 2000).unref();
+      terminateChild(child, { graceMs: 2000 });
     }, timeoutMs);
     timer.unref();
 
