@@ -108,6 +108,56 @@ describe("findOnPath", () => {
     const found = findOnPath("multi-dir-bin", `${dir1}${path.delimiter}${dir2}`);
     assert.equal(found, bin);
   });
+
+  it("uses PATHEXT candidates on Windows", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir);
+    const bin = path.join(dir, "claude.EXE");
+    fs.writeFileSync(bin, "");
+    const found = findOnPath("claude", dir, {
+      platform: "win32",
+      pathExt: ".COM;.EXE;.BAT;.CMD",
+    });
+    assert.equal(found, bin);
+  });
+
+  it("splits Windows PATH entries with semicolons", () => {
+    const dir1 = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir1, dir2);
+    const bin = path.join(dir2, "codex.CMD");
+    fs.writeFileSync(bin, "");
+    const found = findOnPath("codex", `${dir1};${dir2}`, {
+      platform: "win32",
+      pathExt: ".CMD",
+    });
+    assert.equal(found, bin);
+  });
+
+  it("checks explicit Windows extensions without requiring PATHEXT", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir);
+    const bin = path.join(dir, "tool.cmd");
+    fs.writeFileSync(bin, "");
+    const found = findOnPath("tool.cmd", dir, {
+      platform: "win32",
+      pathExt: ".EXE",
+    });
+    assert.equal(found, bin);
+  });
+
+  it("does not append Windows extensions on POSIX", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-"));
+    _dirs.push(dir);
+    const bin = path.join(dir, "node.EXE");
+    fs.writeFileSync(bin, "");
+    fs.chmodSync(bin, 0o755);
+    const found = findOnPath("node", dir, {
+      platform: "linux",
+      pathExt: ".EXE",
+    });
+    assert.equal(found, null);
+  });
 });
 
 // ---------------------------------------------------------------------------
