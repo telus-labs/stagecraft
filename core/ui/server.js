@@ -30,14 +30,19 @@ const MIME = {
   ".svg":  "image/svg+xml",
   ".ico":  "image/x-icon",
 };
+const SECURITY_HEADERS = {
+  "content-security-policy": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  "referrer-policy": "no-referrer",
+  "x-content-type-options": "nosniff",
+};
 
 function sendJSON(res, status, body) {
-  res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
+  res.writeHead(status, { ...SECURITY_HEADERS, "content-type": "application/json", "cache-control": "no-store" });
   res.end(JSON.stringify(body, null, 2));
 }
 
 function sendText(res, status, body, mime = "text/plain; charset=utf-8") {
-  res.writeHead(status, { "content-type": mime, "cache-control": "no-store" });
+  res.writeHead(status, { ...SECURITY_HEADERS, "content-type": mime, "cache-control": "no-store" });
   res.end(body);
 }
 
@@ -51,7 +56,7 @@ function serveStatic(req, res) {
     return;
   }
   const mime = MIME[path.extname(full)] || "application/octet-stream";
-  res.writeHead(200, { "content-type": mime, "cache-control": "no-store" });
+  res.writeHead(200, { ...SECURITY_HEADERS, "content-type": mime, "cache-control": "no-store" });
   fs.createReadStream(full).pipe(res);
 }
 
@@ -220,10 +225,22 @@ function startServer(opts = {}) {
   const stopWatch = watchGates(cwd, broker);
   // Initial heartbeat so any newly-connected client sees state without
   // waiting for the first gate change.
-  setInterval(() => broker.broadcast("heartbeat", { ts: Date.now() }), 15000).unref();
+  const setIntervalFn = opts.setIntervalFn || setInterval;
+  const clearIntervalFn = opts.clearIntervalFn || clearInterval;
+  const heartbeatTimer = setIntervalFn(
+    () => broker.broadcast("heartbeat", { ts: Date.now() }),
+    15000,
+  );
+  if (heartbeatTimer && typeof heartbeatTimer.unref === "function") heartbeatTimer.unref();
+  const stopHeartbeat = () => clearIntervalFn(heartbeatTimer);
 
   return new Promise((resolve, reject) => {
-    server.on("error", reject);
+    server.on("error", (err) => {
+      stopWatch();
+      stopHeartbeat();
+      broker.closeAll();
+      reject(err);
+    });
     server.listen(port, host, () => {
       const actual = server.address();
       const url = `http://${actual.address}:${actual.port}/`;
@@ -233,6 +250,7 @@ function startServer(opts = {}) {
         server,
         close() {
           stopWatch();
+          stopHeartbeat();
           broker.closeAll();
           return new Promise((r) => server.close(r));
         },

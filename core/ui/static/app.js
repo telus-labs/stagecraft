@@ -102,7 +102,16 @@ const el = (tag, cls, text) => {
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 function escHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function classToken(s) {
+  return String(s).replace(/[^a-z0-9_-]/gi, "");
 }
 
 function timeAgo(iso) {
@@ -140,15 +149,15 @@ function stageFriendlyName(stageId) {
 }
 
 function statusClass(state) {
-  return state ? "status-" + state : "";
+  return state ? "status-" + classToken(state) : "";
 }
 
 function badge(text, cls) {
-  return `<span class="badge badge-${cls}">${text}</span>`;
+  return `<span class="badge badge-${classToken(cls)}">${escHtml(text)}</span>`;
 }
 
 function chip(text, cls) {
-  return `<span class="chip ${cls}">${text}</span>`;
+  return `<span class="chip ${classToken(cls)}">${escHtml(text)}</span>`;
 }
 
 function boolChip(val, trueLabel = "Yes", falseLabel = "No") {
@@ -158,8 +167,8 @@ function boolChip(val, trueLabel = "Yes", falseLabel = "No") {
 
 function checkRow(label, pass, note = "") {
   const icon = pass ? '<span class="check-icon check-pass">✓</span>' : '<span class="check-icon check-fail">✗</span>';
-  const noteHtml = note ? ` <span style="color:var(--muted);font-size:0.8rem">${note}</span>` : "";
-  return `<div class="checklist-row">${icon}<span>${label}${noteHtml}</span></div>`;
+  const noteHtml = note ? ` <span style="color:var(--muted);font-size:0.8rem">${escHtml(note)}</span>` : "";
+  return `<div class="checklist-row">${icon}<span>${escHtml(label)}${noteHtml}</span></div>`;
 }
 
 function severityBadgeHtml(sev) {
@@ -175,11 +184,20 @@ function addSection(parent, title) {
   return h;
 }
 
-function addFieldRow(parent, label, valueHtml) {
+function addFieldRow(parent, label, value) {
   const row = el("div", "field-row");
   const k = el("span", "k", label);
   const v = el("span");
-  v.innerHTML = valueHtml;
+  v.textContent = String(value);
+  row.append(k, v);
+  parent.appendChild(row);
+}
+
+function addFieldHtmlRow(parent, label, valueHtml) {
+  const row = el("div", "field-row");
+  const k = el("span", "k", label);
+  const v = el("span");
+  v.innerHTML = String(valueHtml);
   row.append(k, v);
   parent.appendChild(row);
 }
@@ -453,7 +471,7 @@ function renderGate(parent, gate) {
 
 function renderBaseFields(parent, gate) {
   const statusHtml = gate.status ? badge(gate.status, gate.status.toLowerCase()) : "—";
-  addFieldRow(parent, "Status", statusHtml);
+  addFieldHtmlRow(parent, "Status", statusHtml);
 
   if (gate.track) addFieldRow(parent, "Track", gate.track);
   if (gate.workstream) addFieldRow(parent, "Workstream", gate.workstream);
@@ -463,7 +481,7 @@ function renderBaseFields(parent, gate) {
     const ago = timeAgo(gate.timestamp);
     const cls = isStale(gate.timestamp) ? " ts-stale" : "";
     const dur = gate.duration_ms ? ` <span style="color:var(--muted);font-size:0.8rem">(took ${fmtDuration(gate.duration_ms)})</span>` : "";
-    addFieldRow(parent, "Updated", `<span class="${cls}">${ago}</span>${dur}`);
+    addFieldHtmlRow(parent, "Updated", `<span class="${classToken(cls)}">${escHtml(ago)}</span>${dur}`);
   }
 }
 
@@ -490,7 +508,7 @@ function renderRequirements(parent, gate) {
   const wrap = el("div");
   if (gate.acceptance_criteria_count !== undefined) {
     const row = el("div");
-    row.innerHTML = `<span class="criteria-count">${gate.acceptance_criteria_count}</span> <span style="color:var(--muted)">acceptance criteria</span>`;
+    row.innerHTML = `<span class="criteria-count">${escHtml(gate.acceptance_criteria_count)}</span> <span style="color:var(--muted)">acceptance criteria</span>`;
     wrap.appendChild(row);
   }
   if (gate.required_sections_complete !== undefined) {
@@ -526,12 +544,12 @@ function renderDesign(parent, gate) {
 function renderClarification(parent, gate) {
   addSection(parent, "Clarification");
   if (gate.open_questions_count !== undefined) {
-    addFieldRow(parent, "Open questions", gate.open_questions_count === 0
+    addFieldHtmlRow(parent, "Open questions", gate.open_questions_count === 0
       ? badge("0 open", "pass")
       : badge(`${gate.open_questions_count} open`, "fail"));
   }
   if (gate.answered_questions_count !== undefined) addFieldRow(parent, "Answered", String(gate.answered_questions_count));
-  if (gate.scope_changed !== undefined) addFieldRow(parent, "Scope changed", boolChip(gate.scope_changed, "Yes — brief updated", "No"));
+  if (gate.scope_changed !== undefined) addFieldHtmlRow(parent, "Scope changed", boolChip(gate.scope_changed, "Yes — brief updated", "No"));
 }
 
 function renderSpec(parent, gate) {
@@ -539,10 +557,10 @@ function renderSpec(parent, gate) {
   if (gate.criteria_count !== undefined) addFieldRow(parent, "Criteria (AC-N)", String(gate.criteria_count));
   if (gate.scenarios_count !== undefined) addFieldRow(parent, "Scenarios", String(gate.scenarios_count));
   if (gate.all_criteria_mapped !== undefined) {
-    addFieldRow(parent, "All AC mapped", boolChip(gate.all_criteria_mapped, "Yes", "No — see orphans"));
+    addFieldHtmlRow(parent, "All AC mapped", boolChip(gate.all_criteria_mapped, "Yes", "No — see orphans"));
   }
   if (gate.drift !== undefined) {
-    addFieldRow(parent, "Drift detected", boolChip(!gate.drift, "No drift", "Yes — orphans exist"));
+    addFieldHtmlRow(parent, "Drift detected", boolChip(!gate.drift, "No drift", "Yes — orphans exist"));
   }
 }
 
@@ -574,18 +592,18 @@ function renderPreReview(parent, gate) {
 
   if (gate.sca_findings) {
     const { high = 0, critical = 0 } = gate.sca_findings;
-    addFieldRow(parent, "SCA findings",
+    addFieldHtmlRow(parent, "SCA findings",
       `${badge(critical, "critical")} critical &nbsp; ${badge(high, "high")} high`);
   }
 
   if (gate.security_review_required !== undefined) {
-    addFieldRow(parent, "Security review",
+    addFieldHtmlRow(parent, "Security review",
       gate.security_review_required
         ? '<span class="badge badge-warn">Required</span>'
         : '<span class="badge badge-pass">Not required</span>');
   }
   if (gate.migration_safety_required !== undefined) {
-    addFieldRow(parent, "Migration review",
+    addFieldHtmlRow(parent, "Migration review",
       gate.migration_safety_required
         ? '<span class="badge badge-warn">Required</span>'
         : '<span class="badge badge-pass">Not required</span>');
@@ -599,7 +617,7 @@ function renderSecurity(parent, gate) {
   }
   addSection(parent, "Security Review");
   if (gate.security_approved !== undefined) {
-    addFieldRow(parent, "Approved", boolChip(gate.security_approved, "Yes", "No"));
+    addFieldHtmlRow(parent, "Approved", boolChip(gate.security_approved, "Yes", "No"));
   }
   if (Array.isArray(gate.triggering_conditions) && gate.triggering_conditions.length > 0) {
     addSection(parent, "Triggering Conditions");
@@ -618,12 +636,12 @@ function renderRedTeam(parent, gate) {
     [["critical", critical, "sev-critical"], ["high", high, "sev-high"],
      ["medium", medium, "sev-medium"], ["low", low, "sev-low"]].forEach(([label, count, cls]) => {
       const cell = el("div", `severity-count ${cls}`);
-      cell.innerHTML = `<span class="count">${count}</span><span class="label">${label}</span>`;
+      cell.innerHTML = `<span class="count">${escHtml(count)}</span><span class="label">${escHtml(label)}</span>`;
       row.appendChild(cell);
     });
     if (gate.findings_count !== undefined) {
       const total = el("div", "severity-count");
-      total.innerHTML = `<span class="count" style="color:var(--muted)">${gate.findings_count}</span><span class="label">total</span>`;
+      total.innerHTML = `<span class="count" style="color:var(--muted)">${escHtml(gate.findings_count)}</span><span class="label">total</span>`;
       row.appendChild(total);
     }
     parent.appendChild(row);
@@ -667,11 +685,11 @@ function renderRedTeam(parent, gate) {
     mustFix.forEach(f => {
       const tr = el("tr");
       tr.innerHTML = `
-        <td class="col-id">${f.id || "—"}</td>
+        <td class="col-id">${escHtml(f.id || "—")}</td>
         <td>${severityBadgeHtml(f.severity)}</td>
-        <td>${f.likelihood ? chip(f.likelihood, `chip-${f.likelihood}`) : "—"}</td>
-        <td class="col-surface">${f.surface || "—"}</td>
-        <td>${f.summary || ""}</td>
+        <td>${f.likelihood ? chip(f.likelihood, `chip-${classToken(f.likelihood)}`) : "—"}</td>
+        <td class="col-surface">${escHtml(f.surface || "—")}</td>
+        <td>${escHtml(f.summary || "")}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -692,10 +710,10 @@ function renderRedTeam(parent, gate) {
     noted.forEach(f => {
       const tr = el("tr");
       tr.innerHTML = `
-        <td class="col-id">${f.id || "—"}</td>
+        <td class="col-id">${escHtml(f.id || "—")}</td>
         <td>${severityBadgeHtml(f.severity)}</td>
-        <td class="col-surface">${f.surface || "—"}</td>
-        <td>${f.summary || f.text || ""}</td>
+        <td class="col-surface">${escHtml(f.surface || "—")}</td>
+        <td>${escHtml(f.summary || f.text || "")}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -740,7 +758,7 @@ function renderPeerReview(parent, gate) {
   const required = gate.required_approvals || 1;
 
   const summary = el("div", "field-row");
-  summary.innerHTML = `<span class="k">Approvals</span><span>${approvals.length} / ${required} required</span>`;
+  summary.innerHTML = `<span class="k">Approvals</span><span>${approvals.length} / ${escHtml(required)} required</span>`;
   parent.appendChild(summary);
 
   if (approvals.length > 0) {
@@ -774,8 +792,8 @@ function renderQA(parent, gate) {
     const wrap = el("div", "test-bar-wrap");
     wrap.innerHTML = `
       <div class="test-bar-label">
-        <strong>${passed}</strong> / ${total} passing
-        ${failed ? `<span class="status-fail">(${failed} failing)</span>` : '<span class="status-pass">✓ all passing</span>'}
+        <strong>${escHtml(passed)}</strong> / ${escHtml(total)} passing
+        ${failed ? `<span class="status-fail">(${escHtml(failed)} failing)</span>` : '<span class="status-pass">✓ all passing</span>'}
       </div>
       <div class="test-bar">
         <div class="test-bar-fill ${allPass ? "all-pass" : "some-fail"}" style="width:${pct}%"></div>
@@ -804,8 +822,10 @@ function renderQA(parent, gate) {
       const li = el("li");
       li.style.cssText = "font-size:0.82rem;padding:0.2rem 0;font-family:var(--mono);color:var(--fail);";
       const text = typeof f === "string" ? f : (f.file || f.test || JSON.stringify(f));
-      const assigned = typeof f === "object" && f.assigned_to ? ` <span style="color:var(--muted)">(${f.assigned_to})</span>` : "";
-      li.innerHTML = text + assigned;
+      li.textContent = text;
+      if (typeof f === "object" && f.assigned_to) {
+        li.appendChild(el("span", null, ` (${f.assigned_to})`));
+      }
       ul.appendChild(li);
     });
     parent.appendChild(ul);
@@ -814,7 +834,7 @@ function renderQA(parent, gate) {
 
 function renderAccessibility(parent, gate) {
   addSection(parent, "WCAG Audit");
-  if (gate.wcag_level) addFieldRow(parent, "WCAG level", badge(gate.wcag_level, "info"));
+  if (gate.wcag_level) addFieldHtmlRow(parent, "WCAG level", badge(gate.wcag_level, "info"));
   if (gate.audit_method) addFieldRow(parent, "Method", gate.audit_method);
   if (gate.audit_skipped_reason) {
     parent.appendChild(el("div", "alert-banner alert-warn", `Skipped: ${gate.audit_skipped_reason}`));
@@ -827,7 +847,7 @@ function renderAccessibility(parent, gate) {
     [["critical", critical, "sev-critical"], ["serious", serious, "sev-high"],
      ["moderate", moderate, "sev-medium"], ["minor", minor, "sev-low"]].forEach(([label, count, cls]) => {
       const cell = el("div", `severity-count ${cls}`);
-      cell.innerHTML = `<span class="count">${count}</span><span class="label">${label}</span>`;
+      cell.innerHTML = `<span class="count">${escHtml(count)}</span><span class="label">${escHtml(label)}</span>`;
       row.appendChild(cell);
     });
     parent.appendChild(row);
@@ -851,7 +871,8 @@ function renderObservability(parent, gate) {
     wrap.innerHTML = `<div class="obs-counts">${verified.length} / ${required.length} verified${gap.length ? ` · <span class="status-fail">${gap.length} gap(s)</span>` : " ✓"}</div>`;
     gap.forEach(g => {
       const item = el("div", "obs-gap-item");
-      item.innerHTML = `✗ ${g.signal || g} ${g.assigned_to ? `<span class="assigned">→ ${g.assigned_to}</span>` : ""}`;
+      item.appendChild(document.createTextNode(`✗ ${g.signal || g} `));
+      if (g.assigned_to) item.appendChild(el("span", "assigned", `→ ${g.assigned_to}`));
       wrap.appendChild(item);
     });
     parent.appendChild(wrap);
@@ -874,7 +895,7 @@ function renderVerification(parent, gate) {
     addSection(parent, "Methods Skipped");
     gate.methods_skipped.forEach(s => {
       const item = el("div", "checklist-row");
-      item.innerHTML = `<span class="check-icon check-fail">–</span><span><strong>${s.method}</strong>: ${s.reason}</span>`;
+      item.innerHTML = `<span class="check-icon check-fail">–</span><span><strong>${escHtml(s.method)}</strong>: ${escHtml(s.reason)}</span>`;
       parent.appendChild(item);
     });
   }
@@ -892,7 +913,7 @@ function renderVerification(parent, gate) {
     addSection(parent, `Blocking Findings (${gate.blocking_findings.length})`);
     gate.blocking_findings.forEach(f => {
       const card = el("div", "blocker-card");
-      card.innerHTML = `<span>${badge(f.method, "fail")}</span><span>${f.summary}${f.file ? ` <span style="font-family:var(--mono);font-size:0.78rem;color:var(--muted)">${f.file}${f.line ? `:${f.line}` : ""}</span>` : ""}</span>`;
+      card.innerHTML = `<span>${badge(f.method, "fail")}</span><span>${escHtml(f.summary)}${f.file ? ` <span style="font-family:var(--mono);font-size:0.78rem;color:var(--muted)">${escHtml(f.file)}${f.line ? `:${escHtml(f.line)}` : ""}</span>` : ""}</span>`;
       parent.appendChild(card);
     });
   }
@@ -929,11 +950,11 @@ function renderPerformanceBudget(parent, gate) {
     vitals.forEach(([label, val, unit]) => {
       if (val == null) return;
       const cell = el("div", "perf-vital-cell");
-      cell.innerHTML = `<span class="vital-label">${label}</span><span class="vital-value">${val}${unit}</span>`;
+      cell.innerHTML = `<span class="vital-label">${escHtml(label)}</span><span class="vital-value">${escHtml(val)}${escHtml(unit)}</span>`;
       table.appendChild(cell);
     });
     if (table.childElementCount > 0) parent.appendChild(table);
-    if (lh.url) addFieldRow(parent, "URL", `<code>${lh.url}</code>`);
+    if (lh.url) addFieldRow(parent, "URL", lh.url);
     if (lh.tool) addFieldRow(parent, "Tool", lh.tool);
   }
 
@@ -944,7 +965,7 @@ function renderPerformanceBudget(parent, gate) {
     if (b.delta_kb != null) {
       const sign = b.delta_kb > 0 ? "+" : "";
       const cls = b.delta_kb > 0 ? (b.budget_exceeded ? "status-fail" : "status-warn") : "status-pass";
-      addFieldRow(parent, "Delta", `<span class="${cls}">${sign}${b.delta_kb} KB</span>`);
+      addFieldHtmlRow(parent, "Delta", `<span class="${classToken(cls)}">${escHtml(sign)}${escHtml(b.delta_kb)} KB</span>`);
     }
     if (b.budget_kb != null) addFieldRow(parent, "Budget", `≤ ${b.budget_kb} KB total`);
     if (b.delta_budget_kb != null) addFieldRow(parent, "Delta budget", `≤ ${b.delta_budget_kb} KB`);
@@ -972,13 +993,13 @@ function renderSignOff(parent, gate) {
     pmOk ? "✓ PM sign-off confirmed" : "⏳ Awaiting PM sign-off"));
 
   if (gate.deploy_requested !== undefined) {
-    addFieldRow(parent, "Deploy requested", boolChip(gate.deploy_requested, "Yes", "No"));
+    addFieldHtmlRow(parent, "Deploy requested", boolChip(gate.deploy_requested, "Yes", "No"));
   }
   if (gate.auto_from_stage_06) {
-    addFieldRow(parent, "Auto-fold", '<span class="badge badge-info">Yes — Stage 6 AC mapping verified</span>');
+    addFieldHtmlRow(parent, "Auto-fold", '<span class="badge badge-info">Yes — Stage 6 AC mapping verified</span>');
   }
   if (gate.runbook_referenced !== undefined) {
-    addFieldRow(parent, "Runbook", boolChip(gate.runbook_referenced, "Present", "Missing"));
+    addFieldHtmlRow(parent, "Runbook", boolChip(gate.runbook_referenced, "Present", "Missing"));
   }
 }
 
@@ -1059,7 +1080,7 @@ function renderBlockers(parent, gate) {
     const card = el("div", "blocker-card");
     const text = typeof b === "string" ? b : (b.text || b.summary || JSON.stringify(b));
     const sev = typeof b === "object" && b.severity ? severityBadgeHtml(b.severity) + " " : "";
-    card.innerHTML = `${sev}${text}`;
+    card.innerHTML = `${sev}${escHtml(text)}`;
     list.appendChild(card);
   });
   parent.appendChild(list);
@@ -1087,7 +1108,7 @@ function renderWorkstreams(parent, gate) {
     const status = (w.status || w.state || "pending").toLowerCase();
     const icon = STATUS_ICONS[status] || "•";
     const wsId = `${gate.stage}.${w.workstream}`;
-    row.innerHTML = `<span>${icon}</span><span class="ws-role">${w.workstream}</span><span class="ws-host ${statusClass(status)}">${w.host || "—"} · ${w.status || w.state || "pending"}</span>`;
+    row.innerHTML = `<span>${escHtml(icon)}</span><span class="ws-role">${escHtml(w.workstream)}</span><span class="ws-host ${statusClass(status)}">${escHtml(w.host || "—")} · ${escHtml(w.status || w.state || "pending")}</span>`;
     row.title = `Click to inspect ${wsId}`;
     row.onclick = () => selectStage(wsId);
     rows.appendChild(row);
