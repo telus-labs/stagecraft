@@ -82,6 +82,9 @@ describe("ui: HTTP server", () => {
     const r = await get(s.url);
     assert.equal(r.status, 200);
     assert.match(r.text, /<title>devteam<\/title>/);
+    assert.match(r.headers["content-security-policy"] || "", /default-src 'self'/);
+    assert.match(r.headers["content-security-policy"] || "", /object-src 'none'/);
+    assert.equal(r.headers["x-content-type-options"], "nosniff");
   });
 
   it("serves the static app.js bundle", async () => {
@@ -178,5 +181,25 @@ describe("ui: non-loopback bind guard", () => {
     // need to actually fetch through it for this test.
     const s = trackServer(await startServer({ port: 0, cwd, host: "0.0.0.0" }));
     assert.ok(s.url.startsWith("http://"));
+  });
+
+  it("clears the heartbeat interval when the server closes", async () => {
+    const cwd = track(makeTargetProject());
+    const timer = { unrefCalled: false, unref() { this.unrefCalled = true; } };
+    let cleared = null;
+    const s = trackServer(await startServer({
+      port: 0,
+      cwd,
+      setIntervalFn(fn, ms) {
+        assert.equal(typeof fn, "function");
+        assert.equal(ms, 15000);
+        return timer;
+      },
+      clearIntervalFn(value) { cleared = value; },
+    }));
+    assert.equal(timer.unrefCalled, true);
+    await s.close();
+    _servers = _servers.filter((server) => server !== s);
+    assert.equal(cleared, timer);
   });
 });
