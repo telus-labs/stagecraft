@@ -24,6 +24,7 @@
 // (pipeline/run-log.jsonl).
 
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const os = require("node:os");
 const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
@@ -209,11 +210,50 @@ function blockerPatchItems(blockers) {
   return [...new Set(items)].filter(Boolean);
 }
 
+function hashTargetedFixFiles(cwd, files) {
+  const root = path.resolve(cwd);
+  const entries = [];
+  for (const file of files || []) {
+    const rel = normalizeOwnershipPath(file);
+    if (!rel) continue;
+    const fullPath = path.resolve(root, rel);
+    if (fullPath !== root && !fullPath.startsWith(`${root}${path.sep}`)) continue;
+    let exists = true;
+    let hash = null;
+    try {
+      hash = crypto.createHash("sha256").update(fs.readFileSync(fullPath)).digest("hex");
+    } catch (e) {
+      if (e && e.code === "ENOENT") exists = false;
+      else continue;
+    }
+    entries.push({ file: rel, exists, hash });
+  }
+  return entries.length > 0 ? entries : null;
+}
+
+function targetedFixChanged(cwd, before) {
+  const after = hashTargetedFixFiles(cwd, (before || []).map((entry) => entry.file));
+  if (!after) return null;
+  const afterByFile = new Map(after.map((entry) => [entry.file, entry]));
+  for (const entry of before) {
+    if (!afterByFile.has(entry.file)) return null;
+  }
+  return before.some((entry) => {
+    const next = afterByFile.get(entry.file);
+    return entry.exists !== next.exists || entry.hash !== next.hash;
+  });
+}
+
+function targetedFixNoSourceChangeEvidence(before) {
+  return (before || []).map((entry) => entry.file).join(", ");
+}
+
 function targetedBuildFixFromRetry(cwd, changeId, retryAction) {
+  const files = blockerFiles(retryAction.blockers);
   const workstream = singleBuildWorkstreamFromClearGates(retryAction.clear_gates || [])
     || workstreamFromFileOwnership(
       loadFileOwnership(cwd, changeId),
-      blockerFiles(retryAction.blockers)
+      files
     );
   if (!workstream) return null;
   const patchItems = blockerPatchItems(retryAction.blockers || []);
@@ -223,6 +263,7 @@ function targetedBuildFixFromRetry(cwd, changeId, retryAction) {
     name: "build",
     workstream,
     patchItems,
+    files,
     source_stage: retryAction.stage,
     source_name: retryAction.name,
   };
@@ -1245,6 +1286,9 @@ async function run(opts = {}) {
           && state.targetedFix.name === r.name
           ? state.targetedFix
           : null;
+        const targetedFixSnapshot = targetedFix
+          ? hashTargetedFixFiles(cwd, targetedFix.files)
+          : null;
         try {
           runResult = await _runStageHeadless(r.name, {
             cwd,
@@ -1305,6 +1349,39 @@ async function run(opts = {}) {
         if (dispatchClass === "ok") {
           state.transient[r.name] = 0;
           saveRunState(cwd, changeId, state);
+
+          if (
+            targetedFix
+            && targetedFixSnapshot
+            && targetedFixChanged(cwd, targetedFixSnapshot) === false
+          ) {
+            const evidence = targetedFixNoSourceChangeEvidence(targetedFixSnapshot);
+            summary.halted = true;
+            summary.halt_action = "resolve-escalation";
+            summary.halt_failure_class = "convergence-exhausted";
+            summary.halt_reason =
+              `targeted fix for "${r.name}" returned without modifying blocker file(s): `
+              + `${evidence}; escalating for a ruling`;
+            summary.blockers = [];
+            summary.no_source_change_evidence = evidence;
+            logEvent(cwd, changeId, {
+              ...base,
+              outcome: "targeted-fix-no-source-change",
+              no_source_change_evidence: evidence,
+              workstream: targetedFix.workstream,
+            });
+            onEvent({
+              type: "halt",
+              ...base,
+              action: "resolve-escalation",
+              failure_class: "convergence-exhausted",
+              reason: summary.halt_reason,
+              no_source_change_evidence: evidence,
+              workstream: targetedFix.workstream,
+            });
+            _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
+            break;
+          }
 
           // ADR-009 §Decision.3: structural scope gate. FAILs a build that
           // touches files outside the diagnosed affected-files set. In 10.1 the

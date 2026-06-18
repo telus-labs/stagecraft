@@ -298,6 +298,7 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
       onEvent: (ev) => events.push(ev),
       runStageHeadless: async (_stageName, opts) => {
         dispatchOpts.push(opts);
+        fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:22-alpine\n");
         return [{ role: "platform", gatePath: "x", exitCode: 0, durationMs: 1 }];
       },
       stallProbe: () => () => {},
@@ -314,6 +315,42 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     ));
     const state = JSON.parse(fs.readFileSync(path.join(cwd, "pipeline", "run-state.json"), "utf8"));
     assert.equal(state.targetedFix, null, "targeted fix hint is one-shot and cleared after dispatch");
+  });
+
+  it("halts targeted build fixes that pass without changing the blocker file", async () => {
+    const cwd = track(makeTargetProject());
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.platform.json");
+    fs.writeFileSync(victim, "{}");
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM node:18-alpine\n");
+    const events = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "EOL base image", file: "Dockerfile" }],
+        clear_gates: ["pipeline/gates/stage-04.platform.json", "pipeline/gates/stage-04.json"],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      onEvent: (ev) => events.push(ev),
+      runStageHeadless: async () => [{ role: "platform", gatePath: "x", exitCode: 0, durationMs: 1 }],
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, false);
+    assert.equal(s.halt_action, "resolve-escalation");
+    assert.equal(s.halt_failure_class, "convergence-exhausted");
+    assert.match(s.halt_reason, /targeted fix/);
+    assert.match(s.halt_reason, /Dockerfile/);
+    assert.ok(events.some((ev) =>
+      ev.type === "halt" &&
+      ev.failure_class === "convergence-exhausted" &&
+      /Dockerfile/.test(ev.no_source_change_evidence)
+    ));
   });
 
   it("does not target build when fix-and-retry clears multiple workstream gates", async () => {
@@ -385,6 +422,7 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
       next: () => nextSeq[n++],
       runStageHeadless: async (_stageName, opts) => {
         dispatchOpts.push(opts);
+        fs.writeFileSync(path.join(cwd, "src", "backend", "api.js"), "module.exports = { ok: true }\n");
         return [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }];
       },
       stallProbe: () => () => {},
