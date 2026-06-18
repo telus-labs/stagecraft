@@ -1,7 +1,6 @@
-// Tests for item 3.5: POSIX-only declaration + cheap correctness wins.
+// Tests for the cross-platform command and executable-resolution surface.
 //
 // Coverage:
-//   - warnIfWindows(platform) in doctor.js and init.js: emits on "win32", silent otherwise
 //   - findOnPath(bin, pathVar) in doctor.js: pure-Node PATH probe, no subprocess
 //   - runHeadless accepts quoted DEVTEAM_HEADLESS_COMMAND
 //   - dispatchToPrincipal accepts quoted DEVTEAM_HEADLESS_COMMAND
@@ -15,10 +14,8 @@ const os = require("node:os");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
 
-const { warnIfWindows: doctorWarn, findOnPath } =
+const { findOnPath } =
   require(path.join(REPO_ROOT, "core", "cli", "commands", "doctor"));
-const { warnIfWindows: initWarn } =
-  require(path.join(REPO_ROOT, "core", "cli", "commands", "init"));
 const { runHeadless } =
   require(path.join(REPO_ROOT, "core", "adapters", "headless"));
 const { dispatchToPrincipal } =
@@ -27,49 +24,6 @@ const { dispatchToPrincipal } =
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
 afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
-
-// ---------------------------------------------------------------------------
-// warnIfWindows
-// ---------------------------------------------------------------------------
-
-describe("warnIfWindows (doctor)", () => {
-  it("emits a WSL2 recommendation when platform is win32", () => {
-    const msgs = [];
-    doctorWarn("win32", (s) => msgs.push(s));
-    assert.equal(msgs.length, 1);
-    assert.match(msgs[0], /Warning/i);
-    assert.match(msgs[0], /WSL2/);
-    assert.match(msgs[0], /Windows/);
-  });
-
-  it("emits nothing when platform is linux", () => {
-    const msgs = [];
-    doctorWarn("linux", (s) => msgs.push(s));
-    assert.equal(msgs.length, 0);
-  });
-
-  it("emits nothing when platform is darwin", () => {
-    const msgs = [];
-    doctorWarn("darwin", (s) => msgs.push(s));
-    assert.equal(msgs.length, 0);
-  });
-});
-
-describe("warnIfWindows (init)", () => {
-  it("emits a WSL2 recommendation when platform is win32", () => {
-    const msgs = [];
-    initWarn("win32", (s) => msgs.push(s));
-    assert.equal(msgs.length, 1);
-    assert.match(msgs[0], /Warning/i);
-    assert.match(msgs[0], /WSL2/);
-  });
-
-  it("emits nothing when platform is not win32", () => {
-    const msgs = [];
-    initWarn("darwin", (s) => msgs.push(s));
-    assert.equal(msgs.length, 0);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // findOnPath — pure-Node PATH probe

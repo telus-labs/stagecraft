@@ -25,6 +25,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 |---|---|---|---|---|---|
 | A | A1 | Gemini CLI adapter | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | A | A4 | Pluggable adapter discovery | 3 | 2 | landed · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| A | A6 | Native Windows validation and support | 2 | 2 | landed · Node 22 `windows-latest` portability smoke |
 | B | B1 | Accessibility audit stage | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B | B2 | Performance budget stage | 4 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B3 | Deploy cost gate | 4 | 2 | landed in PR #221 · [CHANGELOG](../CHANGELOG.md#unreleased) |
@@ -77,7 +78,6 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
 | A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs the stage on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). |
 | A5 | **API-direct adapter** (no host CLI; talks to Anthropic / OpenAI / Google APIs directly) | 3 | 3 | For users who don't want to install claude-code or codex but still want orchestration. Lighter dependency footprint. |
-| A6 | **Native Windows validation and support** | 2 | 2 | The known portability fixes landed in PRs #224/#226/#227/#228: quote-aware command parsing, PATHEXT-aware probing, portable gate cleanup, and Windows process-tree termination. Remaining promotion gate: run the portability smoke surface on `windows-latest` before calling native Windows supported; until then it is implemented/experimental and WSL2 remains the conservative path. See audit T-1 / P1-2. |
 
 ## B. Pipeline depth — more/richer stages
 
@@ -139,15 +139,13 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 
 ### Immediate and near-term
 
-1. **Dashboard HTML safety + lifecycle (audit P1-1/P1-4).** Escape or text-render
-   model-authored gate values, add a hostile-gate regression, and clear the UI timer.
-2. **Native Windows CI evidence (A6; audit P1-2).** Add one Node 22
-   `windows-latest` smoke lane before promoting support language.
-3. **Current-truth reconciliation (audit P1-3).** Correct stale schema vocabulary,
+1. **Dashboard HTML safety + lifecycle (audit P1-1/P1-4).** PR #235 adds
+   text-safe rendering, hostile-gate regressions, browser hardening, and timer cleanup.
+2. **Current-truth reconciliation (audit P1-3).** Correct stale schema vocabulary,
    canonical tool-budget ownership, support wording, counts, links, and comments.
-4. **Bound transcript memory (audit P2-1).** Replace unbounded in-memory host
+3. **Bound transcript memory (audit P2-1).** Replace unbounded in-memory host
    transcript accumulation with a bounded durable writer.
-5. **Decompose the autonomous driver (audit P2-2).** Extract transition handlers
+4. **Decompose the autonomous driver (audit P2-2).** Extract transition handlers
    under characterization tests without mixing capability changes.
 
 ### Evidence-gated next horizon
