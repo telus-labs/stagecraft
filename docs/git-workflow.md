@@ -66,10 +66,11 @@ Run `devteam init --host <x>` once to write the managed `.gitignore` block. The 
 | `pipeline/run.lock` | ✗ | Ephemeral; in managed `.gitignore` |
 | `pipeline/run-state.json` | ✗ | Ephemeral; in managed `.gitignore` |
 | `pipeline/gates/replay/` | ✗ | `devteam replay` output; ephemeral |
-| `pipeline/pre-review-output.txt` | optional | Large raw output; useful for audits |
-| `pipeline/lint-output.txt` | optional | Same |
+| `pipeline/pre-review-output.txt` | ✗ | Ephemeral tool output; in managed `.gitignore` |
+| `pipeline/lint-output.txt` | ✗ | Ephemeral tool output; in managed `.gitignore` |
+| `pipeline/changed-files.txt` | ✗ | Ephemeral security-heuristic input; in managed `.gitignore` |
 
-`devteam commit` stages gate files automatically for all PASS/WARN stages. Application source files (`src/`) must be staged explicitly by the operator — Stagecraft does not own the application source.
+`devteam commit` stages gate files and per-stage artifacts for all PASS/WARN stages. Two notable exceptions: `pipeline/context.md` and `pipeline/adr/` are not in the artifact registry and must be staged manually. Run `devteam compact` before staging `context.md` to strip machine-managed marker sections. Application source files (`src/`) must also be staged explicitly.
 
 ---
 
@@ -100,8 +101,8 @@ devteam commit   # handles pipeline/gates/ and pipeline artifacts
 
 | Commit | Stage group | What `devteam commit` stages | Also stage manually |
 |--------|------------|------------------------------|---------------------|
-| After Stage 1 (requirements) | stage-01 | gate file, `pipeline/brief.md`, `pipeline/context.md` | — |
-| After Stage 2 (design) | stage-02 | gate file, `pipeline/design-spec.md`, `pipeline/adr/` | — |
+| After Stage 1 (requirements) | stage-01 | gate file, `pipeline/brief.md` | `pipeline/context.md` (run `devteam compact` first) |
+| After Stage 2 (design) | stage-02 | gate file, `pipeline/design-spec.md` | `pipeline/adr/` |
 | After Stage 3 + 3b | stage-03, stage-03b | gate files, `pipeline/spec.feature`, `pipeline/clarification-log.md` | — |
 | After Stage 4 build chain | stage-04, 04a, 04b, 04c | gate files, `pipeline/pr-*.md`, `pipeline/red-team-report.md`, `pipeline/security-review.md` | `src/` |
 | After Stage 5 (peer-review) | stage-05 | gate files, `pipeline/code-review/` | `src/` (if fixes) |
