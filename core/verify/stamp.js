@@ -23,7 +23,7 @@ const path = require("node:path");
 const { loadConfig } = require("../config");
 const { runCommand, resolveCommands } = require("./runner");
 const { loadGateSafe } = require("../gates/load-gate");
-const { verify: specVerify, generateScaffold } = require("../spec/verify");
+const { verify: specVerify, generateScaffold, extractAcsFromBrief: extractAcsFromBriefSpec } = require("../spec/verify");
 const { runLicenseCheck } = require("./license-runner");
 
 const STAMPER_VERSION = "1";
@@ -283,18 +283,13 @@ function checkAcceptanceCriteria(cwd) {
   };
 }
 
-// Extract AC identifiers from brief.md. Tolerant of formats:
-//   - "AC-1: description"
-//   - "**AC-1** — description"
-//   - "- AC-1: ..."
+// Extract AC identifiers from brief.md. Delegates to core/spec/verify.js's
+// implementation, which is line-anchored and section-scoped — it only matches
+// lines where AC-N appears at the start (optionally with a bullet or bold
+// markers) followed by a separator (—, :). This prevents prose cross-references
+// like "existing AC-1 through AC-12" from being mistaken for defined criteria.
 function extractAcsFromBrief(text) {
-  const re = /(?:^|\s|\*|`)AC-(\d+)\b/g;
-  const seen = new Set();
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    seen.add(`AC-${m[1]}`);
-  }
-  return Array.from(seen).sort((a, b) => Number(a.slice(3)) - Number(b.slice(3)));
+  return extractAcsFromBriefSpec(text).ids;
 }
 
 // Extract AC identifiers from a test-report.md mapping table. Any cell
