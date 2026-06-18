@@ -2004,7 +2004,7 @@ Deliverables:
    Sections: Prerequisites, One-time setup, Per-feature workflow, Recommended budget,
    Infrastructure guard, Failure modes, Re-running doctor after setup.
 2. docs/user-guide.md — add one cross-reference line in the appropriate "Further reading"
-   or related section: "- [Dogfooding guide](guides/dogfooding.md) — running Stagecraft
+   or related section: "- [Dogfooding guide](../../docs/guides/dogfooding.md) — running Stagecraft
    against its own source tree".
 3. changelog.d/dogfooding-guide.md — one-bullet fragment.
 

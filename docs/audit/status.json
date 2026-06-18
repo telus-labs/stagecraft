@@ -1,5 +1,5 @@
 {
-  "started": "2026-06-03T00:00:00Z",
+  "started": "2026-06-18T18:24:40Z",
   "scope": "full",
   "phases": {
     "phase-0": "complete",
@@ -7,6 +7,6 @@
     "phase-2": "complete",
     "phase-3": "complete"
   },
-  "current_phase": "phase-3",
-  "audited_by": "claude-code (self-audit, post-derive-approvals, claude-opus-4-7)"
+  "current_phase": null,
+  "audited_by": "codex (Stagecraft self-audit, codex + gpt-5.5)"
 }
