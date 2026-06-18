@@ -137,6 +137,8 @@ The block is written by `seedDeployContext()` in `core/driver.js`, is idempotent
 
 Additional adapters can add a `core/deploy/<adapter>.conventions.md` file to participate in auto-injection.
 
+To clear all `<!-- devteam:*:begin/end -->` sections from `pipeline/context.md` at once (the deploy-target block plus any run-blocker, red-team-blocker, or advise sections), run `devteam compact`. The sections are re-seeded on the next run when still needed.
+
 See [`core/deploy/README.md`](../core/deploy/README.md) for the full adapter contract and instructions for writing project-specific adapters.
 
 ---

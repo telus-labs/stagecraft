@@ -352,7 +352,7 @@ Yes once it exceeds ~150–200 lines. The file is in the `readFirst` list for ne
 | Gate outcome summaries (PASS, BF-NN fixes) | **Keep a one-liner** if the detail matters for regressions; cut the rest |
 | Old `QUESTION:` / `PM-ANSWER:` pairs that are answered | **Cut** — the answer is reflected in the brief or the code |
 
-**Track restarts don't reset it.** Running `--track quick` or `--track nano` on top of a completed full-track run reads the same `pipeline/context.md` in full. There's no automatic cleanup on track switch. Prune manually before starting a new feature.
+**Track restarts don't reset it.** Running `--track quick` or `--track nano` on top of a completed full-track run reads the same `pipeline/context.md` in full. There's no automatic cleanup on track switch. Run `devteam compact` to strip all machine-written marker sections at once, then prune any remaining human-authored stale content manually before starting a new feature.
 
 **Structural fix for sequential feature development:** switch to `isolation: bounded` in `.devteam/config.yml`. Each `devteam run --feature "..."` then gets its own `pipeline/changes/<slug>/context.md` — a fresh context per feature. The base `pipeline/context.md` becomes the permanent static layer (binding constraints only). See [Bounded workspace isolation](#bounded-workspace-isolation).
 

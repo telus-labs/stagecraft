@@ -1088,7 +1088,7 @@ Note that `skip_stages` accepts stage names (e.g. `red-team`, `verification-beyo
 
 Three factors you control drive most of the token cost per stage:
 
-**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Prune it between features.
+**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Run `devteam compact` to strip all machine-written marker sections at once, then prune any remaining human-authored stale content before starting a new feature.
 
 What to keep vs. cut:
 
@@ -1101,7 +1101,7 @@ What to keep vs. cut:
 | Gate outcome summaries | **One-liner** if useful for regression context; cut the rest |
 | Answered `QUESTION:` / `PM-ANSWER:` pairs | **Cut** |
 
-Note: track restarts don't reset `context.md`. Running `--track quick` on top of a completed full-track run reads the same file in full. Prune before starting a new feature, or switch to `isolation: bounded` (see below) so each feature gets its own context.
+Note: track restarts don't reset `context.md`. Running `--track quick` on top of a completed full-track run reads the same file in full. Run `devteam compact` then prune any remaining human-authored stale content before starting a new feature, or switch to `isolation: bounded` (see below) so each feature gets its own context.
 
 **2. Role routing.** Opus costs ~5× more per token than Sonnet, and Sonnet costs more than Haiku. Route expensive models to roles that require sustained reasoning (Principal and Security); use cheaper models for build workstreams. See [Multi-host setups](#multi-host-setups).
 
