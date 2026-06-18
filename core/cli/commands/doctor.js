@@ -20,14 +20,40 @@ function warnIfWindows(platform, write) {
   );
 }
 
+function pathDelimiterFor(platform) {
+  return platform === "win32" ? ";" : path.delimiter;
+}
+
+function executableCandidates(bin, opts = {}) {
+  const platform = opts.platform || process.platform;
+  if (platform !== "win32" || path.extname(bin)) return [bin];
+
+  const pathExt = opts.pathExt || process.env.PATHEXT || ".COM;.EXE;.BAT;.CMD";
+  const extensions = pathExt
+    .split(";")
+    .map((ext) => ext.trim())
+    .filter(Boolean)
+    .map((ext) => ext.startsWith(".") ? ext : `.${ext}`);
+  return [bin, ...extensions.map((ext) => `${bin}${ext}`)];
+}
+
+function isExecutable(file, platform) {
+  fs.accessSync(file, platform === "win32" ? fs.constants.F_OK : fs.constants.X_OK);
+}
+
 // Pure-Node PATH probe — no subprocess. Returns the resolved path on success, null if not found.
 // Exported for unit-testing.
-function findOnPath(bin, pathVar) {
-  const dirs = (pathVar !== undefined ? pathVar : process.env.PATH || "").split(path.delimiter);
+function findOnPath(bin, pathVar, opts = {}) {
+  const platform = opts.platform || process.platform;
+  const delimiter = opts.pathDelimiter || pathDelimiterFor(platform);
+  const dirs = (pathVar !== undefined ? pathVar : process.env.PATH || "").split(delimiter);
+  const candidates = executableCandidates(bin, { ...opts, platform });
   for (const dir of dirs) {
     if (!dir) continue;
-    const full = path.join(dir, bin);
-    try { fs.accessSync(full, fs.constants.X_OK); return full; } catch { /* try next */ }
+    for (const candidate of candidates) {
+      const full = path.join(dir, candidate);
+      try { isExecutable(full, platform); return full; } catch { /* try next */ }
+    }
   }
   return null;
 }
