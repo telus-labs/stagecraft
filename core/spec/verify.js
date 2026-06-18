@@ -57,7 +57,7 @@ const { parse: parseGherkin, allScenarios, acIdsFor } = require("./gherkin");
 //   - **AC-2** — Password reset.       (bullet + bold)
 //   **AC-3**: Invalid creds.           (bold, no bullet)
 //   AC-4 — Something else.             (bare, no bullet)
-const AC_LINE_RE = /^\s*(?:[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]?\s*(.+?)\s*$/;
+const AC_LINE_RE = /^\s*(?:[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]\s*(.+?)\s*$/;
 
 // When a brief uses a dedicated "Acceptance Criteria" section header,
 // extraction is scoped to that section. This prevents AC references in

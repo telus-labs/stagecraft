@@ -228,6 +228,20 @@ test("extractAcsFromBrief: flags duplicates", () => {
   assert.equal(duplicates[0].id, "AC-1");
 });
 
+test("extractAcsFromBrief: does not extract AC-N from prose cross-references", () => {
+  // Regression: brief says "existing AC-1 through AC-12" — when word-wrap lands
+  // AC-12 at the start of a line inside the AC section, the separator-required
+  // regex must reject it (no — or : immediately follows AC-12 in that context).
+  const text = [
+    "## Acceptance Criteria",
+    "**AC-4** — Falls back to git diff --cached, preserving all existing",
+    "behaviour unchanged (existing AC-1 through",
+    "AC-12 from the initial build brief continue to apply).",
+  ].join("\n");
+  const { ids } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-4"]);
+});
+
 test("extractAcRefsFromTestReport: picks up @AC-N and bare AC-N", () => {
   const text = `
 | AC | Scenario | Test | Result |

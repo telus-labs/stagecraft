@@ -35,13 +35,25 @@ describe("verify/stamp: extractAcsFromBrief", () => {
     assert.deepEqual(extractAcsFromBrief(text), ["AC-1", "AC-2"]);
   });
 
-  it("deduplicates references", () => {
-    const text = "AC-1: foo\n... see AC-1 elsewhere ... AC-2: bar";
+  it("deduplicates: AC-N defined once even if mentioned in prose", () => {
+    const text = "## Acceptance Criteria\n- AC-1: foo\n- AC-2: bar\n\nSee AC-1 for prior context.";
     assert.deepEqual(extractAcsFromBrief(text), ["AC-1", "AC-2"]);
   });
 
   it("returns empty for a brief with no AC-N references", () => {
     assert.deepEqual(extractAcsFromBrief("# Title\nProse only."), []);
+  });
+
+  it("does not extract AC-N that appears only as a prose cross-reference", () => {
+    // Regression: brief says "existing AC-1 through AC-12" and word-wrap lands
+    // AC-12 at the start of a line — must not produce orphan_criteria=[AC-12].
+    const text = [
+      "## Acceptance Criteria",
+      "**AC-4** — Falls back to git diff --cached, preserving all existing",
+      "behaviour unchanged (existing AC-1 through",
+      "AC-12 from the initial build brief continue to apply).",
+    ].join("\n");
+    assert.deepEqual(extractAcsFromBrief(text), ["AC-4"]);
   });
 });
 
