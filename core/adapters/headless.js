@@ -39,6 +39,37 @@ const { terminateChild } = require("../process-kill");
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
+function createTranscriptWriter(logPath, header) {
+  let fd = fs.openSync(logPath, "w");
+  try {
+    fs.writeSync(fd, header);
+  } catch (err) {
+    try { fs.closeSync(fd); } catch { /* */ }
+    fd = null;
+    throw err;
+  }
+
+  return {
+    append(chunk) {
+      if (fd === null) return;
+      try {
+        fs.writeSync(fd, chunk);
+      } catch {
+        try { fs.closeSync(fd); } catch { /* */ }
+        fd = null;
+      }
+    },
+    end(trailer) {
+      if (fd === null) return;
+      this.append(trailer);
+      if (fd === null) return;
+      try { fs.fsyncSync(fd); } catch { /* full disk, unsupported fsync, etc. */ }
+      try { fs.closeSync(fd); } catch { /* */ }
+      fd = null;
+    },
+  };
+}
+
 // Rotate <logPath> before writing a new run.
 // <ws>.log → <ws>.1.log, <ws>.1.log → <ws>.2.log, …, <ws>.<N>.log pruned.
 // All filesystem errors are swallowed — rotation is best-effort and must
@@ -84,14 +115,13 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   // historical "inherit" stdio so terminal colors / TTY detection
   // in the host CLI continue to work; when enabled we pipe so we can
   // duplicate the streams.
-  // Logging: buffer the host's stdout/stderr in memory and writeFileSync
-  // on close. In-memory buffering avoids the close-vs-error race that
-  // an async write stream would create, and synchronous flush means
-  // the file is durable the instant runHeadless's promise settles.
-  // Agent transcripts are typically <1 MB; memory cost is negligible.
+  // Logging: stream the host's stdout/stderr directly to a synchronous file
+  // descriptor. This keeps memory constant for long-running agents, exposes
+  // log growth to the liveness probe while the child is active, and lets the
+  // close handler flush the descriptor before runHeadless settles.
   const logDisabled = process.env.DEVTEAM_NO_LOG === "1" || ctx.log === false;
   let logPath = null;
-  let logBuffer = null;     // null when logging disabled or open failed
+  let logWriter = null;     // null when logging disabled or open failed
   let logEnded = false;
   if (!logDisabled) {
     try {
@@ -103,7 +133,7 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
         ? parseInt(rawHistory, 10)
         : 3;
       rotateLog(logPath, maxHistory);
-      logBuffer = [
+      const header = [
         `# Stage transcript: ${descriptor.workstreamId}`,
         `# Host: ${adapter.capabilities && adapter.capabilities.name}`,
         `# Command: ${cmdString}`,
@@ -112,15 +142,15 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
         "",
         "",
       ].join("\n");
+      logWriter = createTranscriptWriter(logPath, header);
     } catch {
       // Best-effort: if we can't create logs/, fall back to terminal-only.
       logPath = null;
-      logBuffer = null;
+      logWriter = null;
     }
   }
   function appendLog(chunk) {
-    if (logBuffer === null) return;
-    logBuffer += typeof chunk === "string" ? chunk : chunk.toString("utf8");
+    logWriter?.append(chunk);
   }
   // Idempotent log-flush. First caller writes the trailer and flushes
   // to disk synchronously. Subsequent calls are no-ops. Safe to call
@@ -128,23 +158,22 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   function endLog(reason) {
     if (!logPath || logEnded) return;
     logEnded = true;
-    appendLog(`\n# ---\n# Ended: ${new Date().toISOString()}\n# Exit: ${reason}\n`);
-    try { fs.writeFileSync(logPath, logBuffer); } catch { /* full disk, etc. */ }
+    logWriter?.end(`\n# ---\n# Ended: ${new Date().toISOString()}\n# Exit: ${reason}\n`);
   }
 
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, {
       cwd: ctx.cwd,
       // When logging is on we read stdout/stderr ourselves to duplicate
-      // them into the buffer; when off, inherit gets us the historical
+      // them into the transcript; when off, inherit gets us the historical
       // terminal-color behavior for free.
-      stdio: logBuffer !== null ? ["pipe", "pipe", "pipe"] : ["pipe", "inherit", "inherit"],
+      stdio: logWriter !== null ? ["pipe", "pipe", "pipe"] : ["pipe", "inherit", "inherit"],
     });
 
     // Tee paths: write each chunk to both the caller's terminal and
-    // the in-memory log buffer. Errors on stdout (closed terminal)
+    // the transcript file. Errors on stdout (closed terminal)
     // are swallowed — a closed pipe shouldn't fail the stage.
-    if (logBuffer !== null) {
+    if (logWriter !== null) {
       child.stdout.on("data", (chunk) => {
         try { process.stdout.write(chunk); } catch { /* */ }
         appendLog(chunk);
@@ -215,4 +244,4 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   });
 }
 
-module.exports = { runHeadless, rotateLog, DEFAULT_TIMEOUT_MS };
+module.exports = { runHeadless, rotateLog, createTranscriptWriter, DEFAULT_TIMEOUT_MS };

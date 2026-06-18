@@ -1,0 +1,1 @@
+- Stream headless stage transcripts directly to disk so long-running host output stays observable and no longer grows Stagecraft's memory with transcript size.
