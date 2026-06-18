@@ -335,6 +335,27 @@ The Platform role at Stage 8 reads the config and follows your adapter's procedu
 
 ## Operational
 
+### `pipeline/context.md` keeps growing — is that a problem?
+
+Yes once it exceeds ~150–200 lines. The file is in the `readFirst` list for nearly every stage, so every dispatch reads it whole. A 300-line context.md adds thousands of tokens per stage across a full run.
+
+**What accumulates:** stage-04 assumption blocks, ruling text, blocker injections, gate outcome summaries. Most of this is valuable during its originating run, but stale once the pipeline is past it.
+
+**What to prune vs. keep:**
+
+| Content | Action |
+|---|---|
+| Binding constraints (env vars, API endpoints, auth conventions) | **Keep always** — agents at every stage need these |
+| Active `<!-- devteam:run-blockers -->` injection | **Keep** until resolved; `devteam restart <stage>` clears it |
+| Stage-04 assumption blocks (workstream notes) | **Cut after build is done** — code is now the source of truth |
+| Ruling text from resolved escalations | **Compress to one line** — "Deploy B1/B2 false positives resolved 2026-06-18" |
+| Gate outcome summaries (PASS, BF-NN fixes) | **Keep a one-liner** if the detail matters for regressions; cut the rest |
+| Old `QUESTION:` / `PM-ANSWER:` pairs that are answered | **Cut** — the answer is reflected in the brief or the code |
+
+**Track restarts don't reset it.** Running `--track quick` or `--track nano` on top of a completed full-track run reads the same `pipeline/context.md` in full. There's no automatic cleanup on track switch. Prune manually before starting a new feature.
+
+**Structural fix for sequential feature development:** switch to `isolation: bounded` in `.devteam/config.yml`. Each `devteam run --feature "..."` then gets its own `pipeline/changes/<slug>/context.md` — a fresh context per feature. The base `pipeline/context.md` becomes the permanent static layer (binding constraints only). See [Bounded workspace isolation](#bounded-workspace-isolation).
+
 ### When do I write `status: ESCALATE` vs `status: FAIL`?
 
 **FAIL** means "this stage's criteria weren't met — fix the code/artifact and retry." The model writes FAIL when it can identify specific things that must be changed. `blockers[]` lists them. The human's job is to fix those things and re-run.

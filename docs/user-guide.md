@@ -1088,7 +1088,20 @@ Note that `skip_stages` accepts stage names (e.g. `red-team`, `verification-beyo
 
 Three factors you control drive most of the token cost per stage:
 
-**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Prune it between features: keep the last few decisions and trim history that's already reflected in the code.
+**1. `pipeline/context.md` size.** This file is in the `readFirst` list for almost every stage. Every question, answer, and concern you append accumulates. On a long project it can exceed 200 lines and add thousands of tokens across a full run. Prune it between features.
+
+What to keep vs. cut:
+
+| Content | Action |
+|---|---|
+| Binding constraints (env vars, API endpoints, auth conventions) | **Keep always** |
+| Active `<!-- devteam:run-blockers -->` injection | **Keep** until resolved |
+| Stage-04 assumption blocks | **Cut** once build is done — code is the source of truth now |
+| Resolved ruling text | **Compress to one line** |
+| Gate outcome summaries | **One-liner** if useful for regression context; cut the rest |
+| Answered `QUESTION:` / `PM-ANSWER:` pairs | **Cut** |
+
+Note: track restarts don't reset `context.md`. Running `--track quick` on top of a completed full-track run reads the same file in full. Prune before starting a new feature, or switch to `isolation: bounded` (see below) so each feature gets its own context.
 
 **2. Role routing.** Opus costs ~5× more per token than Sonnet, and Sonnet costs more than Haiku. Route expensive models to roles that require sustained reasoning (Principal and Security); use cheaper models for build workstreams. See [Multi-host setups](#multi-host-setups).
 
@@ -1103,7 +1116,10 @@ pipeline:
 
 ### Bounded workspace isolation
 
-When multiple features are in flight simultaneously and you want their pipeline artifacts to stay separate, enable bounded workspace mode:
+Enable bounded workspace mode when:
+
+- **Multiple features are in flight simultaneously** and you need their gates and logs to stay separate, or
+- **You're doing sequential feature development** on the same project and don't want stage-04 assumptions, rulings, and blocker injections from one feature to accumulate into the next feature's context.
 
 ```yaml
 pipeline:
@@ -1112,7 +1128,9 @@ pipeline:
 
 With `isolation: bounded`, every run's artifacts (gates, logs, context files) land under `pipeline/changes/<changeId>/` instead of the global `pipeline/`. The `changeId` is derived by slugifying the `--feature` value passed to `devteam stage requirements`. Different features share the same working directory but write to distinct subdirectories, so `devteam next` and `devteam summary` can distinguish them.
 
-Default is `in-place` (global `pipeline/`). Zero impact on existing setups unless you explicitly set `isolation: bounded`.
+The base `pipeline/context.md` still exists and should hold only permanent, project-wide facts (binding constraints, runtime conventions). Each change's `pipeline/changes/<slug>/context.md` starts from those static facts and accumulates only that feature's decisions.
+
+Default is `in-place` (global `pipeline/`). Zero impact on existing setups unless you explicitly set `isolation: bounded`. For projects that started `in-place` and want to switch: prune `pipeline/context.md` to just the permanent static layer first, then flip the flag. Existing gates in `pipeline/gates/` are left untouched.
 
 ### `/goal` injection for convergent stages
 
