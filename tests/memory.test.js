@@ -136,6 +136,28 @@ describe("memory: stub embedder", () => {
     );
   });
 
+  it("names supported providers when a known remote provider is unavailable", async () => {
+    const before = process.env.DEVTEAM_EMBEDDING_PROVIDER;
+    try {
+      for (const provider of ["openai", "cohere"]) {
+        process.env.DEVTEAM_EMBEDDING_PROVIDER = provider;
+        resetCache();
+        await assert.rejects(
+          () => getEmbedder(),
+          (err) => {
+            assert.match(err.message, new RegExp(`Unsupported embedding provider "${provider}"`));
+            assert.match(err.message, /supported providers: local, stub/);
+            assert.doesNotMatch(err.message, /planned for/);
+            return true;
+          },
+        );
+      }
+    } finally {
+      process.env.DEVTEAM_EMBEDDING_PROVIDER = before;
+      resetCache();
+    }
+  });
+
   it("local provider with absent @huggingface/transformers throws actionable MODULE_NOT_FOUND error", async () => {
     const before = process.env.DEVTEAM_EMBEDDING_PROVIDER;
     process.env.DEVTEAM_EMBEDDING_PROVIDER = "local";

@@ -12,7 +12,7 @@ Host-neutral context for any LLM working on the **Stagecraft** codebase itself. 
 ## Test and lint commands
 
 ```bash
-npm test                                              # ~1 641 tests, ~5 s
+npm test                                              # full offline test suite
 npm run consistency                                   # cross-artifact drift check
 npx eslint .                                          # linter
 CI=true DEVTEAM_HEADLESS_COMMAND=cat npm test         # full CI run (no host CLI needed)

@@ -58,7 +58,7 @@ Build and peer-review can run parallel workstreams — frontend, backend, and in
 New `stage-06e`, role `qa`. Runs after stage-06d on `full`; after stage-06c on `quick`/`hotfix`. Not included in nano/config-only/dep-update.
 
 - Checks Lighthouse Web Vitals, bundle size delta, and load-test throughput (k6 / autocannon) against configured budgets in `performance.budget.json` or `.devteam/config.yml` defaults
-- Gate carries `budget_exceeded`, `checks_run[]`, and `skipped_reason` (for changes with no performance-relevant surface)
+- Gate carries `budget_exceeded`, `checks_performed[]`, and `skipped_reason` (for changes with no performance-relevant surface)
 - `budget_exceeded: true` → FAIL; `skipped_reason` populated → PASS with a note
 - **Requires shell capability** — `assertCapabilities()` refuses at dispatch if the routed host doesn't declare `enforces.shell: true`
 
@@ -160,7 +160,7 @@ The `generic` adapter declares `prompt-only` enforcement: violations are discour
 
 ### Role tool budgets — per-role tool-surface restriction
 
-Each role has a declared tool budget — the list of tools it may use during its workstream. The budget is declared in `ROLE_FRONTMATTER` in `hosts/claude-code/adapter.js` and propagated through the dispatch descriptor so every host can apply it.
+Each role has a declared tool budget — the list of tools it may use during its workstream. The host-neutral budget is declared in `core/roles.js` and propagated through the dispatch descriptor so every host can apply it. Claude Code's `ROLE_FRONTMATTER` adds host-specific rendering metadata such as model and permission mode.
 
 Enforcement method depends on the host:
 

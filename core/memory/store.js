@@ -5,8 +5,8 @@
 //   - JSONMemoryStore (this file): default, one .json file per kind under
 //     .devteam/memory/, git-friendly. O(N) cosine search; fine up to ~1k
 //     chunks per project.
-//   - sqlite-vec backend: planned for v0.3 (better-sqlite3 + sqlite-vec
-//     extension). Same interface; binary .db; gitignored.
+//   - A future sqlite-vec backend can implement the same interface with a
+//     gitignored binary database when JSON search no longer fits project scale.
 //
 // Per-project. Cross-project sharing is deferred (cf. D7 decision 3).
 //

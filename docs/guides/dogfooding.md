@@ -7,7 +7,7 @@ workflow.
 ## Prerequisites
 
 - A dedicated Stagecraft clone — do **not** dogfood in your primary install.
-- Node.js 18+.
+- Node.js 20+.
 - Claude Code or another supported host CLI, authenticated.
 
 ```bash

@@ -50,7 +50,7 @@ All phases are complete. These notes are preserved for re-use if new phases are 
 - **One work item per session/PR.** Each item is scoped to be independently mergeable.
   Paste the item (plus the "Conventions" section below) as the task. Do not batch items.
 - **Every item has a Verify block.** The change is not done until those commands pass.
-  `npm test` and `npx eslint .` must be green after every item (1,161 tests, ~6s, fully offline).
+  `npm test` and `npx eslint .` must be green after every item (the suite is fully offline).
 - **Line numbers are anchors, not gospel.** They were verified against commit `212c710`
   (2026-06-10). If the file has moved, search for the quoted code, don't edit blind.
 - **Items marked `[verify-first]`** contain a claim from review agents that was not

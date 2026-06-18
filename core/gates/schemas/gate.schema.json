@@ -139,7 +139,7 @@
     "dispatched_tool_budget": {
       "type": ["array", "null"],
       "items": { "type": "string" },
-      "description": "Optional (G10 tool budgets). Tool names the orchestrator declared available to this role at dispatch time, drawn from ROLE_FRONTMATTER (claude-code) or equivalent adapter.toolBudgetFor(). null means no budget was declared (full host surface). Stamped by the orchestrator for headless runs; auto-injected by the gate validator for user-driven runs. Present on workstream gates; absent on merged stage gates."
+      "description": "Optional (G10 tool budgets). Tool names the orchestrator declared available to this role at dispatch time, drawn from the host-neutral table in core/roles.js. null means no budget was declared (full host surface). Stamped by the orchestrator for headless runs; auto-injected by the gate validator for user-driven runs. Present on workstream gates; absent on merged stage gates."
     },
     "chain": {
       "type": "object",
