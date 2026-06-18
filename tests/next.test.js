@@ -4,10 +4,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup, runCLI } = require("./_helpers");
 const { next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+const { formatGateClear } = require(path.join(REPO_ROOT, "core", "pipeline", "fix-recipes"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
 afterEach(() => { _dirs.forEach(cleanup); _dirs = []; });
+
+function clearsGate(commands, relPath) {
+  return commands.some((cmd) =>
+    cmd.startsWith("node -e ") &&
+    cmd.includes("rmSync(process.argv[1]") &&
+    cmd.endsWith(` ${relPath}`));
+}
 
 describe("next: walks through full track", () => {
   it("empty pipeline → run-stage requirements", () => {
@@ -109,6 +117,15 @@ describe("next: conditional dispatch", () => {
   });
 });
 
+describe("fix-recipes: gate clear command formatting", () => {
+  it("formats gate clears as portable node commands", () => {
+    assert.deepEqual(
+      formatGateClear(["pipeline/gates/stage-04.json"]),
+      ["node -e \"require('node:fs').rmSync(process.argv[1], { force: true })\" pipeline/gates/stage-04.json"],
+    );
+  });
+});
+
 describe("next: stage-04a (pre-review) fix steps", () => {
   function seedThroughBuild(cwd) {
     for (const s of ["stage-01", "stage-02", "stage-03", "stage-03b", "stage-04"]) {
@@ -116,7 +133,7 @@ describe("next: stage-04a (pre-review) fix steps", () => {
     }
   }
 
-  it("pre-review FAIL → fix steps include rm stage-04a.json so driver clears gate", () => {
+  it("pre-review FAIL → fix steps include a stage-04a.json clear command", () => {
     const cwd = track(makeTargetProject());
     seedThroughBuild(cwd);
     seedGate(cwd, "stage-04a", {
@@ -132,8 +149,8 @@ describe("next: stage-04a (pre-review) fix steps", () => {
 
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04a.json"),
-      "fix steps must include rm stage-04a.json so driver clears the failing pre-review gate"
+      clearsGate(allCmds, "pipeline/gates/stage-04a.json"),
+      "fix steps must include a portable clear command for stage-04a.json so driver clears the failing pre-review gate"
     );
     assert.ok(
       allCmds.some(c => c.includes("devteam stage pre-review")),
@@ -145,7 +162,7 @@ describe("next: stage-04a (pre-review) fix steps", () => {
     );
   });
 
-  it("pre-review FAIL with no blockers → fix steps still include rm stage-04a.json", () => {
+  it("pre-review FAIL with no blockers → fix steps still include a stage-04a.json clear command", () => {
     const cwd = track(makeTargetProject());
     seedThroughBuild(cwd);
     seedGate(cwd, "stage-04a", { status: "FAIL" });
@@ -154,8 +171,8 @@ describe("next: stage-04a (pre-review) fix steps", () => {
     assert.equal(r.action, "fix-and-retry");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04a.json"),
-      "rm stage-04a.json present even with no blockers"
+      clearsGate(allCmds, "pipeline/gates/stage-04a.json"),
+      "stage-04a.json clear command present even with no blockers"
     );
   });
 });
@@ -167,7 +184,7 @@ describe("next: stage-04c (red-team) fix steps", () => {
     }
   }
 
-  it("red-team FAIL with workstream-less blockers → fix steps include rm stage-04c.json", () => {
+  it("red-team FAIL with workstream-less blockers → fix steps include a stage-04c.json clear command", () => {
     const cwd = track(makeTargetProject());
     seedThroughPreReview(cwd);
     // Blockers with file paths not matched by _wsFromText heuristics (e.g. src/collectors/)
@@ -189,8 +206,8 @@ describe("next: stage-04c (red-team) fix steps", () => {
 
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04c.json"),
-      "fix steps must include rm stage-04c.json so driver clears the failing red-team gate"
+      clearsGate(allCmds, "pipeline/gates/stage-04c.json"),
+      "fix steps must include a portable clear command for stage-04c.json so driver clears the failing red-team gate"
     );
     assert.ok(
       allCmds.some(c => c.includes("devteam stage red-team")),
@@ -207,7 +224,7 @@ describe("next: stage-04c (red-team) fix steps", () => {
     );
   });
 
-  it("red-team FAIL, disk scan finds build gates → fix steps include rm stage-04.json (merged)", () => {
+  it("red-team FAIL, disk scan finds build gates → fix steps include a stage-04.json clear command", () => {
     const cwd = track(makeTargetProject());
     seedThroughPreReview(cwd);
     // Seed build workstream gates on disk so the disk scan finds them (wsSet is empty
@@ -232,12 +249,12 @@ describe("next: stage-04c (red-team) fix steps", () => {
 
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
-      "fix steps must include rm stage-04.json (merged) so driver clears it and next() dispatches build"
+      clearsGate(allCmds, "pipeline/gates/stage-04.json"),
+      "fix steps must include a portable clear command for stage-04.json (merged) so driver clears it and next() dispatches build"
     );
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04c.json"),
-      "fix steps must include rm stage-04c.json"
+      clearsGate(allCmds, "pipeline/gates/stage-04c.json"),
+      "fix steps must include a portable clear command for stage-04c.json"
     );
     assert.ok(
       !allCmds.some(c => c.includes("<affected-ws>")),
@@ -245,7 +262,7 @@ describe("next: stage-04c (red-team) fix steps", () => {
     );
   });
 
-  it("red-team FAIL with assigned_to blockers → fix steps rm the named workstream gates", () => {
+  it("red-team FAIL with assigned_to blockers → fix steps clear the named workstream gates", () => {
     const cwd = track(makeTargetProject());
     seedThroughPreReview(cwd);
     seedGate(cwd, "stage-04c", {
@@ -261,12 +278,12 @@ describe("next: stage-04c (red-team) fix steps", () => {
     assert.equal(r.action, "fix-and-retry");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04.backend.json"),
-      "fix steps include rm for the assigned_to workstream"
+      clearsGate(allCmds, "pipeline/gates/stage-04.backend.json"),
+      "fix steps include a portable clear command for the assigned_to workstream"
     );
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04c.json"),
-      "fix steps include rm stage-04c.json"
+      clearsGate(allCmds, "pipeline/gates/stage-04c.json"),
+      "fix steps include a portable clear command for stage-04c.json"
     );
     assert.ok(
       !allCmds.some(c => c.includes("<affected-ws>")),
@@ -549,7 +566,7 @@ describe("next: stage-05 per-area fix steps", () => {
     }
   }
 
-  it("INSUFFICIENT_APPROVALS area → rm + re-run reviewer commands in fix_steps", () => {
+  it("INSUFFICIENT_APPROVALS area → clear + re-run reviewer commands in fix_steps", () => {
     const cwd = track(makeTargetProject());
     seedPreReviewStages(cwd);
     // platform area: reviewer wrote wrong areas, quorum not reached
@@ -580,11 +597,11 @@ describe("next: stage-05 per-area fix steps", () => {
     assert.ok(Array.isArray(r.fix_steps) && r.fix_steps.length > 0, "fix_steps present");
 
     const allCmds = r.fix_steps.flatMap(s => s.commands);
-    // Must include rm commands for the incomplete areas
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.platform.json")),
-      "rm platform gate");
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.qa.json")),
-      "rm qa gate");
+    // Must include clear commands for the incomplete areas
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.platform.json"),
+      "clear platform gate");
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.qa.json"),
+      "clear qa gate");
     // Must include targeted peer-review re-run commands
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream platform")),
       "re-run platform reviewer");
@@ -595,12 +612,12 @@ describe("next: stage-05 per-area fix steps", () => {
     // Must NOT include generic peer-review command
     assert.ok(!allCmds.some(c => c === "devteam stage peer-review --headless"),
       "no generic peer-review command");
-    // Must NOT include rm for backend (it passed)
+    // Must NOT include a clear command for backend (it passed)
     assert.ok(!allCmds.some(c => c.includes("stage-05.backend.json")),
       "backend gate untouched");
   });
 
-  it("CHANGES_REQUESTED area → build + rm + re-review commands in fix_steps", () => {
+  it("CHANGES_REQUESTED area → build + clear + re-review commands in fix_steps", () => {
     const cwd = track(makeTargetProject());
     seedPreReviewStages(cwd);
     // frontend area: reviewer requested code changes
@@ -624,18 +641,18 @@ describe("next: stage-05 per-area fix steps", () => {
     const allCmds = r.fix_steps.flatMap(s => s.commands);
 
     // Must include build stage gate clears so the driver backtracks to build
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-04.frontend.json")),
-      "rm build workstream gate — driver must re-enter build to fix the code");
-    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
-      "rm merged build gate — without this next() still sees build PASS and skips it");
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-04.frontend.json"),
+      "clear build workstream gate — driver must re-enter build to fix the code");
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-04.json"),
+      "clear merged build gate — without this next() still sees build PASS and skips it");
     // Must include build re-run with --patch --from peer-review so the agent implements
     // the required changes rather than just verifying existing code
     assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream frontend") && c.includes("--patch --from peer-review")),
       "rebuild frontend with --patch --from peer-review");
     assert.ok(allCmds.some(c => c.includes("devteam merge build")), "merge build");
-    // Must include rm + re-review for the area with changes requested
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.frontend.json")),
-      "rm frontend gate");
+    // Must include clear + re-review for the area with changes requested
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.frontend.json"),
+      "clear frontend gate");
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream frontend")),
       "re-run frontend reviewer");
     assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "merge peer-review");
@@ -666,12 +683,12 @@ describe("next: stage-05 per-area fix steps", () => {
 
     assert.ok(allCmds.some(c => c.includes("devteam stage build --workstream backend")),
       "rebuild backend");
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.platform.json")),
-      "rm platform (incomplete matrix)");
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.platform.json"),
+      "clear platform (incomplete matrix)");
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream platform")),
       "re-run platform reviewer");
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-05.backend.json")),
-      "rm backend (changes requested)");
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.backend.json"),
+      "clear backend (changes requested)");
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream backend")),
       "re-run backend reviewer");
     assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "merge peer-review");
@@ -695,7 +712,7 @@ describe("next: stage-05 per-area fix steps", () => {
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review")), "generic fallback present");
   });
 
-  it("some per-area gates missing → fix steps name missing workstream + rm merged gate", () => {
+  it("some per-area gates missing → fix steps name missing workstream + clear merged gate", () => {
     const cwd = track(makeTargetProject());
     seedPreReviewStages(cwd);
     // backend, platform, qa wrote PASS gates; frontend produced nothing
@@ -708,7 +725,7 @@ describe("next: stage-05 per-area fix steps", () => {
     const r = next({ cwd });
     assert.equal(r.action, "fix-and-retry");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
-    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-05.json"),
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.json"),
       "clears merged gate so driver triggers continue-stage for missing workstream");
     assert.ok(allCmds.some(c => c.includes("devteam stage peer-review --workstream frontend")),
       "re-run missing frontend reviewer");
@@ -731,8 +748,8 @@ describe("next: stage-05 per-area fix steps", () => {
     const r = next({ cwd });
     assert.equal(r.action, "fix-and-retry");
     const allCmds = r.fix_steps.flatMap(s => s.commands);
-    // Must produce at least an rm + re-merge so the driver can clear and loop
-    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-05.json"), "clears merged gate");
+    // Must produce at least a clear + re-merge so the driver can clear and loop
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-05.json"), "clears merged gate");
     assert.ok(allCmds.some(c => c.includes("devteam merge peer-review")), "re-merge");
     // Description must mention the failure_reason
     const allDescs = r.fix_steps.map(s => s.description).join(" ");
@@ -776,8 +793,8 @@ describe("next: stage-06b (accessibility-audit) fix steps", () => {
     assert.ok(!allCmds.some(c => c.includes("A11Y-01=A") && !c.includes("QA-")),
       "does not use raw blocker ID A11Y-01");
     // advise handles gate reset and re-run internally
-    assert.ok(!allCmds.some(c => c.includes("rm pipeline/gates/stage-06b.json")),
-      "no manual gate rm");
+    assert.ok(!clearsGate(allCmds, "pipeline/gates/stage-06b.json"),
+      "no manual gate clear");
     assert.ok(!allCmds.some(c => c.includes("devteam stage accessibility-audit")),
       "no separate re-run");
   });
@@ -892,7 +909,7 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
     }
   }
 
-  it("blocker with Fix: file path → targeted build + rm gate + re-run commands", () => {
+  it("blocker with Fix: file path → targeted build + clear gate + re-run commands", () => {
     const cwd = track(makeTargetProject());
     seedThroughQa(cwd);
     seedGate(cwd, "stage-06d", {
@@ -919,8 +936,8 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
     );
     assert.ok(allCmds.some(c => c.includes("devteam merge build")), "merge build");
     // Gate cleared before re-run
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),
-      "rm stage-06d gate");
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-06d.json"),
+      "clear stage-06d gate");
     assert.ok(allCmds.some(c => c.includes("devteam stage verification-beyond-tests")),
       "re-run verification command");
   });
@@ -941,9 +958,9 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
     // When workstream not identified, driver dispatches build globally with --patch context
     assert.ok(allCmds.some(c => c.includes("devteam stage build") && c.includes("--patch")),
       "build dispatched globally when workstream not identified");
-    assert.ok(allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-04.json"),
       "merged build gate cleared so next() dispatches build not a merge");
-    assert.ok(allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),
+    assert.ok(clearsGate(allCmds, "pipeline/gates/stage-06d.json"),
       "verification gate cleared before re-run");
   });
 
@@ -969,11 +986,11 @@ describe("next: stage-06d (verification-beyond-tests) fix steps", () => {
       "build dispatched with --patch so agent implements the fix from context.md"
     );
     assert.ok(
-      allCmds.some(c => c === "rm pipeline/gates/stage-04.json"),
+      clearsGate(allCmds, "pipeline/gates/stage-04.json"),
       "merged build gate cleared so next() dispatches build"
     );
     assert.ok(
-      allCmds.some(c => c.includes("rm pipeline/gates/stage-06d.json")),
+      clearsGate(allCmds, "pipeline/gates/stage-06d.json"),
       "verification gate cleared"
     );
     assert.ok(

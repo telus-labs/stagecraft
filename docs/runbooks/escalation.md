@@ -293,7 +293,7 @@ attempts but the test still fails, or the test fails non-deterministically.
 → Clear the QA gate and re-run QA with the archive context visible:
 
 ```bash
-rm pipeline/gates/stage-06.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-06.json
 # The archived attempts remain in pipeline/gates/archive/ so QA can read the
 # failure history; QA revises the failing test rather than re-running the implementation.
 devteam stage qa --headless
