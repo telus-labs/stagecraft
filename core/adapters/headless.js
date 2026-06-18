@@ -190,9 +190,22 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
         }
       }
 
+      // Detect pre-seeded stub gates. A stub has `_stub: true` written by the
+      // driver before dispatch. If the LLM exhausted context before overwriting
+      // it, the stub is still present — return stubGate: true so the driver
+      // classifies the dispatch as transient (not structural-input) and retries.
+      const gateExists = fs.existsSync(gatePath);
+      let isStub = false;
+      if (gateExists) {
+        try {
+          const parsed = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+          isStub = parsed._stub === true;
+        } catch { /* unreadable; treat as real gate */ }
+      }
       resolve({
         exitCode: timedOut ? null : exitCode,
-        gatePath: fs.existsSync(gatePath) ? gatePath : null,
+        gatePath: gateExists && !isStub ? gatePath : null,
+        stubGate: isStub,
         logPath,
         durationMs: Date.now() - start,
         timedOut,

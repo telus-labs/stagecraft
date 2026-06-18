@@ -203,6 +203,10 @@ const STAGES = {
   "red-team": {
     stage: "stage-04c",
     roles: ["red-team"],
+    // Driver writes a stub gate before dispatching and detects whether the LLM
+    // overwrote it. If not (context exhausted before gate write), the dispatch is
+    // classified as transient rather than structural-input. See driver.js §stub-gate.
+    preSeedGate: true,
     // Always runs on tracks where it's included (full + hotfix). Not
     // conditional like stage-04b — the goal is uniform adversarial
     // coverage on non-trivial changes. Lighter tracks (quick / nano /

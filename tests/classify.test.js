@@ -78,4 +78,32 @@ describe("classifyDispatch", () => {
   it("no gate after the transient budget is spent → structural-input", () => {
     assert.equal(classifyDispatch({ wroteGate: false, exitCode: 1, timedOut: false }, { transientRetries: 1, maxTransientRetries: 1 }), "structural-input");
   });
+
+  it("stub gate present, clean exit, first attempt → transient (not structural-input)", () => {
+    assert.equal(
+      classifyDispatch({ wroteGate: false, exitCode: 0, timedOut: false, stubGate: true }, { transientRetries: 0 }),
+      "transient",
+    );
+  });
+
+  it("stub gate present, crash exit, first attempt → transient", () => {
+    assert.equal(
+      classifyDispatch({ wroteGate: false, exitCode: 1, timedOut: false, stubGate: true }, { transientRetries: 0 }),
+      "transient",
+    );
+  });
+
+  it("stub gate present after budget spent → structural-input", () => {
+    assert.equal(
+      classifyDispatch({ wroteGate: false, exitCode: 0, timedOut: false, stubGate: true }, { transientRetries: 1, maxTransientRetries: 1 }),
+      "structural-input",
+    );
+  });
+
+  it("wrote a real gate (overwrite of stub) → ok regardless of exit code", () => {
+    assert.equal(
+      classifyDispatch({ wroteGate: true, exitCode: 0, timedOut: false, stubGate: false }),
+      "ok",
+    );
+  });
 });

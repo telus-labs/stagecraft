@@ -148,6 +148,41 @@ test("returns gatePath when the workstream gate file exists in pipeline/gates/",
     );
     assert.equal(r.exitCode, 0);
     assert.equal(r.gatePath, gateFile);
+    assert.equal(r.stubGate, false, "real gate should not be flagged as stub");
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("stub gate detection: pre-seeded _stub:true gate → stubGate:true, gatePath:null", async () => {
+  const ctx = makeCtx();
+  const desc = makeDescriptor("stage-04c");
+  const gateFile = path.join(ctx.cwd, "pipeline", "gates", `${desc.workstreamId}.json`);
+  // Simulate driver pre-seeding a stub gate that the LLM never overwrote.
+  fs.writeFileSync(gateFile, JSON.stringify({ stage: "stage-04c", status: "PASS", _stub: true }));
+  try {
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", () =>
+      runHeadless(makeAdapter(), desc, ctx),
+    );
+    assert.equal(r.exitCode, 0);
+    assert.equal(r.gatePath, null, "stub gate should not be treated as a real gate");
+    assert.equal(r.stubGate, true, "stub flag must be set");
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("stub gate detection: gate with _stub:false is treated as a real gate", async () => {
+  const ctx = makeCtx();
+  const desc = makeDescriptor("stage-04c");
+  const gateFile = path.join(ctx.cwd, "pipeline", "gates", `${desc.workstreamId}.json`);
+  fs.writeFileSync(gateFile, JSON.stringify({ stage: "stage-04c", status: "WARN", _stub: false }));
+  try {
+    const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", () =>
+      runHeadless(makeAdapter(), desc, ctx),
+    );
+    assert.equal(r.gatePath, gateFile, "non-stub gate should be returned as gatePath");
+    assert.equal(r.stubGate, false);
   } finally {
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }
