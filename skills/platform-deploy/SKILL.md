@@ -19,8 +19,9 @@ in `.devteam/adapters/<adapter>.md`.
    a `## Rollback` and `## Health signals` section. If missing: write
    `"status": "ESCALATE"` with reason "Runbook required for Stage 8".
 3. **Config.** Read `.devteam/config.yml`. Find `deploy.adapter`. Accept one of:
-   `docker-compose`, `kubernetes`, `terraform`, `custom`. Unknown adapter:
-   write `"status": "ESCALATE"` with reason "Unknown deploy adapter."
+   `docker-compose`, `kubernetes`, `terraform`, `cloud-run`, `gizmos`, `npm`,
+   `custom`. Unknown adapter: write `"status": "ESCALATE"` with reason
+   "Unknown deploy adapter."
 
 ## Step 1 — Load adapter instructions
 
