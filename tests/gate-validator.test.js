@@ -182,6 +182,78 @@ describe("gate-validator: stage-08 cost gate", () => {
   });
 });
 
+describe("gate-validator: stage-07 documentation gate", () => {
+  it("rejects a PASS sign-off gate when docs fields are missing", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-07", {
+      stage: "stage-07",
+      status: "PASS",
+      pm_signoff: true,
+      deploy_requested: true,
+      runbook_referenced: true,
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /docs_surface_affected/);
+  });
+
+  it("rejects a user-visible PASS sign-off gate when docs are not updated", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-07", {
+      stage: "stage-07",
+      status: "PASS",
+      pm_signoff: true,
+      deploy_requested: true,
+      runbook_referenced: true,
+      docs_surface_affected: true,
+      docs_updated: false,
+      docs_skipped_reason: null,
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /docs_updated: true/);
+  });
+
+  it("accepts an internal-only PASS sign-off gate with a skip reason", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-07", {
+      stage: "stage-07",
+      status: "PASS",
+      pm_signoff: true,
+      deploy_requested: true,
+      runbook_referenced: true,
+      docs_surface_affected: false,
+      docs_updated: null,
+      docs_skipped_reason: "internal refactor, no user-visible surface changed",
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /GATE PASS/);
+  });
+
+  it("allows a FAIL sign-off gate to carry unresolved docs blockers", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-07", {
+      stage: "stage-07",
+      status: "FAIL",
+      pm_signoff: false,
+      deploy_requested: false,
+      runbook_referenced: true,
+      docs_surface_affected: true,
+      docs_updated: false,
+      docs_skipped_reason: null,
+      blockers: ["README must document the new CLI flag"],
+    });
+
+    const r = runValidator(cwd);
+    assert.equal(r.status, 2);
+    assert.match(r.stdout, /README must document/);
+  });
+});
+
 describe("gate-validator: contract F required fields", () => {
   it("auto-injects orchestrator when missing and passes", () => {
     const cwd = track(makeTargetProject());

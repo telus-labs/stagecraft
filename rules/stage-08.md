@@ -3,6 +3,7 @@
 Invoke: `dev-platform` agent.
 Preconditions:
 - `pipeline/gates/stage-07.json` has `"pm_signoff": true`
+- Stage 7's documentation gate is satisfied (`docs_surface_affected: false` with a `docs_skipped_reason`, or `docs_surface_affected: true` and `docs_updated: true`)
 - `pipeline/runbook.md` exists and has `## Rollback` + `## Health signals`
   sections (see `templates/runbook-template.md` for the canonical blank form)
 - `.devteam/config.yml` names a valid adapter in `deploy.adapter`

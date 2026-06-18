@@ -7,7 +7,10 @@
   "required": [
     "pm_signoff",
     "deploy_requested",
-    "runbook_referenced"
+    "runbook_referenced",
+    "docs_surface_affected",
+    "docs_updated",
+    "docs_skipped_reason"
   ],
   "properties": {
     "pm_signoff": {
@@ -21,6 +24,28 @@
     "runbook_referenced": {
       "type": "boolean",
       "description": "Confirms pipeline/runbook.md exists with §Rollback and §Health signals before deploy."
+    },
+    "docs_surface_affected": {
+      "type": "boolean",
+      "description": "True when the change touches a CLI flag, config key, API endpoint, or user-visible behavior that requires documentation review."
+    },
+    "docs_updated": {
+      "type": ["boolean", "null"],
+      "description": "True when required docs/changelog updates are complete. Null only when docs_surface_affected is false."
+    },
+    "docs_skipped_reason": {
+      "type": ["string", "null"],
+      "description": "Required non-empty waiver rationale when docs_surface_affected is false; null when docs updates were required and completed."
+    },
+    "docs_gate": {
+      "type": "object",
+      "description": "Optional orchestrator evidence for the auto-fold documentation decision.",
+      "properties": {
+        "changed_files": { "type": "array", "items": { "type": "string" } },
+        "surface_files": { "type": "array", "items": { "type": "string" } },
+        "doc_files": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
     },
     "adapter": {
       "type": "string",

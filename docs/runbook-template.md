@@ -163,16 +163,19 @@ After stage-07 finishes:
   "timestamp": "2026-05-28T16:42:18Z",
   "blockers": [],
   "warnings": [],
-  "pm_signoff": "approved",
-  "platform_signoff": "approved",
-  "runbook_complete": true,
+  "pm_signoff": true,
+  "deploy_requested": true,
+  "runbook_referenced": true,
+  "docs_surface_affected": false,
+  "docs_updated": null,
+  "docs_skipped_reason": "internal refactor, no user-visible surface changed",
   "auto_from_stage_06": false
 }
 ```
 
 If `auto_from_stage_06: true`, the orchestrator auto-folded stage-07 (Stage 6 reported `all_acceptance_criteria_met: true` AND a 1:1 mapping). The runbook still gets written — Platform writes it as part of the auto-fold — but the human sign-off step is skipped.
 
-If `runbook_complete: false`, the runbook has missing sections and Stage 8 (deploy) cannot proceed.
+If `runbook_referenced: false`, the runbook has missing sections and Stage 8 (deploy) cannot proceed.
 
 ## Stage 8 reads this
 

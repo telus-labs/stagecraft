@@ -87,7 +87,7 @@ At Stage 7 (PM sign-off), the PM classifies whether the change touches a **user-
 - `docs_surface_affected` (bool) records the classification; `docs_updated` (bool) records whether the required update was completed; `docs_skipped_reason` (string) records the waiver rationale for internal-only changes
 - `docs_updated: false` with `docs_surface_affected: true` is a gate **blocker** — the PM cannot sign off until docs are updated
 - Internal refactors, tests, and infrastructure changes require only a one-line skip reason; no doc update is mandated
-- Auto-fold from Stage 6 is blocked when `docs_surface_affected: true` and `docs_updated` cannot be confirmed from the pipeline artifacts — the PM is invoked to resolve it
+- Auto-fold from Stage 6 checks the git changed-file set; if user-visible source/CLI/config paths changed and no docs/changelog path changed, auto-fold is blocked and the PM is invoked to resolve it
 
 The pattern mirrors `runbook_referenced` (Stage 8): the gate cannot PASS without an explicit answer.
 

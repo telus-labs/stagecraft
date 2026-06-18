@@ -11,6 +11,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage, trackLabel } = require("./pipeline/stages");
 const { loadConfig, changeIdFromFeature } = require("./config");
 const { gatesDir: getGatesDir, pipelineRoot, prefixPipelineRelative } = require("./paths");
@@ -700,6 +701,107 @@ function workstreamGatesExistFor(stageDef, gatesDir) {
   );
 }
 
+function gitChangedFiles(cwd) {
+  const result = spawnSync("git", ["status", "--porcelain", "-z", "--untracked-files=all"], {
+    cwd,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) return { ok: false, files: [] };
+
+  const entries = result.stdout.split("\0").filter(Boolean);
+  const files = [];
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const status = entry.slice(0, 2);
+    let file = entry.slice(3);
+    if (status.includes("R") || status.includes("C")) {
+      file = entries[i + 1] || file;
+      i++;
+    }
+    if (file) files.push(file.replace(/\\/g, "/"));
+  }
+  return { ok: true, files };
+}
+
+function isDocumentationPath(file) {
+  return (
+    file === "README.md" ||
+    file === "CHANGELOG.md" ||
+    file.startsWith("docs/") ||
+    file.startsWith("changelog.d/") ||
+    file.endsWith(".md")
+  );
+}
+
+function isProcessOnlyPath(file) {
+  return (
+    file.startsWith("pipeline/") ||
+    file.startsWith(".git/") ||
+    file.startsWith("tests/") ||
+    file.startsWith("test/") ||
+    file.includes("/__tests__/") ||
+    file.endsWith(".test.js") ||
+    file.endsWith(".spec.js")
+  );
+}
+
+function isUserVisiblePath(file) {
+  if (isProcessOnlyPath(file) || isDocumentationPath(file)) return false;
+  return (
+    file === "package.json" ||
+    file === "package-lock.json" ||
+    file.startsWith("bin/") ||
+    file.startsWith("core/cli/") ||
+    file.startsWith("src/") ||
+    file.startsWith("app/") ||
+    file.startsWith("pages/") ||
+    file.startsWith("routes/") ||
+    file.startsWith("api/") ||
+    file.startsWith("server/") ||
+    file.startsWith("public/") ||
+    /(^|\/)(openapi|swagger|schema)\.(ya?ml|json)$/i.test(file)
+  );
+}
+
+function classifyDocumentationGate(cwd) {
+  const changed = gitChangedFiles(cwd);
+  if (!changed.ok) {
+    return {
+      docs_surface_affected: false,
+      docs_updated: null,
+      docs_skipped_reason: "git status unavailable; auto-fold found no reviewable changed-file surface",
+      changed_files: [],
+      surface_files: [],
+      doc_files: [],
+    };
+  }
+
+  const files = changed.files.filter((file) => !isProcessOnlyPath(file));
+  const surfaceFiles = files.filter(isUserVisiblePath);
+  const docFiles = files.filter(isDocumentationPath);
+  if (surfaceFiles.length === 0) {
+    return {
+      docs_surface_affected: false,
+      docs_updated: null,
+      docs_skipped_reason: files.length === 0
+        ? "no changed files detected outside pipeline artifacts"
+        : "changed files are internal-only or documentation-only",
+      changed_files: files,
+      surface_files: [],
+      doc_files: docFiles,
+    };
+  }
+
+  return {
+    docs_surface_affected: true,
+    docs_updated: docFiles.length > 0,
+    docs_skipped_reason: null,
+    changed_files: files,
+    surface_files: surfaceFiles,
+    doc_files: docFiles,
+  };
+}
+
 // Stage 7 auto-fold. Pure function — returns { ok: false, reason } on
 // any precondition failure, or { ok: true, gate, acCount } on success.
 // Does NOT write any file; the caller is responsible for persisting the
@@ -759,6 +861,13 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
 
   const runbookPath = path.join(root, "runbook.md");
   const runbookExists = fs.existsSync(runbookPath);
+  const docsGate = classifyDocumentationGate(cwd);
+  if (docsGate.docs_surface_affected && docsGate.docs_updated !== true) {
+    return {
+      ok: false,
+      reason: `documentation gate requires PM confirmation for user-visible files: ${docsGate.surface_files.join(", ")}`,
+    };
+  }
 
   const gate = {
     stage: "stage-07",
@@ -771,6 +880,14 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
     pm_signoff: true,
     deploy_requested: true,
     runbook_referenced: runbookExists,
+    docs_surface_affected: docsGate.docs_surface_affected,
+    docs_updated: docsGate.docs_updated,
+    docs_skipped_reason: docsGate.docs_skipped_reason,
+    docs_gate: {
+      changed_files: docsGate.changed_files,
+      surface_files: docsGate.surface_files,
+      doc_files: docsGate.doc_files,
+    },
     auto_from_stage_06: true,
     auto_fold: {
       ac_count: briefAcs.length,
