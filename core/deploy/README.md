@@ -57,6 +57,7 @@ Every adapter must:
 | `terraform`                | `terraform.md`     | IaC-managed infra on any cloud     |
 | `cloud-run`                | `cloud-run.md`     | GCP Cloud Run via Artifact Registry + gcloud |
 | `gizmos`                   | `gizmos.md`        | Gizmos platform (Cloudflare Workers, gizmos.run) |
+| `npm`                      | `npm.md`           | npm package publish (CLI tools, libraries) |
 | `custom`                   | `custom.md`        | Project-specific script (escape hatch) |
 
 ## Conventions files
