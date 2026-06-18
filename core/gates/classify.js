@@ -91,6 +91,12 @@ const MAX_TRANSIENT_RETRIES_DEFAULT = 1;
  */
 function classifyDispatch(result, { transientRetries = 0, maxTransientRetries = MAX_TRANSIENT_RETRIES_DEFAULT } = {}) {
   if (result.wroteGate) return "ok";
+  // Stub gate still present — LLM exhausted context before overwriting it.
+  // Treat exactly like a crash or timeout: transient until budget spent.
+  if (result.stubGate) {
+    if (transientRetries >= maxTransientRetries) return "structural-input";
+    return "transient";
+  }
   // Clean exit but nothing written → the host did nothing; retry won't help.
   if (result.exitCode === 0 && !result.timedOut) return "structural-input";
   // Crash / timeout / non-zero exit: transient until we've retried enough.

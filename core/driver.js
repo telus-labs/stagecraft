@@ -30,7 +30,7 @@ const path = require("node:path");
 const { next, runStageHeadless, mergeWorkstreamGates } = require("./orchestrator");
 const { loadConfig, changeIdFromFeature, changeIdFromSymptom } = require("./config");
 const { pipelineRoot, gatesDir: getGatesDir, logsDir: getLogsDir, prefixPipelineRelative } = require("./paths");
-const { orderedStageNamesForTrack } = require("./pipeline/stages");
+const { orderedStageNamesForTrack, STAGES } = require("./pipeline/stages");
 const { runAdvise } = require("./advise");
 const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
@@ -437,6 +437,37 @@ function defaultSleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 // ADR-007 Tier 1: observe-only stall probe. Runs fire-and-forget alongside
 // each run-stage/continue-stage dispatch. Wakes every stallPollIntervalMs
 // and checks whether the workstream log grew or a gate appeared. If neither
+// §stub-gate — pre-dispatch stub for preSeedGate stages.
+//
+// For stages that routinely exhaust context before the gate write (currently
+// red-team / stage-04c), the driver writes a minimal stub gate with `_stub: true`
+// immediately before dispatch. headless.js detects the stub post-dispatch: if the
+// LLM overwrote it (normal), gatePath is valid; if it didn't (context exhausted),
+// stubGate: true is returned. classifyDispatch treats stubGate as transient rather
+// than the usual structural-input for exit-code-0+no-gate, giving one retry.
+//
+// Before the transient retry the driver deletes the stub so next() doesn't
+// mistake it for a completed stage gate.
+function writeStubGate(gatesDirPath, stageId, track) {
+  const stub = {
+    _stub: true,
+    stage: stageId,
+    status: "PASS",
+    orchestrator: "devteam@pre-dispatch",
+    track: track || "full",
+    timestamp: new Date().toISOString(),
+    blockers: [],
+    warnings: [],
+    surfaces_walked: [],
+    findings_count: 0,
+    severity_breakdown: { critical: 0, high: 0, medium: 0, low: 0 },
+    must_address_before_peer_review: [],
+    noted_for_followup: [],
+  };
+  fs.mkdirSync(gatesDirPath, { recursive: true });
+  fs.writeFileSync(path.join(gatesDirPath, `${stageId}.json`), JSON.stringify(stub, null, 2), "utf8");
+}
+
 // happened within stallThresholdMs, emits a stall-detected event and exits.
 // Any log growth resets the clock, so this detects silent hangs only —
 // loop-spew (a model emitting repeating output indefinitely) resets the clock
@@ -1289,6 +1320,12 @@ async function run(opts = {}) {
         const targetedFixSnapshot = targetedFix
           ? hashTargetedFixFiles(cwd, targetedFix.files)
           : null;
+        // §stub-gate: pre-seed a stub gate for stages that frequently exhaust
+        // context before reaching the gate write (preSeedGate: true).
+        const stageDef = STAGES[r.name];
+        if (stageDef && stageDef.preSeedGate && r.stage) {
+          writeStubGate(gatesDir(cwd, changeId), r.stage, effectiveTrack);
+        }
         try {
           runResult = await _runStageHeadless(r.name, {
             cwd,
@@ -1324,6 +1361,8 @@ async function run(opts = {}) {
         const nonSkipped = results.filter((x) => !x.skipped);
         const anyTimedOut = results.some((x) => x.timedOut);
         const wroteGate = nonSkipped.every((x) => x.gatePath);
+        // §stub-gate: true when any workstream left a pre-seeded stub intact.
+        const anyStubGate = nonSkipped.some((x) => x.stubGate);
         // exitCode is 0 only when every dispatched workstream cleanly exited 0;
         // any non-zero/null (timeout) collapses to 1 for classification.
         const exitCode = nonSkipped.length > 0 && nonSkipped.every((x) => x.exitCode === 0) ? 0 : 1;
@@ -1343,7 +1382,7 @@ async function run(opts = {}) {
         // guard. A dispatch that wrote no gate is transient (backoff + retry)
         // until the transient budget is spent, then structural (halt).
         const dispatchClass = classifyDispatch(
-          { wroteGate, exitCode, timedOut: anyTimedOut },
+          { wroteGate, exitCode, timedOut: anyTimedOut, stubGate: anyStubGate },
           { transientRetries: state.transient[r.name] || 0, maxTransientRetries },
         );
         if (dispatchClass === "ok") {
@@ -1409,7 +1448,12 @@ async function run(opts = {}) {
         if (dispatchClass === "transient") {
           state.transient[r.name] = (state.transient[r.name] || 0) + 1;
           saveRunState(cwd, changeId, state);
-          logEvent(cwd, changeId, { ...base, outcome: "transient-retry", attempt: state.transient[r.name] });
+          // §stub-gate: delete the stub so next() doesn't treat it as a completed
+          // stage gate on the retry loop. The pre-seed runs again before re-dispatch.
+          if (anyStubGate && r.stage) {
+            try { fs.unlinkSync(path.join(gatesDir(cwd, changeId), `${r.stage}.json`)); } catch { /* already gone */ }
+          }
+          logEvent(cwd, changeId, { ...base, outcome: "transient-retry", attempt: state.transient[r.name], stub_gate: anyStubGate || undefined });
           onEvent({ type: "transient-retry", ...base, attempt: state.transient[r.name], delay_ms: retryDelayMs });
           await _sleep(retryDelayMs);
           continue;
