@@ -704,8 +704,9 @@ file-path regex if those fields are absent.
 ```bash
 # devteam next prints the exact sequence; manually it is:
 # 1. Clear stale build gate(s) and audit gate (recipe-derived list)
-rm pipeline/gates/stage-04.<ws>.json pipeline/gates/stage-04.json
-rm pipeline/gates/stage-06b.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-04.<ws>.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-04.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-06b.json
 
 # 2. Re-run build with accessibility fix context
 devteam stage build --workstream <ws> --patch --from accessibility-audit --skip-completed --headless
@@ -858,11 +859,11 @@ The fix is in the **backend** workstream (or whichever workstream owns the file 
 # (edit the file named in fix_hint — the gate's counterexample + fix_hint points exactly there)
 
 # 2. Delete the FAIL gate so the stage can be re-run
-rm pipeline/gates/stage-06d.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-06d.json
 
 # 3. Also delete the backend build gate if the change is in src/backend/ — it was
 #    produced before the fix; its content claims represent pre-fix code
-rm pipeline/gates/stage-04.backend.json   # adjust area as needed
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-04.backend.json
 
 # 4. Re-run verification-beyond-tests; the verifier re-runs the property/mutation
 #    suite against the fixed code
@@ -877,7 +878,7 @@ devteam next --json
 ### Re-run sequence
 
 ```bash
-rm pipeline/gates/stage-06d.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-06d.json
 devteam stage verification-beyond-tests --headless
 devteam next
 ```

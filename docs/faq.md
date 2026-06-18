@@ -603,9 +603,9 @@ For high-assurance work on the `full` track, verification-beyond-tests (stage-06
 Yes. Two ways:
 
 - **Re-run an earlier stage.** Writing a new gate file for an earlier stage doesn't roll back the later ones — they still exist on disk. But `devteam next` only cares about the most recent gate per stage, so re-running a stage with `--feature "..."` and producing a new gate effectively "rewinds" that stage.
-- **Delete later gates manually.** If you want to truly start over from stage-04, `rm pipeline/gates/stage-04*.json pipeline/gates/stage-05*.json …`. The orchestrator will then see those stages as pending.
+- **Restart later stages.** If you want to truly start over from stage-04, run `devteam restart build --cascade`. The orchestrator will then see those stages as pending.
 
-`devteam replay <stage-id>` re-runs a recorded stage with the current config and diffs the new gate against the original — useful for verifying that a fix actually changed the outcome. `devteam restart <stage>` clears a stage's gate files so it can be re-run fresh. Manual gate deletion (`rm pipeline/gates/stage-04*.json`) is also always an option.
+`devteam replay <stage-id>` re-runs a recorded stage with the current config and diffs the new gate against the original — useful for verifying that a fix actually changed the outcome. `devteam restart <stage>` clears a stage's gate files so it can be re-run fresh.
 
 ## Running offline / in CI
 

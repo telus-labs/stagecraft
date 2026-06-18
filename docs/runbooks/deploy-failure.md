@@ -159,7 +159,7 @@ infrastructure configuration fix):
 
 ```bash
 # Clear the deploy gate, then patch-build only the owning workstream.
-rm pipeline/gates/stage-08.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-08.json
 devteam stage build --patch --from stage-08 --workstream <workstream> --headless
 devteam merge build
 devteam stage pre-review --headless
@@ -174,7 +174,7 @@ devteam stage deploy --headless
 
 ```bash
 # Clear just the deploy gate; everything upstream is still valid.
-rm pipeline/gates/stage-08.json
+node -e "require('node:fs').rmSync(process.argv[1], { force: true })" pipeline/gates/stage-08.json
 devteam stage deploy --headless
 ```
 

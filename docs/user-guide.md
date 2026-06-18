@@ -684,7 +684,7 @@ devteam stage security-review --headless   # if still required
 devteam stage red-team --headless          # verifies fixes
 ```
 
-For the complete procedure with a worked example (including the `rm pipeline/gates/stage-04.backend.json` optimization to re-run only the affected workstream, what happens to non-target workstreams, the `noted_for_followup` question, and the equivalent flow for QA/pre-review/peer-review FAIL), see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
+For the complete procedure with a worked example (including the portable gate-clear command to re-run only the affected workstream, what happens to non-target workstreams, the `noted_for_followup` question, and the equivalent flow for QA/pre-review/peer-review FAIL), see **[`docs/runbooks/fix-and-retry.md`](runbooks/fix-and-retry.md)**.
 
 ### Fixing QA failures within build
 

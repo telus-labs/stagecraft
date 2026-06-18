@@ -74,10 +74,11 @@ function _buildRoles() {
 
 // ── Formatter ────────────────────────────────────────────────────────────────
 
-// Single formatter: gate paths → rm command strings.
+// Single formatter: gate paths → cross-platform command strings.
 // This is the one place where structured clear_gates become shell strings.
 function formatGateClear(clearGates) {
-  return clearGates.map(g => `rm ${g}`);
+  return clearGates.map(g =>
+    `node -e "require('node:fs').rmSync(process.argv[1], { force: true })" ${g}`);
 }
 
 // Build the standard set of clear_gates paths for a stage-04 (build) retry:
