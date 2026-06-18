@@ -51,7 +51,7 @@ You can drive many target projects from one framework install. Updating the fram
 
 ### Does this run on Windows?
 
-Not natively. Stagecraft is macOS/Linux only for now. Three things break on bare Windows: `devteam doctor` probes the PATH using POSIX conventions, the headless command splitter assumes POSIX argument quoting, and fix-step commands contain POSIX `rm` strings. If you're on Windows, run Stagecraft inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) — it works without any special configuration. Native Windows support is tracked in `docs/BACKLOG.md` (item A6) if there's demand and someone wants to port it.
+Yes. Stagecraft supports native Windows, macOS, and Linux. A Node 22 Windows CI smoke exercises CLI startup, `init`, `doctor`, quoted host commands, PATHEXT-aware executable discovery, and timeout termination. You can still use [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) when a host CLI or your project's own toolchain expects a POSIX shell.
 
 ### Can I run this without Node?
 

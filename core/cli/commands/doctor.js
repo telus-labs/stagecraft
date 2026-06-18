@@ -10,16 +10,6 @@ const FRAMEWORK_ROOT = path.join(__dirname, "..", "..", "..");
 
 const name = "doctor";
 
-// Exported for direct unit-testing without spawning a subprocess.
-function warnIfWindows(platform, write) {
-  if (platform !== "win32") return;
-  (write || process.stderr.write.bind(process.stderr))(
-    "⚠️  Warning: Stagecraft is not supported on native Windows.\n" +
-    "   Please run inside WSL2 (Windows Subsystem for Linux 2).\n" +
-    "   See: https://learn.microsoft.com/en-us/windows/wsl/install\n",
-  );
-}
-
 function pathDelimiterFor(platform) {
   return platform === "win32" ? ";" : path.delimiter;
 }
@@ -65,7 +55,6 @@ const flags = {
 
 function run(positional, _flags) {
   if (_flags.help) { console.log(generateHelp("devteam doctor [options]", flags)); process.exit(0); }
-  warnIfWindows(process.platform);
   const cwd = _flags.cwd || process.cwd();
   const { loadConfig, configPath } = require(path.join(FRAMEWORK_ROOT, "core", "config"));
   let criticalFailures = 0;
@@ -202,4 +191,4 @@ function run(positional, _flags) {
   console.log("✅ everything looks good");
 }
 
-module.exports = { name, flags, run, warnIfWindows, findOnPath };
+module.exports = { name, flags, run, findOnPath };

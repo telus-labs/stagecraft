@@ -15,6 +15,33 @@ permissions:
   contents: read
 
 jobs:
+  windows-smoke:
+    name: windows smoke (node 22)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run native portability tests
+        run: node --test tests/command-line.test.js tests/posix-only.test.js tests/process-kill.test.js tests/windows-smoke.test.js
+
+      - name: Verify CLI help, init, and doctor
+        shell: pwsh
+        run: |
+          node bin/devteam help
+          $target = Join-Path $env:RUNNER_TEMP "stagecraft-windows-smoke"
+          node bin/devteam init --host generic --cwd $target
+          node bin/devteam doctor --cwd $target
+
   test:
     name: node ${{ matrix.node-version }}
     runs-on: ubuntu-latest

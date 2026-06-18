@@ -1,6 +1,6 @@
 # Testing
 
-**Current state:** **`npm test` runs the full suite in ~5s** — all offline, no external services. CI runs on Node 20 / 22 / 24. (Exact counts in `npm test` output; this doc avoids quoting specific numbers since they drift.)
+**Current state:** **`npm test` runs the full suite in ~5s** — all offline, no external services. CI runs the full suite on Ubuntu with Node 20 / 22 / 24 and a native Windows portability smoke on Node 22. (Exact counts in `npm test` output; this doc avoids quoting specific numbers since they drift.)
 
 ## Running the suite
 
@@ -67,6 +67,8 @@ node --experimental-test-coverage --test tests/*.test.js
 
 - Node 20, 22, 24 (matrix; `fail-fast: false`)
 - `npm ci` → `npm test` → `npm run consistency` → `./bin/devteam help` → `./bin/devteam init && ./bin/devteam doctor`
+- Windows Node 22 smoke: command parsing, PATHEXT probing, timeout termination,
+  quoted executable dispatch, CLI help, fresh init, and doctor
 
 Node 18 was dropped in v0.2.0 — it reached EOL in April 2025 and `@huggingface/transformers ^4.x` requires Node ≥20. The matrix tracks current LTS (20, 22) plus latest (24).
 

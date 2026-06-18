@@ -114,7 +114,7 @@ Full feature catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
 ## Prerequisites
 
-**Platform:** macOS and Linux are the supported platforms. Windows users should run Stagecraft inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/install) — native Windows is not supported: `devteam doctor` shells out to POSIX utilities, the headless command splitter assumes POSIX argument syntax, and fix-step commands use POSIX `rm`. Running under WSL2 is the straightforward workaround and works without any configuration changes.
+**Platform:** macOS, Linux, and native Windows are supported. CI exercises the core Windows portability surface on Node 22: CLI startup, initialization, diagnostics, quoted host commands, executable discovery, and timeout termination. WSL2 remains a supported option when a host CLI or project toolchain expects a POSIX shell.
 
 - Node.js ≥ 18
 - At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), **Gemini CLI** (`gemini --version` works), or just a terminal (generic adapter — prompts rendered for manual use, no automation)
