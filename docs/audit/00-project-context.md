@@ -2,109 +2,144 @@
 
 ## Summary
 
-Stagecraft is a model-agnostic AI dev-team pipeline orchestrator. It installs role briefs, hooks, and rules into a target project, then orchestrates an 18-stage software-development pipeline across one or more AI coding tools (Claude Code, Codex CLI, Gemini CLI, generic). It also ships a codebase audit feature — which is what's producing this very document.
+Stagecraft is a model-agnostic AI software-delivery orchestrator. Its CLI binary is
+`devteam`; the core renders stage prompts, validates JSON gates, routes workstreams to
+host adapters, and advances or halts an on-disk pipeline. It does not call a model API
+directly. Claude Code, Codex, Gemini CLI, and a generic terminal adapter provide the
+model-facing execution surfaces.
 
-This is the **second self-audit** — Stagecraft auditing itself, six days after the first dogfood run on 2026-05-28. The prior audit's full output is preserved at `docs/audit-archive/2026-05-28-v0.4.0-initial-dogfood/`. Phase 3 of this audit will carry forward unresolved items from that backlog (per the new audit skill § 3.1 rule).
+This is the **third full Stagecraft self-audit**, started 2026-06-18. The prior audit
+(2026-06-03, v0.4.0, post-derive-approvals) is archived at
+`docs/audit-archive/2026-06-03-v0.4.0-post-derive-approvals/`. Since that audit the
+repository has moved from 254 to 538 tracked files, from 49 to 91 test files, from 17
+to 19 stage definitions, and from v0.4.0 to v0.7.0.
 
 ## Languages and frameworks
 
-| Language | Version | Where |
+| Surface | Version / form | Where |
 |---|---|---|
-| JavaScript (Node) | ≥20 (engines.node) | `core/`, `bin/`, `hosts/`, `scripts/`, `tests/` |
-| Markdown | — | `docs/`, `rules/`, `roles/`, `skills/`, `templates/`, root |
-| JSON Schema | draft 2020-12 | `core/gates/schemas/` |
-| YAML | — | host adapter `capabilities.json`, `.devteam/config.yml` (in target projects) |
+| JavaScript | CommonJS, Node.js >=20 | `bin/`, `core/`, `hosts/`, `scripts/`, `tests/` |
+| Markdown | Host-neutral rules, roles, skills, plans, runbooks | `docs/`, `plans/`, `roles/`, `rules/`, `skills/`, `templates/` |
+| JSON / JSON Schema | Gate contracts and host capabilities | `core/gates/schemas/`, `hosts/*/capabilities.json` |
+| YAML | Project config and GitHub Actions | `.devteam/config.yml` in targets, `.github/workflows/` |
+| HTML/CSS/browser JS | Read-only pipeline dashboard | `core/ui/static/` |
 
-**Frameworks:** none. No web framework, no test framework beyond `node --test` (built-in), no ORM. All deliberate — this is an orchestrator, not an application.
+There is no application framework, transpiler, bundler, ORM, or third-party test
+framework. The project deliberately uses Node built-ins and `node:test`.
 
-## Build & dependency manager
+## Build and dependency manager
 
-- Manager: `npm`. Lockfile present (`package-lock.json`).
-- Build step: none. Pure Node, no transpilation, no bundler.
-- Dependencies (production): `@huggingface/transformers` (memory embedder), 6 `@opentelemetry/*` packages (observability SDK), `js-yaml`. No dev dependencies.
+- Package manager: npm; `package-lock.json` is committed.
+- Build step: none. The CLI runs directly from source.
+- Runtime dependencies: `js-yaml` and six OpenTelemetry packages.
+- Optional runtime dependency: `@huggingface/transformers` for local embeddings.
+- Development dependencies: ESLint, `@eslint/js`, and `eslint-plugin-security`.
+- Package version: `0.7.0`; package remains `private: true`.
 
 ## Commands
 
 ```sh
-npm install                                # install dependencies
-npm test                                   # 778 tests across 123 suites, ~5s wall-clock
-npm run consistency                        # cross-artifact consistency lint
-./bin/devteam help                         # CLI entry
-./bin/devteam init --host claude-code      # install host adapter into a target project
-./bin/devteam stages                       # list known pipeline stages
+npm ci                                               # reproducible install
+npm test                                             # full node:test suite
+CI=true DEVTEAM_HEADLESS_COMMAND=cat npm test        # CI-equivalent host stub
+npm run consistency                                  # cross-artifact drift checks
+npm run lint                                         # ESLint + security subset
+npm run docs:generate                                # generated reference tables
+./bin/devteam help                                   # CLI smoke test
 ```
 
-Other npm scripts: `visualize`, `pr-pack`, `pr-publish`, `dashboard`, `dashboard:cost`, `performance`, `routing:suggest`, `budget`, `release:check`, `release:notes`.
+Useful operational commands include `devteam stage`, `next`, `run`, `summary`,
+`status`, `commit`, `restart`, `replay`, `reproduce`, `verify-chain`, `doctor`,
+`assess`, `standards discover`, `memory`, and `ui`.
 
-## Deployment target
+## Delivery and external execution
 
-Not deployed. Developer tool installed via `npm link` (or future `npm install -g`). Users `git clone` the framework, run `npm install`, then run `devteam init` in target projects to lay down per-host surfaces.
+Stagecraft is a developer CLI rather than a hosted service. It is installed from the
+repository or via npm linking today. GitHub Actions runs lint, tests, informational
+coverage, consistency checks, CLI/init/doctor smoke tests, onboarding smoke, and the
+per-PR changelog-fragment guard on Node 20, 22, and 24.
 
-CI: `.github/workflows/test.yml` runs `npm test` + `npm run consistency` + `./bin/devteam help` + `devteam init --host claude-code` + `devteam doctor` against a fresh `mktemp -d` target. Matrix: Node 20, 22, 24. No artifacts published.
+Deployment *instructions* for target projects support Docker Compose, Kubernetes,
+Terraform, GCP Cloud Run, Gizmos/Cloudflare Workers, and custom scripts. Those tools
+are invoked by the routed platform agent; Stagecraft core does not embed cloud SDKs.
 
-## Documented vs. undocumented-but-implied conventions
+## Governing conventions
 
-**Documented** (load-bearing, codified in `AGENTS.md` / `ARCHITECTURE.md` / rules):
+Documented, load-bearing conventions:
 
-- Gate JSON identity fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. Workstream gates add `workstream`, `host`. Merged gates add `workstreams[]`. No `agent` field anywhere.
-- Workstream gate naming: `pipeline/gates/<stage>.<workstream>.json` (dot separator). Stage merged: `pipeline/gates/<stage>.json`.
-- Routing precedence: `routing.stages[stage] → routing.roles[role] → routing.default_host`.
-- `node:` prefix on every built-in import (`require("node:fs")`, `require("node:path")`).
-- stdout = primary output, stderr = framing/logs. Validator + hooks are exit-code-driven (exception).
-- Host-neutral paths in shared content (`.devteam/rules/`, `roles/`, `skills/`). Adapters do path transforms at install time.
-- Idempotent installs — every adapter `install()` must be safe to re-run.
-- 11 locked design decisions in `ARCHITECTURE.md` — not casually editable.
-- **NEW since prior audit:** Audit-archive convention — past audits land in `docs/audit-archive/<date>-<version>-<context>/`; the skill's Step 0.0 enforces. Inter-agent marker vocabulary catalogued in `docs/conventions.md` (`QUESTION:` / `PM-ANSWER:` / `BLOCKER:` / `SUGGESTION:` / `PATTERN:` / `REVIEW:` / `ESCALATE:` / `PRINCIPAL-RULING:`).
+- Gate identity, stage shape, track membership, adapter exports, routing precedence,
+  and workstream gate filenames are locked contracts.
+- No `agent` field. Use `workstream` + `host` or stage-level `orchestrator`.
+- Core is model-neutral; host-specific invocation belongs in adapters.
+- Built-in imports use `node:` prefixes.
+- stdout is primary output; stderr is framing, diagnostics, and progress.
+- `roles/`, `rules/`, and `skills/` are canonical; adapters render installed copies.
+- Installs are idempotent.
+- Public/code behavior changes in guarded directories require `changelog.d` fragments.
+- Derivable reference tables are generated and checked by `npm run consistency`.
+- Phase 1/2 audit findings require direct `verified_by` evidence before promotion.
 
-**Undocumented but implied** (still load-bearing, surfaces in code but no dedicated docs):
+Dominant but less formally centralized patterns:
 
-- Naming: `cmdX` for `bin/devteam` subcommand functions, `parseFlags()` shape for flag handling.
-- Error handling: `console.error` + `process.exit(N)` rather than throwing.
-- Test file naming: `tests/*.test.js`, single-level (no subdirectories).
-- Slash command `.md` files live under `hosts/<host>/install/commands/`, copied to `.claude/commands/` at install for claude-code.
+- CLI subcommands are lazy-loaded from `core/cli/commands/<name>.js`.
+- Commands export `{ name, flags, run }` and use shared flag parsing/help generation.
+- Tests are flat `tests/*.test.js`, use `node:test`, and create isolated temp targets.
+- Errors at CLI boundaries become a concise stderr message and non-zero exit code.
 
-## Codebase size
+## Repository size
 
-| Surface | Count |
+Measured from tracked files on 2026-06-18:
+
+| Surface | Count / size |
+|---|---:|
+| Tracked files | 538 |
+| JavaScript files | 205 |
+| JavaScript lines | 50,898 |
+| `core/` files | 123 |
+| `core/` JavaScript lines | 19,398 |
+| Test files | 91 |
+| Documentation markdown files | 77 |
+| Role briefs | 12 |
+| Rules files | 29 |
+| Skills | 20 |
+| Stage definitions | 19 (18 ordered pipeline stages plus the stage registry shape) |
+| Tracks | 6 |
+| First-party hosts | 4 |
+| CLI command modules | 34 |
+
+This is a single-package application, not a monorepo. Host directories are adapters,
+not independently versioned packages. External adapters can be discovered from
+`@devteam/host-*` npm packages installed in a target project.
+
+## Major directories
+
+| Directory | Responsibility |
 |---|---|
-| Total files (excluding node_modules, .git, docs/audit-archive) | 254 |
-| `core/` JS files | 29 |
-| `core/` lines (incl. `bin/devteam`) | 9,146 |
-| Tests | 49 files, 778 tests, 123 suites |
-| Hosts | 4 (`claude-code`, `codex`, `gemini-cli`, `generic`) |
-| Roles | 14 `.md` briefs under `roles/` |
-| Stages | 17 (full track), 6 tracks total |
-| Rules docs | 21 files under `rules/` |
-| Skills | 13 under `skills/` |
-| Per-stage schemas | under `core/gates/schemas/` |
-| Templates | under `templates/` |
+| `bin/` | Executable entry point |
+| `core/` | Model-neutral orchestration, state, gates, guards, verification, UI |
+| `hosts/` | First-party adapter implementations and install payloads |
+| `roles/`, `rules/`, `skills/` | Canonical model-facing behavior |
+| `templates/` | Generated artifact and audit templates |
+| `tests/` | Unit, integration, CLI, contract, and end-to-end tests |
+| `scripts/` | Analytics, release, consistency, docs generation, PR tooling |
+| `docs/` | Operator, evaluator, contributor, reference, runbook, ADR, audit docs |
+| `plans/` | Completed phase plans and evidence reviews |
+| `examples/` | Checked-in example pipeline fixture |
 
-## Monorepo vs single app
+## Surprises and audit questions
 
-Single app. One Node package, one CLI binary (`devteam`), one test suite. The `hosts/<host>/` directories aren't separate packages — they're adapters loaded by the core.
+- Velocity is exceptional: 550 commits have landed since the prior audit, including
+  fifteen completed roadmap phases and many dogfooding fixes.
+- `core/driver.js` is now 1,500+ lines and `core/orchestrator.js` 1,200+ lines; both
+  remain structured, but their growth deserves targeted quality analysis.
+- The active GitHub backlog is intentionally evidence-gated (D5, H3, ADR-005,
+  ADR-007 Tier 2), while `docs/BACKLOG.md` still contains several open rows whose
+  implementation appears to have landed. Phase 3 must reconcile those surfaces.
+- Native Windows compatibility work landed in several independent PRs; Phase 1/2
+  should verify whether documentation and the backlog now describe the actual state.
+- The project has strong tests and CI, but the suite size and runtime need fresh
+  measurement rather than inherited counts.
 
-## Surprises and open questions for this audit
+## Project-specific extensions
 
-What's changed since 2026-05-28 (high-level — for the full picture, see CHANGELOG.md `[Unreleased]` and PR history #20–#28):
-
-- **New CLI subcommands**: `devteam ruling`, `devteam derive-approvals`, `devteam log`, `devteam restart`, `devteam verify`. The CLI surface grew significantly.
-- **Stage 7 auto-fold actually implemented** (the prior audit's biggest finding — documented-but-not-shipped feature).
-- **Orchestrator-stamped verification gates** for stage-04a and stage-06 — the orchestrator now runs commands itself instead of trusting model claims.
-- **`--patch --from <gate>` flow** for scoped re-runs after red-team / QA-within-build / peer-review FAIL. Auto-injected blocker sections in `pipeline/context.md` with idempotent strip-on-resolve.
-- **Per-stage rules files** — `pipeline-build.md` (358 lines) split into per-stage `rules/stage-NN.md` files loaded on demand.
-- **De-duplicated `renderStagePrompt`** across the three host adapters (claude-code, codex, gemini-cli).
-- **Security heuristic** now scans both paths and file contents (10 content patterns + new path patterns).
-- **`adapter-contract.test.js`** upgraded from 24 existence-of-method assertions to 56 behavioural assertions.
-- **New role briefs**: dev roles now have a `## Verify` forcing function; `auditor` brief still in `roles/`.
-- **Two new runbooks**: `docs/runbooks/escalation.md`, `docs/runbooks/fix-and-retry.md`.
-- **New `docs/conventions.md`** documenting the inter-agent marker vocabulary.
-- **Four-mode audit framing** in `docs/user-guide.md` — distinguishing code / process / consistency / threat audits.
-- **Audit-archive convention** (this audit's existence depends on it).
-
-Open questions for later phases:
-
-- Has the increase in CLI surface (5+ new subcommands) been documented coherently, or is there drift between `--help`, README, and user-guide?
-- Are the orchestrator-stamped verification commands' fall-through behavior (config → package.json → skip) tested for all three paths?
-- Does the security-heuristic content scan have false-positive escape hatches (the `devteam-allow-secret:` magic comment exists for the secret-scan hook — does the security-heuristic have similar)?
-- The codebase still has no `.eslintrc`, no `prettier` config, no `.editorconfig`. Is the style consistency holding by convention alone, and is that scaling?
-- Are the per-host installs still consistent? `renderStagePrompt` de-duplication means adapters share footer code, but the contract test only verifies the contract — not that all four hosts produce equivalent prompts for the same descriptor.
+No `docs/audit-extensions.md` file is present.

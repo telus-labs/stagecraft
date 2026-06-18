@@ -12,7 +12,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 - [E. Developer experience](#e-developer-experience)
 - [F. Integrations — where the team plugs in](#f-integrations--where-the-team-plugs-in)
 - [G. Innovation bets — speculative, future-oriented](#g-innovation-bets--speculative-future-oriented)
-- [Priority queue](#priority-queue-2026-06-03--post-comparative-analysis)
+- [Priority queue](#priority-queue-2026-06-18--audit-refresh)
 - [Staying ahead of the curve — bets](#staying-ahead-of-the-curve--bets)
 
 **Cross-references.** Items tagged `[cmp-E-N]` were added or refined on 2026-06-03 after the comparative analysis against six adjacent AI-dev frameworks ([`comparative-analysis.md`](comparative-analysis.md)). Items tagged `[hist-N]` came from `audit-archive/HISTORY.md` § Between-cycle observations. Where multiple sources converge on the same idea, that's recorded inline.
@@ -27,8 +27,10 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | A | A4 | Pluggable adapter discovery | 3 | 2 | landed · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | B | B1 | Accessibility audit stage | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B | B2 | Performance budget stage | 4 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
+| B | B3 | Deploy cost gate | 4 | 2 | landed in PR #221 · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | B | B4 | Observability gate | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B | B5 | Migration safety stage | 5 | 3 | v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
+| B | B6 | Documentation gate | 3 | 2 | landed in PR #225 · [CHANGELOG](../CHANGELOG.md#unreleased) |
 | B | B8 | Cross-artifact consistency analyze `[cmp-E-1]` | 4 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B9 | Bounded workspace deltas `[cmp-E-2]` | 4 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B10 | Discover Standards preprocessing `[cmp-E-5]` | 3 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
@@ -75,14 +77,12 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
 | A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs the stage on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). |
 | A5 | **API-direct adapter** (no host CLI; talks to Anthropic / OpenAI / Google APIs directly) | 3 | 3 | For users who don't want to install claude-code or codex but still want orchestration. Lighter dependency footprint. |
-| A6 | **Windows native port** | 2 | 4 | Stagecraft is currently POSIX-only (decided 2026-06-11, phase-3.5). Three known breakage points: (1) `devteam doctor` used `spawnSync("which", ...)` to probe PATH — replaced in 3.5 with a Node-level PATH probe, but the probe itself still uses POSIX path separators and `fs.existsSync` without `.exe` extension awareness; (2) headless command splitter in `core/adapters/headless.js` and `core/escalation.js` splits on `\s+` — a path like `C:\Program Files\claude\claude.exe` would be split at the space, silently invoking the wrong binary; (3) fix-step command strings (produced by `core/pipeline/fix-recipes.js` after 3.2) contain POSIX `rm -f pipeline/gates/...` — Windows has no `rm`. A correct port needs: command quoting/parsing (e.g. `node-shell-quote`), SIGTERM/SIGKILL signal handling on win32, and POSIX path normalization across fix steps. Low demand observed so far; revisit if adoption grows on Windows. |
+| A6 | **Native Windows validation and support** | 2 | 2 | The known portability fixes landed in PRs #224/#226/#227/#228: quote-aware command parsing, PATHEXT-aware probing, portable gate cleanup, and Windows process-tree termination. Remaining promotion gate: run the portability smoke surface on `windows-latest` before calling native Windows supported; until then it is implemented/experimental and WSL2 remains the conservative path. See audit T-1 / P1-2. |
 
 ## B. Pipeline depth — more/richer stages
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| B3 | **Cost gate at deploy** | 4 | 2 | Estimate cloud cost delta from the deploy plan. Block deploys that 10× cost without explicit override. |
-| B6 | **Documentation gate** | 3 | 2 | Public API changed → README/CHANGELOG must reflect it. Mechanical but catches a common drift. |
 | B7 | **Multi-language QA** | 4 | 4 | Stage 6 currently assumes one test framework. Real projects have JS + Python + Go. Per-language test runners with a merged report. |
 
 ## C. Quality & safety — enforcement, sandboxing, scanning
@@ -132,16 +132,33 @@ Retrospective stage proposes changes to `stages.js` / `roles/` / `rules/` based 
 
 ---
 
-## Priority queue (2026-06-03 — post comparative analysis)
+## Priority queue (2026-06-18 — audit refresh)
 
-Re-prioritized after cross-referencing the comparative analysis ([`comparative-analysis.md`](comparative-analysis.md)) and the between-cycle observations in [`audit-archive/HISTORY.md`](audit-archive/HISTORY.md). Items where two independent sources converge get higher priority.
+The full evidence, effort/risk ratings, dependencies, and PR sequence now live in the
+[current audit backlog](audit/09-backlog.md) and [roadmap](audit/10-roadmap.md).
 
-All top-tier, mid-tier, and strategic-bet items from the original queue have landed. The surviving open work:
+### Immediate and near-term
 
-### Open — next horizon
+1. **Dashboard HTML safety + lifecycle (audit P1-1/P1-4).** Escape or text-render
+   model-authored gate values, add a hostile-gate regression, and clear the UI timer.
+2. **Native Windows CI evidence (A6; audit P1-2).** Add one Node 22
+   `windows-latest` smoke lane before promoting support language.
+3. **Current-truth reconciliation (audit P1-3).** Correct stale schema vocabulary,
+   canonical tool-budget ownership, support wording, counts, links, and comments.
+4. **Bound transcript memory (audit P2-1).** Replace unbounded in-memory host
+   transcript accumulation with a bounded durable writer.
+5. **Decompose the autonomous driver (audit P2-2).** Extract transition handlers
+   under characterization tests without mixing capability changes.
+
+### Evidence-gated next horizon
 
 - **D5 maturation — continuous adaptive routing.** Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. **Evidence review done (2026-06-14, `plans/adaptive-routing-evidence.md`):** zero real-run telemetry — the only gate data on disk is the hand-authored `examples/sms-opt-in` fixture (max 4 dispatches per role, no cost fields). The tool's MIN_DISPATCHES=5 guard fires for all 6 roles; no signal, no recommendations. Gate stays shut pending ≥5 dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. ADR-007 Tier 1 (liveness heartbeat + observe-only stall probe) implemented in Phase 11.1; ADR-008 (advisory sweep + `--fail-on-advisory`) implemented in Phase 11.2; ADR-007 Tier 2 (kill policy + `--watch`) evidence-gated in 11.4.
-- **H3 — Recipe factory (escalation→recipe learning)** (Phase 3 of [ADR-003](adr/003-bounded-autonomous-execution.md) · [design](autonomous-execution-design.md)). Persist resolved escalations as semantically-indexed fix-recipes via the existing `core/memory/` embedding store (D7); `computeFixSteps` consults it on a FAIL signature before escalating, so recurring *derivable* failures resolve deterministically. Converts autonomy from a fixed ceiling into a climbing asymptote. A strictly safer subset of G9 (grows fix-recipes, not `stages.js`/`roles/`; learns within one project, dodging G9's "wait for multiple teams" objection). **Evidence review done (2026-06-14, `plans/h3-ground-truth.md`):** zero `run-log.jsonl` files, zero gate archives, one project (Stagecraft itself). Five failure classes identified across development commits — all resolved in HEAD; no recurring unresolved class for H3 to learn. Gate stays shut pending ≥2 real projects each with ≥5 autonomous runs reaching fix-and-retry. Caveat: a learned recipe is a cached judgment — needs recency/confidence decay + re-escalation on material code drift, or it amplifies stale judgment.
+- **H3 — Recipe factory (escalation→recipe learning)** (Phase 3 of [ADR-003](adr/003-bounded-autonomous-execution.md) · [design](autonomous-execution-design.md)). Persist resolved escalations as semantically-indexed fix-recipes via the existing `core/memory/` embedding store (D7); `computeFixSteps` consults it on a FAIL signature before escalating, so recurring *derivable* failures resolve deterministically. **Evidence review done (2026-06-14, `plans/h3-ground-truth.md`):** zero real run logs/archives and no recurring unresolved class. Gate stays shut pending ≥2 real projects each with ≥5 autonomous runs reaching fix-and-retry. Tracked by GitHub #142.
+- **ADR-005 standing grants.** Keep deferred until at least 10 repair runs across 2+
+  projects and consequence-ceiling halt data establish which grants operators routinely
+  approve. Tracked by GitHub #144.
+- **ADR-007 Tier 2 active stall response.** Keep deferred until real
+  `stall-detected` events calibrate frequency and threshold. Tracked by GitHub #145.
 
 ### Consciously deprioritized
 
@@ -149,7 +166,6 @@ Five items that the comparative analysis or shifted context argues against inves
 
 - **E3 — VS Code extension.** Stagecraft sits above the IDE, not inside it. Building an editor extension works against that positioning, and IDE-native tooling is a crowded category.
 - **A2 — Cursor/Windsurf/Aider/Cline adapters.** Supporting 30+ AI agents is a maintenance treadmill. Land **A4 — Pluggable adapter discovery** first and let the long tail be community-built.
-- **B6 — Documentation gate.** Mechanically useful but adds operational friction for marginal reward. Defer unless a real incident makes the case.
 - **F2 / F3 / F5 — Jira / Slack / pre-commit integration.** None changes what Stagecraft can do. Accept community PRs but don't invest core time.
 - **G9 — Self-modifying pipeline.** Premature. Wait until multiple teams use the platform in different configurations before optimizing for any one signal.
 

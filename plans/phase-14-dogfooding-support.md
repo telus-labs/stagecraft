@@ -635,7 +635,7 @@ Dogfood mode
 In the "Further reading" or equivalent section, add:
 
 ```markdown
-- [Dogfooding guide](guides/dogfooding.md) — running Stagecraft against its own source tree
+- [Dogfooding guide](../docs/guides/dogfooding.md) — running Stagecraft against its own source tree
 ```
 
 **Verify:**
