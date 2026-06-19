@@ -152,7 +152,10 @@ const OOS_KEYWORDS = {
 function inferActiveRoles(stage01Gate, allRoles) {
   // Explicit active_roles takes precedence — PM's deliberate decision.
   if (Array.isArray(stage01Gate.active_roles) && stage01Gate.active_roles.length > 0) {
-    return stage01Gate.active_roles.filter(r => allRoles.includes(r));
+    const filtered = stage01Gate.active_roles.filter(r => allRoles.includes(r));
+    // Empty intersection means active_roles doesn't cover this stage's roles at all
+    // (e.g. design uses "principal", not build workstream roles) — apply no filter.
+    return filtered.length > 0 ? filtered : null;
   }
   // Inference fallback: keyword-match out_of_scope_items.
   if (!Array.isArray(stage01Gate.out_of_scope_items) || stage01Gate.out_of_scope_items.length === 0) {
