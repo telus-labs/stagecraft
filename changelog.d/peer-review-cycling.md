@@ -1,0 +1,1 @@
+- Prevent out-of-scope build and review workstreams, detect additional structural defects before peer review, and halt when an escalation applicator fails to dispatch the ruled build workstream.

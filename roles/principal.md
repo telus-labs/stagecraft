@@ -202,6 +202,35 @@ A precise "cannot decide" is a **correct** outcome — it routes the decision to
 [Trade-offs accepted]
 ```
 
+### Prohibition annotations
+
+When an ADR prohibits a specific API, library call, or language construct, add a
+machine-parseable annotation on the line immediately after the prohibition
+statement in the **Decision** or **Consequences** section:
+
+```
+<!-- @prohibit: <regex-pattern> -->
+```
+
+Example:
+
+```markdown
+## Decision
+
+Do not use `urllib.request` for external HTTP calls; use `httpx` instead.
+<!-- @prohibit: urllib\.request -->
+```
+
+The preflight check (`runADRComplianceCheck`) scans every diff addition against
+these patterns and blocks peer-review dispatch if a match is found.
+
+Guidelines:
+- Use a regex narrow enough to avoid false positives on comments and docstrings.
+  Prefer `urllib\.request\.urlopen` over `urllib` (too broad).
+- One `<!-- @prohibit: -->` annotation per prohibition statement.
+- If a legitimate use is intentional, document the exception in
+  `pipeline/context.md` and remove or narrow the annotation.
+
 ## ADR Index Format
 
 `pipeline/adr/index.md` is the running list of all ADRs for this pipeline run.

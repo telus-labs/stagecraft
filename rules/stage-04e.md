@@ -50,7 +50,9 @@ Schema: `core/gates/schemas/stage-04e.schema.json`.
   "warnings": [],
   "git_hygiene_pass": true,
   "import_path_pass": true,
-  "deferred_items_count": 0
+  "deferred_items_count": 0,
+  "callerless_file_check_pass": true,
+  "adr_compliance_pass": true
 }
 ```
 

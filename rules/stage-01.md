@@ -28,7 +28,8 @@ Gate file: `pipeline/gates/stage-01.json`.
   "warnings": [],
   "acceptance_criteria_count": 5,
   "out_of_scope_items": [],
-  "required_sections_complete": true
+  "required_sections_complete": true,
+  "active_roles": null
 }
 ```
 

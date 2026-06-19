@@ -51,6 +51,7 @@ const {
   rulingPreflightTransition,
   rulingOutcomeTransition,
   rulingAppliedTransition,
+  rulingDispatchVerificationTransition,
   mergeTransition,
 } = require("./driver-recovery");
 
@@ -1168,12 +1169,53 @@ async function run(opts = {}) {
           break;
         }
         // Granted class → apply the ruling and resume.
+        // Snapshot build workstream gate mtimes before the applicator runs.
+        // Used below to detect whether the applicator actually dispatched build
+        // work when the ruling's decision mentions a build workstream dispatch.
+        const _gatesDir = getGatesDir(cwd, changeId);
+        const BUILD_GATE_RE = /^stage-04\.\w+\.json$/;
+        const preMtimes = {};
+        try {
+          for (const f of fs.readdirSync(_gatesDir).filter(n => BUILD_GATE_RE.test(n))) {
+            const full = path.join(_gatesDir, f);
+            try { preMtimes[full] = fs.statSync(full).mtimeMs; } catch { /* */ }
+          }
+        } catch { /* gates dir may not yet exist */ }
+
         const fr = await _runFixEscalation(cwd, { escalatingGate: r.gate });
         const appliedTransition = rulingAppliedTransition({ base, applyResult: fr, latest });
         if (appliedTransition.control === TRANSITION_CONTROLS.HALT) {
           applyTransition(appliedTransition);
           break;
         }
+        // When the ruling explicitly orders dispatching a build workstream, verify
+        // the applicator actually updated or created a build gate. An applicator
+        // that ran peer-review instead (or did nothing) would waste the auto-rule
+        // grant and cause the stage to cycle until convergence-exhausted.
+        let buildGateUpdated = false;
+        try {
+          for (const f of fs.readdirSync(_gatesDir).filter(n => BUILD_GATE_RE.test(n))) {
+            const full = path.join(_gatesDir, f);
+            try {
+              const mtime = fs.statSync(full).mtimeMs;
+              if (!preMtimes[full] || mtime > preMtimes[full]) { buildGateUpdated = true; break; }
+            } catch { /* */ }
+          }
+        } catch { /* gates dir may not exist */ }
+        const dispatchVerification = rulingDispatchVerificationTransition({
+          base, latest, buildGateUpdated,
+        });
+        if (dispatchVerification) {
+          applyTransition(dispatchVerification);
+          if (dispatchVerification.control === TRANSITION_CONTROLS.HALT) break;
+
+          // Applicator confirmed build dispatch — reset the one-shot auto-rule
+          // counter so a subsequent peer-review escalation for a new reason gets
+          // a fresh attempt rather than halting immediately on alreadyTried.
+          state.autoRule[r.name] = 0;
+          saveRunState(cwd, changeId, state);
+        }
+
         const { authority } = appliedTransition.details;
         // PR-D2: bind the authority record ONTO the escalating gate, so the
         // autonomous-decision provenance inherits C6 tamper-evidence (vs. only

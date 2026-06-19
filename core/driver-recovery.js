@@ -227,6 +227,29 @@ function rulingAppliedTransition({ base, applyResult, latest }) {
   });
 }
 
+function rulingDispatchVerificationTransition({ base, latest, buildGateUpdated }) {
+  const rulingMentionsBuild = /dispatch\s+(backend|frontend|platform|qa)\s+build\s+workstream/i
+    .test(latest.decision || "");
+  if (!rulingMentionsBuild) return null;
+  if (buildGateUpdated) {
+    return transitionResult(TRANSITION_CONTROLS.CONTINUE, {
+      details: { resetAutoRule: true },
+    });
+  }
+
+  const reason = "escalation applicator did not dispatch a build workstream as the ruling required — no build gate was updated; halting for human review";
+  return transitionResult(TRANSITION_CONTROLS.HALT, {
+    summaryPatch: {
+      halted: true,
+      halt_action: "resolve-escalation",
+      halt_failure_class: "applicator-did-not-dispatch-build",
+      halt_reason: reason,
+    },
+    logEvents: [{ ...base, outcome: "applicator-did-not-dispatch-build" }],
+    emittedEvents: [{ type: "halt", ...base }],
+  });
+}
+
 function mergeTransition({ base, mergeResult }) {
   const logEntry = {
     ...base,
@@ -256,5 +279,6 @@ module.exports = {
   rulingPreflightTransition,
   rulingOutcomeTransition,
   rulingAppliedTransition,
+  rulingDispatchVerificationTransition,
   mergeTransition,
 };

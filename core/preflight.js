@@ -71,32 +71,38 @@ function runGitHygieneCheck(cwd) {
 // ---------------------------------------------------------------------------
 // Check B — import path verification (Python projects)
 // ---------------------------------------------------------------------------
-// Detects conftest.py files with sys.path.insert(0, ".") which causes
-// try/except ImportError fallback patterns to silently swallow the real
-// import failure and test the inline reference implementation instead of
-// the production code path.
+// Detects two classes of Python import path misconfiguration:
 //
-// Only runs when at least one conftest.py is found in the project.
+//   B1. conftest.py with sys.path.insert(0, ".") — inserts project root,
+//       not src/, causing try/except ImportError fallback patterns to silently
+//       swallow the real import failure.
+//
+//   B2. pytest.ini (or pyproject.toml) pythonpath including a directory D
+//       where D/<module>.py shadows D/<package>/<module>.py — `import module`
+//       resolves to the stub instead of the canonical production module.
+//
+// Runs when a conftest.py, pytest.ini, or pyproject.toml is found.
 // ---------------------------------------------------------------------------
 function runImportPathCheck(cwd) {
   const blockers = [];
   const warnings = [];
 
-  // Find conftest.py files under src/tests/ or tests/ (common layouts)
+  // Detect Python project
   const candidates = [];
   for (const dir of ["src/tests", "tests", "src"]) {
     const abs = path.join(cwd, dir, "conftest.py");
     if (fs.existsSync(abs)) candidates.push(abs);
   }
-  // Also check project root
   const rootConf = path.join(cwd, "conftest.py");
   if (fs.existsSync(rootConf)) candidates.push(rootConf);
 
-  if (candidates.length === 0) {
-    // Not a Python project (no conftest.py) — skip silently
+  const pytestIniPath = path.join(cwd, "pytest.ini");
+  const pyprojectPath = path.join(cwd, "pyproject.toml");
+  if (candidates.length === 0 && !fs.existsSync(pytestIniPath) && !fs.existsSync(pyprojectPath)) {
     return { pass: true, blockers, warnings };
   }
 
+  // B1: sys.path.insert(0, ".") in conftest.py
   for (const conftest of candidates) {
     const rel = path.relative(cwd, conftest);
     let src;
@@ -111,9 +117,6 @@ function runImportPathCheck(cwd) {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // Detect sys.path.insert(0, ".") — inserts project root, not src/
-      // which means `from backend.main import app` will resolve to nothing
-      // and the except clause will silently fall back to a reference impl.
       if (/sys\.path\.insert\s*\(\s*0\s*,\s*['"]\.['"]\s*\)/.test(line)) {
         blockers.push(
           `${rel}:${i + 1}: sys.path.insert(0, ".") inserts the project root, not src/ — ` +
@@ -122,8 +125,6 @@ function runImportPathCheck(cwd) {
         );
       }
 
-      // Detect broad except (ImportError, ModuleNotFoundError) without re-raise
-      // that would hide the path misconfiguration from tests.
       if (
         /except\s*\(\s*ImportError/.test(line) ||
         /except\s+ImportError/.test(line)
@@ -135,6 +136,55 @@ function runImportPathCheck(cwd) {
             `if the import fails, tests will silently run against the fallback implementation, not the real backend. ` +
             `Verify the sys.path value is correct.`
           );
+        }
+      }
+    }
+  }
+
+  // B2: pytest.ini pythonpath shadow imports
+  let pythonpathDirs = [];
+  if (fs.existsSync(pytestIniPath)) {
+    try {
+      const ini = fs.readFileSync(pytestIniPath, "utf8");
+      const m = ini.match(/^\s*pythonpath\s*=\s*(.+)$/m);
+      if (m) pythonpathDirs = m[1].trim().split(/\s+/).filter(Boolean);
+    } catch { /* skip */ }
+  }
+  if (pythonpathDirs.length === 0 && fs.existsSync(pyprojectPath)) {
+    try {
+      const toml = fs.readFileSync(pyprojectPath, "utf8");
+      const m = toml.match(/^\s*pythonpath\s*=\s*\[([^\]]+)\]/m);
+      if (m) {
+        pythonpathDirs = [...m[1].matchAll(/"([^"]+)"|'([^']+)'/g)]
+          .map(e => e[1] || e[2]);
+      }
+    } catch { /* skip */ }
+  }
+
+  for (const dir of pythonpathDirs) {
+    const absDir = path.join(cwd, dir);
+    if (!fs.existsSync(absDir)) continue;
+    let rootFiles, subdirs;
+    try {
+      const entries = fs.readdirSync(absDir, { withFileTypes: true });
+      rootFiles = entries
+        .filter(e => e.isFile() && e.name.endsWith(".py") &&
+                     e.name !== "__init__.py" && e.name !== "conftest.py")
+        .map(e => e.name.slice(0, -3));
+      subdirs = entries
+        .filter(e => e.isDirectory() && !["__pycache__", ".pytest_cache"].includes(e.name))
+        .map(e => e.name);
+    } catch { continue; }
+
+    for (const mod of rootFiles) {
+      for (const subdir of subdirs) {
+        if (fs.existsSync(path.join(absDir, subdir, `${mod}.py`))) {
+          blockers.push(
+            `pytest.ini pythonpath = ${dir}: \`import ${mod}\` resolves to ` +
+            `${dir}/${mod}.py (stub) instead of ${dir}/${subdir}/${mod}.py (canonical) — ` +
+            `remove the stub or fix the pythonpath entry`
+          );
+          break;
         }
       }
     }
@@ -180,7 +230,136 @@ function runDeferredItemsRisk(gatesDirPath) {
 }
 
 // ---------------------------------------------------------------------------
-// Check D — staged pipeline artifacts
+// Check D — callerless file detection (warnings only, no blockers)
+// ---------------------------------------------------------------------------
+// Finds newly-added source files that have no callers in the project.
+// A file with no callers is likely dead code (§2 Simplicity First principle).
+// Emits WARNINGs only — false positives are common for infra entry-points
+// that are invoked by shell scripts, Docker, or CI rather than imported.
+// ---------------------------------------------------------------------------
+function runCallerlessFileCheck(cwd) {
+  const warnings = [];
+
+  // Use `git show HEAD` to inspect the most recently committed changes.
+  // Build agents commit their work before preflight runs, so `git diff HEAD`
+  // (working-tree diff) would return nothing — the changes are already committed.
+  const r = spawnSync(
+    "git", ["show", "--name-only", "--diff-filter=A", "--format=", "HEAD"],
+    { cwd, encoding: "utf8", timeout: 10_000 }
+  );
+  if (r.status !== 0 || r.error) {
+    return { pass: true, warnings };
+  }
+
+  const newFiles = (r.stdout || "").split("\n").map(l => l.trim()).filter(Boolean);
+
+  // Entry-point patterns — legitimately have no importers in-tree
+  const ENTRY_POINTS = /(__main__|manage|wsgi|asgi|conftest|setup|entrypoint)\.(py|js|ts|jsx|tsx)$/;
+  const SUPPORTED_EXTS = new Set(["py", "js", "ts", "jsx", "tsx"]);
+
+  for (const file of newFiles) {
+    if (ENTRY_POINTS.test(file)) continue;
+    const ext = path.extname(file).slice(1);
+    if (!SUPPORTED_EXTS.has(ext)) continue;
+
+    const moduleBase = path.basename(file, `.${ext}`)
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // escape regex special chars
+
+    const pattern = ext === "py"
+      ? `(from [a-z_.]*${moduleBase} import|import [a-z_.]*${moduleBase})`
+      : `(require|from).*['"].*${moduleBase}['"]`;
+
+    const g = spawnSync(
+      "grep", ["-r", `--include=*.${ext}`, "-l", "-E", pattern, "."],
+      { cwd, encoding: "utf8", timeout: 10_000 }
+    );
+    const callers = (g.stdout || "").split("\n")
+      .map(l => l.replace(/^\.\//, "").trim())
+      .filter(f => f && f !== file);
+
+    if (callers.length === 0) {
+      warnings.push(
+        `${file}: no callers found — may be dead code (§2 Simplicity First); ` +
+        `verify it is imported or invoked somewhere, or delete it`
+      );
+    }
+  }
+
+  return { pass: true, warnings };
+}
+
+// ---------------------------------------------------------------------------
+// Check E — ADR compliance (blockers)
+// ---------------------------------------------------------------------------
+// Reads pipeline/adr/*.md files for <!-- @prohibit: <regex> --> annotations
+// and greps the git diff for each prohibited pattern.
+// A match is a BLOCKER — the ADR author explicitly banned this construct.
+//
+// To suppress a false positive, add a documented exception to
+// pipeline/context.md and remove or narrow the @prohibit annotation.
+// ---------------------------------------------------------------------------
+function runADRComplianceCheck(cwd) {
+  const adrDir = path.join(cwd, "pipeline", "adr");
+  if (!fs.existsSync(adrDir)) return { pass: true, blockers: [], warnings: [] };
+
+  let adrFiles;
+  try {
+    adrFiles = fs.readdirSync(adrDir).filter(f => f.endsWith(".md"));
+  } catch {
+    return { pass: true, blockers: [], warnings: [] };
+  }
+
+  const prohibitions = [];
+  for (const f of adrFiles) {
+    let src;
+    try { src = fs.readFileSync(path.join(adrDir, f), "utf8"); } catch { continue; }
+    for (const m of src.matchAll(/<!--\s*@prohibit:\s*(.+?)\s*-->/g)) {
+      prohibitions.push({ pattern: m[1].trim(), source: f });
+    }
+  }
+  if (prohibitions.length === 0) return { pass: true, blockers: [], warnings: [] };
+
+  // Use `git show HEAD` to inspect the most recently committed changes.
+  // Build agents commit their work before preflight runs, so `git diff HEAD`
+  // (working-tree diff) would return nothing.
+  const diffResult = spawnSync(
+    "git", ["show", "HEAD", "--unified=0"],
+    { cwd, encoding: "utf8", timeout: 15_000 }
+  );
+  if (diffResult.status !== 0 || diffResult.error) {
+    return {
+      pass: true,
+      blockers: [],
+      warnings: ["ADR compliance check skipped — git show HEAD failed"],
+    };
+  }
+
+  const addedLines = (diffResult.stdout || "")
+    .split("\n")
+    .filter(l => l.startsWith("+") && !l.startsWith("+++"));
+
+  const blockers = [];
+  for (const { pattern, source } of prohibitions) {
+    let re;
+    try { re = new RegExp(pattern); } catch {
+      // Malformed regex in ADR — skip rather than crash
+      continue;
+    }
+    const hit = addedLines.find(l => re.test(l));
+    if (hit) {
+      blockers.push(
+        `ADR ${source} prohibits "${pattern}" — found in diff: ` +
+        `"${hit.trim().slice(0, 80)}". ` +
+        `Add a documented exception to pipeline/context.md if intentional.`
+      );
+    }
+  }
+
+  return { pass: blockers.length === 0, blockers, warnings: [] };
+}
+
+// ---------------------------------------------------------------------------
+// Check F — staged pipeline artifacts
 // ---------------------------------------------------------------------------
 // Blocks a PR if any pipeline artifact files appear in the git index.
 // Applies to all projects (not just dogfood mode) — staging these files into
@@ -218,9 +397,11 @@ function checkStagedPipelineArtifacts(cwd) {
 function runPreflight(cwd, opts = {}) {
   const gatesDirPath = opts.gatesDir || getGatesDir(cwd, opts.changeId || null);
 
-  const hygiene     = runGitHygieneCheck(cwd);
-  const importPath  = runImportPathCheck(cwd);
-  const deferred    = runDeferredItemsRisk(gatesDirPath);
+  const hygiene      = runGitHygieneCheck(cwd);
+  const importPath   = runImportPathCheck(cwd);
+  const deferred     = runDeferredItemsRisk(gatesDirPath);
+  const callerless   = runCallerlessFileCheck(cwd);
+  const adrCompliance = runADRComplianceCheck(cwd);
 
   const stagedArtifacts = checkStagedPipelineArtifacts(cwd);
   const stagedBlockers  = stagedArtifacts.length > 0
@@ -232,21 +413,34 @@ function runPreflight(cwd, opts = {}) {
       ]
     : [];
 
-  const allBlockers = [...hygiene.blockers, ...importPath.blockers, ...stagedBlockers];
-  const allWarnings = [...hygiene.warnings, ...importPath.warnings, ...deferred.warnings];
-  const status      = allBlockers.length > 0 ? "FAIL" : "PASS";
+  const allBlockers = [
+    ...hygiene.blockers,
+    ...importPath.blockers,
+    ...stagedBlockers,
+    ...adrCompliance.blockers,
+  ];
+  const allWarnings = [
+    ...hygiene.warnings,
+    ...importPath.warnings,
+    ...deferred.warnings,
+    ...callerless.warnings,
+    ...adrCompliance.warnings,
+  ];
+  const status = allBlockers.length > 0 ? "FAIL" : "PASS";
 
   const gate = {
-    stage:              "stage-04e",
+    stage:                   "stage-04e",
     status,
-    orchestrator:       "devteam@preflight",
-    track:              opts.track || "unknown",
-    timestamp:          new Date().toISOString(),
-    blockers:           allBlockers,
-    warnings:           allWarnings,
-    git_hygiene_pass:   hygiene.pass,
-    import_path_pass:   importPath.pass,
-    deferred_items_count: deferred.deferredCount,
+    orchestrator:            "devteam@preflight",
+    track:                   opts.track || "unknown",
+    timestamp:               new Date().toISOString(),
+    blockers:                allBlockers,
+    warnings:                allWarnings,
+    git_hygiene_pass:        hygiene.pass,
+    import_path_pass:        importPath.pass,
+    deferred_items_count:    deferred.deferredCount,
+    callerless_file_check_pass: callerless.pass,
+    adr_compliance_pass:     adrCompliance.pass,
   };
 
   if (!opts.skipWrite) {
@@ -258,4 +452,12 @@ function runPreflight(cwd, opts = {}) {
   return { status, blockers: allBlockers, warnings: allWarnings, gate };
 }
 
-module.exports = { runPreflight, runGitHygieneCheck, runImportPathCheck, runDeferredItemsRisk, checkStagedPipelineArtifacts };
+module.exports = {
+  runPreflight,
+  runGitHygieneCheck,
+  runImportPathCheck,
+  runDeferredItemsRisk,
+  runCallerlessFileCheck,
+  runADRComplianceCheck,
+  checkStagedPipelineArtifacts,
+};

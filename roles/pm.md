@@ -85,6 +85,23 @@ Then write `pipeline/gates/stage-01.json` with `"status": "PASS"` and include
 `"required_sections_complete": true` once all required sections for the chosen
 track are present.
 
+When the brief's **Out of Scope** section explicitly excludes a build workstream
+area (e.g. "No frontend or web UI", "Backend only — no infrastructure changes"),
+add `"active_roles"` to the gate listing only the in-scope roles:
+
+```json
+"active_roles": ["backend", "platform", "qa"]
+```
+
+Valid values are `"backend"`, `"frontend"`, `"platform"`, `"qa"`. The
+orchestrator uses this field to suppress excluded workstreams from both the
+build (stage-04) and peer-review (stage-05) dispatch — preventing phantom
+reviewers for areas the project never touched.
+
+When all four workstream areas are in scope (or the brief does not exclude any),
+omit `active_roles` or set it to `null` — the orchestrator defaults to all roles
+active. Do NOT set `active_roles: []` (empty list); use `null` instead.
+
 ## On an Executable-Spec Request (stage-03b, G2)
 
 Runs on `full` and `quick` after clarification. The pipeline generates a

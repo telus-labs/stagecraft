@@ -25,6 +25,7 @@ const {
   rulingPreflightTransition,
   rulingOutcomeTransition,
   rulingAppliedTransition,
+  rulingDispatchVerificationTransition,
   mergeTransition,
 } = require(path.join(REPO_ROOT, "core", "driver-recovery"));
 
@@ -227,6 +228,31 @@ describe("driver recovery handlers", () => {
     assert.equal(retry.statePatch.fixRetries.build, 1);
     assert.equal(retry.logEvents[0].outcome, "fix-retry");
     assert.equal(nonCode.summaryPatch.halt_failure_class, "state-corruption");
+  });
+
+  it("verifies applicator build dispatch through a typed transition", () => {
+    const latest = {
+      class: "code-fix",
+      decision: "dispatch backend build workstream",
+    };
+    const missing = rulingDispatchVerificationTransition({
+      base, latest, buildGateUpdated: false,
+    });
+    const updated = rulingDispatchVerificationTransition({
+      base, latest, buildGateUpdated: true,
+    });
+    const unrelated = rulingDispatchVerificationTransition({
+      base,
+      latest: { class: "formatting-only", decision: "fix gate shape" },
+      buildGateUpdated: false,
+    });
+
+    assert.equal(missing.control, TRANSITION_CONTROLS.HALT);
+    assert.equal(missing.summaryPatch.halt_failure_class, "applicator-did-not-dispatch-build");
+    assert.equal(missing.logEvents[0].outcome, "applicator-did-not-dispatch-build");
+    assert.equal(updated.control, TRANSITION_CONTROLS.CONTINUE);
+    assert.equal(updated.details.resetAutoRule, true);
+    assert.equal(unrelated, null);
   });
 
   it("builds ruling preflight and Principal outcome transitions", () => {

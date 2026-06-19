@@ -667,6 +667,19 @@ function main() {
     );
   }
 
+  if (
+    gate.stage === "stage-01" &&
+    Array.isArray(gate.out_of_scope_items) &&
+    gate.out_of_scope_items.length > 0 &&
+    gate.active_roles == null
+  ) {
+    advisories.push(
+      `stage-01 gate has out_of_scope_items but active_roles is not set — ` +
+      `workstream suppression falls back to keyword inference; ` +
+      `set active_roles explicitly in the gate for a reliable filter`,
+    );
+  }
+
   const malformedLessons = findMalformedReinforcedLines();
   for (const m of malformedLessons) {
     advisories.push(
