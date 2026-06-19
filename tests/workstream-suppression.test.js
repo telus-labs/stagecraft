@@ -12,7 +12,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { computeDispatchPlan, mergeWorkstreamGates } = require(path.join(REPO_ROOT, "core", "orchestrator"));
+const { computeDispatchPlan, mergeWorkstreamGates, next } = require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
 const { loadConfig } = require(path.join(REPO_ROOT, "core", "config"));
 const { gatesDir: getGatesDir } = require(path.join(REPO_ROOT, "core", "paths"));
@@ -204,5 +204,59 @@ describe("mergeWorkstreamGates: filtered plan skips missing workstream gate", ()
       changeId: null,
     });
     assert.equal(r.merged, true, `expected merge to succeed; got: ${JSON.stringify(r)}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// next(): multi-role stage completion uses filtered roles
+// ---------------------------------------------------------------------------
+
+describe("next(): multi-role stage respects active_roles when checking completion", () => {
+  // Seed PASS gates for all stages before build so next() advances to stage-04.
+  function seedPreBuildGates(cwd) {
+    seedGate(cwd, "stage-02.json", { stage: "stage-02", status: "PASS", arch_approved: true, pm_approved: true, adr_count: 0, adrs_consulted: [], adrs_superseded: [], file_ownership: {} });
+    seedGate(cwd, "stage-03.json", { stage: "stage-03", status: "PASS", questions_resolved: true, open_questions: 0 });
+    seedGate(cwd, "stage-03b.json", { stage: "stage-03b", status: "PASS", criteria_count: 1, scenarios_count: 1, all_criteria_mapped: true, orphan_scenarios: [], orphan_criteria: [], drift: false });
+  }
+
+  it("returns merge when all filtered workstream gates exist (frontend suppressed)", () => {
+    // Regression: next() iterated stageDef.roles (full list) so stage-04.frontend.json
+    // being absent kept remaining=[frontend] → perpetual continue-stage loop.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "platform", "qa"] });
+    seedPreBuildGates(cwd);
+    for (const role of ["backend", "platform", "qa"]) {
+      seedGate(cwd, `stage-04.${role}.json`, { status: "PASS", lint_passed: true, tests_passed: true });
+    }
+    const r = next({ cwd, track: "full" });
+    assert.equal(r.action, "merge", `expected merge; got ${r.action} (${r.reason})`);
+    assert.equal(r.stage, "stage-04");
+  });
+
+  it("returns continue-stage with only the active remaining roles (frontend suppressed)", () => {
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "platform", "qa"] });
+    seedPreBuildGates(cwd);
+    // Only backend done; platform and qa pending
+    seedGate(cwd, "stage-04.backend.json", { status: "PASS", lint_passed: true, tests_passed: true });
+    const r = next({ cwd, track: "full" });
+    assert.equal(r.action, "continue-stage", `expected continue-stage; got ${r.action}`);
+    assert.ok(r.remaining.includes("platform"), "platform should be remaining");
+    assert.ok(r.remaining.includes("qa"), "qa should be remaining");
+    assert.ok(!r.remaining.includes("frontend"), "frontend should not appear in remaining");
+    assert.equal(r.remaining.length, 2);
+  });
+
+  it("returns run-stage without frontend in roles when no workstream gates exist", () => {
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "platform", "qa"] });
+    seedPreBuildGates(cwd);
+    // No build workstream gates written yet
+    const r = next({ cwd, track: "full" });
+    assert.equal(r.action, "run-stage");
+    assert.equal(r.stage, "stage-04");
+    assert.ok(Array.isArray(r.roles), "roles should be an array");
+    assert.ok(!r.roles.includes("frontend"), "roles should not include suppressed frontend");
+    assert.deepEqual(r.roles.sort(), ["backend", "platform", "qa"]);
   });
 });

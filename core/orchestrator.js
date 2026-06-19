@@ -1026,9 +1026,22 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
 
     if (!fs.existsSync(stageGatePath)) {
       if (stageDef.roles.length > 1) {
+        // Apply active_roles filter: only expect gates for roles that were
+        // actually dispatched. Without this, a suppressed role (e.g. frontend
+        // when active_roles=[backend,platform,qa]) keeps `remaining` non-empty
+        // forever and the driver loops until max-iterations is exhausted.
+        let effectiveRoles = stageDef.roles;
+        const s1Path = path.join(gatesDir, "stage-01.json");
+        if (fs.existsSync(s1Path)) {
+          const { gate: s1Gate } = loadGateSafe(s1Path);
+          if (s1Gate) {
+            const filtered = inferActiveRoles(s1Gate, stageDef.roles);
+            if (filtered) effectiveRoles = filtered;
+          }
+        }
         const completed = [];
         const remaining = [];
-        for (const role of stageDef.roles) {
+        for (const role of effectiveRoles) {
           const p = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
           (fs.existsSync(p) ? completed : remaining).push(role);
         }
@@ -1042,7 +1055,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
         if (completed.length === 0) {
           return {
             action: "run-stage", stage: stageDef.stage, name: stageName,
-            roles: stageDef.roles,
+            roles: effectiveRoles,
             reason: "multi-role stage not started",
             command: `devteam stage ${stageName}`,
           };
@@ -1050,7 +1063,7 @@ function _nextImpl(stageList, gatesDir, track, skipStages = [], maxRetries = MAX
         return {
           action: "continue-stage", stage: stageDef.stage, name: stageName,
           completed, remaining,
-          reason: `${completed.length}/${stageDef.roles.length} workstreams complete`,
+          reason: `${completed.length}/${effectiveRoles.length} workstreams complete`,
           command: `devteam stage ${stageName}  # roles still pending: ${remaining.join(", ")}`,
         };
       }
@@ -1218,9 +1231,19 @@ function summary(opts = {}) {
 
     // No stage gate. Multi-role: check per-workstream gates.
     if (stageDef.roles.length > 1) {
+      // Apply active_roles filter so suppressed workstreams don't show as pending.
+      let effectiveRoles = stageDef.roles;
+      const s1Path = path.join(gatesDir, "stage-01.json");
+      if (fs.existsSync(s1Path)) {
+        const s1Data = readJSONSafe(s1Path);
+        if (s1Data) {
+          const filtered = inferActiveRoles(s1Data, stageDef.roles);
+          if (filtered) effectiveRoles = filtered;
+        }
+      }
       const completed = [];
       const remaining = [];
-      for (const role of stageDef.roles) {
+      for (const role of effectiveRoles) {
         const p = path.join(gatesDir, `${stageDef.stage}.${role}.json`);
         if (fs.existsSync(p)) {
           const g = readJSONSafe(p);
