@@ -38,7 +38,7 @@ The JSON output has `schema_version: "1.0"` and contains aggregate sections:
 |---|---|
 | `scope` | observed run, completion, and repair-run counts |
 | `quality` | missing or degraded source counters |
-| `routing` | current/archived gate observations grouped by role, host, and model |
+| `routing` | durable dispatch observations, or legacy gate snapshots when no durable history exists, grouped by role, host, and model |
 | `recovery` | fix/retry and convergence counts grouped by stage and failure class |
 | `rulings` | auto-applied ruling counts by grant class |
 | `stalls` | observed stalls grouped by stage and stall class |
@@ -54,14 +54,39 @@ Every capability remains `not-ready` until its documented evidence conditions ar
 and reviewed by a human. `portfolio_status: "not-assessable"` means the condition needs
 multiple independently exported projects; one project cannot satisfy it locally.
 
-Two unavailable signals are intentionally loud:
+Two signals require special care:
 
-- **D5 durable dispatch history.** Current gates are a snapshot, and existing run logs
-  do not retain per-workstream host/model/cost records for every successful dispatch.
-  Gate observations are reported, but not misrepresented as durable history.
+- **D5 durable dispatch history.** Runs made after Phase 17 record one allowlisted
+  `dispatch-observation` per non-skipped workstream. If those events exist, routing
+  aggregates use them exclusively. Older projects still show gate snapshots, but
+  those snapshots cannot satisfy the durable-history condition and are never mixed
+  with the new events. Historical dispatches are not reconstructed.
 - **H3 accepted resolutions.** Existing logs show automated fix/retry outcomes but do
   not prove that a human accepted a learned resolution. The report does not infer
   acceptance from a later PASS.
+
+The durable event contains only stage, role, host, model, gate status, gate-written and
+timeout booleans, and optional non-negative cost/duration values. It excludes blockers,
+warnings, reasons, prompts, responses, paths, transcripts, feature text, credentials,
+and repository identity. Invalid or secret-shaped categories collapse to `other` when
+the event is recorded and are checked again at analysis time.
+
+## Collecting real evidence
+
+No special collection mode is required after Phase 17. Run autonomous pipelines
+normally, keep the ignored pipeline state, and inspect progress locally:
+
+```bash
+devteam run --feature "..." --budget-usd 10
+devteam evidence status
+devteam evidence status --json
+```
+
+For D5, use at least two independent projects and route the same role through at least
+two hosts. Each compared `(role, host)` needs five durable observations, and written
+gates need cost telemetry. When the local conditions have useful volume, create a new
+consented bundle from each project and assess them together. A threshold result still
+requires human review and never changes routing automatically.
 
 Portfolio status validates each strict v1 schema and payload digest. Exact duplicate
 bundles are ignored. Different bundles with the same `project_ref` are rejected rather

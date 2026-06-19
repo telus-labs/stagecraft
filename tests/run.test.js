@@ -125,6 +125,58 @@ describe("driver: dispatch loop (injected deps)", () => {
     assert.deepEqual(s.stages_advanced, ["build"]);
   });
 
+  it("records allowlisted per-workstream dispatch evidence in the durable run log", async () => {
+    const cwd = track(makeTargetProject());
+    const gatePath = path.join(cwd, "pipeline", "gates", "stage-04.backend.json");
+    fs.writeFileSync(gatePath, JSON.stringify({
+      stage: "stage-04",
+      workstream: "backend",
+      host: "codex",
+      model: `ghp_${"A".repeat(36)}`,
+      status: "PASS",
+      cost_usd: 0.42,
+      duration_ms: 125,
+      blockers: ["free-form text must not enter dispatch evidence"],
+    }));
+    const actions = [
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let index = 0;
+
+    await run({
+      cwd,
+      next: () => actions[index++],
+      runStageHeadless: async () => [{
+        role: "backend", host: "codex", gatePath, exitCode: 0, durationMs: 130,
+      }],
+    });
+
+    const events = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8")
+      .trim().split("\n").map((line) => JSON.parse(line));
+    const observation = events.find((event) => event.outcome === "dispatch-observation");
+    assert.deepEqual({
+      stage: observation.stage,
+      role: observation.role,
+      host: observation.host,
+      model: observation.model,
+      status: observation.status,
+      cost_usd: observation.cost_usd,
+      duration_ms: observation.duration_ms,
+      gate_written: observation.gate_written,
+    }, {
+      stage: "stage-04",
+      role: "backend",
+      host: "codex",
+      model: "other",
+      status: "PASS",
+      cost_usd: 0.42,
+      duration_ms: 125,
+      gate_written: true,
+    });
+    assert.doesNotMatch(JSON.stringify(observation), /free-form text/);
+  });
+
   it("halts structural-input when a dispatch keeps writing no gate", async () => {
     const cwd = track(makeTargetProject());
     const s = await run({

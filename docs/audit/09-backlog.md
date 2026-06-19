@@ -128,14 +128,17 @@ was found, and no data-corruption path was verified.
 - **Theme:** Evidence-gated learning remains the right strategic posture.
 - **Sources:** GitHub #142, #143, #144, #145.
 - **Description:** provide an opt-in, privacy-reviewed evidence bundle and a command
-  reporting gate-condition readiness. This makes thresholds visible; it does not
-  bypass them or implement gated capabilities.
+  reporting gate-condition readiness, then retain privacy-bounded per-workstream
+  dispatch observations during normal autonomous runs. This makes thresholds visible
+  and collectible; it does not bypass them or implement gated capabilities.
 - **Affected components:** run-log/gate archive tooling, docs, privacy model.
 - **Effort:** L.
 - **Risk of change:** medium.
 - **Risk of NOT changing:** high strategically.
 - **Dependencies:** redaction, consent, and project-identity proposal.
 - **Confidence:** MEDIUM.
+- **Status:** Phase 16 delivered readiness/export; Phase 17 adds the missing durable
+  dispatch history. Real-project collection and human review remain outstanding.
 
 ### P3-2 — Evaluate an upstream conversational refinement contract
 

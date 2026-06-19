@@ -102,6 +102,40 @@ function extractRouting(gateRecords) {
     `${a.role}\0${a.host}\0${a.model}`.localeCompare(`${b.role}\0${b.host}\0${b.model}`));
 }
 
+function extractDurableRouting(events) {
+  const groups = new Map();
+  for (const event of events) {
+    if (event.outcome !== "dispatch-observation") continue;
+    const role = category(event.role);
+    const host = category(event.host);
+    const model = category(event.model || "unknown");
+    const key = `${role}\0${host}\0${model}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        role, host, model, gate_observations: 0, pass: 0, warn: 0, fail: 0,
+        escalate: 0, cost_observations: 0, total_cost_usd: 0,
+        duration_observations: 0, total_duration_ms: 0,
+      });
+    }
+    const row = groups.get(key);
+    row.gate_observations += 1;
+    const status = KNOWN_STATUSES.has(event.status) ? event.status : null;
+    if (status === "PASS") row.pass += 1;
+    else if (status === "WARN") row.warn += 1;
+    else if (status === "FAIL") row.fail += 1;
+    else if (status === "ESCALATE") row.escalate += 1;
+    const cost = number(event.cost_usd);
+    if (cost !== null) { row.cost_observations += 1; row.total_cost_usd += cost; }
+    const duration = number(event.duration_ms);
+    if (duration !== null) {
+      row.duration_observations += 1;
+      row.total_duration_ms += duration;
+    }
+  }
+  return [...groups.values()].sort((a, b) =>
+    `${a.role}\0${a.host}\0${a.model}`.localeCompare(`${b.role}\0${b.host}\0${b.model}`));
+}
+
 function condition(id, value, threshold, met, reasonCode = null) {
   return { id, value, threshold, met, reason_code: met ? null : reasonCode };
 }
@@ -119,6 +153,7 @@ function readinessSummary({ runs, routing, recovery, rulings, stalls }) {
   }
   const comparableRoles = [...roleHosts.values()].filter((hosts) =>
     [...hosts.values()].filter((count) => count >= 5).length >= 2).length;
+  const durableDispatches = routing.reduce((sum, row) => sum + row.gate_observations, 0);
   const ceilingEvents = runs.reduce((sum, run) =>
     sum + run.events.filter((e) => e.outcome === "ceiling-halt").length, 0);
   const rulingEvents = rulings.reduce((sum, row) => sum + row.observations, 0);
@@ -145,7 +180,7 @@ function readinessSummary({ runs, routing, recovery, rulings, stalls }) {
       local_conditions: [
         condition("comparable-roles", comparableRoles, 1, comparableRoles >= 1, "insufficient-host-comparison"),
         condition("cost-covered-observations", costCoverage, 1, costCoverage >= 1, "cost-telemetry-unavailable"),
-        condition("durable-dispatch-history", 0, 1, false, "durable-dispatch-history-unavailable"),
+        condition("durable-dispatch-history", durableDispatches, 1, durableDispatches >= 1, "durable-dispatch-history-unavailable"),
       ],
       portfolio_reason_code: "multiple-project-bundles-required",
     },
@@ -205,7 +240,8 @@ function analyzeEvidence({ events = [], gates = [], quality = {} }) {
   }
   const rulings = rowsFromMap(rulingMap, ["ruling_class"]);
   const stalls = rowsFromMap(stallMap, ["stage", "stall_class"]);
-  const routing = extractRouting(gates);
+  const durableRouting = extractDurableRouting(events);
+  const routing = durableRouting.length > 0 ? durableRouting : extractRouting(gates);
   const completedRuns = runs.filter((run) => run.events.some((e) => e.outcome === "complete")).length;
   const normalizedQuality = {
     log_present: false,
@@ -233,8 +269,20 @@ function analyzeEvidence({ events = [], gates = [], quality = {} }) {
     recovery,
     rulings,
     stalls,
-    readiness: readinessSummary({ runs, routing, recovery, rulings, stalls }),
+    readiness: readinessSummary({
+      runs,
+      routing: durableRouting,
+      recovery,
+      rulings,
+      stalls,
+    }),
   };
 }
 
-module.exports = { analyzeEvidence, category, groupRuns, extractRouting };
+module.exports = {
+  analyzeEvidence,
+  category,
+  groupRuns,
+  extractRouting,
+  extractDurableRouting,
+};

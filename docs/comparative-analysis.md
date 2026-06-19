@@ -154,9 +154,10 @@ adaptive, organization-oriented methodology and evaluation system.
    the auditability claim at its presentation boundary.
 2. **Prove portability rather than advertise it.** Add native Windows CI before
    support promotion.
-3. **Make real-run evidence attainable.** A privacy-safe readiness/export loop is the
-   prerequisite for adaptive routing, learned recipes, standing grants, and active
-   stall response.
+3. **Collect real-run evidence.** The privacy-safe readiness/export loop and durable
+   dispatch instrumentation now exist. The next step is multi-project collection and
+   human review before adaptive routing, learned recipes, standing grants, or active
+   stall response can advance.
 4. **Keep the autonomy core structurally protected.** Driver transitions are now
    decomposed behind characterized result contracts; require new autonomy work to
    preserve that boundary and its run-state/run-log invariants.

@@ -29,6 +29,7 @@ const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalat
 const { archiveGate, pruneArchives } = require("./gates/archive");
 const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
+const { category: evidenceCategory } = require("./evidence/analyzer");
 const { upsertSection } = require("./markers");
 const {
   TRANSITION_CONTROLS,
@@ -130,6 +131,40 @@ function logEvent(cwd, changeId, entry) {
     fs.mkdirSync(path.dirname(runLogPath(cwd, changeId)), { recursive: true });
     fs.appendFileSync(runLogPath(cwd, changeId), JSON.stringify({ ts: nowIso(), ...entry }) + "\n");
   } catch { /* logging must never break the run */ }
+}
+
+function nonNegativeNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function dispatchObservation(base, result) {
+  if (!result || result.skipped) return null;
+  let gate = null;
+  if (result.gatePath) {
+    try {
+      const stat = fs.lstatSync(result.gatePath);
+      if (stat.isFile() && !stat.isSymbolicLink()) {
+        const parsed = JSON.parse(fs.readFileSync(result.gatePath, "utf8"));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) gate = parsed;
+      }
+    } catch { /* a missing or malformed gate is recorded as no-gate */ }
+  }
+  const observation = {
+    outcome: "dispatch-observation",
+    stage: evidenceCategory(base.stage),
+    role: evidenceCategory(result.role || "unknown"),
+    host: evidenceCategory(result.host || "unknown"),
+    model: evidenceCategory(gate && gate.model || "unknown"),
+    status: evidenceCategory(gate && gate.status || "NO_GATE"),
+    gate_written: Boolean(gate),
+    timed_out: Boolean(result.timedOut),
+  };
+  const cost = nonNegativeNumber(gate && gate.cost_usd);
+  const duration = nonNegativeNumber(gate && gate.duration_ms)
+    ?? nonNegativeNumber(result.durationMs);
+  if (cost !== null) observation.cost_usd = cost;
+  if (duration !== null) observation.duration_ms = duration;
+  return observation;
 }
 
 function singleBuildWorkstreamFromClearGates(clearGates) {
@@ -1356,6 +1391,10 @@ async function run(opts = {}) {
         const dispatch = normalizeDispatchResults(runResult);
         const { results, timedOut: anyTimedOut, wroteGate, stubGate: anyStubGate, exitCode } = dispatch;
         const durationMs = Date.now() - t0;
+        for (const result of results) {
+          const observation = dispatchObservation(base, result);
+          if (observation) logEvent(cwd, changeId, observation);
+        }
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
         // Phase 12.2: track stage IDs in state for `devteam commit` cursor.
         if (r.stage && !state.stages_advanced.includes(r.stage)) state.stages_advanced.push(r.stage);

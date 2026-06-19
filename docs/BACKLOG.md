@@ -103,7 +103,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
-| D5 | **D5 maturation — continuous adaptive routing** | 5 | 3 | Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. Evidence review done 2026-06-14; gate stays shut pending ≥5 dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. |
+| D5 | **D5 maturation — continuous adaptive routing** | 5 | 3 | Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. Phase 17 makes per-workstream dispatch history durable and privacy-bounded; the gate stays shut pending ≥5 dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. |
 
 ## E. Developer experience
 
@@ -140,8 +140,9 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 ### Immediate and near-term
 
 No ungated implementation item remains from the audit's immediate and targeted
-improvement batches. The next implementation horizon requires the evidence and
-privacy work described below.
+improvement batches. Phase 16 completed the privacy-safe readiness/export surface;
+Phase 17 adds the missing durable dispatch instrumentation. The next horizon is real
+collection, followed by review rather than calendar-driven capability activation.
 
 Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),
 native Windows CI evidence, support wording, and A6 promotion (PR #236), and bounded
@@ -159,9 +160,12 @@ and fix/ruling/merge transitions landed as three behavior-preserving slices whil
   model, read-only local readiness, consented aggregate export, identity lifecycle,
   strict bundle validation, and explicit multi-project analysis. See
   [`plans/phase-16-evidence-readiness-and-export.md`](../plans/phase-16-evidence-readiness-and-export.md).
+  Phase 17 adds allowlisted per-workstream dispatch events so D5 evidence accumulates
+  during normal autonomous runs without reconstructing history from gate snapshots.
+  See [`plans/phase-17-durable-evidence-instrumentation.md`](../plans/phase-17-durable-evidence-instrumentation.md).
   This makes the gates below measurable; it does not open them.
 
-- **D5 maturation — continuous adaptive routing.** Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. **Evidence review done (2026-06-14, `plans/adaptive-routing-evidence.md`):** zero real-run telemetry — the only gate data on disk is the hand-authored `examples/sms-opt-in` fixture (max 4 dispatches per role, no cost fields). The tool's MIN_DISPATCHES=5 guard fires for all 6 roles; no signal, no recommendations. Gate stays shut pending ≥5 dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. ADR-007 Tier 1 (liveness heartbeat + observe-only stall probe) implemented in Phase 11.1; ADR-008 (advisory sweep + `--fail-on-advisory`) implemented in Phase 11.2; ADR-007 Tier 2 (kill policy + `--watch`) evidence-gated in 11.4.
+- **D5 maturation — continuous adaptive routing.** Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. **Evidence baseline (2026-06-14, `plans/adaptive-routing-evidence.md`):** zero real-run telemetry at review time. Phase 17 starts durable collection from real autonomous dispatches; it does not backfill old gates. Gate stays shut pending ≥5 durable dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. ADR-007 Tier 1 (liveness heartbeat + observe-only stall probe) implemented in Phase 11.1; ADR-008 (advisory sweep + `--fail-on-advisory`) implemented in Phase 11.2; ADR-007 Tier 2 remains evidence-gated.
 - **H3 — Recipe factory (escalation→recipe learning)** (Phase 3 of [ADR-003](adr/003-bounded-autonomous-execution.md) · [design](autonomous-execution-design.md)). Persist resolved escalations as semantically-indexed fix-recipes via the existing `core/memory/` embedding store (D7); `computeFixSteps` consults it on a FAIL signature before escalating, so recurring *derivable* failures resolve deterministically. **Evidence review done (2026-06-14, `plans/h3-ground-truth.md`):** zero real run logs/archives and no recurring unresolved class. Gate stays shut pending ≥2 real projects each with ≥5 autonomous runs reaching fix-and-retry. Tracked by GitHub #142.
 - **ADR-005 standing grants.** Keep deferred until at least 10 repair runs across 2+
   projects and consequence-ceiling halt data establish which grants operators routinely
