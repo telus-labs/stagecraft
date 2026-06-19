@@ -41,5 +41,10 @@
   },
   "engines": {
     "node": ">=20.0.0"
-  }
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
 }

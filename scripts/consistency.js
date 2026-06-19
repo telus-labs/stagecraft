@@ -1282,6 +1282,160 @@ function checkRoleBriefToolBudgetCompatibility(scanRoot, trackedSet) {
   }
 }
 
+// --- Check 9: Stable schema vocabulary ---
+//
+// Only vocabulary with a durable, machine-readable schema authority belongs
+// here. Historical/audit archives remain excluded by scanDirs().
+function checkSchemaVocabulary(scanRoot, trackedSet) {
+  const root = scanRoot || REPO_ROOT;
+  const contracts = [{
+    schema: "core/gates/schemas/stage-06e.schema.json",
+    field: "checks_performed",
+    obsolete: ["checks_run"],
+    docs: ["docs/FEATURES.md", "docs/user-guide.md"],
+  }];
+
+  for (const contract of contracts) {
+    const schemaPath = path.join(root, contract.schema);
+    if (!fs.existsSync(schemaPath)) continue;
+    let schema;
+    try { schema = JSON.parse(fs.readFileSync(schemaPath, "utf8")); } catch { continue; }
+    if (!schema.properties || !Object.hasOwn(schema.properties, contract.field)) {
+      proseViolation(
+        "schema-vocabulary",
+        contract.schema,
+        0,
+        `canonical field "${contract.field}" is missing from the schema`,
+        `schema-vocabulary:${contract.schema}:missing:${contract.field}`,
+      );
+      continue;
+    }
+
+    for (const rel of contract.docs) {
+      const abs = path.join(root, rel);
+      if (!fs.existsSync(abs)) continue;
+      if (trackedSet !== null && trackedSet !== undefined && !trackedSet.has(rel)) continue;
+      const content = fs.readFileSync(abs, "utf8");
+      if (content.includes(contract.field)) {
+        pass(`${rel} uses canonical schema field "${contract.field}"`);
+      } else {
+        proseViolation(
+          "schema-vocabulary",
+          rel,
+          0,
+          `must document canonical field "${contract.field}" from ${contract.schema}`,
+          `schema-vocabulary:${rel}:missing:${contract.field}`,
+        );
+      }
+    }
+
+    for (const oldField of contract.obsolete) {
+      const matches = scanDirs(["docs"], new RegExp(`\\b${oldField}\\b`), root, trackedSet);
+      for (const m of matches) {
+        if (m.file.startsWith("docs/audit/")) continue;
+        proseViolation(
+          "schema-vocabulary",
+          m.file,
+          m.line,
+          `obsolete field "${oldField}"; schema uses "${contract.field}"`,
+          `schema-vocabulary:${m.file}:${oldField}`,
+        );
+      }
+    }
+  }
+}
+
+// --- Check 10: Stable runtime/platform support facts ---
+//
+// package.json is the machine-readable authority for minimum Node and supported
+// operating systems. Exact test totals are deliberately not an authority: they
+// change too often to belong in current maintainer entry points.
+function checkSupportState(scanRoot, trackedSet) {
+  const root = scanRoot || REPO_ROOT;
+  const pkgPath = path.join(root, "package.json");
+  if (!fs.existsSync(pkgPath)) return;
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8")); } catch { return; }
+
+  const nodeMatch = String(pkg.engines?.node || "").match(/(\d+)/);
+  const minNode = nodeMatch ? Number(nodeMatch[1]) : null;
+  const nodeDocs = ["README.md", "docs/guides/dogfooding.md"];
+  for (const rel of nodeDocs) {
+    const abs = path.join(root, rel);
+    if (!minNode || !fs.existsSync(abs)) continue;
+    if (trackedSet !== null && trackedSet !== undefined && !trackedSet.has(rel)) continue;
+    const content = fs.readFileSync(abs, "utf8");
+    const claims = [...content.matchAll(/Node(?:\.js)?\s*(?:(?:≥|>=)\s*(\d+)|(\d+)\+)/gi)];
+    if (claims.length === 0) {
+      proseViolation(
+        "support-state",
+        rel,
+        0,
+        `must document the package.json minimum Node version (${pkg.engines.node})`,
+        `support-state:${rel}:node-missing`,
+      );
+    }
+    for (const claim of claims) {
+      const claimedMajor = Number(claim[1] || claim[2]);
+      if (claimedMajor === minNode) continue;
+      const line = content.slice(0, claim.index).split(/\r?\n/).length;
+      proseViolation(
+        "support-state",
+        rel,
+        line,
+        `Node ${claimedMajor} claim disagrees with package.json engines.node (${pkg.engines.node})`,
+        `support-state:${rel}:node:${claimedMajor}`,
+      );
+    }
+  }
+
+  if (Array.isArray(pkg.os) && pkg.os.includes("win32")) {
+    const windowsDocs = [
+      ["README.md", /native Windows (?:are|is) supported/i],
+      ["docs/FEATURES.md", /runs natively on Windows/i],
+      ["docs/faq.md", /(?:supports native Windows|native Windows is supported)/i],
+    ];
+    for (const [rel, affirmation] of windowsDocs) {
+      const abs = path.join(root, rel);
+      if (!fs.existsSync(abs)) continue;
+      if (trackedSet !== null && trackedSet !== undefined && !trackedSet.has(rel)) continue;
+      const content = fs.readFileSync(abs, "utf8");
+      if (affirmation.test(content)) {
+        pass(`${rel} affirms native Windows support`);
+        continue;
+      }
+      proseViolation(
+        "support-state",
+        rel,
+        0,
+        "must affirm package.json os support for win32",
+        `support-state:${rel}:win32-missing`,
+      );
+    }
+  }
+
+  const countDocs = ["AGENTS.md", "CONTRIBUTING.md", "plans/README.md"];
+  for (const rel of countDocs) {
+    const abs = path.join(root, rel);
+    if (!fs.existsSync(abs)) continue;
+    if (trackedSet !== null && trackedSet !== undefined && !trackedSet.has(rel)) continue;
+    const content = fs.readFileSync(abs, "utf8");
+    const match = content.match(/(?:~\s*)?\d[\d, ]*\s+tests\b/i);
+    if (!match) {
+      pass(`${rel} avoids a volatile exact test count`);
+      continue;
+    }
+    const line = content.slice(0, match.index).split(/\r?\n/).length;
+    proseViolation(
+      "support-state",
+      rel,
+      line,
+      `volatile test-count claim "${match[0].trim()}"; describe the suite without an exact total`,
+      `support-state:${rel}:volatile-test-count`,
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Prose-vs-code dispatch — run all checks that work against fixture trees.
 // checkTracksMatrixSync() is NOT here; it only runs in full-repo mode
@@ -1306,6 +1460,8 @@ function runProseChecks(scanRoot, onlyFilter) {
   if (shouldRun("docs-index")) checkDocsIndexCoverage(scanRoot, trackedSet);
   if (shouldRun("role-budget-brief")) checkRoleBriefToolBudgetCompatibility(scanRoot, trackedSet);
   if (shouldRun("file-size-ceiling")) checkFileSizeCeilings(scanRoot);
+  if (shouldRun("schema-vocabulary")) checkSchemaVocabulary(scanRoot, trackedSet);
+  if (shouldRun("support-state")) checkSupportState(scanRoot, trackedSet);
 }
 
 // ---------------------------------------------------------------------------

@@ -49,7 +49,7 @@ node --experimental-test-coverage --test tests/*.test.js
 | `escalation.test.js` | Escalation-handling end-to-end: `devteam ruling` dispatch, `fix-escalation` encoding, auto-rule grant/deny, `PRINCIPAL-CANNOT-DECIDE` halt. |
 | `chain.test.js` | Multi-stage fix-and-retry chains: blocker propagation across stage boundaries, retry ceiling, convergence-exhausted promotion to escalation. |
 | `archive.test.js` | Gate archiving (`pipeline/gates/archive/<stage>.attempt-N.json`): snapshot-before-clear, diff fields, replay-compatible format. |
-| `consistency-meta.test.js` | `scripts/consistency.js` exits 0 against the live repo; fixture-tree tests for all six check classes (violation detection, clean exits, baseline suppression, non-baselined exit 1). |
+| `consistency-meta.test.js` | `scripts/consistency.js` exits 0 against the live repo; fixture-tree tests cover every prose-vs-code class, including schema vocabulary and support state, with violation detection, clean exits, baseline suppression, and archive exclusions. |
 
 ## Conventions
 

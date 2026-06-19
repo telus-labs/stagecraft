@@ -69,9 +69,10 @@ function writeFile(root, rel, content) {
 // Pass noBaseline=true to see all violations without suppression.
 // Pass baselineEntries=[...] to inject a specific baseline (via temp file +
 // CONSISTENCY_BASELINE_FILE env var, which is supported by the checker).
-function runChecker(fixtureRoot, { noBaseline = false, baselineEntries = null } = {}) {
+function runChecker(fixtureRoot, { noBaseline = false, baselineEntries = null, only = null } = {}) {
   const args = [CONSISTENCY_JS, "--root", fixtureRoot];
   if (noBaseline) args.push("--no-baseline");
+  if (only) args.push("--only", only);
 
   const env = { ...process.env };
   let baselinePath = null;
@@ -476,6 +477,155 @@ test("check 6 stage-rule-file: stage with rule file exits 0", () => {
     const r = runChecker(root, { noBaseline: true });
     assert.equal(r.status, 0,
       `expected exit 0 but got ${r.status}:\n${r.stdout}\n${r.stderr}`);
+  } finally {
+    cleanup(root);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Check 9: Stable schema vocabulary
+// ---------------------------------------------------------------------------
+
+function writePerformanceSchema(root) {
+  writeFile(root, "core/gates/schemas/stage-06e.schema.json", JSON.stringify({
+    type: "object",
+    properties: { checks_performed: { type: "array" } },
+  }));
+}
+
+test("check 9 schema-vocabulary: obsolete documented field is detected", () => {
+  const root = mkFixtureRoot();
+  try {
+    writePerformanceSchema(root);
+    writeFile(root, "docs/FEATURES.md", "Gate carries `checks_performed` (formerly `checks_run`).\n");
+    const r = runChecker(root, { noBaseline: true, only: "schema-vocabulary" });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /schema-vocabulary/);
+    assert.match(r.stdout, /obsolete field "checks_run"/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 9 schema-vocabulary: canonical field exits 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    writePerformanceSchema(root);
+    writeFile(root, "docs/FEATURES.md", "Gate carries `checks_performed`.\n");
+    writeFile(root, "docs/user-guide.md", "Inspect `checks_performed` for executed checks.\n");
+    const r = runChecker(root, { noBaseline: true, only: "schema-vocabulary" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 9 schema-vocabulary: violation can be baselined", () => {
+  const root = mkFixtureRoot();
+  try {
+    writePerformanceSchema(root);
+    writeFile(root, "docs/FEATURES.md", "`checks_performed`; old name: `checks_run`.\n");
+    const r = runChecker(root, {
+      only: "schema-vocabulary",
+      baselineEntries: ["schema-vocabulary:docs/FEATURES.md:checks_run"],
+    });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /baselined/i);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 9 schema-vocabulary: audit archives remain excluded", () => {
+  const root = mkFixtureRoot();
+  try {
+    writePerformanceSchema(root);
+    writeFile(root, "docs/FEATURES.md", "Gate carries `checks_performed`.\n");
+    writeFile(root, "docs/audit-archive/old.md", "Historical field: `checks_run`.\n");
+    const r = runChecker(root, { noBaseline: true, only: "schema-vocabulary" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    cleanup(root);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Check 10: Stable support state
+// ---------------------------------------------------------------------------
+
+function writeSupportPackage(root) {
+  writeFile(root, "package.json", JSON.stringify({
+    engines: { node: ">=20.0.0" },
+    os: ["darwin", "linux", "win32"],
+  }));
+}
+
+test("check 10 support-state: stale Node requirement is detected", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeSupportPackage(root);
+    writeFile(root, "README.md", "Prerequisite: Node.js 18+. Native Windows is supported.\n");
+    const r = runChecker(root, { noBaseline: true, only: "support-state" });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /Node 18 claim disagrees/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 10 support-state: native Windows contradiction is detected", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeSupportPackage(root);
+    writeFile(root, "README.md", "Node.js 20+. Native Windows is not supported.\n");
+    const r = runChecker(root, { noBaseline: true, only: "support-state" });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /must affirm package\.json os support for win32/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 10 support-state: volatile maintainer test count is detected", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeSupportPackage(root);
+    writeFile(root, "README.md", "Node.js 20+. Native Windows is supported.\n");
+    writeFile(root, "AGENTS.md", "Run 1,944 tests before committing.\n");
+    const r = runChecker(root, { noBaseline: true, only: "support-state" });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stdout, /volatile test-count claim/);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 10 support-state: matching stable facts exit 0", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeSupportPackage(root);
+    writeFile(root, "README.md", "Prerequisite: Node.js 20+. Native Windows is supported.\n");
+    writeFile(root, "docs/FEATURES.md", "Stagecraft runs natively on Windows.\n");
+    writeFile(root, "docs/faq.md", "Yes, native Windows is supported.\n");
+    writeFile(root, "AGENTS.md", "Run the full offline suite before committing.\n");
+    const r = runChecker(root, { noBaseline: true, only: "support-state" });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+  } finally {
+    cleanup(root);
+  }
+});
+
+test("check 10 support-state: violation can be baselined", () => {
+  const root = mkFixtureRoot();
+  try {
+    writeSupportPackage(root);
+    writeFile(root, "README.md", "Prerequisite: Node.js 18+. Native Windows is supported.\n");
+    const r = runChecker(root, {
+      only: "support-state",
+      baselineEntries: ["support-state:README.md:node:18"],
+    });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /baselined/i);
   } finally {
     cleanup(root);
   }
