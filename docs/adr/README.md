@@ -51,6 +51,7 @@ What else was on the table and why we didn't pick those.
 | [009](009-repair-mode.md) | Repair mode: `devteam run --repair` as an intent flag (orthogonal to `--track`); fix-aware artifacts on existing stages, reusing PATCH MODE + the spec→stamp chain | Accepted |
 | [010](010-git-integration.md) | Git integration: managed gitignore block via `devteam init`, `devteam commit` as primary git interface, `--auto-commit` on clean halts, `last_committed_stage_index` cursor | Accepted |
 | [011](011-authenticated-gate-chain.md) | Authenticated gate chain: optional HMAC-SHA256, explicit signed-only policy, provider-neutral KMS path deferred | Accepted |
+| [012](012-explicit-resolution-acceptance.md) | Explicit resolution acceptance: hash-bound human evidence without free-form resolution export | Accepted |
 
 ### Deferred
 

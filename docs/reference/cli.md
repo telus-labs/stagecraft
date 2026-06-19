@@ -3,7 +3,7 @@
 
 # CLI Reference
 
-Full `devteam` command reference. 33 commands.
+Full `devteam` command reference. 34 commands.
 Derived from the per-command flag schemas in `core/cli/commands/`.
 Run `npm run docs:generate` to regenerate after adding or changing flags.
 
@@ -231,6 +231,22 @@ Chronological event timeline: every gate and artifact write in mtime order. --fo
 | --feature | string | Feature name (bounded isolation mode) |
 | --json    | bool   | JSON output (one object per line)     |
 | --follow  | bool   | Tail pipeline/ at 1s poll             |
+
+### `devteam evidence <status|export|identity|accept-resolution> [options]`
+
+Assess evidence-gated capabilities offline, export consented aggregates, manage project identity, or explicitly accept a successful fix/retry resolution.
+
+| Flag      | Type   | Description                                        |
+| --------- | ------ | -------------------------------------------------- |
+| --cwd     | string | Target project directory                           |
+| --feature | string | Feature name for bounded isolation                 |
+| --json    | bool   | Emit stable aggregate JSON                         |
+| --out     | string | New local export file                              |
+| --consent | bool   | Acknowledge the documented export boundary         |
+| --bundle  | list   | Validated bundle for portfolio status (repeatable) |
+| --rotate  | bool   | Rotate the local project identity                  |
+| --delete  | bool   | Delete the local project identity                  |
+| --yes     | bool   | Confirm identity mutation or resolution acceptance |
 
 ### `devteam ui [options]`
 

@@ -22,7 +22,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [ci.md](ci.md) — GitHub Actions workflow template and environment variables
 - [memory.md](memory.md) — persistent project memory: embedder options and shared store
 - [observability.md](observability.md) — OpenTelemetry span schema and collector setup
-- [evidence.md](evidence.md) — read-only readiness for evidence-gated capabilities
+- [evidence.md](evidence.md) — offline readiness, explicit resolution acceptance, and privacy-safe export
 - [reproducibility.md](reproducibility.md) — gate fingerprint fields, replay readiness, drift detection
 - [runbooks/escalation.md](runbooks/escalation.md) — what to read and decide when `devteam next` says `resolve-escalation`
 - [runbooks/fix-and-retry.md](runbooks/fix-and-retry.md) — fix-and-retry halt: red-team, QA, pre-review, peer-review (11 cases)
@@ -42,6 +42,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [TESTING.md](TESTING.md) — test structure and guidance
 - [adr/README.md](adr/README.md) — architecture decision records index
 - [adr/011-authenticated-gate-chain.md](adr/011-authenticated-gate-chain.md) — HMAC gate authentication, strict policy, and trust boundaries
+- [adr/012-explicit-resolution-acceptance.md](adr/012-explicit-resolution-acceptance.md) — hash-bound human acceptance evidence for H3
 - [autonomous-execution-design.md](autonomous-execution-design.md) — design notes for the bounded autonomous driver (companion to ADR-003)
 - [spec-authoring.md](spec-authoring.md) — writing AC-N criteria and scaffolding the spec file
 - [migration-safety.md](migration-safety.md) — veto criteria, gate fields, and the migration heuristic

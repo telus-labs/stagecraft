@@ -89,6 +89,7 @@ function fixRetryTransition({
   clearedCount,
   archived,
   target,
+  derivable,
   targetedFix,
   fixRetries,
 }) {
@@ -105,8 +106,9 @@ function fixRetryTransition({
       cleared_gates: clearedCount,
       archived: archived || null,
       target,
+      derivable: derivable === true,
     }],
-    emittedEvents: [{ type: "fix-retry", ...base, attempt, cleared_gates: clearedCount, target }],
+    emittedEvents: [{ type: "fix-retry", ...base, attempt, cleared_gates: clearedCount, target, derivable: derivable === true }],
   });
 }
 

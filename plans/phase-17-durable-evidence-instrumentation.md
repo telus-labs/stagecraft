@@ -1,6 +1,6 @@
 # Phase 17 — Durable Evidence Instrumentation
 
-**Status:** Item 17.1 implemented; pending merge.
+**Status:** Item 17.1 complete (PR #254); operational collection in progress.
 **Roadmap item:** Audit P3-1 follow-through / GitHub #143 evidence acquisition.
 **Purpose:** make normal autonomous runs produce the durable, privacy-bounded dispatch
 history that Phase 16 can assess and export.
@@ -80,10 +80,10 @@ analysis applies the same boundary again before any category reaches an export b
 - Review #143 only after each compared role/host pair has at least five durable
   observations in each of two projects and cost coverage is non-zero.
 
-### 17.3 — Remaining unavailable signals (separate design work)
+### 17.3 — Remaining signals
 
-- H3 still needs an explicit accepted-resolution signal; a later design must define
-  who records acceptance and what exactly was accepted. A later PASS is not enough.
+- H3's explicit accepted-resolution signal is implemented in Phase 18 under ADR-012;
+  real-project collection and review remain outstanding.
 - ADR-007 Tier 2 still needs observed stalls before a threshold can be calibrated.
 - Standing grants still need real repair runs, consequence-ceiling halts, and granted
   ruling events. Existing driver events already collect those facts.

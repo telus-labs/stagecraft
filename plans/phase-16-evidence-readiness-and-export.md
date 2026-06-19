@@ -62,8 +62,10 @@ activate stall termination.
 | Git/repository metadata | none | remote URL, repository name, branch, commit, author/email, file paths | excluded |
 | host transcripts/logs | none | prompts, responses, source excerpts, command output, secrets | excluded |
 
-Raw local sources remain untouched. Evidence code is read-only except for the local
-project identity file and an operator-selected export destination.
+Raw local sources remain untouched by Phase 16. Its evidence code is read-only except
+for the local project identity file and an operator-selected export destination. Phase
+18 later adds a separately confirmed, append-only resolution-acceptance event under
+ADR-012.
 
 ### 3.2 Export allowlist
 

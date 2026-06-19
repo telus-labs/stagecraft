@@ -30,7 +30,7 @@ function localCondition(bundle, capability, id) {
     ?.local_conditions.find((item) => item.id === id);
 }
 
-function portfolioReadiness(bundles, rulings, stalls) {
+function portfolioReadiness(bundles, resolutions, rulings, stalls) {
   const projectCount = bundles.length;
   const h3Projects = bundles.filter((bundle) =>
     (localCondition(bundle, "h3-recipe-suggestions", "fix-retry-runs")?.value || 0) >= 5).length;
@@ -44,6 +44,32 @@ function portfolioReadiness(bundles, rulings, stalls) {
     }
   }
   const recurringProjects = Math.max(0, ...[...recoveryProjects.values()].map((set) => set.size));
+  const acceptedProjects = bundles.filter((bundle) => (bundle.resolutions || []).length > 0).length;
+  const acceptedResolutionCount = resolutions.reduce((sum, row) => sum + row.observations, 0);
+  const derivableResolutionCount = resolutions.reduce((sum, row) => sum + row.derivable, 0);
+  const derivablePercent = acceptedResolutionCount === 0
+    ? 0 : Math.round((derivableResolutionCount / acceptedResolutionCount) * 100);
+  const resolutionGroups = new Map();
+  for (const bundle of bundles) {
+    for (const row of bundle.resolutions || []) {
+      const key = `${row.stage}\0${row.failure_class}\0${row.schema_fingerprint}`;
+      if (!resolutionGroups.has(key)) {
+        resolutionGroups.set(key, { projects: new Set(), observations: 0 });
+      }
+      const group = resolutionGroups.get(key);
+      group.projects.add(bundle.project_ref);
+      group.observations += row.observations;
+    }
+  }
+  const acceptedRecurringProjects = Math.max(
+    0, ...[...resolutionGroups.values()].map((group) => group.projects.size),
+  );
+  const acceptedRecurringObservations = Math.max(
+    0,
+    ...[...resolutionGroups.values()]
+      .filter((group) => group.projects.size >= 2)
+      .map((group) => group.observations),
+  );
 
   const comparableProjects = bundles.filter((bundle) => {
     const roleHosts = new Map();
@@ -54,6 +80,9 @@ function portfolioReadiness(bundles, rulings, stalls) {
     return [...roleHosts.values()].some((hosts) => hosts.size >= 2);
   }).length;
   const costProjects = bundles.filter((bundle) => bundle.quality.cost_coverage_dispatches > 0).length;
+  const durableProjects = bundles.filter(
+    (bundle) => (bundle.quality.durable_dispatch_observations || 0) > 0,
+  ).length;
   const repairRuns = bundles.reduce((sum, bundle) => sum + bundle.scope.repair_run_count, 0);
   const ceilingEvents = bundles.reduce((sum, bundle) => sum
     + (localCondition(bundle, "standing-grants", "consequence-ceiling-events")?.value || 0), 0);
@@ -67,7 +96,10 @@ function portfolioReadiness(bundles, rulings, stalls) {
         condition("projects", projectCount, 2, projectCount >= 2, "insufficient-projects"),
         condition("projects-with-fix-retry-runs", h3Projects, 2, h3Projects >= 2, "insufficient-project-fix-retry-evidence"),
         condition("recurring-failure-projects", recurringProjects, 2, recurringProjects >= 2, "insufficient-cross-project-recurrence"),
-        condition("accepted-resolution-signal", 0, 1, false, "accepted-resolution-signal-unavailable"),
+        condition("accepted-resolution-projects", acceptedProjects, 2, acceptedProjects >= 2, "insufficient-accepted-resolution-projects"),
+        condition("accepted-recurring-failure-projects", acceptedRecurringProjects, 2, acceptedRecurringProjects >= 2, "insufficient-accepted-cross-project-recurrence"),
+        condition("accepted-recurring-resolution-observations", acceptedRecurringObservations, 3, acceptedRecurringObservations >= 3, "insufficient-accepted-resolutions"),
+        condition("derivable-accepted-resolutions-percent", derivablePercent, 80, acceptedResolutionCount >= 3 && derivablePercent >= 80, "insufficient-derivable-resolutions"),
       ],
     },
     {
@@ -76,7 +108,7 @@ function portfolioReadiness(bundles, rulings, stalls) {
         condition("projects", projectCount, 2, projectCount >= 2, "insufficient-projects"),
         condition("projects-with-host-comparison", comparableProjects, 2, comparableProjects >= 2, "insufficient-host-comparison"),
         condition("projects-with-cost-telemetry", costProjects, 2, costProjects >= 2, "cost-telemetry-unavailable"),
-        condition("durable-dispatch-history", 0, 1, false, "durable-dispatch-history-unavailable"),
+        condition("projects-with-durable-dispatch-history", durableProjects, 2, durableProjects >= 2, "durable-dispatch-history-unavailable"),
       ],
     },
     {
@@ -127,17 +159,24 @@ function analyzePortfolio(files) {
     "total_cost_usd", "duration_observations", "total_duration_ms",
   ]);
   const recovery = aggregateRows(bundles, "recovery", ["stage", "failure_class"], ["observations", "runs"]);
+  const resolutions = aggregateRows(
+    bundles.map((bundle) => ({ ...bundle, resolutions: bundle.resolutions || [] })),
+    "resolutions",
+    ["stage", "failure_class", "schema_fingerprint"],
+    ["observations", "derivable"],
+  );
   const rulings = aggregateRows(bundles, "rulings", ["ruling_class"], ["observations"]);
   const stalls = aggregateRows(bundles, "stalls", ["stage", "stall_class"], ["observations"]);
   const quality = {
     malformed_records: 0, oversized_records: 0, unreadable_sources: 0,
     truncated_sources: 0, symlink_sources: 0, orphan_events: 0,
     suppressed_observations: 0, cost_coverage_dispatches: 0,
+    durable_dispatch_observations: 0,
   };
   for (const bundle of bundles) {
     Object.keys(quality).forEach((key) => {
       quality[key] += key === "suppressed_observations"
-        ? bundle.suppressed_observations : bundle.quality[key];
+        ? bundle.suppressed_observations : (bundle.quality[key] || 0);
     });
   }
   return {
@@ -150,8 +189,8 @@ function analyzePortfolio(files) {
       complete_run_count: bundles.reduce((sum, bundle) => sum + bundle.scope.complete_run_count, 0),
       repair_run_count: bundles.reduce((sum, bundle) => sum + bundle.scope.repair_run_count, 0),
     },
-    quality, routing, recovery, rulings, stalls,
-    readiness: portfolioReadiness(bundles, rulings, stalls),
+    quality, routing, recovery, resolutions, rulings, stalls,
+    readiness: portfolioReadiness(bundles, resolutions, rulings, stalls),
   };
 }
 

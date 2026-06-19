@@ -120,6 +120,11 @@ const COMMANDS = [
     description: "Chronological event timeline: every gate and artifact write in mtime order. --follow tails at 1-second poll.",
   },
   {
+    name:        "evidence",
+    synopsis:    "devteam evidence <status|export|identity|accept-resolution> [options]",
+    description: "Assess evidence-gated capabilities offline, export consented aggregates, manage project identity, or explicitly accept a successful fix/retry resolution.",
+  },
+  {
     name:        "ui",
     synopsis:    "devteam ui [options]",
     description: "Start a local web UI at http://127.0.0.1:3737/ showing pipeline state with live updates via SSE.",

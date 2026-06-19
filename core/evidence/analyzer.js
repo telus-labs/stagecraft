@@ -1,18 +1,10 @@
 "use strict";
 
-const { scanContent } = require("../hooks/secret-scan");
+const { category, number } = require("./categories");
+const { sourceEventRef } = require("./resolutions");
 
-const SAFE_CATEGORY = /^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,79}$/;
 const KNOWN_STATUSES = new Set(["PASS", "WARN", "FAIL", "ESCALATE"]);
-
-function category(value) {
-  if (typeof value !== "string" || !SAFE_CATEGORY.test(value)) return "other";
-  return scanContent(value).length === 0 ? value : "other";
-}
-
-function number(value) {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
-}
+const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 function groupRuns(events) {
   const runs = [];
@@ -136,11 +128,56 @@ function extractDurableRouting(events) {
     `${a.role}\0${a.host}\0${a.model}`.localeCompare(`${b.role}\0${b.host}\0${b.model}`));
 }
 
+function extractResolutions(events) {
+  const groups = new Map();
+  const seenSources = new Set();
+  const validSources = new Map();
+  for (const event of events) {
+    if (event.outcome !== "fix-retry") continue;
+    const stage = category(event.stage);
+    const failure_class = category(event.failure_class);
+    if (stage === "other" || failure_class === "other") continue;
+    validSources.set(sourceEventRef(event), {
+      stage,
+      failure_class,
+      derivable: event.derivable === true
+        || (Number.isInteger(event.cleared_gates) && event.cleared_gates > 0),
+    });
+  }
+  for (const event of events) {
+    if (event.outcome !== "resolution-accepted") continue;
+    if (!HASH_PATTERN.test(event.source_event_sha256)
+      || !HASH_PATTERN.test(event.schema_fingerprint)
+      || seenSources.has(event.source_event_sha256)) continue;
+    const source = validSources.get(event.source_event_sha256);
+    if (!source || category(event.stage) !== source.stage
+      || category(event.failure_class) !== source.failure_class
+      || event.derivable !== source.derivable) continue;
+    seenSources.add(event.source_event_sha256);
+    const stage = category(event.stage);
+    const failure_class = category(event.failure_class);
+    const schema_fingerprint = event.schema_fingerprint;
+    const key = `${stage}\0${failure_class}\0${schema_fingerprint}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        stage, failure_class, schema_fingerprint, observations: 0, derivable: 0,
+      });
+    }
+    const row = groups.get(key);
+    row.observations += 1;
+    if (event.derivable === true) row.derivable += 1;
+  }
+  return [...groups.values()].sort((a, b) =>
+    `${a.stage}\0${a.failure_class}\0${a.schema_fingerprint}`.localeCompare(
+      `${b.stage}\0${b.failure_class}\0${b.schema_fingerprint}`,
+    ));
+}
+
 function condition(id, value, threshold, met, reasonCode = null) {
   return { id, value, threshold, met, reason_code: met ? null : reasonCode };
 }
 
-function readinessSummary({ runs, routing, recovery, rulings, stalls }) {
+function readinessSummary({ runs, routing, recovery, resolutions, rulings, stalls }) {
   const fixRetryRuns = runs.filter((run) => run.events.some((e) => e.outcome === "fix-retry")).length;
   const repairRuns = runs.filter((run) => run.intent === "repair").length;
   const maxRecoveryRuns = recovery.reduce((max, row) => Math.max(max, row.runs), 0);
@@ -158,6 +195,10 @@ function readinessSummary({ runs, routing, recovery, rulings, stalls }) {
     sum + run.events.filter((e) => e.outcome === "ceiling-halt").length, 0);
   const rulingEvents = rulings.reduce((sum, row) => sum + row.observations, 0);
   const stallEvents = stalls.reduce((sum, row) => sum + row.observations, 0);
+  const acceptedResolutions = resolutions.reduce((sum, row) => sum + row.observations, 0);
+  const derivableResolutions = resolutions.reduce((sum, row) => sum + row.derivable, 0);
+  const derivablePercent = acceptedResolutions === 0
+    ? 0 : Math.round((derivableResolutions / acceptedResolutions) * 100);
 
   return [
     {
@@ -168,7 +209,8 @@ function readinessSummary({ runs, routing, recovery, rulings, stalls }) {
       local_conditions: [
         condition("fix-retry-runs", fixRetryRuns, 5, fixRetryRuns >= 5, "insufficient-fix-retry-runs"),
         condition("recurring-failure-runs", maxRecoveryRuns, 3, maxRecoveryRuns >= 3, "insufficient-recurrence"),
-        condition("accepted-resolution-signal", 0, 1, false, "accepted-resolution-signal-unavailable"),
+        condition("accepted-resolution-signal", acceptedResolutions, 1, acceptedResolutions >= 1, "no-accepted-resolutions"),
+        condition("derivable-accepted-resolutions-percent", derivablePercent, 80, acceptedResolutions > 0 && derivablePercent >= 80, "insufficient-derivable-resolutions"),
       ],
       portfolio_reason_code: "multiple-project-bundles-required",
     },
@@ -240,7 +282,11 @@ function analyzeEvidence({ events = [], gates = [], quality = {} }) {
   }
   const rulings = rowsFromMap(rulingMap, ["ruling_class"]);
   const stalls = rowsFromMap(stallMap, ["stage", "stall_class"]);
+  const resolutions = extractResolutions(events);
   const durableRouting = extractDurableRouting(events);
+  const durableDispatchObservations = durableRouting.reduce(
+    (sum, row) => sum + row.gate_observations, 0,
+  );
   const routing = durableRouting.length > 0 ? durableRouting : extractRouting(gates);
   const completedRuns = runs.filter((run) => run.events.some((e) => e.outcome === "complete")).length;
   const normalizedQuality = {
@@ -252,6 +298,7 @@ function analyzeEvidence({ events = [], gates = [], quality = {} }) {
     truncated_sources: 0,
     symlink_sources: 0,
     ...quality,
+    durable_dispatch_observations: durableDispatchObservations,
     orphan_events: orphanEvents,
   };
 
@@ -267,12 +314,14 @@ function analyzeEvidence({ events = [], gates = [], quality = {} }) {
     quality: normalizedQuality,
     routing,
     recovery,
+    resolutions,
     rulings,
     stalls,
     readiness: readinessSummary({
       runs,
       routing: durableRouting,
       recovery,
+      resolutions,
       rulings,
       stalls,
     }),
@@ -285,4 +334,5 @@ module.exports = {
   groupRuns,
   extractRouting,
   extractDurableRouting,
+  extractResolutions,
 };
