@@ -67,25 +67,26 @@ describe("security-heuristic: needsSecurityReview", () => {
   });
 
   it("does NOT flag safe paths", () => {
+    const d = tmpdir();
     const r = needsSecurityReview([
-      "src/frontend/components/Button.tsx",
-      "README.md",
-      "docs/concepts.md",
-      "src/utils/format.js",
+      writeFile(d, "src/frontend/components/Button.tsx", "export const Button = {};\n"),
+      writeFile(d, "README.md", "Project overview.\n"),
+      writeFile(d, "docs/concepts.md", "Concepts.\n"),
+      writeFile(d, "src/utils/format.js", "module.exports = {};\n"),
     ]);
     assert.equal(r.length, 0);
   });
 
   it("returns the subset of paths that matched", () => {
-    const r = needsSecurityReview([
-      "README.md",
-      "src/backend/auth.js",
-      "docs/x.md",
-      "Dockerfile",
-    ]);
+    const d = tmpdir();
+    const readme = writeFile(d, "README.md", "Project overview.\n");
+    const auth = writeFile(d, "src/backend/auth.js", "module.exports = {};\n");
+    const docs = writeFile(d, "docs/x.md", "Documentation.\n");
+    const dockerfile = writeFile(d, "Dockerfile", "FROM node:22\n");
+    const r = needsSecurityReview([readme, auth, docs, dockerfile]);
     assert.equal(r.length, 2);
-    assert.ok(r.includes("src/backend/auth.js"));
-    assert.ok(r.includes("Dockerfile"));
+    assert.ok(r.includes(auth));
+    assert.ok(r.includes(dockerfile));
   });
 
   it("accepts custom patterns", () => {

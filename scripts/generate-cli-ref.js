@@ -57,7 +57,7 @@ const COMMANDS = [
   {
     name:        "verify-chain",
     synopsis:    "devteam verify-chain [options]",
-    description: "Verify the tamper-evident gate chain — each stage gate commits to a hash of its predecessor.",
+    description: "Verify predecessor hashes and optional HMAC authentication across the stage-gate chain.",
   },
   {
     name:        "stamp-chain",

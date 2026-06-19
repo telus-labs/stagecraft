@@ -122,6 +122,7 @@ test("`devteam ci show` prints the template to stdout", () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /name: stagecraft pr-checks/);
   assert.match(r.stdout, /checks: write/);
+  assert.match(r.stdout, /secrets\.DEVTEAM_SIGNING_SECRET/);
 });
 
 test("`devteam ci` with no subcommand prints usage", () => {

@@ -29,6 +29,9 @@ const DEFAULTS = {
     // Produced by `devteam assess --apply` or set manually. null = use
     // default_track.
     custom_stages: null,
+    // Require every stamped gate to carry a verifiable HMAC. The signing
+    // secret is supplied only through DEVTEAM_SIGNING_SECRET.
+    require_signed_gates: false,
   },
   autonomy: {
     // ADR-003 / H1: retry budget before `next()` escalates a still-FAIL stage
@@ -77,6 +80,7 @@ function loadConfig(cwd = process.cwd()) {
         skip_stages: Array.isArray(parsed.pipeline?.skip_stages) ? parsed.pipeline.skip_stages : [],
         verify: (parsed.pipeline && typeof parsed.pipeline.verify === "object" && parsed.pipeline.verify !== null) ? parsed.pipeline.verify : {},
         custom_stages: Array.isArray(parsed.pipeline?.custom_stages) ? parsed.pipeline.custom_stages : null,
+        require_signed_gates: parsed.pipeline?.require_signed_gates === true,
       },
       autonomy: {
         max_retries: Number.isInteger(parsed.autonomy?.max_retries) && parsed.autonomy.max_retries >= 0
@@ -181,6 +185,7 @@ function renderDefaultConfig(hosts, opts = {}) {
   lines.push("pipeline:");
   lines.push("  default_track: full");
   lines.push("  isolation: in-place");
+  lines.push("  # require_signed_gates: false  # requires DEVTEAM_SIGNING_SECRET when true");
   lines.push("  # skip_stages: []     # stage names to skip, e.g. [red-team]");
   lines.push("  # verify:             # orchestrator-stamped verification commands");
   lines.push("  #   lint_command: \"npm run lint\"   # override; defaults to package.json scripts.lint");

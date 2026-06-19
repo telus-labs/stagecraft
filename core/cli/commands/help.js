@@ -90,10 +90,10 @@ Commands:
                                    pipeline/gates/. Exit codes: 0 PASS/WARN,
                                    1 malformed, 2 FAIL, 3 ESCALATE. Used
                                    by host hooks (e.g. Claude Code Stop).
-  verify-chain [--track <t>]       C6: verify the tamper-evident gate chain —
-       [--json]                     each stage gate commits to a hash of its
-                                   predecessor. Reports breaks + unstamped
-                                   gates. Exit 0 intact, 1 broken (CI-usable).
+  verify-chain [--track <t>]       C6: verify predecessor hashes and optional
+       [--require-signed] [--json]  HMAC authentication. Reports breaks,
+                                   invalid MACs, and unsigned gates. Exit 0
+                                   intact, 1 failed (CI-usable).
   stamp-chain [--track <t>]        C6: (re)stamp the chain on all stage gates,
                                    in order. Use after a deliberate earlier-
                                    stage re-run, or to stamp interactive gates.

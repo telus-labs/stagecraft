@@ -27,6 +27,7 @@ describe("config: loadConfig", () => {
     assert.equal(c.routing.default_host, "claude-code");
     assert.equal(c.routing.roles.backend, "codex");
     assert.equal(c.pipeline.default_track, "hotfix");
+    assert.equal(c.pipeline.require_signed_gates, false);
   });
 
   it("fills in defaults for missing fields", () => {
@@ -36,6 +37,13 @@ describe("config: loadConfig", () => {
     const c = loadConfig(cwd);
     assert.equal(c.pipeline.default_track, "full"); // default
     assert.deepEqual(c.routing.roles, {}); // default
+  });
+
+  it("enables signed-only gate policy only for explicit true", () => {
+    const cwd = track(makeTargetProject({
+      config: "pipeline:\n  require_signed_gates: true\n",
+    }));
+    assert.equal(loadConfig(cwd).pipeline.require_signed_gates, true);
   });
 });
 
@@ -69,6 +77,7 @@ describe("config: renderDefaultConfig + writeConfigIfAbsent", () => {
     const text = renderDefaultConfig(["claude-code"]);
     assert.match(text, /default_host: claude-code/);
     assert.match(text, /default_track: full/);
+    assert.match(text, /require_signed_gates: false/);
   });
 
   it("renders multi-host hints", () => {

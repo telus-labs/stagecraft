@@ -100,13 +100,14 @@ Validate the most recent gate in pipeline/gates/. Exit codes: 0 PASS/WARN, 1 mal
 
 ### `devteam verify-chain [options]`
 
-Verify the tamper-evident gate chain — each stage gate commits to a hash of its predecessor.
+Verify predecessor hashes and optional HMAC authentication across the stage-gate chain.
 
-| Flag    | Type   | Description                 |
-| ------- | ------ | --------------------------- |
-| --cwd   | string | Target project directory    |
-| --track | string | Override the pipeline track |
-| --json  | bool   | JSON output                 |
+| Flag             | Type   | Description                                  |
+| ---------------- | ------ | -------------------------------------------- |
+| --cwd            | string | Target project directory                     |
+| --track          | string | Override the pipeline track                  |
+| --json           | bool   | JSON output                                  |
+| --require-signed | bool   | Fail unless every gate has a verifiable HMAC |
 
 ### `devteam stamp-chain [options]`
 
