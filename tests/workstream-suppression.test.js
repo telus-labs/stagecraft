@@ -86,6 +86,17 @@ describe("computeDispatchPlan: explicit active_roles in stage-01 gate", () => {
     const roles = dispatchPlanRoles(cwd, "build");
     assert.equal(roles.length, 4);
   });
+
+  it("does not filter non-build stages when active_roles lists build workstreams only", () => {
+    // Regression: active_roles = [backend, platform, qa] intersected with
+    // design's roles = [principal] → empty → was wrongly applying a zero-role
+    // filter, causing infinite 0ms dispatch loops.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "platform", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "design");
+    assert.ok(roles.includes("principal"), `design should still dispatch principal; got: ${roles}`);
+    assert.equal(roles.length, 1);
+  });
 });
 
 // ---------------------------------------------------------------------------
