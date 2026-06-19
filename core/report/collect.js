@@ -323,6 +323,41 @@ function collectReport(cwd, opts = {}) {
     exists: fs.existsSync(path.join(pipelineDir, a.rel)),
   }));
 
+  // --- 10. Embeddable document content (raw text for HTML embedding) ---
+  const DOC_DESCRIPTORS = [
+    { kind: "brief",         label: "brief.md",               rel: "brief.md" },
+    { kind: "spec",          label: "spec.feature",            rel: "spec.feature" },
+    { kind: "design",        label: "design-spec.md",          rel: "design-spec.md" },
+    { kind: "build-plan",    label: "build-plan.md",           rel: "build-plan.md" },
+    { kind: "pre-review",    label: "pre-review.md",           rel: "pre-review.md" },
+    { kind: "security",      label: "security-review.md",      rel: "security-review.md" },
+    { kind: "red-team",      label: "red-team-report.md",      rel: "red-team-report.md" },
+    { kind: "test-report",   label: "test-report.md",          rel: "test-report.md" },
+    { kind: "accessibility", label: "accessibility-report.md", rel: "accessibility-report.md" },
+    { kind: "observability", label: "observability-report.md", rel: "observability-report.md" },
+    { kind: "retrospective", label: "retrospective.md",        rel: "retrospective.md" },
+  ];
+  for (const adr of adrs) {
+    DOC_DESCRIPTORS.push({ kind: "adr", label: adr.title, abs: adr.absPath });
+  }
+  const codeRevDir = path.join(pipelineDir, "code-review");
+  if (fs.existsSync(codeRevDir)) {
+    const revFiles = fs.readdirSync(codeRevDir)
+      .filter(f => f.startsWith("by-") && f.endsWith(".md"))
+      .sort();
+    for (const f of revFiles) {
+      const role = f.replace(/^by-/, "").replace(/\.md$/, "");
+      DOC_DESCRIPTORS.push({ kind: "review", label: `code-review (${role})`, rel: `code-review/${f}` });
+    }
+  }
+  const documents = DOC_DESCRIPTORS
+    .map(d => {
+      const absPath = d.abs || path.join(pipelineDir, d.rel);
+      const content = readText(absPath);
+      return content !== null ? { kind: d.kind, label: d.label, content } : null;
+    })
+    .filter(Boolean);
+
   // --- Compose meta ---
   // Feature name: prefer run-state.feature, then brief.md H1 title,
   // then the pipeline parent directory name, then the intent string.
@@ -361,6 +396,7 @@ function collectReport(cwd, opts = {}) {
     stages,
     blockerLog,
     artifacts,
+    documents,
   };
 }
 

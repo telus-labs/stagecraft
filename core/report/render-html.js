@@ -3,16 +3,14 @@
 // render-html.js — take a ReportData object and return a self-contained
 // HTML string. No external dependencies, no CDN, works offline.
 
+// ── Utility helpers ──────────────────────────────────────────────────────────
+
 function esc(str) {
   return String(str ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function fileLink(absPath, label) {
-  return `<a href="file://${esc(absPath)}">${esc(label)}</a>`;
 }
 
 function badge(status) {
@@ -34,7 +32,7 @@ function finalStatusBadge(status) {
     "no-run":  ["neutral", "NO RUN DATA"],
   };
   const [cls, text] = map[status] || ["neutral", esc(status)];
-  return `<span class="badge ${cls}">${text}</span>`;
+  return `<span class="badge large ${cls}">${text}</span>`;
 }
 
 function formatDate(isoStr) {
@@ -60,97 +58,422 @@ function formatCost(usd) {
   return `$${Number(usd).toFixed(3)}`;
 }
 
+// ── Markdown → HTML ──────────────────────────────────────────────────────────
+
+// Apply inline markdown formatting. Escapes HTML first (so * [ ] ` survive),
+// then substitutes bold, italic, code, and links.
+function inlineMd(raw) {
+  let s = esc(String(raw ?? ""));
+  s = s.replace(/`([^`]+)`/g, (_, c) => `<code>${c}</code>`);
+  s = s.replace(/\*\*\*(.+?)\*\*\*/g, (_, c) => `<strong><em>${c}</em></strong>`);
+  s = s.replace(/\*\*(.+?)\*\*/g, (_, c) => `<strong>${c}</strong>`);
+  s = s.replace(/\*([^*\n]+)\*/g, (_, c) => `<em>${c}</em>`);
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => `<a href="${u}">${t}</a>`);
+  return s;
+}
+
+// Convert a markdown string to HTML. Handles: fenced code blocks, ATX
+// headings (h1–h4), HR, blockquotes, tables, bullet/ordered lists,
+// and paragraphs. Returns an HTML-safe string.
+function mdToHtml(text) {
+  if (!text) return "";
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  let i = 0;
+  let listType = null;
+  let listItems = [];
+  let paraLines = [];
+
+  const flushPara = () => {
+    if (paraLines.length) { out.push(`<p>${paraLines.join("<br>")}</p>`); paraLines = []; }
+  };
+  const flushList = () => {
+    if (listType && listItems.length) {
+      out.push(`<${listType}>${listItems.map(li => `<li>${li}</li>`).join("")}</${listType}>`);
+      listType = null; listItems = [];
+    }
+  };
+  const flush = () => { flushPara(); flushList(); };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (/^\s*```/.test(line)) {
+      flush(); i++;
+      const code = [];
+      while (i < lines.length && !/^\s*```/.test(lines[i])) { code.push(lines[i]); i++; }
+      out.push(`<pre><code>${esc(code.join("\n"))}</code></pre>`);
+      i++; continue;
+    }
+
+    // ATX heading
+    const hm = line.match(/^(#{1,4})\s+(.*)/);
+    if (hm) {
+      flush();
+      const lv = hm[1].length;
+      out.push(`<h${lv}>${inlineMd(hm[2])}</h${lv}>`);
+      i++; continue;
+    }
+
+    // Horizontal rule
+    if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line.trim())) {
+      flush(); out.push("<hr>"); i++; continue;
+    }
+
+    // Blockquote
+    if (line.startsWith(">")) {
+      flush();
+      const bq = [];
+      while (i < lines.length && lines[i].startsWith(">")) {
+        bq.push(lines[i].replace(/^>\s?/, "")); i++;
+      }
+      out.push(`<blockquote>${mdToHtml(bq.join("\n"))}</blockquote>`);
+      continue;
+    }
+
+    // Table (pipe-delimited)
+    if (/^\|/.test(line.trim()) && line.includes("|")) {
+      flush();
+      const trows = [];
+      while (i < lines.length && /^\|/.test(lines[i].trim())) { trows.push(lines[i]); i++; }
+      const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      if (trows.length >= 2) {
+        const heads = cells(trows[0]);
+        const body = trows.slice(2).filter(r => !/^[\s|:=-]+$/.test(r.replace(/\|/g, "")));
+        out.push(`<table><thead><tr>${heads.map(h => `<th>${inlineMd(h)}</th>`).join("")}</tr></thead>`);
+        if (body.length) out.push(`<tbody>${body.map(r => `<tr>${cells(r).map(c => `<td>${inlineMd(c)}</td>`).join("")}</tr>`).join("")}</tbody>`);
+        out.push("</table>");
+      }
+      continue;
+    }
+
+    // Unordered list item
+    const ulm = line.match(/^(\s{0,3})[-*+]\s+(.*)/);
+    if (ulm) {
+      flushPara();
+      if (listType !== "ul") { flushList(); listType = "ul"; }
+      listItems.push(inlineMd(ulm[2])); i++; continue;
+    }
+
+    // Ordered list item
+    const olm = line.match(/^(\s{0,3})\d+[.)]\s+(.*)/);
+    if (olm) {
+      flushPara();
+      if (listType !== "ol") { flushList(); listType = "ol"; }
+      listItems.push(inlineMd(olm[2])); i++; continue;
+    }
+
+    // Blank line
+    if (line.trim() === "") { flush(); i++; continue; }
+
+    // Paragraph text
+    flushList();
+    paraLines.push(inlineMd(line));
+    i++;
+  }
+
+  flush();
+  return out.join("\n");
+}
+
+// ── Stage progress bar ───────────────────────────────────────────────────────
+
+const STAGE_SHORT = {
+  "stage-01":  "brief",
+  "stage-02":  "design",
+  "stage-03":  "clarity",
+  "stage-03b": "spec",
+  "stage-04":  "build",
+  "stage-04a": "pre-rev",
+  "stage-04b": "sec-rev",
+  "stage-04c": "red-team",
+  "stage-04e": "preflight",
+  "stage-05":  "review",
+  "stage-06":  "qa",
+  "stage-06b": "a11y",
+  "stage-06c": "obs-gate",
+  "stage-07":  "deploy",
+  "stage-08":  "post-dep",
+};
+
+function renderProgressBar(stages) {
+  if (!stages || stages.length === 0) return "";
+  const parts = [];
+  for (let idx = 0; idx < stages.length; idx++) {
+    const s = stages[idx];
+    if (idx > 0) parts.push('<span class="stage-sep">›</span>');
+    const cls = s.status ? s.status.toLowerCase() : "not-run";
+    const short = STAGE_SHORT[s.stage] || s.name;
+    const tooltip = `${s.name} (${s.stage})${s.status ? ` · ${s.status}` : " · not run"}`;
+    const attr = s.status ? `data-stage="${esc(s.stage)}"` : "";
+    parts.push(`<div class="stage-pip ${esc(cls)}" ${attr} title="${esc(tooltip)}">${esc(short)}</div>`);
+  }
+  return `<div class="progress-bar">${parts.join("")}</div>`;
+}
+
+// ── Tab: Summary ─────────────────────────────────────────────────────────────
+
+function renderSummaryTab(data) {
+  const { meta, brief, stages } = data;
+
+  const haltHtml = meta.haltReason
+    ? `<div class="halt-box"><span class="halt-label">Halt:</span> ${esc(meta.haltReason)}</div>`
+    : "";
+
+  const progressBar = renderProgressBar(stages);
+
+  const statParts = [];
+  if (brief.acCount != null)
+    statParts.push(`<div class="stat-chip"><span class="chip-num">${esc(String(brief.acCount))}</span><span class="chip-lbl">ACs</span></div>`);
+  if (brief.specScenarios != null)
+    statParts.push(`<div class="stat-chip"><span class="chip-num">${esc(String(brief.specScenarios))}</span><span class="chip-lbl">scenarios</span></div>`);
+  if (brief.acCount != null || brief.specScenarios != null) {
+    const driftVal = brief.specDrift
+      ? `<span class="drift-warn">detected</span>`
+      : `<span class="no-drift">none</span>`;
+    statParts.push(`<div class="stat-chip"><span class="chip-lbl">drift</span> ${driftVal}</div>`);
+  }
+  const statsRow = statParts.length
+    ? `<div class="stat-row">${statParts.join("")}</div>` : "";
+
+  const problemHtml = brief.problemStatement
+    ? `<p class="problem">${esc(brief.problemStatement)}</p>` : "";
+
+  const rolesHtml = brief.activeRoles && brief.activeRoles.length > 0
+    ? `<div class="meta-line">
+        <span class="meta-label">Active roles:</span>
+        ${brief.activeRoles.map(r => `<span class="role-badge">${esc(r)}</span>`).join("")}
+       </div>` : "";
+
+  const oosHtml = brief.outOfScope && brief.outOfScope.length > 0
+    ? `<div class="oos-section">
+        <span class="meta-label">Out of scope:</span>
+        <ul class="oos-list">${brief.outOfScope.map(i => `<li>${esc(i)}</li>`).join("")}</ul>
+       </div>` : "";
+
+  return `${haltHtml}${progressBar}${statsRow}${problemHtml}${rolesHtml}${oosHtml}`;
+}
+
+// ── Tab: Stages ──────────────────────────────────────────────────────────────
+
+function renderStagesTab(stages, blockerLog) {
+  let tableHtml;
+  if (!stages || stages.length === 0) {
+    tableHtml = '<p class="no-data">No stage gate files found.</p>';
+  } else {
+    const rows = stages.map(s => {
+      const statusCell = s.status ? badge(s.status) : '<span class="badge neutral">—</span>';
+      const when = s.timestamp ? formatDate(s.timestamp) : "—";
+      const dur = s.durationMs != null
+        ? formatDuration(s.durationMs)
+        : s.workstreams.length > 0 && s.workstreams[0].durationMs != null
+          ? formatDuration(s.workstreams.reduce((sum, w) => sum + (w.durationMs || 0), 0))
+          : "—";
+
+      let details = "";
+
+      if (s.workstreams.length > 0) {
+        const wsRows = s.workstreams.map(w => `
+          <tr>
+            <td>${esc(w.role)}</td>
+            <td>${w.status ? badge(w.status) : "—"}</td>
+            <td>${w.host ? esc(w.host) : "—"}</td>
+            <td>${w.durationMs != null ? formatDuration(w.durationMs) : "—"}</td>
+          </tr>`).join("");
+        details += `
+          <details>
+            <summary>${s.workstreams.length} workstream${s.workstreams.length !== 1 ? "s" : ""}</summary>
+            <table class="ws-table"><thead><tr><th>Role</th><th>Status</th><th>Host</th><th>Duration</th></tr></thead>
+            <tbody>${wsRows}</tbody></table>
+          </details>`;
+      }
+
+      const allBlockers = [...(s.blockers || []), ...s.workstreams.flatMap(w => w.blockers || [])];
+      const allWarnings = [...(s.warnings || []), ...s.workstreams.flatMap(w => w.warnings || [])];
+
+      if (allBlockers.length > 0)
+        details += `<details><summary>${allBlockers.length} blocker${allBlockers.length !== 1 ? "s" : ""}</summary>
+          <ul class="blockers-list">${allBlockers.map(b => `<li>${esc(b)}</li>`).join("")}</ul></details>`;
+
+      if (allWarnings.length > 0)
+        details += `<details><summary>${allWarnings.length} warning${allWarnings.length !== 1 ? "s" : ""}</summary>
+          <ul class="warnings-list">${allWarnings.map(w => `<li>${esc(w)}</li>`).join("")}</ul></details>`;
+
+      return `
+        <tr id="sr-${esc(s.stage)}">
+          <td class="stage-name">${esc(s.name)}<span class="stage-id">${esc(s.stage)}</span></td>
+          <td>${statusCell}</td>
+          <td style="white-space:nowrap">${esc(when)}</td>
+          <td style="white-space:nowrap">${esc(dur)}</td>
+          <td>${details}</td>
+        </tr>`;
+    });
+
+    tableHtml = `
+      <table>
+        <thead><tr><th>Stage</th><th>Status</th><th>Completed</th><th>Duration</th><th>Details</th></tr></thead>
+        <tbody>${rows.join("")}</tbody>
+      </table>`;
+  }
+
+  const blockersSection = blockerLog
+    ? `<div style="margin-top:2rem">
+        <h2>Blockers &amp; Escalations</h2>
+        <details open><summary>Re-dispatch blockers (from context.md)</summary>
+        <pre class="blocker-pre">${esc(blockerLog)}</pre></details>
+       </div>` : "";
+
+  return tableHtml + blockersSection;
+}
+
+// ── Tab: Documents ───────────────────────────────────────────────────────────
+
+function renderDocumentsTab(documents) {
+  if (!documents || documents.length === 0) {
+    return '<p class="no-data">No pipeline documents found.</p>';
+  }
+
+  const navItems = documents.map((doc, idx) =>
+    `<div class="doc-nav-item${idx === 0 ? " active" : ""}" data-doc="${idx}">${esc(doc.label)}</div>`
+  ).join("");
+
+  const panes = documents.map((doc, idx) => {
+    const body = (doc.kind === "spec")
+      ? `<pre class="doc-pre">${esc(doc.content)}</pre>`
+      : `<div class="doc-body">${mdToHtml(doc.content)}</div>`;
+    return `<div class="doc-pane${idx === 0 ? "" : " hidden"}" id="doc-${idx}">${body}</div>`;
+  }).join("");
+
+  return `
+    <div class="doc-layout">
+      <nav class="doc-nav">${navItems}</nav>
+      <div class="doc-viewer">${panes}</div>
+    </div>`;
+}
+
+// ── CSS ──────────────────────────────────────────────────────────────────────
+
 const CSS = `
   *, *::before, *::after { box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 14px;
-    line-height: 1.6;
-    color: #111827;
-    background: #f9fafb;
-    margin: 0;
-    padding: 0;
+    font-size: 14px; line-height: 1.6; color: #111827;
+    background: #f9fafb; margin: 0; padding: 0;
   }
-  .page { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
-  h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.25rem; }
+  .page { max-width: 980px; margin: 0 auto; padding: 1.75rem 1.5rem 4rem; }
+  h1 { font-size: 1.4rem; font-weight: 700; margin: 0; }
   h2 {
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6b7280;
-    margin: 0 0 0.75rem;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid #e5e7eb;
+    font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #6b7280; margin: 0 0 0.75rem;
+    padding-bottom: 0.4rem; border-bottom: 1px solid #e5e7eb;
   }
-  .section { margin-bottom: 2.5rem; }
-  .header { margin-bottom: 2rem; }
+
+  /* Header */
+  .report-header { margin-bottom: 1.5rem; }
+  .report-title { display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
   .header-meta {
-    color: #6b7280;
-    font-size: 0.85rem;
-    margin: 0.35rem 0 0.75rem;
-    display: flex;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-    align-items: center;
+    color: #6b7280; font-size: 0.82rem;
+    display: flex; gap: 1.25rem; flex-wrap: wrap;
   }
+
+  /* Badges */
   .badge {
-    display: inline-block;
-    font-size: 0.72rem;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 999px;
-    letter-spacing: 0.04em;
-    white-space: nowrap;
+    display: inline-block; font-size: 0.7rem; font-weight: 600;
+    padding: 2px 8px; border-radius: 999px;
+    letter-spacing: 0.04em; white-space: nowrap;
   }
+  .badge.large { font-size: 0.82rem; padding: 4px 12px; }
   .pass     { background: #d1fae5; color: #065f46; }
   .warn     { background: #fef3c7; color: #78350f; }
   .fail     { background: #fee2e2; color: #7f1d1d; }
   .escalate { background: #ede9fe; color: #4c1d95; }
   .neutral  { background: #f3f4f6; color: #6b7280; }
   .role-badge {
-    display: inline-block;
-    font-size: 0.72rem;
-    background: #dbeafe;
-    color: #1e40af;
-    padding: 1px 7px;
-    border-radius: 999px;
-    margin-right: 4px;
+    display: inline-block; font-size: 0.7rem; background: #dbeafe; color: #1e40af;
+    padding: 1px 7px; border-radius: 999px; margin-right: 4px;
   }
-  .stat-row {
-    display: flex;
-    gap: 1.25rem;
-    flex-wrap: wrap;
-    font-size: 0.85rem;
-    color: #374151;
-    margin-bottom: 0.75rem;
+
+  /* Tabs */
+  .tab-bar {
+    display: flex; border-bottom: 2px solid #e5e7eb; margin-bottom: 1.5rem;
   }
-  .stat-row .stat { display: flex; align-items: center; gap: 0.25rem; }
-  .stat-row .stat span { color: #6b7280; }
-  .problem { color: #374151; font-size: 0.9rem; margin-bottom: 0.75rem; max-width: 72ch; }
-  ul.oos { margin: 0.25rem 0 0 1rem; padding: 0; list-style: disc; color: #6b7280; font-size: 0.85rem; }
-  ul.oos li { margin-bottom: 2px; }
+  .tab-btn {
+    background: none; border: none; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; padding: 0.55rem 1.1rem;
+    font-size: 0.85rem; font-weight: 500; color: #6b7280;
+    cursor: pointer; transition: color 0.12s, border-color 0.12s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .tab-btn:hover { color: #111827; }
+  .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+  .tab-count {
+    background: #e5e7eb; color: #374151; font-size: 0.68rem;
+    padding: 1px 5px; border-radius: 999px; font-weight: 600;
+  }
+  .hidden { display: none !important; }
+
+  /* Stage progress bar */
+  .progress-bar {
+    display: flex; align-items: center; gap: 2px;
+    flex-wrap: wrap; margin: 0.75rem 0 1.25rem;
+  }
+  .stage-pip {
+    padding: 3px 9px; border-radius: 4px; font-size: 0.68rem;
+    font-weight: 600; letter-spacing: 0.03em;
+    white-space: nowrap; cursor: pointer; user-select: none;
+    transition: opacity 0.12s;
+  }
+  .stage-pip:hover { opacity: 0.72; }
+  .stage-pip.not-run {
+    background: #f3f4f6; color: #9ca3af;
+    border: 1px dashed #d1d5db; cursor: default;
+  }
+  .stage-pip.not-run:hover { opacity: 1; }
+  .stage-sep { color: #d1d5db; font-size: 0.7rem; }
+
+  /* Summary tab */
+  .halt-box {
+    background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px;
+    padding: 0.6rem 0.9rem; color: #7f1d1d; font-size: 0.85rem; margin-bottom: 1rem;
+  }
+  .halt-label { font-weight: 600; }
+  .stat-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .stat-chip {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 0.35rem 0.75rem; display: flex; align-items: baseline; gap: 0.3rem;
+    font-size: 0.82rem;
+  }
+  .chip-num { font-size: 1.1rem; font-weight: 700; color: #111827; }
+  .chip-lbl { color: #6b7280; font-size: 0.75rem; }
+  .drift-warn { color: #78350f; font-weight: 600; }
+  .no-drift { color: #065f46; font-weight: 600; }
+  .problem {
+    color: #374151; font-size: 0.9rem; max-width: 76ch;
+    margin-bottom: 0.85rem; line-height: 1.7;
+  }
+  .meta-line { margin-top: 0.5rem; font-size: 0.82rem; }
+  .meta-label { color: #6b7280; margin-right: 4px; }
+  .oos-section { margin-top: 0.75rem; font-size: 0.82rem; }
+  .oos-list { margin: 0.25rem 0 0 1rem; padding: 0; list-style: disc; color: #6b7280; }
+  .oos-list li { margin-bottom: 2px; }
+
+  /* Stages tab — table */
   table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
   thead th {
-    text-align: left;
-    padding: 6px 10px;
-    background: #f3f4f6;
-    border-bottom: 2px solid #e5e7eb;
-    font-weight: 600;
-    color: #374151;
+    text-align: left; padding: 6px 10px;
+    background: #f3f4f6; border-bottom: 2px solid #e5e7eb;
+    font-weight: 600; color: #374151;
   }
   tbody tr:nth-child(even) { background: #f9fafb; }
   tbody tr:hover { background: #f0f9ff; }
   tbody td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
   .stage-name { font-weight: 500; }
-  .stage-id { color: #9ca3af; font-size: 0.75rem; margin-left: 4px; }
+  .stage-id { color: #9ca3af; font-size: 0.72rem; margin-left: 5px; }
   details { margin-top: 4px; }
   details summary {
-    cursor: pointer;
-    font-size: 0.78rem;
-    color: #6b7280;
-    user-select: none;
-    list-style: none;
+    cursor: pointer; font-size: 0.78rem; color: #6b7280;
+    user-select: none; list-style: none;
   }
   details summary::before { content: "▶ "; font-size: 0.65rem; }
   details[open] summary::before { content: "▼ "; font-size: 0.65rem; }
@@ -158,221 +481,133 @@ const CSS = `
   .ws-table td { padding: 3px 6px; border-bottom: 1px solid #f3f4f6; }
   .blockers-list { margin: 6px 0 0 1rem; padding: 0; list-style: disc; color: #7f1d1d; }
   .warnings-list { margin: 6px 0 0 1rem; padding: 0; list-style: disc; color: #78350f; }
-  .blocker-log pre {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 1rem;
-    font-size: 0.8rem;
-    white-space: pre-wrap;
-    word-break: break-word;
-    color: #374151;
-    max-height: 400px;
-    overflow-y: auto;
-    margin: 0.5rem 0 0;
+  .blocker-pre {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 1rem; font-size: 0.8rem; white-space: pre-wrap;
+    word-break: break-word; color: #374151; max-height: 400px;
+    overflow-y: auto; margin: 0.5rem 0 0;
   }
-  .artifacts-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 0.5rem;
+  @keyframes highlightRow {
+    0%   { background: #bfdbfe; }
+    100% { background: transparent; }
   }
-  .artifact-item {
-    background: #fff;
-    border: 1px solid #e5e7eb;
-    border-radius: 6px;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.82rem;
+  .stage-highlight { animation: highlightRow 2s ease-out; }
+
+  /* Documents tab */
+  .doc-layout {
+    display: grid; grid-template-columns: 200px 1fr;
+    border: 1px solid #e5e7eb; border-radius: 8px;
+    overflow: hidden; min-height: 500px;
   }
-  .artifact-item.missing { opacity: 0.4; }
-  .artifact-item a { color: #2563eb; text-decoration: none; }
-  .artifact-item a:hover { text-decoration: underline; }
-  .adrs-list { display: flex; flex-direction: column; gap: 0.35rem; }
-  .adrs-list a { color: #2563eb; font-size: 0.85rem; text-decoration: none; }
-  .adrs-list a:hover { text-decoration: underline; }
-  .design-links { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.5rem; }
-  .design-links a { color: #2563eb; font-size: 0.85rem; text-decoration: none; }
-  .design-links a:hover { text-decoration: underline; }
-  footer {
-    margin-top: 3rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e5e7eb;
-    color: #9ca3af;
-    font-size: 0.75rem;
+  .doc-nav {
+    background: #f9fafb; border-right: 1px solid #e5e7eb;
+    overflow-y: auto; max-height: 80vh;
   }
+  .doc-nav-item {
+    padding: 0.5rem 0.75rem; font-size: 0.78rem; cursor: pointer;
+    border-bottom: 1px solid #f3f4f6; color: #374151;
+    line-height: 1.4; transition: background 0.1s;
+  }
+  .doc-nav-item:hover { background: #eff6ff; }
+  .doc-nav-item.active { background: #eff6ff; color: #2563eb; font-weight: 500; }
+  .doc-viewer { overflow-y: auto; max-height: 80vh; padding: 1.5rem 1.75rem; }
+  .doc-body { font-size: 0.875rem; }
+  .doc-body h1 { font-size: 1.2rem; font-weight: 700; margin: 0 0 0.5rem; }
+  .doc-body h2 {
+    font-size: 0.95rem; font-weight: 600; text-transform: none;
+    letter-spacing: 0; border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 4px; margin: 1.25rem 0 0.5rem; color: #111827;
+  }
+  .doc-body h3 { font-size: 0.875rem; font-weight: 600; margin: 1rem 0 0.35rem; }
+  .doc-body h4 { font-size: 0.82rem; font-weight: 600; margin: 0.75rem 0 0.25rem; }
+  .doc-body p  { margin: 0 0 0.75rem; }
+  .doc-body pre {
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px;
+    padding: 0.75rem; overflow-x: auto; font-size: 0.8rem; margin: 0.5rem 0;
+  }
+  .doc-body code { background: #f3f4f6; padding: 1px 4px; border-radius: 3px; font-size: 0.8em; }
+  .doc-body pre code { background: none; padding: 0; }
+  .doc-body table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.82rem; }
+  .doc-body table th { background: #f3f4f6; border: 1px solid #e5e7eb; padding: 4px 8px; text-align: left; }
+  .doc-body table td { border: 1px solid #e5e7eb; padding: 4px 8px; }
+  .doc-body blockquote {
+    border-left: 3px solid #d1d5db; margin: 0.5rem 0;
+    padding: 0.25rem 0.75rem; color: #6b7280;
+  }
+  .doc-body hr { border: none; border-top: 1px solid #e5e7eb; margin: 1rem 0; }
+  .doc-body ul, .doc-body ol { padding-left: 1.5rem; margin: 0.35rem 0 0.75rem; }
+  .doc-body li { margin-bottom: 2px; }
+  .doc-body a { color: #2563eb; }
+  .doc-pre {
+    font-size: 0.8rem; white-space: pre-wrap; word-break: break-word;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 1rem; margin: 0; line-height: 1.6;
+  }
+
+  /* Misc */
   .no-data { color: #9ca3af; font-style: italic; font-size: 0.85rem; }
-  .drift-warn { color: #78350f; font-weight: 600; }
+  footer {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;
+    color: #9ca3af; font-size: 0.75rem;
+  }
 `;
 
-function renderStageTable(stages) {
-  if (!stages || stages.length === 0) {
-    return '<p class="no-data">No stage gate files found.</p>';
-  }
+// ── JavaScript ───────────────────────────────────────────────────────────────
 
-  const rows = stages.map(s => {
-    const statusCell = s.status ? badge(s.status) : '<span class="neutral badge">—</span>';
-    const when = s.timestamp ? formatDate(s.timestamp) : "—";
-    const dur = s.durationMs != null ? formatDuration(s.durationMs)
-      : (s.workstreams.length > 0 && s.workstreams[0].durationMs != null)
-        ? formatDuration(s.workstreams.reduce((sum, w) => sum + (w.durationMs || 0), 0))
-        : "—";
-
-    let details = "";
-
-    // Workstreams breakdown (if multi-role)
-    if (s.workstreams.length > 0) {
-      const wsRows = s.workstreams.map(w => `
-        <tr>
-          <td>${esc(w.role)}</td>
-          <td>${w.status ? badge(w.status) : "—"}</td>
-          <td>${w.host ? esc(w.host) : "—"}</td>
-          <td>${w.durationMs != null ? formatDuration(w.durationMs) : "—"}</td>
-        </tr>`).join("");
-      details += `
-        <details>
-          <summary>${s.workstreams.length} workstream${s.workstreams.length !== 1 ? "s" : ""}</summary>
-          <table class="ws-table">
-            <thead><tr><th>Role</th><th>Status</th><th>Host</th><th>Duration</th></tr></thead>
-            <tbody>${wsRows}</tbody>
-          </table>
-        </details>`;
-    }
-
-    // Collect blockers from stage + workstreams
-    const allBlockers = [
-      ...(s.blockers || []),
-      ...s.workstreams.flatMap(w => w.blockers || []),
-    ];
-    const allWarnings = [
-      ...(s.warnings || []),
-      ...s.workstreams.flatMap(w => w.warnings || []),
-    ];
-
-    if (allBlockers.length > 0) {
-      const items = allBlockers.map(b => `<li>${esc(b)}</li>`).join("");
-      details += `
-        <details>
-          <summary>${allBlockers.length} blocker${allBlockers.length !== 1 ? "s" : ""}</summary>
-          <ul class="blockers-list">${items}</ul>
-        </details>`;
-    }
-
-    if (allWarnings.length > 0) {
-      const items = allWarnings.map(w => `<li>${esc(w)}</li>`).join("");
-      details += `
-        <details>
-          <summary>${allWarnings.length} warning${allWarnings.length !== 1 ? "s" : ""}</summary>
-          <ul class="warnings-list">${items}</ul>
-        </details>`;
-    }
-
-    return `
-      <tr>
-        <td class="stage-name">${esc(s.name)}<span class="stage-id">${esc(s.stage)}</span></td>
-        <td>${statusCell}</td>
-        <td>${esc(when)}</td>
-        <td>${esc(dur)}</td>
-        <td>${details}</td>
-      </tr>`;
+const SCRIPT = `
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden');
+    });
   });
 
-  return `
-    <table>
-      <thead>
-        <tr>
-          <th>Stage</th>
-          <th>Status</th>
-          <th>Completed</th>
-          <th>Duration</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>${rows.join("")}</tbody>
-    </table>`;
-}
+  // Document sidebar navigation
+  document.querySelectorAll('.doc-nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      document.querySelectorAll('.doc-nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.doc-pane').forEach(p => p.classList.add('hidden'));
+      item.classList.add('active');
+      document.getElementById('doc-' + item.dataset.doc).classList.remove('hidden');
+    });
+  });
+
+  // Stage pip click → switch to Stages tab and highlight the row
+  document.querySelectorAll('.stage-pip[data-stage]').forEach(pip => {
+    pip.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+      document.querySelector('.tab-btn[data-tab="stages"]').classList.add('active');
+      document.getElementById('tab-stages').classList.remove('hidden');
+      const row = document.getElementById('sr-' + pip.dataset.stage);
+      if (row) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.remove('stage-highlight');
+        void row.offsetWidth; // force reflow to restart animation
+        row.classList.add('stage-highlight');
+      }
+    });
+  });
+`;
+
+// ── Main render ──────────────────────────────────────────────────────────────
 
 function renderHtml(data) {
-  const { meta, brief, adrs, stages, blockerLog, artifacts } = data;
+  const { meta, brief, stages, blockerLog, documents = [] } = data;
 
   const metaItems = [
-    meta.track ? `Track: <strong>${esc(meta.track)}</strong>` : null,
-    meta.startedAt ? `Started: <strong>${esc(formatDate(meta.startedAt))}</strong>` : null,
+    meta.track && `Track: <strong>${esc(meta.track)}</strong>`,
+    meta.startedAt && `Started: <strong>${esc(formatDate(meta.startedAt))}</strong>`,
     `Iterations: <strong>${esc(String(meta.iterations))}</strong>`,
-    meta.costUsd != null ? `Cost: <strong>${esc(formatCost(meta.costUsd))}</strong>` : null,
-    meta.orchestratorVersion ? `<span style="color:#d1d5db">${esc(meta.orchestratorVersion)}</span>` : null,
+    meta.costUsd != null && `Cost: <strong>${esc(formatCost(meta.costUsd))}</strong>`,
+    meta.orchestratorVersion && `<span style="color:#d1d5db">${esc(meta.orchestratorVersion)}</span>`,
   ].filter(Boolean).join(" &nbsp;·&nbsp; ");
 
-  // Brief section
-  const problemHtml = brief.problemStatement
-    ? `<p class="problem">${esc(brief.problemStatement)}</p>`
-    : "";
-
-  const statParts = [];
-  if (brief.acCount != null) statParts.push(`<div class="stat"><span>ACs:</span> <strong>${esc(String(brief.acCount))}</strong></div>`);
-  if (brief.specScenarios != null) statParts.push(`<div class="stat"><span>Scenarios:</span> <strong>${esc(String(brief.specScenarios))}</strong></div>`);
-  if (brief.acCount != null || brief.specScenarios != null) {
-    const driftStr = brief.specDrift
-      ? '<span class="drift-warn">drift detected</span>'
-      : '<span style="color:#065f46">no drift</span>';
-    statParts.push(`<div class="stat"><span>Spec drift:</span> ${driftStr}</div>`);
-  }
-  const statRowHtml = statParts.length > 0
-    ? `<div class="stat-row">${statParts.join("")}</div>`
-    : "";
-
-  const rolesHtml = brief.activeRoles && brief.activeRoles.length > 0
-    ? `<div style="margin-top:0.5rem"><span style="color:#6b7280;font-size:0.82rem">Active roles: </span>${brief.activeRoles.map(r => `<span class="role-badge">${esc(r)}</span>`).join("")}</div>`
-    : "";
-
-  const oosHtml = brief.outOfScope && brief.outOfScope.length > 0
-    ? `<ul class="oos">${brief.outOfScope.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`
-    : "";
-
-  // Design section
-  const designLinks = artifacts
-    .filter(a => ["design", "build-plan"].includes(a.kind) && a.exists)
-    .map(a => fileLink(a.absPath, a.label));
-
-  const adrHtml = adrs.length > 0
-    ? `<div class="adrs-list">${adrs.map(a => `<div>${fileLink(a.absPath, a.title)}</div>`).join("")}</div>`
-    : '<p class="no-data">No ADRs written.</p>';
-
-  const designLinksHtml = designLinks.length > 0
-    ? `<div class="design-links">${designLinks.join("")}</div>`
-    : "";
-
-  const designSection = (adrs.length > 0 || designLinks.length > 0)
-    ? `
-      <div class="section">
-        <h2>Design</h2>
-        ${adrHtml}
-        ${designLinksHtml}
-      </div>`
-    : "";
-
-  // Blockers section
-  const blockersSection = blockerLog
-    ? `
-      <div class="section blocker-log">
-        <h2>Blockers &amp; Escalations</h2>
-        <details open>
-          <summary>Re-dispatch blockers (from context.md)</summary>
-          <pre>${esc(blockerLog)}</pre>
-        </details>
-      </div>`
-    : "";
-
-  // Halt reason
-  const haltHtml = meta.haltReason
-    ? `<div style="margin-top:0.5rem;font-size:0.85rem;color:#7f1d1d">Halt: ${esc(meta.haltReason)}</div>`
-    : "";
-
-  // Artifacts grid
-  const artifactsHtml = artifacts.map(a => {
-    const linkHtml = a.exists
-      ? fileLink(a.absPath, a.label)
-      : `<span style="color:#9ca3af">${esc(a.label)}</span>`;
-    return `<div class="artifact-item${a.exists ? "" : " missing"}">${linkHtml}</div>`;
-  }).join("");
+  const stagesCount = stages.length;
+  const docsCount = documents.length;
 
   const now = new Date().toLocaleString(undefined, {
     year: "numeric", month: "short", day: "numeric",
@@ -388,47 +623,40 @@ function renderHtml(data) {
   <style>${CSS}</style>
 </head>
 <body>
-  <div class="page">
+<div class="page">
 
-    <!-- Header -->
-    <div class="section header">
+  <div class="report-header">
+    <div class="report-title">
       <h1>${esc(meta.feature)}</h1>
-      <div class="header-meta">${metaItems}</div>
-      <div>${finalStatusBadge(meta.finalStatus)}${haltHtml}</div>
+      ${finalStatusBadge(meta.finalStatus)}
     </div>
-
-    <!-- Brief -->
-    <div class="section">
-      <h2>Brief</h2>
-      ${problemHtml}
-      ${statRowHtml}
-      ${rolesHtml}
-      ${oosHtml ? `<div style="margin-top:0.75rem"><span style="color:#6b7280;font-size:0.82rem">Out of scope:</span>${oosHtml}</div>` : ""}
-    </div>
-
-    <!-- Design -->
-    ${designSection}
-
-    <!-- Stage timeline -->
-    <div class="section">
-      <h2>Stage Timeline</h2>
-      ${renderStageTable(stages)}
-    </div>
-
-    <!-- Blockers -->
-    ${blockersSection}
-
-    <!-- Artifacts -->
-    <div class="section">
-      <h2>Pipeline Artifacts</h2>
-      <div class="artifacts-grid">${artifactsHtml}</div>
-    </div>
-
-    <footer>
-      Generated ${esc(now)}${meta.orchestratorVersion ? ` &nbsp;·&nbsp; ${esc(meta.orchestratorVersion)}` : ""}
-    </footer>
-
+    <div class="header-meta">${metaItems}</div>
   </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="summary">Summary</button>
+    <button class="tab-btn" data-tab="stages">Stages${stagesCount > 0 ? ` <span class="tab-count">${stagesCount}</span>` : ""}</button>
+    <button class="tab-btn" data-tab="documents">Documents${docsCount > 0 ? ` <span class="tab-count">${docsCount}</span>` : ""}</button>
+  </div>
+
+  <div id="tab-summary" class="tab-pane">
+    ${renderSummaryTab(data)}
+  </div>
+
+  <div id="tab-stages" class="tab-pane hidden">
+    ${renderStagesTab(stages, blockerLog)}
+  </div>
+
+  <div id="tab-documents" class="tab-pane hidden">
+    ${renderDocumentsTab(documents)}
+  </div>
+
+  <footer>
+    Generated ${esc(now)}${meta.orchestratorVersion ? ` &nbsp;·&nbsp; ${esc(meta.orchestratorVersion)}` : ""}
+  </footer>
+
+</div>
+<script>${SCRIPT}</script>
 </body>
 </html>`;
 }
