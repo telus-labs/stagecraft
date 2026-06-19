@@ -14,6 +14,7 @@ const {
   readIdentity, getOrCreateIdentity, rotateIdentity, deleteIdentity,
 } = require(path.join(__dirname, "..", "..", "evidence", "identity"));
 const { analyzePortfolio } = require(path.join(__dirname, "..", "..", "evidence", "portfolio"));
+const { appendAcceptedResolution } = require(path.join(__dirname, "..", "..", "evidence", "resolutions"));
 
 const name = "evidence";
 const flags = {
@@ -25,7 +26,7 @@ const flags = {
   bundle: { type: "list", description: "Validated bundle for portfolio status (repeatable)" },
   rotate: { type: "boolean", description: "Rotate the local project identity" },
   delete: { type: "boolean", description: "Delete the local project identity" },
-  yes: { type: "boolean", description: "Confirm identity rotation or deletion" },
+  yes: { type: "boolean", description: "Confirm identity mutation or resolution acceptance" },
   help: { type: "boolean", description: "Show this help" },
 };
 
@@ -156,18 +157,39 @@ function runIdentity(commandFlags) {
   else process.stdout.write(`Evidence identity: ${action}; project reference: ${output.project_ref || "none"}\n`);
 }
 
+function runAcceptResolution(commandFlags) {
+  rejectFlags(commandFlags, ["out", "consent", "bundle", "rotate", "delete"], "accept-resolution");
+  if (!commandFlags.yes) throw new Error("resolution acceptance requires --yes");
+  const cwd = path.resolve(commandFlags.cwd || process.cwd());
+  const config = loadConfig(cwd);
+  checkBoundedFence(config, name);
+  const changeId = resolveChangeId(commandFlags, config);
+  const event = appendAcceptedResolution(pipelineRoot(cwd, changeId));
+  const output = {
+    accepted: true,
+    stage: event.stage,
+    failure_class: event.failure_class,
+    schema_fingerprint: event.schema_fingerprint,
+    derivable: event.derivable,
+    source_event_sha256: event.source_event_sha256,
+  };
+  if (commandFlags.json) console.log(JSON.stringify(output, null, 2));
+  else process.stdout.write(`Accepted ${output.stage}/${output.failure_class} resolution (${output.derivable ? "derivable" : "not derivable"}).\n`);
+}
+
 function run(positional, commandFlags) {
   if (commandFlags.help) {
-    console.log(generateHelp("devteam evidence <status|export|identity> [options]", flags));
+    console.log(generateHelp("devteam evidence <status|export|identity|accept-resolution> [options]", flags));
     process.exit(0);
   }
-  if (positional.length !== 1 || !["status", "export", "identity"].includes(positional[0])) {
-    process.stderr.write("Usage: devteam evidence <status|export|identity> [options]\n");
+  if (positional.length !== 1 || !["status", "export", "identity", "accept-resolution"].includes(positional[0])) {
+    process.stderr.write("Usage: devteam evidence <status|export|identity|accept-resolution> [options]\n");
     process.exit(2);
   }
   if (positional[0] === "status") return runStatus(commandFlags);
   if (positional[0] === "export") return runExport(commandFlags);
-  return runIdentity(commandFlags);
+  if (positional[0] === "identity") return runIdentity(commandFlags);
+  return runAcceptResolution(commandFlags);
 }
 
 module.exports = { name, flags, run, renderHuman: renderProject, renderPortfolio };

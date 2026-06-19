@@ -159,6 +159,8 @@ Commands:
   evidence export --out <file>     Write a local aggregate-only bundle. Requires
        --consent                   explicit consent and a new destination; never
                                    uploads or overwrites evidence.
+  evidence accept-resolution --yes Record explicit human acceptance of the latest
+       [--feature <name>]          successful fix/retry in the bounded pipeline.
   evidence identity               Inspect the pseudonymous project reference.
        [--rotate|--delete] --yes   Rotation/deletion require confirmation; raw
                                    identity entropy is never printed.

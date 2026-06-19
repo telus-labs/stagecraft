@@ -1161,6 +1161,7 @@ async function run(opts = {}) {
           clearedCount: cleared.length,
           archived,
           target,
+          derivable: toClear.length > 0,
           targetedFix,
           fixRetries: state.fixRetries,
         }));

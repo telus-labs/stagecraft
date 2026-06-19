@@ -13,6 +13,9 @@ const {
   projectRef, readIdentity, getOrCreateIdentity, rotateIdentity, deleteIdentity,
 } = require(path.join(REPO_ROOT, "core", "evidence", "identity"));
 const { analyzePortfolio } = require(path.join(REPO_ROOT, "core", "evidence", "portfolio"));
+const {
+  schemaFingerprint, sourceEventRef,
+} = require(path.join(REPO_ROOT, "core", "evidence", "resolutions"));
 
 let dirs = [];
 function track(cwd) { dirs.push(cwd); return cwd; }
@@ -23,7 +26,26 @@ function evidenceReport(options = {}) {
   const runs = options.runs || 5;
   for (let index = 0; index < runs; index++) {
     events.push({ outcome: "run-start", intent: "repair" });
-    events.push({ outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect" });
+    const source = {
+      outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect",
+      attempt: index + 1, cleared_gates: index < 4 ? 1 : 0, derivable: index < 4,
+    };
+    events.push(source);
+    events.push({
+      outcome: "resolution-accepted",
+      source_event_sha256: sourceEventRef(source),
+      stage: "stage-04",
+      failure_class: "code-defect",
+      schema_fingerprint: schemaFingerprint("stage-04"),
+      derivable: index < 4,
+    });
+    for (const host of ["codex", "claude-code"]) {
+      events.push({
+        outcome: "dispatch-observation", stage: "stage-04", role: "backend", host,
+        model: `${host}-model`, status: "PASS", gate_written: true, timed_out: false,
+        cost_usd: 0.2, duration_ms: 100,
+      });
+    }
     if (index < 3) {
       events.push({ outcome: "auto-ruled", grant_class: "formatting-only" });
       events.push({ outcome: "stall-detected", stage: "stage-04", stall_class: "observed" });
@@ -125,6 +147,8 @@ describe("evidence bundle", () => {
     assert.equal(sparseBundle.suppressed_observations, 1);
     const denseBundle = createBundle(evidenceReport(), projectRef("2".repeat(32)));
     assert.equal(denseBundle.routing.length, 2);
+    assert.equal(denseBundle.resolutions[0].observations, 5);
+    assert.equal(denseBundle.resolutions[0].derivable, 4);
     assert.deepEqual(validateBundle(denseBundle, { verifyDigest: true }), []);
     const { payload_sha256: _digest, ...payload } = denseBundle;
     assert.equal(denseBundle.payload_sha256, payloadDigest(payload));
@@ -145,6 +169,21 @@ describe("evidence bundle", () => {
     fs.writeFileSync(target, JSON.stringify(valid));
     fs.symlinkSync(target, file);
     assert.throws(() => readBundle(file), /non-symlink/);
+  });
+
+  it("continues to validate and analyze pre-Phase-18 schema 1.0 bundles", () => {
+    const cwd = track(makeTargetProject());
+    const current = createBundle(evidenceReport(), projectRef("9".repeat(32)));
+    const { payload_sha256: _digest, ...legacyPayload } = current;
+    delete legacyPayload.resolutions;
+    delete legacyPayload.quality.durable_dispatch_observations;
+    const legacy = { ...legacyPayload, payload_sha256: payloadDigest(legacyPayload) };
+    assert.deepEqual(validateBundle(legacy, { verifyDigest: true }), []);
+    const file = path.join(cwd, "legacy-v1.json");
+    fs.writeFileSync(file, JSON.stringify(legacy));
+    const report = analyzePortfolio([file]);
+    assert.deepEqual(report.resolutions, []);
+    assert.equal(report.quality.durable_dispatch_observations, 0);
   });
 
   it("uses exclusive writes and refuses a symlinked destination parent", { skip: process.platform === "win32" }, () => {
@@ -196,7 +235,17 @@ describe("portfolio evidence", () => {
     assert.equal(report.scope.duplicate_bundles, 1);
     assert.equal(report.readiness.length, 4);
     assert.equal(report.readiness[0].conditions.find((item) => item.id === "recurring-failure-projects").met, true);
-    assert.equal(report.readiness[0].status, "not-ready");
+    assert.equal(report.readiness[0].conditions.find(
+      (item) => item.id === "accepted-recurring-failure-projects",
+    ).met, true);
+    assert.equal(report.readiness[0].conditions.find(
+      (item) => item.id === "derivable-accepted-resolutions-percent",
+    ).value, 80);
+    assert.equal(report.readiness[0].status, "threshold-met-review-required");
+    assert.equal(report.readiness[1].conditions.find(
+      (item) => item.id === "projects-with-durable-dispatch-history",
+    ).met, true);
+    assert.equal(report.readiness[1].status, "threshold-met-review-required");
     assert.equal(report.readiness[3].status, "not-ready");
     const cli = runCLI(["evidence", "status", "--json", "--bundle", first, "--bundle", second]);
     assert.equal(cli.status, 0, cli.stderr);

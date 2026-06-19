@@ -9,9 +9,12 @@ const { REPO_ROOT, makeTargetProject, cleanup, runCLI } = require("./_helpers");
 const { readJsonLinesBounded, readGatesBounded, readEvidenceSources } = require(
   path.join(REPO_ROOT, "core", "evidence", "readers"),
 );
-const { analyzeEvidence, extractRouting, extractDurableRouting } = require(
+const { analyzeEvidence, extractRouting, extractDurableRouting, extractResolutions } = require(
   path.join(REPO_ROOT, "core", "evidence", "analyzer"),
 );
+const {
+  sourceEventRef, schemaFingerprint, pendingResolution,
+} = require(path.join(REPO_ROOT, "core", "evidence", "resolutions"));
 
 let dirs = [];
 function track(cwd) { dirs.push(cwd); return cwd; }
@@ -148,8 +151,56 @@ describe("evidence analyzer", () => {
     assert.equal(report.rulings[0].ruling_class, "formatting-only");
     assert.equal(report.stalls[0].stall_class, "observed");
     assert.equal(report.readiness[0].portfolio_status, "not-assessable");
-    assert.match(JSON.stringify(report), /accepted-resolution-signal-unavailable/);
+    assert.match(JSON.stringify(report), /no-accepted-resolutions/);
     assert.doesNotMatch(JSON.stringify(report), new RegExp(secret));
+  });
+
+  it("aggregates hash-bound accepted resolutions once and measures derivability", () => {
+    const source = {
+      ts: "2026-06-19T00:00:00Z",
+      outcome: "fix-retry",
+      stage: "stage-04",
+      failure_class: "code-defect",
+      cleared_gates: 1,
+      derivable: true,
+    };
+    const accepted = {
+      outcome: "resolution-accepted",
+      source_event_sha256: sourceEventRef(source),
+      stage: source.stage,
+      failure_class: source.failure_class,
+      schema_fingerprint: schemaFingerprint(source.stage),
+      derivable: true,
+    };
+    const report = analyzeEvidence({
+      events: [{ outcome: "run-start", intent: "repair" }, source, accepted, accepted],
+    });
+    assert.deepEqual(extractResolutions([source, accepted, accepted]), [{
+      stage: "stage-04",
+      failure_class: "code-defect",
+      schema_fingerprint: schemaFingerprint("stage-04"),
+      observations: 1,
+      derivable: 1,
+    }]);
+    const h3 = report.readiness.find((item) => item.capability === "h3-recipe-suggestions");
+    assert.equal(h3.local_conditions.find((item) => item.id === "accepted-resolution-signal").met, true);
+    assert.equal(h3.local_conditions.find(
+      (item) => item.id === "derivable-accepted-resolutions-percent",
+    ).value, 100);
+    assert.deepEqual(extractResolutions([accepted]), []);
+    assert.deepEqual(extractResolutions([source, { ...accepted, derivable: false }]), []);
+  });
+
+  it("selects the latest unaccepted fix/retry and preserves legacy derivability", () => {
+    const first = { outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect", cleared_gates: 1 };
+    const second = { outcome: "fix-retry", stage: "stage-06", failure_class: "code-defect", cleared_gates: 0 };
+    const pending = pendingResolution([first, second]);
+    assert.equal(pending.stage, "stage-06");
+    assert.equal(pending.derivable, false);
+    assert.equal(pendingResolution([first, second, {
+      outcome: "resolution-accepted",
+      source_event_sha256: sourceEventRef(second),
+    }]).stage, "stage-04");
   });
 
   it("does not double-count merged and direct current workstream gates", () => {
@@ -315,5 +366,81 @@ describe("devteam evidence status", () => {
     const bad = runCLI(["evidence", "unknown"]);
     assert.equal(bad.status, 2);
     assert.match(bad.stderr, /Usage: devteam evidence/);
+  });
+
+  it("requires explicit confirmation and a current PASS gate before accepting", () => {
+    const cwd = track(makeTargetProject());
+    writeLog(path.join(cwd, "pipeline"), [
+      { outcome: "run-start", intent: "repair" },
+      { outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect", derivable: true },
+    ]);
+    const refused = runCLI(["evidence", "accept-resolution", "--cwd", cwd]);
+    assert.equal(refused.status, 1);
+    assert.match(refused.stderr, /requires --yes/);
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.json"), JSON.stringify({
+      stage: "stage-04", status: "FAIL",
+    }));
+    const failed = runCLI(["evidence", "accept-resolution", "--yes", "--cwd", cwd]);
+    assert.equal(failed.status, 1);
+    assert.match(failed.stderr, /must be PASS/);
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.json"), JSON.stringify({
+      stage: "stage-06", status: "PASS",
+    }));
+    const mismatched = runCLI(["evidence", "accept-resolution", "--yes", "--cwd", cwd]);
+    assert.equal(mismatched.status, 1);
+    assert.match(mismatched.stderr, /identity does not match/);
+  });
+
+  it("records one privacy-safe acceptance and refuses duplicate reuse", () => {
+    const cwd = track(makeTargetProject());
+    const secret = `ghp_${"A".repeat(36)}`;
+    writeLog(path.join(cwd, "pipeline"), [
+      { outcome: "run-start", intent: "repair", reason: secret },
+      {
+        outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect",
+        derivable: true, blockers: [secret],
+      },
+      { outcome: "complete" },
+    ]);
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.json"), JSON.stringify({
+      stage: "stage-04", status: "PASS",
+    }));
+    const accepted = runCLI([
+      "evidence", "accept-resolution", "--yes", "--json", "--cwd", cwd,
+    ]);
+    assert.equal(accepted.status, 0, accepted.stderr);
+    const output = JSON.parse(accepted.stdout);
+    assert.equal(output.derivable, true);
+    assert.match(output.schema_fingerprint, /^sha256:[0-9a-f]{64}$/);
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "run-log.jsonl"), "utf8");
+    const acceptance = log.trim().split("\n").map(JSON.parse).at(-1);
+    assert.deepEqual(Object.keys(acceptance).sort(), [
+      "derivable", "failure_class", "outcome", "schema_fingerprint", "source_event_sha256", "stage", "ts",
+    ]);
+    assert.doesNotMatch(JSON.stringify(acceptance), new RegExp(secret));
+    const duplicate = runCLI(["evidence", "accept-resolution", "--yes", "--cwd", cwd]);
+    assert.equal(duplicate.status, 1);
+    assert.match(duplicate.stderr, /no unaccepted/);
+  });
+
+  it("writes acceptance into the selected bounded pipeline only", () => {
+    const cwd = track(makeTargetProject({
+      config: "pipeline:\n  default_track: full\n  isolation: bounded\n",
+    }));
+    const root = path.join(cwd, "pipeline", "changes", "checkout-retry");
+    writeLog(root, [
+      { outcome: "run-start", intent: "repair" },
+      { outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect", derivable: true },
+    ]);
+    fs.mkdirSync(path.join(root, "gates"), { recursive: true });
+    fs.writeFileSync(path.join(root, "gates", "stage-04.json"), JSON.stringify({
+      stage: "stage-04", status: "PASS",
+    }));
+    const result = runCLI([
+      "evidence", "accept-resolution", "--yes", "--cwd", cwd, "--feature", "Checkout retry",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(fs.readFileSync(path.join(root, "run-log.jsonl"), "utf8"), /resolution-accepted/);
+    assert.equal(fs.existsSync(path.join(cwd, "pipeline", "run-log.jsonl")), false);
   });
 });

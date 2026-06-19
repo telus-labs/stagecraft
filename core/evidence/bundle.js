@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { sha256 } = require("../reproducibility");
-const { category } = require("./analyzer");
+const { category } = require("./categories");
 
 const EXPORT_SCHEMA_VERSION = "1.0";
 const MIN_EXPORT_CELL = 3;
@@ -53,6 +53,16 @@ function copyRecovery(row) {
   };
 }
 
+function copyResolution(row) {
+  return {
+    stage: row.stage,
+    failure_class: row.failure_class,
+    schema_fingerprint: row.schema_fingerprint,
+    observations: row.observations,
+    derivable: row.derivable,
+  };
+}
+
 function copyRuling(row) {
   return { ruling_class: row.ruling_class, observations: row.observations };
 }
@@ -82,6 +92,7 @@ function createBundle(report, projectRef, opts = {}) {
   if (!HASH_PATTERN.test(projectRef)) throw new Error("invalid evidence project reference");
   const routingResult = suppressRows(report.routing.map(copyRouting), "gate_observations");
   const recoveryResult = suppressRows(report.recovery.map(copyRecovery), "observations");
+  const resolutionResult = suppressRows((report.resolutions || []).map(copyResolution), "observations");
   const rulingResult = suppressRows(report.rulings.map(copyRuling), "observations");
   const stallResult = suppressRows(report.stalls.map(copyStall), "observations");
   const packageVersion = opts.stagecraftVersion || require("../../package.json").version;
@@ -110,13 +121,15 @@ function createBundle(report, projectRef, opts = {}) {
       cost_coverage_dispatches: report.routing.reduce(
         (sum, row) => sum + row.cost_observations, 0,
       ),
+      durable_dispatch_observations: quality.durable_dispatch_observations || 0,
     },
     routing: routingResult.included,
     recovery: recoveryResult.included,
+    resolutions: resolutionResult.included,
     rulings: rulingResult.included,
     stalls: stallResult.included,
     readiness: report.readiness.map(copyReadiness),
-    suppressed_observations: routingResult.suppressed + recoveryResult.suppressed
+    suppressed_observations: routingResult.suppressed + recoveryResult.suppressed + resolutionResult.suppressed
       + rulingResult.suppressed + stallResult.suppressed,
   };
   const bundle = { ...payload, payload_sha256: payloadDigest(payload) };
@@ -207,6 +220,7 @@ function validateBundle(bundle, opts = {}) {
     "quality", "routing", "recovery", "rulings", "stalls", "readiness",
     "suppressed_observations", "payload_sha256",
   ];
+  if (Object.prototype.hasOwnProperty.call(bundle, "resolutions")) topKeys.push("resolutions");
   if (!exactKeys(bundle, topKeys, "bundle", errors)) return errors;
   if (bundle.schema_version !== EXPORT_SCHEMA_VERSION) errors.push("unsupported schema_version");
   if (!VERSION_PATTERN.test(bundle.stagecraft_version)) errors.push("stagecraft_version is invalid");
@@ -223,6 +237,9 @@ function validateBundle(bundle, opts = {}) {
     "unreadable_sources", "truncated_sources", "symlink_sources", "orphan_events",
     "cost_coverage_dispatches",
   ];
+  if (Object.prototype.hasOwnProperty.call(bundle.quality, "durable_dispatch_observations")) {
+    qualityKeys.push("durable_dispatch_observations");
+  }
   if (exactKeys(bundle.quality, qualityKeys, "quality", errors)) {
     if (typeof bundle.quality.log_present !== "boolean") errors.push("quality.log_present must be boolean");
     validateNumbers(bundle.quality, qualityKeys.filter((key) => key !== "log_present"), "quality", errors);
@@ -235,6 +252,20 @@ function validateBundle(bundle, opts = {}) {
   validateRows(bundle.recovery, {
     categories: ["stage", "failure_class"], counts: ["observations", "runs"],
   }, "recovery", errors);
+  if (Object.prototype.hasOwnProperty.call(bundle, "resolutions")) {
+    validateRows(bundle.resolutions, {
+      categories: ["stage", "failure_class", "schema_fingerprint"],
+      counts: ["observations", "derivable"],
+    }, "resolutions", errors);
+    for (const [index, row] of bundle.resolutions.entries()) {
+      if (!HASH_PATTERN.test(row.schema_fingerprint)) {
+        errors.push(`resolutions[${index}].schema_fingerprint is invalid`);
+      }
+      if (validCount(row.derivable) && validCount(row.observations) && row.derivable > row.observations) {
+        errors.push(`resolutions[${index}].derivable exceeds observations`);
+      }
+    }
+  }
   validateRows(bundle.rulings, {
     categories: ["ruling_class"], counts: ["observations"],
   }, "rulings", errors);

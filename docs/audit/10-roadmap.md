@@ -90,10 +90,13 @@ npm deploy adapter and is green. Merge it before overlapping deploy-adapter work
 - **Current status:** Phase 16 implements the approved privacy model, local status,
   separately consented aggregate export, project identity lifecycle, and explicit
   portfolio analysis. Phase 17 adds durable allowlisted dispatch observations so D5
-  evidence begins accumulating during normal runs. Capability gates remain closed
-  pending real evidence and review. See
+  evidence begins accumulating during normal runs. Phase 18 adds explicit hash-bound
+  acceptance for successful fix/retry resolutions so H3 readiness can be measured
+  without exporting resolution text. Capability gates remain closed pending real
+  evidence and review. See
   [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md)
-  and [`plans/phase-17-durable-evidence-instrumentation.md`](../../plans/phase-17-durable-evidence-instrumentation.md).
+  [`plans/phase-17-durable-evidence-instrumentation.md`](../../plans/phase-17-durable-evidence-instrumentation.md),
+  and [`plans/phase-18-accepted-resolution-evidence.md`](../../plans/phase-18-accepted-resolution-evidence.md).
 
 ### Proposal 4.2 — Conversational upstream experiment
 

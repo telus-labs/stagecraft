@@ -129,16 +129,18 @@ was found, and no data-corruption path was verified.
 - **Sources:** GitHub #142, #143, #144, #145.
 - **Description:** provide an opt-in, privacy-reviewed evidence bundle and a command
   reporting gate-condition readiness, then retain privacy-bounded per-workstream
-  dispatch observations during normal autonomous runs. This makes thresholds visible
-  and collectible; it does not bypass them or implement gated capabilities.
+  dispatch observations during normal autonomous runs and explicitly bind human
+  acceptance to successful fix/retry events. This makes thresholds visible and
+  collectible; it does not bypass them or implement gated capabilities.
 - **Affected components:** run-log/gate archive tooling, docs, privacy model.
 - **Effort:** L.
 - **Risk of change:** medium.
 - **Risk of NOT changing:** high strategically.
 - **Dependencies:** redaction, consent, and project-identity proposal.
 - **Confidence:** MEDIUM.
-- **Status:** Phase 16 delivered readiness/export; Phase 17 adds the missing durable
-  dispatch history. Real-project collection and human review remain outstanding.
+- **Status:** Phase 16 delivered readiness/export; Phase 17 delivered durable dispatch
+  history; Phase 18 adds H3 accepted-resolution evidence. Real-project collection and
+  human review remain outstanding.
 
 ### P3-2 — Evaluate an upstream conversational refinement contract
 
@@ -174,7 +176,7 @@ was found, and no data-corruption path was verified.
 | #145 ADR-007 Tier 2 | Parked until real stall events satisfy criteria |
 | #144 ADR-005 standing grants | Parked until repair/ceiling evidence exists |
 | #143 D5 adaptive routing | Parked until comparative real-run telemetry exists |
-| #142 H3 recipe factory | Parked until recurring cross-project failures exist |
+| #142 H3 recipe factory | Parked until recurring, accepted, mostly derivable cross-project resolutions exist |
 
 ## Prior-audit closure record
 
