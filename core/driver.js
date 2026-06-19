@@ -30,6 +30,11 @@ const { archiveGate, pruneArchives } = require("./gates/archive");
 const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 const { upsertSection } = require("./markers");
+const {
+  TRANSITION_CONTROLS,
+  transitionResult,
+  applyTransitionResult,
+} = require("./driver-transition");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -945,7 +950,6 @@ async function run(opts = {}) {
       };
 
       if (r.action === "pipeline-complete") {
-        summary.completed = true;
         // ADR-008: post-completion advise sweep. Classify all noted_for_followup
         // items to surface advisory blockers without altering the exit contract.
         // Best-effort: a sweep failure must never break a clean run.
@@ -964,8 +968,16 @@ async function run(opts = {}) {
           summary.advisory_blockers_count = adviseResult.unresolvedBlockers;
           summary.advisory_breakdown = breakdown;
         } catch { /* sweep failure must never break the run */ }
-        logEvent(cwd, changeId, { ...base, outcome: "complete" });
-        onEvent({ type: "complete", ...base });
+        applyTransitionResult(transitionResult(TRANSITION_CONTROLS.COMPLETE, {
+          summaryPatch: { completed: true },
+          logEvents: [{ ...base, outcome: "complete" }],
+          emittedEvents: [{ type: "complete", ...base }],
+        }), {
+          summary,
+          state,
+          logEvent: (entry) => logEvent(cwd, changeId, entry),
+          onEvent,
+        });
         break;
       }
 
@@ -1201,14 +1213,23 @@ async function run(opts = {}) {
       // Non-auto-fixable fix-and-retry classes (state-corruption /
       // external-blocked) halt for a human.
       if (r.action === "fix-and-retry") {
-        summary.halted = true;
-        summary.halt_action = r.action;
-        summary.halt_failure_class = r.failure_class || null;
-        summary.halt_reason = r.reason;
-        summary.blockers = r.blockers || [];
-        summary.fix_steps = r.fix_steps || [];
-        logEvent(cwd, changeId, { ...base, outcome: "halt" });
-        onEvent({ type: "halt", ...base, blockers: r.blockers, fix_steps: r.fix_steps });
+        applyTransitionResult(transitionResult(TRANSITION_CONTROLS.HALT, {
+          summaryPatch: {
+            halted: true,
+            halt_action: r.action,
+            halt_failure_class: r.failure_class || null,
+            halt_reason: r.reason,
+            blockers: r.blockers || [],
+            fix_steps: r.fix_steps || [],
+          },
+          logEvents: [{ ...base, outcome: "halt" }],
+          emittedEvents: [{ type: "halt", ...base, blockers: r.blockers, fix_steps: r.fix_steps }],
+        }), {
+          summary,
+          state,
+          logEvent: (entry) => logEvent(cwd, changeId, entry),
+          onEvent,
+        });
         break;
       }
 
@@ -1475,11 +1496,20 @@ async function run(opts = {}) {
       }
 
       // Unknown action — halt defensively rather than spin.
-      summary.halted = true;
-      summary.halt_action = r.action;
-      summary.halt_reason = `unhandled action "${r.action}"`;
-      logEvent(cwd, changeId, { ...base, outcome: "unhandled" });
-      onEvent({ type: "unhandled", ...base });
+      applyTransitionResult(transitionResult(TRANSITION_CONTROLS.HALT, {
+        summaryPatch: {
+          halted: true,
+          halt_action: r.action,
+          halt_reason: `unhandled action "${r.action}"`,
+        },
+        logEvents: [{ ...base, outcome: "unhandled" }],
+        emittedEvents: [{ type: "unhandled", ...base }],
+      }), {
+        summary,
+        state,
+        logEvent: (entry) => logEvent(cwd, changeId, entry),
+        onEvent,
+      });
       break;
     }
     } // if (!trackHalted)

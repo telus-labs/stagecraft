@@ -312,6 +312,19 @@ inherits the tamper-evidence — `devteam verify-chain` surfaces it per stage.
 
 ## 4. Layer 3 — The bounded autonomous driver (capstone)
 
+### Transition handler contract
+
+The driver decomposes actions behind one internal transition-result contract. A
+handler returns a control decision (`continue`, `halt`, or `complete`), summary and
+run-state patches, and ordered run-log/progress events. `run()` applies that result
+and retains ownership of the loop, lock lifecycle, and final persistence. This keeps
+handler extraction behavior-preserving: handlers may decide a transition, but they
+cannot quietly acquire locks, spin a second loop, or finalize run state.
+
+The extraction is deliberately sequenced. Characterization tests first pin summary,
+`run-state.json`, and `run-log.jsonl` outcomes; dispatch/transient handling moves
+next; fix/ruling/merge handling moves only after the preceding slice is reviewed.
+
 ### 4.1 `devteam run`
 
 A new command implementing the driver loop. It is **code, not an LLM** — the only
