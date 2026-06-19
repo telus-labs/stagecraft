@@ -134,7 +134,41 @@ function patchGateForUnpricedModel(gatePath) {
 // hostName is null when fanout is active and the caller should resolve
 // it from the entry's hostName field directly (no routing precedence).
 // For non-fanout, the caller resolves via routing as usual.
-function computeDispatchPlan(stageDef, config, track) {
+//
+// opts.gatesDir — when provided, the stage-01 gate is read to filter roles
+// via active_roles (explicit) or inferred from out_of_scope_items (fallback).
+// The filter applies to all stages, including peer-review (stage-05), so
+// excluded workstreams never get phantom reviewer areas.
+
+// Keywords that signal a workstream area is out of scope. Matched
+// case-insensitively against out_of_scope_items[] strings.
+const OOS_KEYWORDS = {
+  frontend: ["frontend", "web ui", "web app", "browser", "ui layer"],
+  backend:  ["backend", "api server", "rest api", "server-side"],
+  platform: ["platform", "infrastructure", "infra"],
+  qa:       ["qa workstream", "test workstream"],
+};
+
+function inferActiveRoles(stage01Gate, allRoles) {
+  // Explicit active_roles takes precedence — PM's deliberate decision.
+  if (Array.isArray(stage01Gate.active_roles) && stage01Gate.active_roles.length > 0) {
+    return stage01Gate.active_roles.filter(r => allRoles.includes(r));
+  }
+  // Inference fallback: keyword-match out_of_scope_items.
+  if (!Array.isArray(stage01Gate.out_of_scope_items) || stage01Gate.out_of_scope_items.length === 0) {
+    return null; // no filter
+  }
+  const suppressed = new Set();
+  for (const item of stage01Gate.out_of_scope_items) {
+    const lower = item.toLowerCase();
+    for (const [role, keywords] of Object.entries(OOS_KEYWORDS)) {
+      if (keywords.some(k => lower.includes(k))) suppressed.add(role);
+    }
+  }
+  return suppressed.size === 0 ? null : allRoles.filter(r => !suppressed.has(r));
+}
+
+function computeDispatchPlan(stageDef, config, track, opts = {}) {
   const fanout = (config && config.routing && Array.isArray(config.routing.review_fanout))
     ? config.routing.review_fanout
     : [];
@@ -144,7 +178,21 @@ function computeDispatchPlan(stageDef, config, track) {
   // four-area matrix. rolesForStage falls back to stageDef.roles for
   // every other stage.
   const effectiveTrack = track || (config && config.pipeline && config.pipeline.default_track) || "full";
-  const roles = rolesForStage(stageDef, effectiveTrack);
+  let roles = rolesForStage(stageDef, effectiveTrack);
+
+  // Apply active_roles filter from stage-01 gate when gatesDir is available.
+  // The filter covers all stages so peer-review areas match the build workstreams
+  // that actually ran — no phantom reviewer areas for excluded workstreams.
+  if (opts.gatesDir) {
+    const s1Path = path.join(opts.gatesDir, "stage-01.json");
+    if (fs.existsSync(s1Path)) {
+      const { gate } = loadGateSafe(s1Path);
+      if (gate) {
+        const filtered = inferActiveRoles(gate, roles);
+        if (filtered) roles = filtered;
+      }
+    }
+  }
 
   const plan = [];
   for (const role of roles) {
@@ -249,7 +297,8 @@ function runStage(stageName, opts = {}) {
     );
   }
 
-  const plan = computeDispatchPlan(stageDef, config, ctx.track);
+  const gatesDir = getGatesDir(cwd, ctx.changeId);
+  const plan = computeDispatchPlan(stageDef, config, ctx.track, { gatesDir });
 
   // Apply --workstream filter BEFORE rendering prompts so only the requested
   // workstreams are built. This is the single shared filter for both headless
@@ -496,7 +545,8 @@ function mergeWorkstreamGates(stageName, opts = {}) {
   const track = opts.track
     || (Array.isArray(config.pipeline.custom_stages) ? config.pipeline.custom_stages : null)
     || config.pipeline.default_track;
-  const plan = computeDispatchPlan(stageDef, config, track);
+  const gatesDir = opts.gatesDir || getGatesDir(opts.cwd || process.cwd(), opts.changeId || null);
+  const plan = computeDispatchPlan(stageDef, config, track, { gatesDir });
   if (plan.length <= 1) {
     return { merged: false, reason: "single-workstream stage; no merge needed" };
   }
@@ -507,7 +557,6 @@ function mergeWorkstreamGates(stageName, opts = {}) {
     "devteam.workstream_count": plan.length,
     "devteam.fanout": plan.some((p) => p.fanout) || undefined,
   }, () => {
-    const gatesDir = opts.gatesDir || getGatesDir(opts.cwd || process.cwd(), opts.changeId || null);
     const wsGates = [];
     for (const entry of plan) {
       const wsFile = path.join(gatesDir, entry.gateFile);

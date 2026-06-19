@@ -20,10 +20,10 @@ Multi-role stages appear once per dispatched role. The CI advisory
 
 | Stage     | Name                      | Role       | Framework B | Role brief B | Dispatch B | Tokens~ |
 | --------- | ------------------------- | ---------- | ----------- | ------------ | ---------- | ------- |
-| stage-01  | requirements              | pm         | 11,940      | 8,832        | 20,772     | 5193    |
-| stage-02  | design                    | principal  | 11,940      | 13,129       | 25,069     | 6268    |
-| stage-03  | clarification             | pm         | 11,940      | 8,832        | 20,772     | 5193    |
-| stage-03b | executable-spec           | pm         | 11,940      | 8,832        | 20,772     | 5193    |
+| stage-01  | requirements              | pm         | 11,940      | 9,629        | 21,569     | 5393    |
+| stage-02  | design                    | principal  | 11,940      | 14,066       | 26,006     | 6502    |
+| stage-03  | clarification             | pm         | 11,940      | 9,629        | 21,569     | 5393    |
+| stage-03b | executable-spec           | pm         | 11,940      | 9,629        | 21,569     | 5393    |
 | stage-04  | build                     | backend    | 11,940      | 7,530        | 19,470     | 4868    |
 | stage-04  | build                     | frontend   | 11,940      | 6,295        | 18,235     | 4559    |
 | stage-04  | build                     | platform   | 11,940      | 2,400        | 14,340     | 3585    |
@@ -38,19 +38,19 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-06c | observability-gate        | platform   | 11,940      | 2,400        | 14,340     | 3585    |
 | stage-06d | verification-beyond-tests | verifier   | 11,940      | 9,089        | 21,029     | 5258    |
 | stage-06e | performance-budget        | qa         | 11,940      | 2,718        | 14,658     | 3665    |
-| stage-07  | sign-off                  | pm         | 11,940      | 8,832        | 20,772     | 5193    |
+| stage-07  | sign-off                  | pm         | 11,940      | 9,629        | 21,569     | 5393    |
 | stage-07  | sign-off                  | platform   | 11,940      | 2,400        | 14,340     | 3585    |
 | stage-08  | deploy                    | platform   | 11,940      | 2,400        | 14,340     | 3585    |
-| stage-09  | retrospective             | principal  | 11,940      | 13,129       | 25,069     | 6268    |
+| stage-09  | retrospective             | principal  | 11,940      | 14,066       | 26,006     | 6502    |
 
 ## Top 5 heaviest framework files
 
 | File                | Bytes  | Tokens~ |
 | ------------------- | ------ | ------- |
+| roles/principal.md  | 14,066 | 3517    |
 | roles/red-team.md   | 13,675 | 3419    |
-| roles/principal.md  | 13,129 | 3283    |
+| roles/pm.md         | 9,629  | 2408    |
 | roles/verifier.md   | 9,089  | 2273    |
-| roles/pm.md         | 8,832  | 2208    |
 | roles/migrations.md | 8,272  | 2068    |
 
 ## Advisory file-size ceilings
@@ -65,10 +65,10 @@ Advisories are non-blocking (they print but do not fail CI).
 | AGENTS.md          | 10 KB   |
 
 <!-- budget-data
-stage-01,20772
-stage-02,25069
-stage-03,20772
-stage-03b,20772
+stage-01,21569
+stage-02,26006
+stage-03,21569
+stage-03b,21569
 stage-04,19470
 stage-04a,14340
 stage-04b,19243
@@ -80,8 +80,8 @@ stage-06b,14658
 stage-06c,14340
 stage-06d,21029
 stage-06e,14658
-stage-07,20772
+stage-07,21569
 stage-08,14340
-stage-09,25069
+stage-09,26006
 -->
 <!-- /generated -->

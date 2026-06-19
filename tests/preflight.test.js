@@ -15,6 +15,8 @@ const {
   runGitHygieneCheck,
   runImportPathCheck,
   runDeferredItemsRisk,
+  runCallerlessFileCheck,
+  runADRComplianceCheck,
   checkStagedPipelineArtifacts,
 } = require(path.join(REPO_ROOT, "core", "preflight"));
 
@@ -394,5 +396,210 @@ describe("runPreflight — FAIL on staged pipeline artifacts", () => {
       r.blockers.every((b) => !b.includes("Pipeline artifacts are staged")),
       `unexpected staged-artifact blocker: ${JSON.stringify(r.blockers)}`
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runImportPathCheck — pytest.ini pythonpath shadow imports (B2)
+// ---------------------------------------------------------------------------
+
+describe("runImportPathCheck — pytest.ini pythonpath shadow import", () => {
+  it("produces a blocker when a root-level stub shadows a package module", () => {
+    const cwd = makeTmp();
+    // pytest.ini with pythonpath = src
+    fs.writeFileSync(path.join(cwd, "pytest.ini"), "[pytest]\npythonpath = src\n");
+    // src/worker.py (stub) shadows src/backend/worker.py (canonical)
+    fs.mkdirSync(path.join(cwd, "src", "backend"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, "src", "worker.py"), "# stub\n");
+    fs.writeFileSync(path.join(cwd, "src", "backend", "worker.py"), "# canonical\n");
+    const r = runImportPathCheck(cwd);
+    assert.equal(r.pass, false, "shadow import should produce a blocker");
+    assert.ok(r.blockers.some(b => b.includes("worker")), `expected 'worker' in blocker: ${JSON.stringify(r.blockers)}`);
+    assert.ok(r.blockers.some(b => b.includes("stub")), `expected 'stub' in blocker: ${JSON.stringify(r.blockers)}`);
+  });
+
+  it("passes when no root-level module shadows a package module", () => {
+    const cwd = makeTmp();
+    fs.writeFileSync(path.join(cwd, "pytest.ini"), "[pytest]\npythonpath = src\n");
+    fs.mkdirSync(path.join(cwd, "src", "backend"), { recursive: true });
+    // Only src/backend/worker.py — no root-level shadow
+    fs.writeFileSync(path.join(cwd, "src", "backend", "worker.py"), "# canonical\n");
+    const r = runImportPathCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.equal(r.blockers.length, 0);
+  });
+
+  it("skips silently when no Python project files are present", () => {
+    const cwd = makeTmp();
+    const r = runImportPathCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.equal(r.blockers.length, 0);
+    assert.equal(r.warnings.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runCallerlessFileCheck
+// ---------------------------------------------------------------------------
+
+function makeGitRepo(cwd) {
+  spawnSync("git", ["init"], { cwd, encoding: "utf8" });
+  spawnSync("git", ["config", "user.email", "test@example.com"], { cwd });
+  spawnSync("git", ["config", "user.name", "Test"], { cwd });
+}
+
+describe("runCallerlessFileCheck — non-git directory", () => {
+  it("returns pass:true with no warnings when git returns non-zero", () => {
+    const cwd = makeTmp();
+    const r = runCallerlessFileCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.equal(r.warnings.length, 0);
+  });
+});
+
+describe("runCallerlessFileCheck — new file with no callers", () => {
+  it("emits a warning for a .py file with no callers", () => {
+    const cwd = makeTmp();
+    makeGitRepo(cwd);
+    // Initial commit with a placeholder so HEAD exists
+    fs.writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    spawnSync("git", ["add", "README.md"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "init"], { cwd, encoding: "utf8" });
+    // Add a new .py file with no callers (nothing imports 'orphan')
+    fs.writeFileSync(path.join(cwd, "orphan.py"), "def unused(): pass\n");
+    spawnSync("git", ["add", "orphan.py"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add orphan"], { cwd, encoding: "utf8" });
+    const r = runCallerlessFileCheck(cwd);
+    assert.equal(r.pass, true, "callerless check is WARNING only — pass must always be true");
+    assert.ok(r.warnings.some(w => w.includes("orphan.py")), `expected orphan.py in warnings: ${JSON.stringify(r.warnings)}`);
+    assert.ok(r.warnings.some(w => w.includes("dead code")), `expected 'dead code' hint: ${JSON.stringify(r.warnings)}`);
+  });
+});
+
+describe("runCallerlessFileCheck — new file with a caller", () => {
+  it("emits no warning when the new module is imported by another file", () => {
+    const cwd = makeTmp();
+    makeGitRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    spawnSync("git", ["add", "README.md"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "init"], { cwd, encoding: "utf8" });
+    // Add helper.py and a caller that imports it
+    fs.writeFileSync(path.join(cwd, "helper.py"), "def greet(): return 'hi'\n");
+    fs.writeFileSync(path.join(cwd, "main.py"), "from helper import greet\nprint(greet())\n");
+    spawnSync("git", ["add", "helper.py", "main.py"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add helper"], { cwd, encoding: "utf8" });
+    const r = runCallerlessFileCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.ok(!r.warnings.some(w => w.includes("helper.py")), `unexpected warning for helper.py: ${JSON.stringify(r.warnings)}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runADRComplianceCheck
+// ---------------------------------------------------------------------------
+
+describe("runADRComplianceCheck — no adr directory", () => {
+  it("passes silently when pipeline/adr does not exist", () => {
+    const cwd = makeTmp();
+    const r = runADRComplianceCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.equal(r.blockers.length, 0);
+  });
+});
+
+describe("runADRComplianceCheck — no @prohibit annotations", () => {
+  it("passes when ADR files exist but contain no @prohibit annotations", () => {
+    const cwd = makeTmp();
+    fs.mkdirSync(path.join(cwd, "pipeline", "adr"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "adr", "0001-no-prohibit.md"),
+      "# ADR 0001\n\n## Decision\nUse httpx.\n"
+    );
+    const r = runADRComplianceCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.equal(r.blockers.length, 0);
+  });
+});
+
+describe("runADRComplianceCheck — prohibited pattern found in diff", () => {
+  it("produces a blocker when a diff addition matches a @prohibit annotation", () => {
+    const cwd = makeTmp();
+    makeGitRepo(cwd);
+    // Initial commit
+    fs.writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    spawnSync("git", ["add", "README.md"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "init"], { cwd, encoding: "utf8" });
+
+    // Write ADR with @prohibit annotation
+    fs.mkdirSync(path.join(cwd, "pipeline", "adr"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "adr", "0001-no-urllib.md"),
+      "# ADR 0001\n## Decision\nDo not use urllib.request.\n<!-- @prohibit: urllib\\.request -->\n"
+    );
+
+    // Add a file that uses the prohibited pattern (committed so it shows in diff)
+    fs.writeFileSync(path.join(cwd, "fetcher.py"), "import urllib.request\nresp = urllib.request.urlopen('http://example.com')\n");
+    spawnSync("git", ["add", "fetcher.py"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add fetcher"], { cwd, encoding: "utf8" });
+
+    const r = runADRComplianceCheck(cwd);
+    assert.equal(r.pass, false, "prohibited pattern in diff should block");
+    assert.ok(r.blockers.some(b => b.includes("urllib")), `expected urllib in blocker: ${JSON.stringify(r.blockers)}`);
+    assert.ok(r.blockers.some(b => b.includes("0001-no-urllib.md")), `expected ADR source in blocker: ${JSON.stringify(r.blockers)}`);
+  });
+});
+
+describe("runADRComplianceCheck — prohibited pattern not in diff", () => {
+  it("passes when the prohibited pattern does not appear in any added line", () => {
+    const cwd = makeTmp();
+    makeGitRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    spawnSync("git", ["add", "README.md"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "init"], { cwd, encoding: "utf8" });
+
+    fs.mkdirSync(path.join(cwd, "pipeline", "adr"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "adr", "0001-no-urllib.md"),
+      "# ADR 0001\n## Decision\nDo not use urllib.request.\n<!-- @prohibit: urllib\\.request -->\n"
+    );
+
+    // Add a file that does NOT use urllib.request
+    fs.writeFileSync(path.join(cwd, "fetcher.py"), "import httpx\nresp = httpx.get('http://example.com')\n");
+    spawnSync("git", ["add", "fetcher.py"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add fetcher"], { cwd, encoding: "utf8" });
+
+    const r = runADRComplianceCheck(cwd);
+    assert.equal(r.pass, true);
+    assert.equal(r.blockers.length, 0);
+  });
+});
+
+describe("runPreflight — new gate fields", () => {
+  it("includes callerless_file_check_pass and adr_compliance_pass in the gate", () => {
+    const cwd = makeTmp();
+    const r = runPreflight(cwd, { skipWrite: true });
+    assert.equal(r.gate.callerless_file_check_pass, true);
+    assert.equal(r.gate.adr_compliance_pass, true);
+  });
+
+  it("adr_compliance_pass is false and status FAIL when a prohibited pattern is in diff", () => {
+    const cwd = makeTmp();
+    makeGitRepo(cwd);
+    fs.writeFileSync(path.join(cwd, "README.md"), "hello\n");
+    spawnSync("git", ["add", "README.md"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "init"], { cwd, encoding: "utf8" });
+
+    fs.mkdirSync(path.join(cwd, "pipeline", "adr"), { recursive: true });
+    fs.writeFileSync(
+      path.join(cwd, "pipeline", "adr", "0001.md"),
+      "## Decision\nNo sys.exit.\n<!-- @prohibit: sys\\.exit -->\n"
+    );
+    fs.writeFileSync(path.join(cwd, "bad.py"), "import sys\nsys.exit(1)\n");
+    spawnSync("git", ["add", "bad.py"], { cwd, encoding: "utf8" });
+    spawnSync("git", ["commit", "--no-gpg-sign", "-m", "add bad"], { cwd, encoding: "utf8" });
+
+    const r = runPreflight(cwd, { skipWrite: true });
+    assert.equal(r.status, "FAIL");
+    assert.equal(r.gate.adr_compliance_pass, false);
   });
 });

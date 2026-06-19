@@ -27,6 +27,9 @@ const STAGES = {
       acceptance_criteria_count: 0,
       out_of_scope_items: [],
       required_sections_complete: false,
+      // null = all roles active; explicit list suppresses excluded workstreams
+      // from both build (stage-04) and peer-review (stage-05) dispatch.
+      active_roles: null,
     },
     // ADR-009 Phase 2: when intent === "repair", stage-01 produces a DIAGNOSIS
     // instead of a feature brief — same stage, same gate path, fix-aware artifact.
@@ -276,6 +279,8 @@ const STAGES = {
       git_hygiene_pass: false,
       import_path_pass: false,
       deferred_items_count: 0,
+      callerless_file_check_pass: true,
+      adr_compliance_pass: true,
     },
   },
   "peer-review": {

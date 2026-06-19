@@ -30,6 +30,14 @@
       "type": "integer",
       "minimum": 0,
       "description": "Number of stage-04c noted_for_followup[] items. Non-zero emits a warning (not a blocker) so operators know to expect peer-review objections."
+    },
+    "callerless_file_check_pass": {
+      "type": "boolean",
+      "description": "True when no newly-added files were found to have zero callers in the project. Always true (this check emits warnings, not blockers) — false is reserved for future escalation."
+    },
+    "adr_compliance_pass": {
+      "type": "boolean",
+      "description": "True when no diff additions matched a @prohibit pattern from pipeline/adr/ files. False blocks peer-review dispatch."
     }
   },
   "additionalProperties": true

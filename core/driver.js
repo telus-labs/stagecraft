@@ -1181,6 +1181,19 @@ async function run(opts = {}) {
           break;
         }
         // Granted class → apply the ruling and resume.
+        // Snapshot build workstream gate mtimes before the applicator runs.
+        // Used below to detect whether the applicator actually dispatched build
+        // work when the ruling's decision mentions a build workstream dispatch.
+        const _gatesDir = getGatesDir(cwd, changeId);
+        const BUILD_GATE_RE = /^stage-04\.\w+\.json$/;
+        const preMtimes = {};
+        try {
+          for (const f of fs.readdirSync(_gatesDir).filter(n => BUILD_GATE_RE.test(n))) {
+            const full = path.join(_gatesDir, f);
+            try { preMtimes[full] = fs.statSync(full).mtimeMs; } catch { /* */ }
+          }
+        } catch { /* gates dir may not yet exist */ }
+
         const fr = await _runFixEscalation(cwd, { escalatingGate: r.gate });
         if (fr && fr.exitCode !== 0) {
           summary.halted = true;
@@ -1190,6 +1203,41 @@ async function run(opts = {}) {
           onEvent({ type: "halt", ...base });
           break;
         }
+
+        // When the ruling explicitly orders dispatching a build workstream, verify
+        // the applicator actually updated or created a build gate. An applicator
+        // that ran peer-review instead (or did nothing) would waste the auto-rule
+        // grant and cause the stage to cycle until convergence-exhausted.
+        const rulingMentionsBuild = /dispatch\s+(backend|frontend|platform|qa)\s+build\s+workstream/i.test(latest.decision || "");
+        if (rulingMentionsBuild) {
+          let buildGateUpdated = false;
+          try {
+            for (const f of fs.readdirSync(_gatesDir).filter(n => BUILD_GATE_RE.test(n))) {
+              const full = path.join(_gatesDir, f);
+              try {
+                const mtime = fs.statSync(full).mtimeMs;
+                if (!preMtimes[full] || mtime > preMtimes[full]) { buildGateUpdated = true; break; }
+              } catch { /* */ }
+            }
+          } catch { /* ignore */ }
+
+          if (!buildGateUpdated) {
+            summary.halted = true;
+            summary.halt_action = "resolve-escalation";
+            summary.halt_failure_class = "applicator-did-not-dispatch-build";
+            summary.halt_reason = "escalation applicator did not dispatch a build workstream as the ruling required — no build gate was updated; halting for human review";
+            logEvent(cwd, changeId, { ...base, outcome: "applicator-did-not-dispatch-build" });
+            onEvent({ type: "halt", ...base });
+            break;
+          }
+
+          // Applicator confirmed build dispatch — reset the one-shot auto-rule
+          // counter so a subsequent peer-review escalation for a new reason gets
+          // a fresh attempt rather than halting immediately on alreadyTried.
+          state.autoRule[r.name] = 0;
+          saveRunState(cwd, changeId, state);
+        }
+
         const authority = `auto-rule:${latest.class}`;
         // PR-D2: bind the authority record ONTO the escalating gate, so the
         // autonomous-decision provenance inherits C6 tamper-evidence (vs. only
