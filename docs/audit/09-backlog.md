@@ -139,8 +139,8 @@ was found, and no data-corruption path was verified.
 - **Dependencies:** redaction, consent, and project-identity proposal.
 - **Confidence:** MEDIUM.
 - **Status:** Phase 16 delivered readiness/export; Phase 17 delivered durable dispatch
-  history; Phase 18 adds H3 accepted-resolution evidence. Real-project collection and
-  human review remain outstanding.
+  history; Phase 18 delivered H3 accepted-resolution evidence in PR #262. Real-project
+  collection and human review remain outstanding.
 
 ### P3-2 — Evaluate an upstream conversational refinement contract
 
@@ -168,11 +168,10 @@ was found, and no data-corruption path was verified.
 - **SQLite/vector memory backend:** revisit above measured 100ms query latency.
 - **Real-contention approval test:** revisit after an observed corruption incident.
 
-## Current GitHub state (2026-06-18)
+## Current GitHub state (2026-06-19)
 
 | Issue | Audit disposition |
 |---|---|
-| #231 npm deploy false-positive | Green PR #232 fixes it; merge gates closure |
 | #145 ADR-007 Tier 2 | Parked until real stall events satisfy criteria |
 | #144 ADR-005 standing grants | Parked until repair/ceiling evidence exists |
 | #143 D5 adaptive routing | Parked until comparative real-run telemetry exists |
