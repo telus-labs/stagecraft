@@ -1,1 +1,0 @@
-- Add native Windows CI coverage for command parsing, executable discovery, timeout termination, initialization, diagnostics, and CLI startup.

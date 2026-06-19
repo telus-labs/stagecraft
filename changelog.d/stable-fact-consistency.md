@@ -1,1 +1,0 @@
-- Extend consistency checks to prevent drift in schema field vocabulary, Node and platform support claims, and volatile test totals in current maintainer documentation.

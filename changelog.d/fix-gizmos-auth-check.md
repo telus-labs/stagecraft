@@ -1,1 +1,0 @@
-- **Fix: `gizmos whoami` replaced with `GIZMOS_API_KEY` env check in `core/deploy/gizmos.md`.** `gizmos whoami` is not a real CLI command. Authentication is via the `GIZMOS_API_KEY` environment variable — a missing or empty value causes `gizmos push` to fail with a 401. Both the `## Assumptions` line and Precondition step 1f now reflect the correct auth mechanism.

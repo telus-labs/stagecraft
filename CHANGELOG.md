@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] — 2026-06-19
+
 ### Added
 
 - **Adapter conventions auto-injected into `pipeline/context.md` — Phase 15.2. Phase 15 complete.** When `deploy.adapter` is set in `.devteam/config.yml`, `devteam run` and `devteam stage` (requirements/design/build) now write a deploy-target context block into `pipeline/context.md` before the first agent dispatches. The block is idempotent (written via `upsertSection`), adapter-specific, and removed cleanly when the adapter changes and pipeline state is reset. Two adapter conventions files ship: `core/deploy/gizmos.conventions.md` (language, runtime, required file structure, no-build-step rule, file tracking, secrets model, health check requirements for Gizmos/Cloudflare Workers) and `core/deploy/cloud-run.conventions.md` (runtime, structure, `PORT` env var, state/persistence model, health check requirements for GCP Cloud Run). The new `seedDeployContext(cwd, config, changeId, opts)` function in `core/driver.js` reads the adapter name from `config.deploy.adapter`, resolves the companion `.conventions.md` file, and upserts it into `pipeline/context.md`. `loadConfig()` in `core/config.js` now exposes `config.deploy` directly (previously only available via `config._raw.deploy`). `core/deploy/README.md` documents the conventions file pattern. 6 new tests in `tests/deploy-conventions.test.js` cover the false-on-null, false-on-missing-file, write+content, idempotency, update, and auto-mkdir cases. **Phase 15 complete.** All items shipped: pre-work `devteam init --adapter` (PR #173); 15.1 gizmos auth fix / `GIZMOS_API_KEY` (PR #176); 15.2 conventions injection (this item, feat/adapter-conventions).
@@ -49,6 +53,357 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 - **Diagnosis as fix-aware stage-01 and `--repair-at` escape hatch — Phase 10.2 (ADR-009 Phase 2).** When `intent === "repair"`, stage-01 (requirements) produces a **DIAGNOSIS** document instead of a feature brief — same stage id, same gate file path, fix-aware artifact, no new stages. Concretely: (1) `repairOverride` field added to the `requirements` stage definition; `buildDescriptor` in the orchestrator applies it when `intent === "repair"`, swapping objective, artifact (`pipeline/diagnosis.md`), template (`templates/diagnosis-template.md`), `allowedWrites`, and gate schema. (2) The diagnosis gate is always **ESCALATE-shaped** — a judgment gate with `escalation_reason` and `decision_needed` fields, requiring human approval or `--auto-rule diagnosis-approved` before the build proceeds. `diagnosis-approved` is the new ruling class slug; grant it with `--auto-rule diagnosis-approved`. (3) Driver: `repairNeedsDiagnosis = intent === "repair" && !repairAt` prepends `"requirements"` to the effective stage order so `next()` routes through diagnosis before build; the diagnosis gate's `affected_files` list is read before each build dispatch and populates `state.affectedFiles`, **activating 10.1's structural scope gate** (previously inert — no diagnosis stage existed to supply the list); `repairPatchItems` upgrades from the raw symptom string to structured per-file entries from the diagnosis. (4) **`--repair-at <file>:<line>` escape hatch** — when the caller already knows the defect location, comma-separated `file:line` locations seed `state.affectedFiles` directly, write a synthetic PASS stage-01 gate, and skip the LLM diagnosis dispatch entirely; a `repair-at-seeded` event is logged. (5) `intent` propagated through `ctx` in `runStage()` so adapters render repair-mode prompts. Tests (6 new in `tests/repair-mode.test.js`, section 7): `buildDescriptor` repair shape (unit); `buildDescriptor` feature shape unchanged (unit); scope gate activates from diagnosis gate `affected_files` without `opts.affectedFiles` (this test failed on main before 10.2); diagnosis ESCALATE halts without `--auto-rule`; `--auto-rule diagnosis-approved` proceeds; `--repair-at` escape hatch seeds, writes synthetic gate, skips dispatch. Suite: 1661 pass (was 1655), lint clean, consistency 317 checks passed.
 
 - **`--repair "<symptom>"` intent flag — Phase 10.1 (ADR-009 Phase 1).** Adds `--repair` to `devteam run` as an intent flag orthogonal to `--track`, implemented as fix-aware wiring on existing stages — zero new stages, zero parallel pipeline. Concretely: (1) `--repair` and `--feature` are mutually exclusive (enforced in both the CLI command and the driver); (2) `--repair` defaults to `hotfix` depth; `--repair --track full` overrides; auth/payments/migration symptoms are upgraded to `full` via the same stoplist patterns (`checkStoplist`) regardless of the default — the existing lighter-track stoplist bypass does not apply here; (3) `intent: "repair" | "feature"` is written to `run-state.json` and every run-log event base object from day one (ADR-009 §Decision.7 perishable baseline — without this, repair vs feature runs are indistinguishable in history); `repair: <symptom>` string is also persisted in run-state; (4) on `--resume`, a `prior_run_id` correlation field is written linking the re-run to its predecessor's `started_at`; (5) `changeIdFromSymptom` exported from `core/config.js` (same slug algorithm as `changeIdFromFeature`) so bounded-isolation paths can derive the changeId from a symptom string (ADR-009 §Consequences); (6) repair builds dispatch `runStageHeadless` with `patchItems` set to the symptom string, activating `renderPatchBlock`'s `## ⚠️  PATCH MODE — targeted fix only` block in the build prompt — no new prompt authored (ADR-009 §Decision.2, PATCH MODE is the existing mechanism); (7) structural scope gate wired behind `state.affectedFiles` / `opts.affectedFiles`: a post-build `checkScopeGate` call (injectable for tests; default: `git diff --name-only HEAD`) fails the run with `halt_action: "scope-gate"` when files outside the list were touched. The list is supplied by 10.2's diagnosis stage (same release). CLI reference regenerated (`npm run docs:generate`). Tests (14 new in `tests/repair-mode.test.js`): mutual exclusion (both CLI and driver-level); hotfix default; `--track full` override; auth-symptom stoplist upgrade with event emission and run-log verification; intent tag in run-state and run-log; feature run intent tag; resume prior_run_id correlation; repair build patchItems dispatch; feature build lacks patchItems; `renderPatchBlock` unit check with symptom text; scope gate FAIL with synthetic affected-files list; scope gate PASS within scope; scope gate inert without affectedFiles. Suite: 1655 pass (was 1641), lint clean, consistency 317 checks passed.
+
+- Require Phase 1 and Phase 2 audit findings to include `verified_by` evidence before they can be promoted above LOW confidence.
+
+- Stream headless stage transcripts directly to disk so long-running host output stays observable and no longer grows Stagecraft's memory with transcript size.
+
+- Reconcile current documentation and maintenance guidance with shipped Windows support, canonical role-tool ownership, performance-gate vocabulary, bounded autonomy, and supported embedding providers.
+
+- Demote unused `adapterPath` and verify runner timeout exports to private module details.
+
+---
+type: feat
+---
+
+- Add `cloud-run` deploy adapter (`core/deploy/cloud-run.md`): builds a Docker image, pushes to GCP Artifact Registry, deploys a Cloud Run revision, smoke-tests the live URL, and writes a compliant stage-08 gate with `deploy_completed`, `smoke_tests_passed`, and `rollback_executed` fields.
+
+Added a Stage 8 deploy cost gate that blocks 10x-or-greater recurring cost increases unless an explicit human override is recorded.
+
+---
+type: feat
+---
+
+- Add `gizmos` deploy adapter (`core/deploy/gizmos.md`): pushes source to the Gizmos platform (Cloudflare Workers, gizmos.run) via `gizmos push`, smoke-tests the live URL, and writes a compliant stage-08 gate with `deploy_completed`, `smoke_tests_passed`, and `rollback_executed` fields.
+
+- **docs(analysis):** D5 adaptive routing evidence review (`plans/adaptive-routing-evidence.md`). Runs `devteam routing:suggest` against all accumulated pipeline gate data; finds zero real-run telemetry — only the hand-authored `examples/sms-opt-in` fixture (max 4 dispatches per role, no cost data). The tool's MIN_DISPATCHES guard fires for all 6 roles; no recommendations are produced; human conclusion matches tool output. Verdict: continuous adaptive routing stays gated pending ≥5 dispatches per (role, host) pair across ≥2 real projects, cost telemetry, and ADR-007 implementation. Honest scope note: ADR-007 precondition not yet met.
+
+- **docs(adr):** Draft ADR-007 — Liveness/heartbeat (`docs/adr/007-liveness-heartbeat.md`, Status: Proposed). Defines *stall* (host process alive, output flowing, no gate progress) as distinct from the wall-clock `timeoutMs` timeout; specifies a per-iteration `heartbeat` event in `run-log.jsonl` and a dispatch-progress probe (log-file growth vs gate mtime) running as `Promise.race` alongside each dispatch; specifies operator surface (`devteam status` reporting `last_heartbeat_age_ms` and `stall_detected`, and a `devteam run --watch` rendering flag); stall response reuses the existing `transient`/`structural` vocabulary from `classifyDispatch`. Ends with 7 open questions for human ruling. Updates `docs/adr/README.md` to move ADR-007 from Deferred to the main Proposed index.
+
+- **docs(adr):** Draft ADR-008 — Exit semantics (`docs/adr/008-exit-semantics.md`, Status: Proposed). Confirms [verify-first]: `devteam run` exits 0 on `pipeline-complete` with pending advise blockers — the design-doc step 9 ("run a final advise sweep and exit") was never implemented. ADR frames four options (status quo, exit 1, exit 3, opt-in flag), with exit 3 as the recommended candidate for evaluation; ends with 4 open questions for human ruling including severity threshold and CI contract documentation. Updates `docs/adr/README.md` to move ADR-008 from Deferred to the main Proposed index.
+
+- **Docs: FAQ entry on preserving implementation constraints through the PM interpretation layer.** The PM agent rewrites `--feature` as product intent, which can normalise away specific env var names, API endpoints, or explicit exclusions. The new entry covers: (1) phrasing constraints as observable behaviours so the PM captures them as ACs, (2) seeding `pipeline/context.md` with a binding constraints block before running, and (3) how to open a build-gate blocker and re-run after the build has already produced the wrong implementation.
+
+## `docs/git-workflow.md` restructure + repair-mode commit guidance (Phase 12.4)
+
+**`docs/git-workflow.md`** restructured into a 7-section outline covering both operator
+modes: §1 Overview (interactive vs. autonomous; what lives in git), §2 What to commit vs.
+ignore (reference `devteam init` gitignore block; include/exclude table), §3 Interactive
+mode (`devteam commit` as primary interface; per-stage-group commit cadence; Stage 04
+worktrees), §4 Autonomous mode (new: `halt_action` table identifying `ceiling`/`until`/
+`budget` as clean commit signals; `devteam commit` after a halt; `--auto-commit` opt-in
+semantics), §5 Repair mode (new: three natural commit points; note that source file staging
+is the operator's responsibility), §6 PR timing, §7 CI integration.
+
+**`docs/runbooks/repair-flow.md`** — added "When to commit in repair mode" section: three
+commit points (after diagnosis gate approval, after failing-first test, after build + scope
+gate PASS). Notes that `devteam commit` handles gate files automatically; application source
+files require explicit `git add` by the operator.
+
+**Phase 12 complete.** All four items shipped: managed gitignore (PR #154), `devteam commit`
+(PR #155), `--auto-commit` (PR #156), docs restructure (PR #157).
+
+---
+type: fix
+---
+
+- Document gizmos secrets limitation in `core/deploy/gizmos.md`: `gizmos push` has no flag for env vars or secrets; add them via the Gizmos hub UI after the first deploy. First-request failure is expected, not a broken deploy.
+
+- **Plan: Phase 12 — Git workflow automation (ADR-010).** Documents the design and implementation plan for removing the two structural git friction points in Stagecraft: volatile file management (`devteam init` writes a managed `.gitignore` block) and autonomous-mode commit timing (`devteam commit` command + `devteam run --auto-commit` on clean halts). ADR-010 proposes five binding decisions; items 12.1–12.4 are blocked until ADR-010 is accepted.
+
+- **Plan: Phase 14 — Dogfooding support.** Adds `devteam init --profile dogfood` (infrastructure guard pre-commit hook, supplemental gitignore block for pipeline document artifacts, `.git/info/exclude` entry for deploy spec, `profile: dogfood` config marker), `devteam doctor` dogfood-mode checks (6 checks: hook presence/executability, gitignore block, exclude entry, no publish script, budget reminder), a preflight gate that blocks staged pipeline artifacts from reaching peer-review, a budget-cap warning when `devteam run` starts without `--budget-usd`, and `docs/guides/dogfooding.md`. Tracking: issue #130.
+
+- **Plan: Phase 15 — Adapter-aware stage context.** Pre-work (`devteam init --adapter`, PR #173) and 15.1 (gizmos auth fix, PR #176) complete. 15.2 adds `core/deploy/<adapter>.conventions.md` files (Gizmos and Cloud Run) and a `seedDeployContext()` function that writes adapter platform constraints into `pipeline/context.md` before stages 01–03 dispatch — so `--feature` strings can express pure intent without repeating stack details already implied by `deploy.adapter` config.
+
+- **Docs: adoption guide now covers project context seeding as a first-run step.** A new Step 4 in the Week 1 pilot sequence explains what to write into `pipeline/context.md` before the first pipeline run — architecture, platform, locked-in technology choices, compliance constraints, integration points, and team conventions. Includes a safe-zone rule (content must go above `<!-- devteam: -->` markers to survive pipeline runs), a concrete example for a payments service, and a cross-reference between the adoption guide and the existing FAQ entry on preserving per-run binding constraints through the PM layer.
+
+- **Repair-mode vocabulary map (ADR-009 §Decision.8).** `docs/conventions.md` now carries the authoritative vocabulary table distinguishing `--repair` (intent), `hotfix` (depth), `fix-and-retry` / `fix_steps` (internal driver machinery), and PATCH MODE (the mechanism `--repair` reuses). Explains why renaming the internal terms was rejected and why a `--repair` run will still emit `fix-retry` events in its `run-log.jsonl` — coexistence is expected, not a bug.
+- **Repair-mode runbook (`docs/runbooks/repair-flow.md`).** Covers all three operator decision points: (1) the diagnosis gate — what to read, how to approve interactively and autonomously, the `--repair-at` escape hatch, and the knowledge-gate limit; (2) scope-gate FAIL recovery — why it fires, how to amend the diagnosis scope and re-run, and why the gate is inert without a diagnosis; (3) tri-state reproduction — what `reproduced: true / false / "unverifiable: <reason>"` each means, accepted skip reasons, and why repair-on-hotfix now includes stage-03b. `docs/runbooks/README.md` gains three index rows. Pointer added to `docs/conventions.md` § See also.
+- **Metrics surface — intent slice (ADR-009 §Decision.7, advisory only).** `scripts/dashboard.js` accepts `--by intent` as a new grouping dimension (alongside existing stage / host / role / status). Both pass-rate and cost views support the slice. Exports `computeScopeAdherence(gates)` (scope adherence: did the repair build stay within the diagnosed affected-files set — the headline repair metric, ADR-009 §Decision.3) and `computeCostInversionEstimate({ diagnosisRejectionRate, avgFullBuildCost, diagnosisCost })` (savings estimate with exposed inputs — never a measured figure). `scripts/routing-suggest.js` exports and wires `filterByIntent(gates, intent)` behind a `--intent repair|feature` CLI flag so routing recommendations can be computed separately for each intent. `scripts/budget.js` accepts `--intent repair|feature` on `init` and records an optional `Intent:` line in `pipeline/budget.md`, preserved across `update` calls. Tests: 14 new in `tests/repair-metrics.test.js` covering intent slice (aggregate + cost), scope adherence, cost inversion estimate, and routing-suggest filterByIntent.
+
+- Clarify the per-stage rule-file coverage shape so stages 3 and 03b are documented as intentional `pipeline-core.md` guidance rather than missing rule files.
+
+- **`devteam doctor` now shows a "Dogfood mode" section when `profile: dogfood` is set (Phase 14.2).** Six checks are shown: pre-commit infrastructure guard present, hook executable, `# BEGIN stagecraft-dogfood` block in `.gitignore`, `pipeline/stages/deploy.md` in `.git/info/exclude`, no `npm publish` script (warn), and a budget-usd reminder (info). The section is entirely absent when the profile is not set.
+
+## Unreleased
+
+- Enforced the Stage 7 documentation gate with schema fields, validator checks, and auto-fold changed-file evidence.
+
+- **Docs: dogfooding guide.** Adds `docs/guides/dogfooding.md` — one-time setup with `devteam init --profile dogfood`, per-feature workflow, recommended budget table, infrastructure guard explanation, failure modes, and expected `devteam doctor` output. Cross-referenced from `docs/user-guide.md`.
+
+- **Extract autonomous-driver dispatch decisions** (audit P2-2, roadmap PR 3.2b).
+  Moves consequence, `--until`, and budget guards; host-result normalization;
+  transient/structural classification; targeted-fix convergence; and repair scope
+  decisions into pure handlers returning the common transition result. `run()`
+  retains host invocation, stall probes, persistence, retry delay, stub cleanup,
+  and loop ownership. Existing characterization traces remain unchanged. *Honest
+  scope note:* fix, ruling, and merge handlers remain the sequential PR 3.2c.
+
+- Taught autonomous fix retries to use the Stage 2 `file_ownership` map when routing blocker-named files back to a single owning build workstream.
+
+- **Complete autonomous-driver transition extraction** (audit P2-2, roadmap PR
+  3.2c). Moves fix/retry and convergence outcomes, Principal-ruling boundaries, and
+  merge results into pure handlers returning the common transition result. The
+  effectful coordinator retains archive and gate writes, Principal and host dispatch,
+  state persistence, locking, loop control, and final cleanup. Current backlog,
+  design, and comparative guidance now record the completed three-PR decomposition.
+  *Honest scope note:* this is a behavior-preserving structural change and adds no
+  autonomous capability or gate/event vocabulary.
+
+- **Characterize the autonomous-driver transition contract** (audit P2-2, roadmap
+  PR 3.2a). Adds a common `continue` / `halt` / `complete` transition result for
+  summary and run-state patches plus ordered run-log/progress events, and routes
+  representative terminal paths through its centralized applicator. New
+  characterization tests pin persisted state and event traces for successful and
+  transient dispatch, non-code fixes, rulings, and merge failure before handler
+  extraction begins. *Honest scope note:* this slice introduces and proves the
+  contract; dispatch/transient and fix/ruling/merge handler extraction remain the
+  sequential follow-up PRs.
+
+- Add consented, aggregate-only evidence export with a rotatable pseudonymous project identity, strict schema and digest validation, sparse-cell suppression, and explicit multi-bundle portfolio readiness analysis.
+
+- **Propose a privacy-safe evidence acquisition contract** (audit P3-1). Defines the
+  raw-data threat model, aggregate-only export allowlist, pseudonymous and rotatable
+  project identity, explicit consent boundary, sparse-cell suppression, strict bundle
+  schema direction, and the sequenced local-status/export implementation plan. This
+  proposal changes no runtime behavior and does not open evidence-gated capabilities.
+
+- **Add read-only evidence readiness** (audit P3-1, Phase 16.2). `devteam evidence
+  status` uses bounded, symlink-rejecting readers to aggregate local run logs, current
+  gates, and gate archives for #142–#145. It separates local progress from
+  cross-project conditions, reports degraded inputs, excludes free-form content, and
+  explicitly marks durable-routing and accepted-resolution signals that current
+  records cannot prove.
+
+- Feat: adapter conventions auto-injected into pipeline/context.md.
+  When deploy.adapter is set, devteam run and devteam stage (requirements/design/build)
+  write a deploy-target context block into pipeline/context.md before the first agent
+  dispatches. The block is idempotent and adapter-specific (gizmos, cloud-run have
+  full conventions files). --feature strings no longer need to repeat stack details
+  implied by the deploy adapter.
+
+- **Advisory sweep on completion + `--fail-on-advisory` — Phase 11.2 (ADR-008).** After `pipeline-complete`, the driver now runs an in-process advisory sweep (reusing `core/advise.js` classification: `QA_BLOCKER` / `PEER_REVIEW_RISK` / `A11Y_FIX`) and adds `advisory_blockers_count` and `advisory_breakdown` (per-class counts) to the `--json` summary (schema version bumped to `1.1`). When any blocker-class items remain, the driver prints a loud line to stderr: `pipeline complete — N advisory blocker(s) remain; run \`devteam advise\` to review`. **The default exit code is unchanged** — `pipeline-complete` still exits 0 so external `if devteam run; then merge` consumers are unaffected (ADR-008 revision: A-default). New opt-in `--fail-on-advisory` flag exits **3** (not 1 — preserves the failed-vs-advisory distinction) when unaddressed blocker-class items remain; default threshold: `QA_BLOCKER` + `A11Y_FIX`; `--fail-on-advisory=all` adds `PEER_REVIEW_RISK`. Flag parser extended to support `--flag=value` form and a new `"toggle"` type (bare → `true`, `=value` → value string). Docs: exit-code table updated (0/1/2/3) in `docs/runbooks/autonomous-run.md` and the CLI reference; `docs/ci.md` lenient-vs-strict advisory gate examples added. Tests: 7 new tests (2 driver-level, 5 CLI-subprocess) in `tests/run.test.js`. Suite: 1709 pass, lint clean, consistency green (318 checks).
+
+---
+type: feat
+---
+
+- `devteam advise` now renders follow-up items grouped by risk tier (QA BLOCKER → PEER-REVIEW RISK → QA NOISE → INFO) with item counts; tiers with zero items are omitted.
+- ADDRESSED items collapse to a single summary line (`✓ N addressed: id1, id2, ...`) instead of printing a full block per item.
+- Scaffold follow-up commands are surfaced inline in read mode, not only after `--apply`.
+- `runAdvise` result and `--json` output now include a `by_tier` object pre-grouping items by classification for machine consumers.
+
+## `devteam commit` command (Phase 12.2)
+
+**New command:** `devteam commit [options]`
+
+Stages exactly the right pipeline artifacts for each completed stage and
+generates a meaningful commit message — without any `git add` decisions from
+the operator. Uses an idempotency cursor (`last_committed_stage_index`) so
+calling it repeatedly is safe.
+
+**Flags:**
+- `--all` — stage all gate-bearing stages regardless of the cursor
+- `--dry-run` — print what would be staged without committing
+- `--message <msg>` — override the generated commit message
+- `--json` — machine-readable output
+
+**Stage artifact registry** (`core/pipeline/artifacts.js`): maps every stage ID
+to its named output files. Gate files are added automatically for PASS/WARN
+stages. Volatile runtime files (from the `devteam init` gitignore block) are
+excluded unconditionally.
+
+**Schema bump:** `run-state.json` now carries `stages_advanced` (list of stage
+IDs in pipeline order) and `last_committed_stage_index` (commit cursor, `null`
+if nothing has been committed). Both fields are migrated on read from pre-12.2
+run states. `RUN_SCHEMA_VERSION` bumped to 1.2.
+
+**Honest scope note:** Phase 12.2 supports in-place pipeline mode (changeId
+null). Bounded-workspace (B9) support for `devteam commit` is a follow-on item.
+
+- **New: `devteam compact`** (`core/cli/commands/compact.js`). Strips all devteam-managed marker sections (`<!-- devteam:*:begin/end -->`) from `pipeline/context.md` in one shot. These sections (run-blockers, red-team-blockers, deploy-target, advise, etc.) are regenerated by devteam on the next run when still needed, so removing them is always safe. Supports `--dry-run` to preview what would be removed and `--json` for scripted use. Designed for projects with long-lived in-place pipelines where `context.md` has accumulated blocker history across multiple escalation/ruling cycles, and as a pre-migration cleanup step before switching to bounded isolation.
+
+- Added `--feature-file <path>` for `devteam stage` and `devteam run` so longer feature briefs can be read from disk.
+
+- **Feat: `devteam init --adapter <name>` sets the stage-08 deploy target.** Pass `--adapter gizmos`, `--adapter cloud-run`, `--adapter docker-compose`, `--adapter kubernetes`, `--adapter terraform`, or `--adapter custom` at init time to write the `deploy:` block into `.devteam/config.yml` automatically — no hand-editing required. Adapter-specific config hints (gizmos app name, cloud-run project/region/service) are included as comments. Unknown adapter names are rejected at init time with a clear error listing valid choices.
+
+- **`devteam init` writes managed `.gitignore` block (Phase 12.1).** Running `devteam init --host <x>` now writes (or updates) a `# BEGIN stagecraft` / `# END stagecraft` block in the project's `.gitignore`, covering all volatile pipeline files (`run.lock`, `run-state.json`, `run-log.jsonl`, `logs/`, `gates/archive/`, `gates/replay/`, `dispatches/`, `memory/`, and their `pipeline/changes/*/` counterparts). The block is the canonical list from ADR-010; subsequent runs are idempotent (skipped if identical, updated if outdated). Operators on existing projects can run `devteam init --host <x>` without `--force` to migrate. Honest scope note: the block covers Stagecraft-owned volatile files; application source files and other project-specific ignores remain the operator's responsibility.
+
+- **Liveness heartbeat + observe-only stall detector — Phase 11.1 (ADR-007 Tier 1).** The driver now emits a `heartbeat` event to `run-log.jsonl` (and via `onEvent`) at the **start of every loop iteration**, before `next()`, so the last-event age is always bounded. Alongside each `run-stage`/`continue-stage` dispatch an **observe-only stall probe** runs fire-and-forget: it wakes every 60 s and emits `stall-detected` (with `stall_class: "observed"`) if neither the workstream log (under `pipeline/logs/`) grew ≥ 512 bytes nor any gate updated within 5 minutes. The dispatch is **never killed, no `Promise.race` fires** (Tier-1 observe-only; the probe self-cancels via a `cancelled` flag when the dispatch settles, preventing stale events). Config: optional `autonomy.stall_threshold_ms` (default 300000) and `autonomy.stall_min_growth_bytes` (default 512) in `.devteam/config.yml`. The probe detects silent hangs only — loop-spew (repetitive output that resets the clock) rides with ADR-007 Tier 2. New read-only **`devteam status`** command reads `run-state.json` + tail of `run-log.jsonl` and reports `status / current_stage / last_action / iterations / cost_usd / last_heartbeat_age_ms / last_event_age_ms / stall_detected`. Docs: "No heartbeat" removed from `docs/runbooks/autonomous-run.md` Honest Limitations; replaced with a full liveness section (heartbeat, stall probe, `devteam status` fields, observe-first note); `devteam status` added to help text. Tests: 4 new tests in `tests/run.test.js` (heartbeat every iteration, stall-detected on flat log+gate with injected clock, no stale event after dispatch settles, no kill on stall) and 1 new `tests/status.test.js` file (ages from fixture log). Suite: 1702 pass, lint clean, consistency green (318 checks).
+
+- **New: `npm` deploy adapter** (`core/deploy/npm.md`). Stage 8 can now publish Node.js packages to an npm registry. The adapter runs `npm pack --dry-run`, verifies artifact scope (accepts both `"files"` whitelist and `.npmignore`), checks for **actual populated credentials** by reading file contents rather than pattern-matching on filenames, bumps version-conflict detection, and smoke-tests the published tarball with `npm install --dry-run`. Fixes the false-positive credential blocker (B2) that caused the commit-gen deploy to escalate. Fixes #231.
+
+- **`--repair` diagnosis stage — Phase 10.2 (ADR-009 Phase 2).** When `intent === "repair"`, stage-01 (requirements) produces a **DIAGNOSIS** document instead of a feature brief — same stage id, same gate file path, fix-aware artifact. Zero new stages, zero parallel pipeline. Concretely: (1) `repairOverride` field added to the `requirements` stage definition in `core/pipeline/stages.js`; when `intent === "repair"`, `buildDescriptor` (orchestrator) merges the override on top of the base definition — swapping objective, artifact (`pipeline/diagnosis.md`), template (`diagnosis-template.md`), `allowedWrites`, and gate schema. (2) The diagnosis gate is always ESCALATE-shaped (`escalation_reason` + `decision_needed`) — a judgment gate requiring human approval or `--auto-rule diagnosis-approved` before the build proceeds. (3) `intent` is propagated through `ctx` in `runStage()` so adapters render repair-mode prompts correctly. (4) Driver (`core/driver.js`): `repairNeedsDiagnosis = intent === "repair" && !repairAtRaw` prepends `"requirements"` to the effective stage order so `next()` routes through it before build; the diagnosis gate is read before each build dispatch and its `affected_files` list activates 10.1's structural scope gate (previously inert) by populating `state.affectedFiles`; `repairPatchItems` upgrades from the raw symptom string to structured per-file entries from the diagnosis. (5) **`--repair-at <file>:<line>` escape hatch**: comma-separated `file:line` locations seed `state.affectedFiles` directly, write a synthetic PASS stage-01 gate, and skip the LLM diagnosis dispatch entirely — for cases where the caller already knows the defect location. (6) `diagnosis-approved` is the new ruling class slug; granted via `--auto-rule diagnosis-approved`. (7) `templates/diagnosis-template.md` added. CLI reference regenerated. Tests (6 new in `tests/repair-mode.test.js`, section 7): `buildDescriptor` repair shape (unit); `buildDescriptor` feature shape unchanged (unit); scope gate activates from diagnosis gate `affected_files` without `opts.affectedFiles` (this test fails on main without 10.2 — the activation boundary); diagnosis ESCALATE halts without `--auto-rule`; `--auto-rule diagnosis-approved` proceeds; `--repair-at` escape hatch seeds, writes synthetic gate, skips dispatch. Suite: 1661 pass, lint clean, consistency 317 checks passed.
+
+- **`--repair "<symptom>"` intent flag — Phase 10.1 (ADR-009 Phase 1).** Adds `--repair` to `devteam run` as an intent flag orthogonal to `--track`, implemented as fix-aware wiring on existing stages — zero new stages, zero parallel pipeline. Concretely: (1) `--repair` and `--feature` are mutually exclusive (enforced in both the CLI command and the driver); (2) `--repair` defaults to `hotfix` depth; `--repair --track full` overrides; auth/payments/migration symptoms are upgraded to `full` via the same stoplist patterns (`checkStoplist`) regardless of the default — the existing lighter-track stoplist bypass does not apply here; (3) `intent: "repair" | "feature"` is written to `run-state.json` and every run-log event base object from day one (ADR-009 §Decision.7 perishable baseline — without this, repair vs feature runs are indistinguishable in history); `repair: <symptom>` string is also persisted in run-state; (4) on `--resume`, a `prior_run_id` correlation field is written linking the re-run to its predecessor's `started_at`; (5) `changeIdFromSymptom` exported from `core/config.js` (same slug algorithm as `changeIdFromFeature`) so bounded-isolation paths can derive the changeId from a symptom string (ADR-009 §Consequences); (6) repair builds dispatch `runStageHeadless` with `patchItems` set to the symptom string, activating `renderPatchBlock`'s `## ⚠️  PATCH MODE — targeted fix only` block in the build prompt — no new prompt authored (ADR-009 §Decision.2, PATCH MODE is the existing mechanism); (7) structural scope gate wired behind `opts.affectedFiles`: if present, a post-build `checkScopeGate` call (injectable for tests; default: `git diff --name-only HEAD`) fails the run with `halt_action: "scope-gate"` when files outside the list were touched — inert in 10.1 (no diagnosis yet), activated by 10.2's affected-files contract; peer-review criteria gain "could this be smaller?" as a judgment on top of the mechanical boundary. CLI reference regenerated (`npm run docs:generate`). Tests (14 new in `tests/repair-mode.test.js`): mutual exclusion (both CLI and driver-level); hotfix default; `--track full` override; auth-symptom stoplist upgrade with event emission and run-log verification; intent tag in run-state and run-log; feature run intent tag; resume prior_run_id correlation; repair build patchItems dispatch; feature build lacks patchItems; `renderPatchBlock` unit check with symptom text; scope gate FAIL with synthetic affected-files list; scope gate PASS within scope; scope gate inert without affectedFiles. Suite: 1655 pass (was 1641), lint clean, consistency 317 checks passed.
+
+  Honest scope note: The structural scope gate is mechanically inert in 10.1 — no affected-files list is supplied because 10.2's diagnosis stage (which produces it) has not shipped yet. The ADR-009 Phase 1 must-not-ship-without-Phase-2 rule (`plans/phase-10-repair-mode.md §10.1`) applies: 10.1 should be merged together with 10.2 so the scope gate has an actual contract to enforce.
+
+- **`--repair` reproduction stage — Phase 10.3 (ADR-009 Phase 3).** When `intent === "repair"`, stage-03b (executable-spec) is injected immediately before `build` in the effective stage order — even on hotfix depth, which previously skipped it entirely. The stage author writes a failing-first Gherkin Scenario that exercises the defect so the regression test is RED before the fix and GREEN after. Concretely: (1) `repairOverride` added to the `executable-spec` stage definition in `core/pipeline/stages.js` — swaps objective to failing-first bug reproduction, swaps `readFirst` to include `pipeline/diagnosis.md`, and adds a tri-state `reproduced` gate field (`true` / `false` / `"unverifiable: <reason>"`). (2) Driver (`core/driver.js`): for repair intent, filters `executable-spec` out of the base track list and re-injects it at the position immediately before `build`; `--repair-at` escape hatch still includes the reproduction stage (skips diagnosis only); full-track runs are filtered before re-inject to prevent double-injection. (3) `stampStage03b` in `core/verify/stamp.js`: if `gate.reproduced` is unverifiable, emits a loud `WARN reproduction-unverifiable` into `gate.warnings` and records `{ unverifiable: true, reason }` in `stamp.runs.reproduction_pre_build` — no blocker; if `true` or `false`, runs the configured test command and captures the pre-build baseline (`reproduction_pre_build`). (4) `stampStage04a` in `core/verify/stamp.js`: reads `stage-03b.json`, compares pre-build vs post-build test results, writes `reproduction_verification` (`red_before_confirmed`, `green_after_confirmed`, `finalized_at`) and finalizes `reproduced` on the stage-03b gate file on disk — verification is orchestrator-observed, not agent-asserted. (5) `core/gates/schemas/stage-03b.schema.json`: optional `reproduced` property added (tri-state `oneOf`), not in `required` so feature runs continue to satisfy the schema skeleton test. Tests: 7 new in `tests/repair-mode.test.js` (section 8 — stage order injection, adjacency, double-inject safety, escape-hatch inclusion, `buildDescriptor` repair/feature modes) and 8 new in `tests/verify-stamp.test.js` (stampStage03b tri-state, stampStage04a red→green finalization). Suite: 1676 pass, lint clean, consistency 317 checks passed.
+
+- `devteam restart requirements [--cascade]` now also deletes `pipeline/brief.md` so a follow-on `devteam run --feature "..."` or `devteam stage requirements --feature "..."` starts completely fresh without manual cleanup.
+
+## `devteam run --auto-commit` (Phase 12.3)
+
+**New flag:** `--auto-commit` on `devteam run`
+
+When passed, the driver automatically commits pipeline artifacts after a clean
+halt — using the same algorithm as `devteam commit`, with no interactive
+confirmation prompt.
+
+**"Clean halt"** is defined as `halt_action` in `{"ceiling", "until", "budget"}`:
+the halts where the driver stopped by design, not because something broke.
+Non-clean halts (`fix-and-retry`, `resolve-escalation`, `structural-input`,
+etc.) do **not** trigger auto-commit.
+
+**Behaviour:**
+- Calls `runCommit(cwd)` (the programmatic export of `devteam commit`) after
+  the driver returns. Prints the list of committed files to stderr.
+- If there is nothing to commit (cursor already current), logs
+  `{"event":"auto-commit-skipped","reason":"nothing-to-commit"}` and moves on.
+- On commit success, logs `{"event":"auto-commit","staged_files":[…],"commit_hash":"…"}`.
+- On commit failure, logs `{"event":"auto-commit-failed","reason":"…"}` and
+  emits a loud stderr warning. The run's exit code is **not** changed — a git
+  failure does not retroactively change the pipeline halt semantics.
+
+**New export:** `runCommit(cwd)` from `core/cli/commands/commit.js` — the
+programmatic interface for unattended commits (no prompt, returns a result
+object rather than calling `process.exit`).
+
+**Honest scope note:** auto-commit operates in in-place mode (changeId null),
+consistent with Phase 12.2. Bounded-workspace support is a follow-on item.
+
+## feat(track-provenance): pipeline/track.json + confidence guard (ADR-006, Phase 11.3)
+
+**`devteam assess` writes `pipeline/track.json`** (per-run inference record) by default.
+`--confirm` sets `source:"human"`. `--apply` continues to write `custom_stages` to
+`.devteam/config.yml` (no breaking change).
+
+**`resolveTrack`** now reads `pipeline/track.json` in precedence:
+```
+--track  >  pipeline/track.json  >  custom_stages  >  default_track  >  "full"
+```
+Returns `{track, source, confidence}` so the confidence guard below can apply.
+
+**`autonomy.require_confirmed_track`** (new config flag, default `false`): when on,
+an inferred `pipeline/track.json` at medium or low confidence produces an
+`unconfirmed-track` halt requiring `--track` or `--force`. High confidence proceeds.
+When off (default), an inferred track emits a warn-once line to stderr, never blocks.
+The flag is NOT keyed on `CI=true` (which is already overloaded by the validator and
+verify runner) — CI pipelines opt in explicitly.
+
+**`run-log.jsonl`** gains a `run-start` event at the top of every run, carrying
+`track_source` and `track_confidence` for provenance auditing. A
+`track-confidence-check` event is logged whenever the guard runs.
+
+Honest scope note: the guard covers `pipeline/track.json`-based provenance. A run
+with no `track.json` falls through to `custom_stages` / `default_track` (source:
+`"config"`) — those are explicit project-wide choices and not subject to the
+confidence guard.
+
+---
+type: fix
+---
+
+- `AC_SECTION_RE` in `extractAcsFromBrief` now accepts any single-token section prefix before "Acceptance Criteria" (`§3`, `3.`, `3`, etc.), not just the `§N` style. Briefs using `## 3. Acceptance Criteria` no longer fall through to a whole-document scan that misidentifies cross-section AC references as duplicate definitions.
+- The drift blocker message now includes `duplicate_criteria` count and ids when duplicates are the cause, making the failure self-explanatory without requiring a read of the gate file.
+
+- **Fix: `devteam advise --apply` now correctly handles item IDs containing commas.** The parser previously split the entire `--apply` value on every comma, fragmenting long item IDs that contain commas and emitting "Unknown item id" errors for each fragment. It now accumulates fragments until it finds a complete `id=letter` selection boundary, making comma-containing IDs work as expected.
+
+- **Fix: `devteam advise` no longer duplicates item text or prints an unparseable Apply hint.** When a `noted_for_followup` entry was a plain string without a short `ID:` prefix, the item label printed the full text twice (separated by ` — `) and the `Apply:` hint was missing shell quoting, making it impossible to run. Both are now corrected in `core/cli/commands/advise.js`.
+
+- **Fix: `devteam advise` option descriptions now show the correct `--apply` option letter and quote long item IDs.** The ticket hint in `generateOptions` hardcoded `=B:PROJ-XYZ` for all classifications, but `PEER_REVIEW_RISK` items have `defer` as option A — the hint now uses the correct letter per call site. Item IDs containing spaces or shell-unsafe characters are also now single-quoted in the hint.
+
+---
+type: fix
+---
+
+- `extractAcsFromBrief` now parses AC definitions written in bold markdown format (`**AC-1** — description`) in addition to the existing bare and bullet-prefixed forms.
+- Extraction is scoped to the `## [§N ]Acceptance Criteria` section when a heading is present, preventing AC references in other sections (e.g. Observability notes) from being counted as duplicate definitions. Falls back to whole-document scan for headerless briefs.
+
+- **Fix: three bugs that forced manual `run-state.json` edits after `convergence-exhausted`.** (1) `detectNoSourceChange` in `core/gates/convergence.js` now early-returns `false` when any blocker-referenced file is unreadable, instead of hashing its content as `""` — the SHA-256 of `""` (`e3b0c44…`) made two consecutive missing-file iterations look identical and tripped the no-source-change halt prematurely. (2) `core/driver.js` now rewrites the failing gate to `status: "ESCALATE"` with `escalation_reason` and `decision_needed` when convergence-exhausted fires, so the state is visible in the gate file rather than only in `run-state.json` and `run-log.jsonl`. (3) `devteam restart <stage>` now clears `fixRetries[stageName]` from `run-state.json` so re-running after a convergence-exhausted restart doesn't immediately re-halt. Fixes issue #195.
+
+- **Three ephemeral pipeline txt files added to the canonical `.gitignore` block.** `devteam init` now writes `pipeline/lint-output.txt`, `pipeline/pre-review-output.txt`, and `pipeline/changed-files.txt` (plus their `pipeline/changes/*/` bounded-mode counterparts) to the managed Stagecraft block. Projects on the old block pick up the new entries automatically on the next `devteam init` run (no `--force` needed). These files were previously listed as "optional" in `docs/git-workflow.md`; they are now correctly marked as ephemeral and excluded from git.
+- **`docs/git-workflow.md` commit-coverage corrections.** Two entries in the "Recommended commit points" table incorrectly claimed `devteam commit` stages `pipeline/context.md` (Stage 1) and `pipeline/adr/` (Stage 2). Neither path is in the stage-artifact registry — both must be staged manually. The table now reflects this, and a `devteam compact` reminder is added for `context.md`. The prose note below the table is updated to name both exceptions explicitly.
+
+- **Fix: `gizmos whoami` replaced with `GIZMOS_API_KEY` env check in `core/deploy/gizmos.md`.** `gizmos whoami` is not a real CLI command. Authentication is via the `GIZMOS_API_KEY` environment variable — a missing or empty value causes `gizmos push` to fail with a 401. Both the `## Assumptions` line and Precondition step 1f now reflect the correct auth mechanism.
+
+- **Fix: `devteam help` now lists all current commands.** `devteam commit`, `devteam hook`, and `devteam advise` (shipped in Phases 11–12) were missing from the help output entirely. The `devteam run` synopsis was also missing `--auto-commit`. All four gaps are now documented in `core/cli/commands/help.js`.
+
+- **Fix marker-section replacement when an end marker is missing.** Stagecraft now uses the shared marker helper for `context.md` blocker/advisory upserts and preserves surrounding content when a managed section has an orphaned begin marker instead of silently slicing the file at the wrong offset.
+
+- `devteam next` now reads the active track from `pipeline/run-state.json` (written by `devteam run`) so it sequences against the correct track instead of always falling back to the full track. A new `--track` flag allows manual override. Fixes #220.
+
+- **Fix: red-team (stage-04c) now writes a stub gate before the adversarial walk, preventing structural-input halts on context-exhausting runs.** On thorough runs (10 surfaces walked, many carried findings), the report narrative could exhaust the context window before the gate write, leaving no `pipeline/gates/stage-04c.json` and causing the orchestrator to halt. The role now lists the gate before the report in `## Writes`, adds a Step 0a that writes a minimal valid stub immediately after surface scoping, and makes the report explicitly last. Fixes #181.
+
+- **Fix: red-team (stage-04c) context-exhaustion halt now retries instead of halting with structural-input.** The driver pre-seeds a `_stub: true` gate before dispatch; `headless.js` detects whether the LLM overwrote it; if not (context exhausted before the gate write), `classifyDispatch` treats the outcome as transient rather than structural-input, giving one retry. Fixes the regression introduced when PR #182's prompt-only Step 0a instruction was silently skipped by the LLM. Fixes #181.
+
+---
+type: fix
+---
+- `devteam restart --cascade` now deletes downstream artifact files (e.g. `brief.md`, `spec.feature`, `test-report.md`) in addition to gate files. Previously, stale artifacts from a prior feature run would cause false drift on the next run.
+
+- **Fix spec-drift false-positive when brief prose references an AC from a prior build.** Stage-03b was escalating with `orphan_criteria=[AC-N]` when a brief mentioned an acceptance criterion number in a cross-reference (e.g. "all existing AC-1 through AC-12 continue to apply") and word-wrap happened to place that identifier at the start of a line. Two root causes fixed:
+  - `core/spec/verify.js` `AC_LINE_RE`: the separator character (`—`, `:`, `.`) after the AC number was optional (`[.:\-—]?`), so `AC-12 from the initial build...` matched as a definition. Separator is now required — prose cross-references never have one immediately following the number, while every defined AC always does.
+  - `core/verify/stamp.js` `extractAcsFromBrief`: used an independent global-scan regex `/(?:^|\s|\*|`)AC-(\d+)\b/g` that matched `AC-N` anywhere in the document regardless of line position. Replaced with a delegation to `core/spec/verify.js`'s section-scoped, line-anchored implementation so both the orchestrator and the CLI display use the same extraction logic.
+- Regression tests added to `tests/spec-g2.test.js` and `tests/verify-stamp.test.js` covering the word-wrap false-positive scenario.
+
+---
+type: fix
+---
+- `stampStage03b` no longer runs the test-report alignment check (that belongs to stage-06). A stale `pipeline/test-report.md` from a prior feature run no longer causes `drift: true` in the spec-authoring gate.
+- `stamp.runs.spec_verify` now records `orphan_in_tests_count` and `unknown_in_tests_count` so drift is never opaque.
+
+- Targeted autonomous fix retries at the owning build workstream when a failed gate names exactly one build workstream and blocker context.
+
+- Harden the pipeline dashboard against model-authored HTML injection, add a restrictive content security policy, and clean up heartbeat timers when UI servers close.
+
+- **`devteam init --profile dogfood` writes four dogfooding safeguards (Phase 14.1).** Running `devteam init --host <x> --profile dogfood` now writes a supplemental `# BEGIN stagecraft-dogfood` gitignore block covering generated pipeline documents (`brief.md`, `context.md`, `spec.feature`, `runbook.md`, `test-report.md`, `code-review/`, and their `pipeline/changes/*/` counterparts), installs a pre-commit hook that blocks accidental commits to `core/`, `bin/devteam`, `pipeline/stages/`, `roles/`, or `rules/`, adds `pipeline/stages/deploy.md` to `.git/info/exclude`, and writes a `profile: dogfood` marker to `.devteam/config.yml`. All writes are idempotent — re-running the command skips already-correct state.
+
+## Improvements
+
+- Lazy-load CLI command modules in `bin/devteam` so command startup only requires the selected command handler.
+
+## Unreleased
+
+- Marked live streaming headless output as shipped in the backlog.
+
+- Prevent out-of-scope build and review workstreams, detect additional structural defects before peer review, and halt when an escalation applicator fails to dispatch the ruled build workstream.
+
+Added pluggable host adapter discovery for installed `@devteam/host-*` packages.
+
+- **`devteam preflight` now blocks PRs that contain staged pipeline artifacts (Phase 14.3).** A new check in `core/preflight.js` runs `git diff --cached --name-only` and emits a BLOCKER if any file matching the artifact prefix list (`pipeline/brief.md`, `pipeline/gates/`, `pipeline/code-review/`, etc.) appears in the git index. Applies to all projects, not just dogfood mode. Run `git restore --staged <files>` to clear the blocker.
+
+## Fixes
+
+- Implemented the advertised `devteam replay --restore-backup` recovery mode so leftover replay backups can be restored without manually copying files.
+
+- **feat(driver):** emit a two-line stderr warning when `devteam run` starts without `--budget-usd`, so operators know the run will not halt on spend (Phase 14.4).
+
+- Extend consistency checks to prevent drift in schema field vocabulary, Node and platform support claims, and volatile test totals in current maintainer documentation.
+
+- Added a machine-readable `file_ownership` map to the Stage 2 design gate so later auto-fix routing can identify the Stage 4 workstream that owns a blocker-named file.
+
+- Enforce targeted build fix dispatches by halting when the named blocker files
+  are unchanged despite a successful retry.
+
+## Unreleased
+
+- Fixed headless command parsing so quoted arguments and executable or script paths containing spaces survive dispatch, escalation, a11y remediation, and doctor diagnostics.
+
+## Unreleased
+
+- Replaced POSIX-only gate clear commands in fix-step guidance with portable Node commands.
+
+- Add native Windows CI coverage for command parsing, executable discovery, timeout termination, initialization, diagnostics, and CLI startup.
+
+## Unreleased
+
+- Made `devteam doctor` find Windows executables via semicolon-delimited PATH entries and PATHEXT candidates.
+
+## Unreleased
+
+- Made timeout termination use Windows-friendly process killing while preserving POSIX SIGTERM/SIGKILL escalation.
 
 ---
 

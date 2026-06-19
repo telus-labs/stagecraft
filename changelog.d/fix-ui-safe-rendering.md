@@ -1,1 +1,0 @@
-- Harden the pipeline dashboard against model-authored HTML injection, add a restrictive content security policy, and clean up heartbeat timers when UI servers close.
