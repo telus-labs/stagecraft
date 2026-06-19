@@ -155,6 +155,8 @@ was found, and no data-corruption path was verified.
 - **Risk of NOT changing:** low.
 - **Dependencies:** five user reports of upstream rigidity; ADR for contract changes.
 - **Confidence:** MEDIUM.
+- **Status:** discovery threshold not met as of 2026-06-19; no implementation phase
+  should begin before the five-user signal and an adapter-contract ADR.
 
 ## Parked
 

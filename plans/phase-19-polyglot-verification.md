@@ -1,6 +1,6 @@
 # Phase 19 — Polyglot Verification
 
-**Status:** Item 19.1 implemented; pending merge.
+**Status:** Complete in PR #264.
 **Backlog item:** B7 multi-language QA.
 **Purpose:** make orchestrator-stamped verification cover mixed Node, Python, and Go
 projects without requiring a hand-composed shell command.

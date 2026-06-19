@@ -2,8 +2,8 @@
 
 Phase plans produced from the 2026-06-10 full-framework review and subsequent audits. Each phase is a set of
 PR-sized work items with file/line anchors, acceptance criteria, and verification commands,
-written to be executed one item at a time. **Phases 1–18 are complete; Phase 19 is in
-progress alongside real-project evidence collection.**
+written to be executed one item at a time. **Phases 1–19 are complete. Real-project
+evidence collection is the active roadmap priority.**
 
 | Phase | Plan | Prompts | Theme | Status |
 |---|---|---|---|---|
@@ -26,7 +26,7 @@ progress alongside real-project evidence collection.**
 | 16 | [phase-16-evidence-readiness-and-export.md](phase-16-evidence-readiness-and-export.md) | — | Privacy-safe evidence readiness and explicit aggregate export (audit P3-1) | ✅ complete — 16.1 privacy review · 16.2 local status · 16.3 export and portfolio analysis |
 | 17 | [phase-17-durable-evidence-instrumentation.md](phase-17-durable-evidence-instrumentation.md) | — | Durable privacy-bounded dispatch evidence and real-project collection | ✅ 17.1 complete (PR #254); collection in progress |
 | 18 | [phase-18-accepted-resolution-evidence.md](phase-18-accepted-resolution-evidence.md) | — | Explicit hash-bound human acceptance evidence for H3 | ✅ 18.1 complete (PR #262); collection in progress |
-| 19 | [phase-19-polyglot-verification.md](phase-19-polyglot-verification.md) | — | B7 deterministic Node, pytest, and Go suite aggregation | 🚧 19.1 implemented; pending merge |
+| 19 | [phase-19-polyglot-verification.md](phase-19-polyglot-verification.md) | — | B7 deterministic Node, pytest, and Go suite aggregation | ✅ complete (PR #264) |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status
