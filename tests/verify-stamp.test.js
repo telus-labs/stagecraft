@@ -178,6 +178,44 @@ describe("verify/stamp: stampStage06 — AC mapping", () => {
     const r = await stampStage06(cwd, gatePath);
     assert.equal(r.gate.status, "PASS");
     assert.equal(r.gate.all_acceptance_criteria_met, true);
+    assert.equal(r.gate._orchestrator_stamped.runs.test.command, "true");
+    assert.equal("suites" in r.gate._orchestrator_stamped.runs.test, false);
+  });
+
+  it("discovers and aggregates Node, pytest, and Go suites", { skip: process.platform === "win32" }, async () => {
+    const cwd = track(makeTargetProject());
+    fs.writeFileSync(path.join(cwd, "package.json"), JSON.stringify({
+      name: "polyglot-fixture", scripts: { test: "node -e \"process.exit(0)\"" },
+    }));
+    fs.writeFileSync(path.join(cwd, "pytest.ini"), "[pytest]\n");
+    fs.writeFileSync(path.join(cwd, "go.mod"), "module example.test/polyglot\n\ngo 1.22\n");
+    const bin = path.join(cwd, "fake-bin");
+    fs.mkdirSync(bin);
+    for (const command of ["python3", "go"]) {
+      const file = path.join(bin, command);
+      fs.writeFileSync(file, "#!/bin/sh\nexit 0\n");
+      fs.chmodSync(file, 0o755);
+    }
+    const gatePath = seedGateRaw(cwd, "stage-06", {
+      stage: "stage-06", status: "PASS", orchestrator: "devteam@test", host: "generic",
+      track: "full", timestamp: "2026-06-19T12:00:00Z",
+      blockers: [], warnings: [], all_acceptance_criteria_met: true,
+      tests_total: 3, tests_passed: 3, tests_failed: 0, failing_tests: [],
+      criterion_to_test_mapping_is_one_to_one: true,
+    });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${bin}${path.delimiter}${originalPath}`;
+    try {
+      const result = await stampStage06(cwd, gatePath);
+      assert.equal(result.gate.status, "PASS");
+      assert.equal(result.gate._orchestrator_stamped.runs.test.exit_code, 0);
+      assert.deepEqual(
+        result.gate._orchestrator_stamped.runs.test.suites.map((suite) => suite.id),
+        ["node", "python", "go"],
+      );
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it("flips status to FAIL when an AC is unmapped (model claimed met)", async () => {

@@ -3,7 +3,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { runCommand, discoverScripts, resolveCommands } = require("../core/verify/runner");
+const {
+  runCommand,
+  discoverScripts,
+  discoverTestCommands,
+  resolveCommands,
+  resolveTestCommands,
+  runTestCommands,
+} = require("../core/verify/runner");
 
 let _dirs = [];
 function tmpdir() {
@@ -102,6 +109,65 @@ describe("verify/runner: discoverScripts", () => {
     const d = tmpdir();
     fs.writeFileSync(path.join(d, "package.json"), "{ not json");
     assert.deepEqual(discoverScripts(d), { lint: null, test: null });
+  });
+});
+
+describe("verify/runner: polyglot test discovery", () => {
+  it("discovers Node, pytest, and Go suites in stable order", () => {
+    const d = tmpdir();
+    fs.writeFileSync(path.join(d, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }));
+    fs.writeFileSync(path.join(d, "pytest.ini"), "[pytest]\n");
+    fs.writeFileSync(path.join(d, "go.mod"), "module example.test/polyglot\n\ngo 1.22\n");
+    assert.deepEqual(discoverTestCommands(d), [
+      { id: "node", command: "npm test" },
+      {
+        id: "python",
+        command: process.platform === "win32" ? "py -m pytest" : "python3 -m pytest",
+      },
+      { id: "go", command: "go test ./..." },
+    ]);
+  });
+
+  it("detects conventional Python test files without treating any pyproject as pytest", () => {
+    const d = tmpdir();
+    fs.writeFileSync(path.join(d, "pyproject.toml"), "[project]\nname = 'library'\n");
+    assert.deepEqual(discoverTestCommands(d), []);
+    fs.mkdirSync(path.join(d, "tests"));
+    fs.writeFileSync(path.join(d, "tests", "test_unit.py"), "def test_ok():\n    assert True\n");
+    assert.equal(discoverTestCommands(d)[0].id, "python");
+  });
+
+  it("does not follow a symlinked Python test directory", { skip: process.platform === "win32" }, () => {
+    const d = tmpdir();
+    const outside = tmpdir();
+    fs.writeFileSync(path.join(outside, "test_external.py"), "def test_ok():\n    assert True\n");
+    fs.symlinkSync(outside, path.join(d, "tests"));
+    assert.deepEqual(discoverTestCommands(d), []);
+  });
+
+  it("keeps a configured command exclusive and honors explicit null", () => {
+    const d = tmpdir();
+    fs.writeFileSync(path.join(d, "package.json"), JSON.stringify({ scripts: { test: "node --test" } }));
+    fs.writeFileSync(path.join(d, "go.mod"), "module example.test/polyglot\n");
+    assert.deepEqual(resolveTestCommands(d, {
+      pipeline: { verify: { test_command: "custom-test --all" } },
+    }), [{ id: "configured", command: "custom-test --all" }]);
+    assert.deepEqual(resolveTestCommands(d, {
+      pipeline: { verify: { test_command: null } },
+    }), []);
+  });
+
+  it("runs every suite and reports aggregate failure without short-circuiting", async () => {
+    const d = tmpdir();
+    const pass = writeScript(d, "pass.js", "process.exit(0)");
+    const fail = writeScript(d, "fail.js", "process.exit(3)");
+    const result = await runTestCommands([
+      { id: "node", command: `node ${pass}` },
+      { id: "python", command: `node ${fail}` },
+    ], { cwd: d });
+    assert.equal(result.passed, false);
+    assert.deepEqual(result.runs.map((run) => run.exitCode), [0, 3]);
+    assert.ok(result.durationMs >= 0);
   });
 });
 

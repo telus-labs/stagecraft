@@ -16,6 +16,23 @@ Coverage report (experimental):
 node --experimental-test-coverage --test tests/*.test.js
 ```
 
+## Target-project test discovery
+
+This repository's suite remains Node-only. When Stagecraft verifies a target project,
+however, pre-review and QA run every conservatively detected suite:
+
+| Project signal | Command |
+|---|---|
+| `package.json` with `scripts.test` | `npm test` |
+| `pytest.ini`, pytest config in `pyproject.toml`/`setup.cfg`, or conventional Python tests under `test/` or `tests/` | `python3 -m pytest` (`py -m pytest` on Windows) |
+| `go.mod` | `go test ./...` |
+
+Discovery is bounded and does not follow symlinks. Suites run sequentially and all are
+attempted; the orchestrator stamps per-suite commands, exit codes, and durations, then
+fails the gate if any suite fails. A non-empty
+`pipeline.verify.test_command` is an exclusive override for projects with another
+runner or monorepo command. Set it to `null` to disable automatic test execution.
+
 ## Test file inventory
 
 | File | What it covers |

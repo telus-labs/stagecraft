@@ -21,12 +21,58 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { loadConfig } = require("../config");
-const { runCommand, resolveCommands } = require("./runner");
+const {
+  runCommand, resolveCommands, resolveTestCommands, runTestCommands,
+} = require("./runner");
 const { loadGateSafe } = require("../gates/load-gate");
 const { verify: specVerify, generateScaffold, extractAcsFromBrief: extractAcsFromBriefSpec } = require("../spec/verify");
 const { runLicenseCheck } = require("./license-runner");
 
 const STAMPER_VERSION = "1";
+
+function testRunRecord(execution) {
+  const suites = execution.runs.map((run) => ({
+    id: run.id,
+    command: run.command,
+    exit_code: run.exitCode,
+    duration_ms: run.durationMs,
+    timed_out: run.timedOut || undefined,
+    spawn_error: run.spawnError || undefined,
+  }));
+  if (suites.length === 1) {
+    const [run] = suites;
+    return {
+      command: run.command,
+      exit_code: run.exit_code,
+      duration_ms: run.duration_ms,
+      timed_out: run.timed_out,
+      spawn_error: run.spawn_error,
+    };
+  }
+  return {
+    command: `polyglot test suite (${suites.length} commands)`,
+    exit_code: execution.passed ? 0 : 1,
+    duration_ms: execution.durationMs,
+    suites,
+  };
+}
+
+async function executeTests(cwd, config) {
+  const commands = resolveTestCommands(cwd, config);
+  if (commands.length === 0) return null;
+  return runTestCommands(commands, { cwd });
+}
+
+function appendTestFailures(blockers, execution) {
+  for (const run of execution.runs) {
+    const passed = run.exitCode === 0 && !run.timedOut && !run.spawnError;
+    if (!passed) {
+      blockers.push(
+        `test command failed [${run.id}] (exit ${run.exitCode}${run.timedOut ? ", timed out" : ""}): ${run.command}`,
+      );
+    }
+  }
+}
 
 // Stage-04a (Pre-Review): orchestrator stamps lint_passed and tests_passed
 // based on actually running the configured commands.
@@ -69,25 +115,17 @@ async function stampStage04a(cwd, gatePath) {
   }
 
   // tests_passed (lightweight check at 4a; 06 is the authoritative test stage)
-  if (commands.test) {
-    const result = await runCommand(commands.test, { cwd });
-    const passed = result.exitCode === 0 && !result.timedOut && !result.spawnError;
+  const testExecution = await executeTests(cwd, config);
+  if (testExecution) {
+    const passed = testExecution.passed;
     if (gate.tests_passed !== passed) {
       stamp.fields.push({ field: "tests_passed", model_said: gate.tests_passed, orchestrator: passed });
     } else {
       stamp.fields.push({ field: "tests_passed", orchestrator: passed });
     }
     gate.tests_passed = passed;
-    stamp.runs.test = {
-      command: result.command,
-      exit_code: result.exitCode,
-      duration_ms: result.durationMs,
-      timed_out: result.timedOut || undefined,
-      spawn_error: result.spawnError || undefined,
-    };
-    if (!passed) {
-      blockers.push(`tests failed (exit ${result.exitCode}${result.timedOut ? ", timed out" : ""}): ${result.command}`);
-    }
+    stamp.runs.test = testRunRecord(testExecution);
+    if (!passed) appendTestFailures(blockers, testExecution);
   } else {
     stamp.runs.test = { skipped: "no test command configured or discovered" };
   }
@@ -184,7 +222,6 @@ async function stampStage04a(cwd, gatePath) {
 // pipeline/test-report.md against brief.md AC-N list.
 async function stampStage06(cwd, gatePath) {
   const config = loadConfig(cwd);
-  const commands = resolveCommands(cwd, config);
   const { gate, error } = loadGateSafe(gatePath);
   if (error) return { ok: false, error };
 
@@ -197,23 +234,17 @@ async function stampStage06(cwd, gatePath) {
   const blockers = Array.isArray(gate.blockers) ? gate.blockers.slice() : [];
 
   // Test command exit code
-  if (commands.test) {
-    const result = await runCommand(commands.test, { cwd });
-    const passed = result.exitCode === 0 && !result.timedOut && !result.spawnError;
-    stamp.runs.test = {
-      command: result.command,
-      exit_code: result.exitCode,
-      duration_ms: result.durationMs,
-      timed_out: result.timedOut || undefined,
-      spawn_error: result.spawnError || undefined,
-    };
+  const testExecution = await executeTests(cwd, config);
+  if (testExecution) {
+    const passed = testExecution.passed;
+    stamp.runs.test = testRunRecord(testExecution);
     if (!passed) {
       // Force a counter when tests genuinely fail. The model's tests_failed
       // and failing_tests stay as written (those are runner-specific to
       // count), but we record that at least one failure occurred per the
       // exit code. The blocker below halts sign-off.
       stamp.fields.push({ field: "test_command_exit_0", orchestrator: false });
-      blockers.push(`test command failed (exit ${result.exitCode}${result.timedOut ? ", timed out" : ""}): ${result.command}`);
+      appendTestFailures(blockers, testExecution);
     } else {
       stamp.fields.push({ field: "test_command_exit_0", orchestrator: true });
     }
@@ -449,17 +480,12 @@ async function stampStage03b(cwd, gatePath) {
       // build stage does that), so this captures any currently-failing tests.
       // stampStage04a combines this with the post-build result to finalize reproduced.
       const config = loadConfig(cwd);
-      const commands = resolveCommands(cwd, config);
-      if (commands.test) {
-        const result = await runCommand(commands.test, { cwd });
-        const preBuildPassed = result.exitCode === 0 && !result.timedOut && !result.spawnError;
+      const testExecution = await executeTests(cwd, config);
+      if (testExecution) {
+        const preBuildPassed = testExecution.passed;
         stamp.runs.reproduction_pre_build = {
-          command: result.command,
-          exit_code: result.exitCode,
-          duration_ms: result.durationMs,
+          ...testRunRecord(testExecution),
           pre_build_tests_passed: preBuildPassed,
-          timed_out: result.timedOut || undefined,
-          spawn_error: result.spawnError || undefined,
         };
       } else {
         stamp.runs.reproduction_pre_build = { skipped: "no test command configured or discovered" };

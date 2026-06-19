@@ -2,10 +2,10 @@
 
 ## Roadmap posture
 
-There is no emergency or ungated implementation batch. Batches 1–3 and the
-instrumentation portion of Proposal 4.1 are complete. The active priority is
-real-project evidence collection; learning features remain gated on that operational
-data and human review.
+There is no emergency implementation batch. Batches 1–3 and the instrumentation
+portion of Proposal 4.1 are complete. Real-project evidence collection remains the
+active learning priority; user-directed Phase 19 advances independent B7 polyglot QA
+without bypassing any evidence gate.
 
 ## Batch 1 — Immediate
 
@@ -107,13 +107,24 @@ implementation merge gate remains.
   improves AC completeness or reduces clarification retries.
 - **Estimate:** discovery first; 3–5 weeks if validated.
 
+### Proposal 4.3 — Polyglot orchestrator verification (Phase 19)
+
+- **Item:** BACKLOG B7.
+- **Proposal:** conservatively discover and aggregate Node, pytest, and Go suites in
+  orchestrator-stamped pre-review, QA, and repair verification.
+- **Validation criterion:** mixed-language projects run every detected suite, preserve
+  explicit overrides, and fail with per-language evidence when one suite fails.
+- **Current status:** implementation and documentation are in
+  [`plans/phase-19-polyglot-verification.md`](../../plans/phase-19-polyglot-verification.md).
+- **Estimate:** one bundled PR; independent of #142–#145.
+
 ## Dependency map
 
 - PR 2.1 and PR 2.2 can run concurrently.
 - PR 2.3 waits for Windows wording from PR 2.2.
 - PR 3.1 and driver-refactor design can run concurrently.
 - PR 3.3 waits for PR 2.3 but can run beside driver extraction.
-- Proposals 4.1 and 4.2 are independent and do not bypass issue gates.
+- Proposals 4.1–4.3 are independent and do not bypass issue gates.
 
 ## Roadmap risks
 

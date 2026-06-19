@@ -71,6 +71,17 @@ Runs automatically after QA on `full`, `quick`, and `hotfix` tracks.
 - Gate records WCAG finding counts by severity: critical / serious / moderate / minor
 - Records `audit_method` (axe-core, pa11y, Lighthouse) and `components_audited`
 
+### Polyglot QA — verify every detected test suite
+
+Orchestrator stamping at pre-review and QA discovers and runs all applicable project
+test suites in stable order: `npm test` when `package.json` has `scripts.test`, pytest
+when pytest configuration or conventional Python test files are present, and
+`go test ./...` when `go.mod` is present. Every suite must pass. The gate's
+`_orchestrator_stamped.runs.test.suites` records each command, exit code, and duration;
+one failing language adds a named blocker without preventing the remaining suites from
+running. Set `pipeline.verify.test_command` for an exclusive custom command, or `null`
+to disable test discovery. See [Testing](TESTING.md#target-project-test-discovery).
+
 ### Observability gate — confirm metrics, logs, and traces are wired
 
 Platform role verifies that observability signals are actually in place before sign-off.
