@@ -157,8 +157,9 @@ adaptive, organization-oriented methodology and evaluation system.
 3. **Make real-run evidence attainable.** A privacy-safe readiness/export loop is the
    prerequisite for adaptive routing, learned recipes, standing grants, and active
    stall response.
-4. **Protect the autonomy core structurally.** Decompose driver transitions before
-   adding another major autonomous capability.
+4. **Keep the autonomy core structurally protected.** Driver transitions are now
+   decomposed behind characterized result contracts; require new autonomy work to
+   preserve that boundary and its run-state/run-log invariants.
 
 ### Validate before investing
 

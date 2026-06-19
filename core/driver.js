@@ -42,6 +42,17 @@ const {
   targetedFixNoChangeTransition,
   scopeGateTransition,
 } = require("./driver-dispatch");
+const {
+  retryBudgetTransition,
+  convergenceTransition,
+  blockedFixTransition,
+  fixRetryTransition,
+  nonCodeFixTransition,
+  rulingPreflightTransition,
+  rulingOutcomeTransition,
+  rulingAppliedTransition,
+  mergeTransition,
+} = require("./driver-recovery");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -1038,14 +1049,11 @@ async function run(opts = {}) {
 
       if (r.action === "fix-and-retry" && r.failure_class === "code-defect") {
         const attempts = state.fixRetries[r.name] || 0;
-        if (attempts >= maxRetries) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "convergence-exhausted";
-          summary.halt_reason = `driver retry budget exhausted for "${r.name}" (${attempts}/${maxRetries}); escalating`;
-          summary.blockers = r.blockers || [];
-          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt" });
-          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
+        const budgetTransition = retryBudgetTransition({
+          action: r, base, attempts, maxRetries,
+        });
+        if (budgetTransition) {
+          applyTransition(budgetTransition);
           _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
@@ -1061,14 +1069,9 @@ async function run(opts = {}) {
         const progress = detectNoProgress(gatesDir(cwd, changeId), r.stage);
         if (progress.noProgress) {
           const evidence = noProgressEvidence(progress.stuckBlockers, progress.attempts);
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "convergence-exhausted";
-          summary.halt_reason = `no-progress convergence for "${r.name}": ${evidence}; escalating for a ruling`;
-          summary.blockers = r.blockers || [];
-          summary.no_progress_evidence = evidence;
-          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_progress_evidence: evidence, archived: archived || null });
-          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_progress_evidence: evidence });
+          applyTransition(convergenceTransition({
+            action: r, base, kind: "no-progress", evidence, archived,
+          }));
           _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
@@ -1080,14 +1083,9 @@ async function run(opts = {}) {
         const srcCheck = detectNoSourceChange(cwd, gatesDir(cwd, changeId), r.stage, state);
         if (srcCheck.noSourceChange) {
           const evidence = noSourceChangeEvidence(srcCheck.lastAttempt, srcCheck.files);
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "convergence-exhausted";
-          summary.halt_reason = `no-source-change convergence for "${r.name}": ${evidence}; escalating for a ruling`;
-          summary.blockers = r.blockers || [];
-          summary.no_source_change_evidence = evidence;
-          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_source_change_evidence: evidence, archived: archived || null });
-          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_source_change_evidence: evidence });
+          applyTransition(convergenceTransition({
+            action: r, base, kind: "no-source-change", evidence, archived,
+          }));
           _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
@@ -1112,27 +1110,25 @@ async function run(opts = {}) {
         // Stages with no recipe (toClear empty) still reach convergence-exhausted —
         // they may recover if the agent self-corrects on retry.
         if (cleared.length === 0 && toClear.length > 0) {
-          summary.halted = true;
-          summary.halt_action = "fix-and-retry";
-          summary.halt_failure_class = "structural-input";
-          summary.halt_reason =
-            `fix steps for "${r.name}" contain no gate clears — cannot make automated progress; `
-            + `run \`devteam next\` for manual fix steps`;
-          summary.blockers = r.blockers || [];
-          summary.fix_steps = r.fix_steps || [];
-          logEvent(cwd, changeId, { ...base, outcome: "no-progress-halt", archived: archived || null });
-          onEvent({ type: "halt", ...base, failure_class: "structural-input", reason: summary.halt_reason, blockers: r.blockers, fix_steps: r.fix_steps });
+          applyTransition(blockedFixTransition({ action: r, base, archived }));
           break;
         }
         writeRunBlockers(cwd, r.name, r.blockers, changeId);
-        state.targetedFix = targetedBuildFixFromRetry(cwd, changeId, r);
-        state.fixRetries[r.name] = attempts + 1;
-        saveRunState(cwd, changeId, state);
-        const target = state.targetedFix
-          ? { workstream: state.targetedFix.workstream, patch_items: state.targetedFix.patchItems.length }
+        const targetedFix = targetedBuildFixFromRetry(cwd, changeId, r);
+        const target = targetedFix
+          ? { workstream: targetedFix.workstream, patch_items: targetedFix.patchItems.length }
           : null;
-        logEvent(cwd, changeId, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null, target });
-        onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length, target });
+        applyTransition(fixRetryTransition({
+          action: r,
+          base,
+          attempts,
+          clearedCount: cleared.length,
+          archived,
+          target,
+          targetedFix,
+          fixRetries: state.fixRetries,
+        }));
+        saveRunState(cwd, changeId, state);
         continue;
       }
 
@@ -1144,17 +1140,15 @@ async function run(opts = {}) {
       if (r.action === "resolve-escalation") {
         const hardStop = r.failure_class === "convergence-exhausted" || CONSEQUENCE_CEILING.has(r.name);
         const alreadyTried = (state.autoRule[r.name] || 0) >= 1;
-        if (grantSet.size === 0 || hardStop || alreadyTried) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = r.failure_class || "judgment-gate";
-          summary.halt_reason = hardStop
-            ? `escalation requires a human (auto-rule never crosses ${r.failure_class === "convergence-exhausted" ? "convergence-exhausted" : "the consequence ceiling"})`
-            : alreadyTried
-              ? `auto-rule already attempted once for "${r.name}" and it re-escalated; halting for a human`
-              : r.reason;
-          logEvent(cwd, changeId, { ...base, outcome: "halt" });
-          onEvent({ type: "halt", ...base });
+        const preflightTransition = rulingPreflightTransition({
+          action: r,
+          base,
+          grantCount: grantSet.size,
+          hardStop,
+          alreadyTried,
+        });
+        if (preflightTransition) {
+          applyTransition(preflightTransition);
           break;
         }
 
@@ -1166,46 +1160,21 @@ async function run(opts = {}) {
         saveRunState(cwd, changeId, state);
         const fresh = loadPrincipalOutputs(cwd).slice(before);
         const latest = fresh.length ? fresh[fresh.length - 1] : null;
-
-        if (!latest || (rr && rr.exitCode !== 0)) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "judgment-gate";
-          summary.halt_reason = "Principal produced no ruling; halting for a human";
-          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-no-output" });
-          onEvent({ type: "halt", ...base });
-          break;
-        }
-        if (latest.type === "cannot-decide") {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "cannot-decide";
-          summary.cannot_decide = { reason_class: latest.reason_class, question: latest.question };
-          summary.halt_reason = `Principal cannot decide (${latest.reason_class}): ${latest.question}`;
-          logEvent(cwd, changeId, { ...base, outcome: "cannot-decide", reason_class: latest.reason_class });
-          onEvent({ type: "cannot-decide", ...base, reason_class: latest.reason_class, question: latest.question });
-          break;
-        }
-        if (!grantSet.has(latest.class)) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "judgment-gate";
-          summary.halt_reason = `ruling class "${latest.class}" is not in the --auto-rule grant; halting for a human`;
-          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-ungranted", ruling_class: latest.class });
-          onEvent({ type: "halt", ...base, ruling_class: latest.class });
+        const outcomeTransition = rulingOutcomeTransition({
+          base, rulingResult: rr, latest, grantSet,
+        });
+        if (outcomeTransition) {
+          applyTransition(outcomeTransition);
           break;
         }
         // Granted class → apply the ruling and resume.
         const fr = await _runFixEscalation(cwd, { escalatingGate: r.gate });
-        if (fr && fr.exitCode !== 0) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_reason = `escalation applicator failed (exit ${fr.exitCode}); halting`;
-          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-apply-failed" });
-          onEvent({ type: "halt", ...base });
+        const appliedTransition = rulingAppliedTransition({ base, applyResult: fr, latest });
+        if (appliedTransition.control === TRANSITION_CONTROLS.HALT) {
+          applyTransition(appliedTransition);
           break;
         }
-        const authority = `auto-rule:${latest.class}`;
+        const { authority } = appliedTransition.details;
         // PR-D2: bind the authority record ONTO the escalating gate, so the
         // autonomous-decision provenance inherits C6 tamper-evidence (vs. only
         // living in run-log.jsonl). Best-effort: if the applicator cleared the
@@ -1218,31 +1187,14 @@ async function run(opts = {}) {
             fs.writeFileSync(r.gate, JSON.stringify(g, null, 2) + "\n");
           }
         } catch { /* run-log retains the record */ }
-        logEvent(cwd, changeId, { ...base, outcome: "auto-ruled", grant_class: latest.class, ruling: latest.decision, authority });
-        onEvent({ type: "auto-ruled", ...base, grant_class: latest.class, ruling: latest.decision, authority });
+        applyTransition(appliedTransition);
         continue;
       }
 
       // Non-auto-fixable fix-and-retry classes (state-corruption /
       // external-blocked) halt for a human.
       if (r.action === "fix-and-retry") {
-        applyTransitionResult(transitionResult(TRANSITION_CONTROLS.HALT, {
-          summaryPatch: {
-            halted: true,
-            halt_action: r.action,
-            halt_failure_class: r.failure_class || null,
-            halt_reason: r.reason,
-            blockers: r.blockers || [],
-            fix_steps: r.fix_steps || [],
-          },
-          logEvents: [{ ...base, outcome: "halt" }],
-          emittedEvents: [{ type: "halt", ...base, blockers: r.blockers, fix_steps: r.fix_steps }],
-        }), {
-          summary,
-          state,
-          logEvent: (entry) => logEvent(cwd, changeId, entry),
-          onEvent,
-        });
+        applyTransition(nonCodeFixTransition({ action: r, base }));
         break;
       }
 
@@ -1441,12 +1393,9 @@ async function run(opts = {}) {
       if (r.action === "merge") {
         onEvent({ type: "merge", ...base });
         const m = _merge(r.name, { cwd, track: effectiveTrack, changeId });
-        logEvent(cwd, changeId, { ...base, outcome: m.merged ? "merged" : "merge-failed", reason: m.reason || null });
-        if (!m.merged) {
-          summary.halted = true;
-          summary.halt_action = "merge-failed";
-          summary.halt_reason = m.reason || "merge failed";
-          onEvent({ type: "merge-failed", ...base, reason: m.reason });
+        const result = mergeTransition({ base, mergeResult: m });
+        applyTransition(result);
+        if (result.control === TRANSITION_CONTROLS.HALT) {
           break;
         }
         continue;
