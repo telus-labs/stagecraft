@@ -216,6 +216,27 @@ test("extractAcsFromBrief: handles N.-prefixed section headers (e.g. 3. Acceptan
   assert.equal(duplicates.length, 0, "AC-1 signal in §9 must not register as duplicate");
 });
 
+test("extractAcsFromBrief: handles numbered list AC entries (e.g. 1. **AC-N — ...**:)", () => {
+  // Regression: PM agent sometimes writes ACs as a numbered list with bold IDs
+  // (e.g. "1. **AC-1 — HTTP endpoint exists**: ...") instead of dash bullets.
+  // AC_LINE_RE must match both bullet styles.
+  const text = `
+## §3 Acceptance Criteria
+
+1. **AC-1 — HTTP endpoint exists**: A POST endpoint returns 200.
+2. **AC-2 — Conventional-commit format**: The message matches type(scope): subject.
+3. AC-3 — Numbered bare: Missing diff returns 400.
+
+## §9 Observability Requirements
+
+- **AC-1, AC-2** signal: log latency.
+`;
+  const { ids, byId, duplicates } = extractAcsFromBrief(text);
+  assert.deepEqual(ids, ["AC-1", "AC-2", "AC-3"]);
+  assert.match(byId.get("AC-1").body, /POST endpoint/);
+  assert.equal(duplicates.length, 0, "observability cross-references must not register as duplicates");
+});
+
 test("extractAcsFromBrief: flags duplicates", () => {
   const text = `
 - AC-1: first
