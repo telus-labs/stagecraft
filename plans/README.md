@@ -2,7 +2,7 @@
 
 Phase plans produced from the 2026-06-10 full-framework review and subsequent audits. Each phase is a set of
 PR-sized work items with file/line anchors, acceptance criteria, and verification commands,
-written to be executed by Claude (Sonnet) one item at a time. **All phases complete through Phase 15.**
+written to be executed by Claude (Sonnet) one item at a time. **All phases complete through Phase 16.**
 
 | Phase | Plan | Prompts | Theme | Status |
 |---|---|---|---|---|
@@ -22,7 +22,7 @@ written to be executed by Claude (Sonnet) one item at a time. **All phases compl
 | 13 | [phase-13-deploy-adapters.md](phase-13-deploy-adapters.md) | [prompts](prompts/ALL-PROMPTS.md) | Deploy adapters: GCP Cloud Run and Gizmos (Cloudflare Workers) for stage-08 | ✅ complete — 13.1 ✅ cloud-run (PR #160) · 13.2 ✅ gizmos (feat/deploy-gizmos) |
 | 14 | [phase-14-dogfooding-support.md](phase-14-dogfooding-support.md) | [prompts](prompts/ALL-PROMPTS.md) | Dogfooding support: `devteam init --profile dogfood`, doctor checks, preflight staged-artifact guard, budget warning, guide | ✅ complete — 14.1 ✅ `--profile dogfood` (PR #163) · 14.2 ✅ doctor dogfood checks (PR #164) · 14.3 ✅ preflight artifact guard (PR #165) · 14.4 ✅ budget warning (PR #166) · 14.5 ✅ dogfooding guide |
 | 15 | [phase-15-adapter-conventions.md](phase-15-adapter-conventions.md) | [prompts](prompts/ALL-PROMPTS.md) | Adapter-aware stage context: inject deploy target constraints into `pipeline/context.md` so `--feature` can be pure intent; `devteam init --adapter`; fix `gizmos whoami` bug | ✅ complete — pre-work ✅ `--adapter` flag (PR #173) · 15.1 ✅ gizmos auth fix (PR #176) · 15.2 ✅ conventions injection (feat/adapter-conventions) |
-| 16 | [phase-16-evidence-readiness-and-export.md](phase-16-evidence-readiness-and-export.md) | — | Privacy-safe evidence readiness and explicit aggregate export (audit P3-1) | in progress — 16.1 privacy/schema review merged as PR #246; 16.2 local status implemented |
+| 16 | [phase-16-evidence-readiness-and-export.md](phase-16-evidence-readiness-and-export.md) | — | Privacy-safe evidence readiness and explicit aggregate export (audit P3-1) | ✅ complete — 16.1 privacy review · 16.2 local status · 16.3 export and portfolio analysis |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status

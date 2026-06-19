@@ -154,7 +154,14 @@ Commands:
        [--feature <name>]          Aggregates bounded run logs, current gates,
                                    and gate archives; reports local threshold
                                    progress separately from cross-project
-                                   conditions. Does not export or transmit data.
+                                   conditions. Repeated --bundle files run
+                                   validated, de-duplicated portfolio analysis.
+  evidence export --out <file>     Write a local aggregate-only bundle. Requires
+       --consent                   explicit consent and a new destination; never
+                                   uploads or overwrites evidence.
+  evidence identity               Inspect the pseudonymous project reference.
+       [--rotate|--delete] --yes   Rotation/deletion require confirmation; raw
+                                   identity entropy is never printed.
   summary [--json]                 One-screen pipeline state report.
   log [--follow] [--json]          Chronological event timeline: every gate
                                    and every artifact write, in mtime order,

@@ -37,6 +37,7 @@ node --experimental-test-coverage --test tests/*.test.js
 | `observability.test.js` | OpenTelemetry spans emitted at every instrumented call site, with expected attributes, via `InMemorySpanExporter`. |
 | `secret-scan.test.js` | PreToolUse hook: pattern detection, false-positive guards, magic-comment override, path allowlist, end-to-end stdin parsing, snippet redaction. |
 | `evidence-status.test.js` | Bounded evidence readers, aggregate-only readiness analysis, malformed/oversized input handling, bounded isolation, and read-only CLI behavior. |
+| `evidence-export.test.js` | Pseudonymous identity lifecycle, consent and exclusive writes, strict bundle validation/digests, sparse-cell suppression, hostile-value exclusion, symlink refusal, portfolio de-duplication, and cross-project readiness. |
 | `fanout.test.js` | `computeDispatchPlan` correctness with/without fanout; end-to-end `runStage` producing N×M workstream prompts; `mergeWorkstreamGates` aggregation across all fanout gates. |
 | `dashboard.test.js` | Gate→row expansion (merged stage gates split into workstream rows); per-host / per-role attribution; multi-project rollup; time-window filter; ASCII chart + JSON output. |
 | `pr-publish.test.js` | Gate→check-run translation: PASS→success / WARN→neutral / FAIL+ESCALATE→failure; blockers + warnings + workstreams in summary; auto-detect repo + PR; `--dry-run`. |
