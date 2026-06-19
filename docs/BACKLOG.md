@@ -141,14 +141,13 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 
 1. **Decompose the autonomous driver (audit P2-2).** Extract transition handlers
    under characterization tests without mixing capability changes.
-2. **Lock stable support facts (audit P2-3).** Extend consistency checks for
-   machine-derived schema vocabulary and platform support without encoding volatile
-   test counts.
 
 Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),
 native Windows CI evidence, support wording, and A6 promotion (PR #236), and bounded
 durable transcript streaming (PR #237). Current-truth reconciliation removed the
 remaining P1-3 ownership, vocabulary, comment, count, link, and provider drift.
+Stable-fact consistency now locks schema vocabulary, Node/platform support, and the
+absence of volatile test totals while leaving audit history untouched (audit P2-3).
 
 ### Evidence-gated next horizon
 

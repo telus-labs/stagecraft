@@ -445,7 +445,7 @@ Machine-derived docs stay in sync with the codebase by construction — a CI adv
 
 - **[`docs/reference/prompt-budget.md`](reference/prompt-budget.md)** — per-stage framework context size in bytes and estimated tokens (bytes ÷ 4), plus the top-5 heaviest files per stage. Used to track readFirst weight over time; a CI advisory fires when any stage grows >10% from its committed baseline.
 
-**`npm run consistency`** — cross-artifact consistency checker (313+ checks). Catches prose-vs-code drift across stage names, track lists, command surface, referenced-file existence, file-size ceiling violations, and EXAMPLE.md freshness. Runs in CI; advisory-only checks print without failing the build; hard checks exit non-zero.
+**`npm run consistency`** — cross-artifact consistency checker. Catches prose-vs-code drift across stage names, track lists, command surface, referenced-file existence, file-size ceilings, schema vocabulary, runtime/platform support claims, and EXAMPLE.md freshness. Runs in CI; advisory-only checks print without failing the build; hard checks exit non-zero. Audit and historical archives are excluded from current-fact vocabulary checks.
 
 ---
 
