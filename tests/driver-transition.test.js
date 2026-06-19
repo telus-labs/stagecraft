@@ -16,6 +16,17 @@ const {
   targetedFixNoChangeTransition,
   scopeGateTransition,
 } = require(path.join(REPO_ROOT, "core", "driver-dispatch"));
+const {
+  retryBudgetTransition,
+  convergenceTransition,
+  blockedFixTransition,
+  fixRetryTransition,
+  nonCodeFixTransition,
+  rulingPreflightTransition,
+  rulingOutcomeTransition,
+  rulingAppliedTransition,
+  mergeTransition,
+} = require(path.join(REPO_ROOT, "core", "driver-recovery"));
 
 let dirs = [];
 function track(cwd) { dirs.push(cwd); return cwd; }
@@ -166,6 +177,110 @@ describe("driver dispatch handlers", () => {
     assert.equal(targeted.logEvents[0].outcome, "targeted-fix-no-source-change");
     assert.equal(scope.summaryPatch.halt_action, "scope-gate");
     assert.equal(scopeGateTransition({ base, outOfScope: [] }), null);
+  });
+});
+
+describe("driver recovery handlers", () => {
+  const action = {
+    action: "fix-and-retry",
+    stage: "stage-04",
+    name: "build",
+    failure_class: "code-defect",
+    blockers: ["test failure"],
+  };
+  const base = { iteration: 1, stage: "stage-04", name: "build", action: "fix-and-retry" };
+
+  it("builds retry-budget and convergence halts", () => {
+    assert.equal(retryBudgetTransition({ action, base, attempts: 1, maxRetries: 2 }), null);
+    const budget = retryBudgetTransition({ action, base, attempts: 2, maxRetries: 2 });
+    const progress = convergenceTransition({
+      action, base, kind: "no-progress", evidence: "same blocker", archived: "attempt-2.json",
+    });
+    const source = convergenceTransition({
+      action, base, kind: "no-source-change", evidence: "Dockerfile", archived: null,
+    });
+
+    assert.equal(budget.summaryPatch.halt_failure_class, "convergence-exhausted");
+    assert.equal(progress.summaryPatch.no_progress_evidence, "same blocker");
+    assert.equal(source.summaryPatch.no_source_change_evidence, "Dockerfile");
+  });
+
+  it("builds blocked and continuing fix transitions", () => {
+    const blocked = blockedFixTransition({ action, base, archived: null });
+    const retry = fixRetryTransition({
+      action,
+      base,
+      attempts: 0,
+      clearedCount: 1,
+      archived: "attempt-1.json",
+      target: { workstream: "backend", patch_items: 1 },
+      targetedFix: { workstream: "backend" },
+      fixRetries: {},
+    });
+    const nonCode = nonCodeFixTransition({
+      action: { ...action, failure_class: "state-corruption", reason: "bad gate" },
+      base,
+    });
+
+    assert.equal(blocked.summaryPatch.halt_failure_class, "structural-input");
+    assert.equal(retry.control, TRANSITION_CONTROLS.CONTINUE);
+    assert.equal(retry.statePatch.fixRetries.build, 1);
+    assert.equal(retry.logEvents[0].outcome, "fix-retry");
+    assert.equal(nonCode.summaryPatch.halt_failure_class, "state-corruption");
+  });
+
+  it("builds ruling preflight and Principal outcome transitions", () => {
+    const rulingAction = {
+      action: "resolve-escalation",
+      stage: "stage-01",
+      name: "requirements",
+      failure_class: "judgment-gate",
+      reason: "decision needed",
+    };
+    const noGrant = rulingPreflightTransition({
+      action: rulingAction, base, grantCount: 0, hardStop: false, alreadyTried: false,
+    });
+    const cannotDecide = rulingOutcomeTransition({
+      base,
+      rulingResult: { exitCode: 0 },
+      latest: { type: "cannot-decide", reason_class: "missing-context", question: "Which API?" },
+      grantSet: new Set(["formatting-only"]),
+    });
+    const ungranted = rulingOutcomeTransition({
+      base,
+      rulingResult: { exitCode: 0 },
+      latest: { type: "ruling", class: "architecture" },
+      grantSet: new Set(["formatting-only"]),
+    });
+
+    assert.equal(noGrant.summaryPatch.halt_failure_class, "judgment-gate");
+    assert.equal(cannotDecide.summaryPatch.halt_failure_class, "cannot-decide");
+    assert.equal(ungranted.logEvents[0].outcome, "auto-rule-ungranted");
+    assert.equal(rulingPreflightTransition({
+      action: rulingAction, base, grantCount: 1, hardStop: false, alreadyTried: false,
+    }), null);
+  });
+
+  it("builds applied-ruling and merge transitions", () => {
+    const applied = rulingAppliedTransition({
+      base,
+      applyResult: { exitCode: 0 },
+      latest: { class: "formatting-only", decision: "apply" },
+    });
+    const applyFailed = rulingAppliedTransition({
+      base,
+      applyResult: { exitCode: 2 },
+      latest: { class: "formatting-only", decision: "apply" },
+    });
+    const merged = mergeTransition({ base, mergeResult: { merged: true } });
+    const mergeFailed = mergeTransition({
+      base, mergeResult: { merged: false, reason: "missing frontend gate" },
+    });
+
+    assert.equal(applied.details.authority, "auto-rule:formatting-only");
+    assert.equal(applyFailed.summaryPatch.halt_action, "resolve-escalation");
+    assert.equal(merged.control, TRANSITION_CONTROLS.CONTINUE);
+    assert.equal(mergeFailed.summaryPatch.halt_action, "merge-failed");
   });
 });
 

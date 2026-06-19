@@ -139,8 +139,9 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 
 ### Immediate and near-term
 
-1. **Decompose the autonomous driver (audit P2-2).** Extract transition handlers
-   under characterization tests without mixing capability changes.
+No ungated implementation item remains from the audit's immediate and targeted
+improvement batches. The next implementation horizon requires the evidence and
+privacy work described below.
 
 Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),
 native Windows CI evidence, support wording, and A6 promotion (PR #236), and bounded
@@ -148,6 +149,9 @@ durable transcript streaming (PR #237). Current-truth reconciliation removed the
 remaining P1-3 ownership, vocabulary, comment, count, link, and provider drift.
 Stable-fact consistency now locks schema vocabulary, Node/platform support, and the
 absence of volatile test totals while leaving audit history untouched (audit P2-3).
+The autonomous driver decomposition is complete: characterization, dispatch/transient,
+and fix/ruling/merge transitions landed as three behavior-preserving slices while
+`run()` retained lock, loop, effect, and final-persistence ownership (audit P2-2).
 
 ### Evidence-gated next horizon
 
