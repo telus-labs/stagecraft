@@ -221,6 +221,10 @@ function renderSummaryTab(data) {
     ? `<div class="halt-box"><span class="halt-label">Halt:</span> ${esc(meta.haltReason)}</div>`
     : "";
 
+  const abandonedAt = (meta.finalStatus === "abandoned" && meta.currentStage)
+    ? `<div class="abandoned-at">Stopped at: <code>${esc(meta.currentStage)}</code></div>`
+    : "";
+
   const progressBar = renderProgressBar(stages);
 
   const statParts = [];
@@ -238,7 +242,7 @@ function renderSummaryTab(data) {
     ? `<div class="stat-row">${statParts.join("")}</div>` : "";
 
   const problemHtml = brief.problemStatement
-    ? `<p class="problem">${esc(brief.problemStatement)}</p>` : "";
+    ? `<p class="problem">${inlineMd(brief.problemStatement)}</p>` : "";
 
   const rolesHtml = brief.activeRoles && brief.activeRoles.length > 0
     ? `<div class="meta-line">
@@ -252,7 +256,20 @@ function renderSummaryTab(data) {
         <ul class="oos-list">${brief.outOfScope.map(i => `<li>${esc(i)}</li>`).join("")}</ul>
        </div>` : "";
 
-  return `${haltHtml}${progressBar}${statsRow}${problemHtml}${rolesHtml}${oosHtml}`;
+  const briefSection = (statsRow || problemHtml || rolesHtml || oosHtml)
+    ? `<div class="summary-section">
+        <div class="section-label">Brief</div>
+        ${statsRow}${problemHtml}${rolesHtml}${oosHtml}
+       </div>`
+    : "";
+
+  return `
+    ${haltHtml}
+    ${abandonedAt}
+    ${progressBar
+      ? `<div class="summary-section"><div class="section-label">Pipeline</div>${progressBar}</div>`
+      : ""}
+    ${briefSection}`;
 }
 
 // ── Tab: Stages ──────────────────────────────────────────────────────────────
@@ -262,6 +279,9 @@ function renderStagesTab(stages, blockerLog) {
   if (!stages || stages.length === 0) {
     tableHtml = '<p class="no-data">No stage gate files found.</p>';
   } else {
+    const hasDuration = stages.some(s =>
+      s.durationMs != null || s.workstreams.some(w => w.durationMs != null));
+
     const rows = stages.map(s => {
       const statusCell = s.status ? badge(s.status) : '<span class="badge neutral">—</span>';
       const when = s.timestamp ? formatDate(s.timestamp) : "—";
@@ -289,8 +309,12 @@ function renderStagesTab(stages, blockerLog) {
           </details>`;
       }
 
-      const allBlockers = [...(s.blockers || []), ...s.workstreams.flatMap(w => w.blockers || [])];
-      const allWarnings = [...(s.warnings || []), ...s.workstreams.flatMap(w => w.warnings || [])];
+      const seenB = new Set();
+      const allBlockers = [...(s.blockers || []), ...s.workstreams.flatMap(w => w.blockers || [])]
+        .filter(b => { const k = String(b); return seenB.has(k) ? false : seenB.add(k); });
+      const seenW = new Set();
+      const allWarnings = [...(s.warnings || []), ...s.workstreams.flatMap(w => w.warnings || [])]
+        .filter(w => { const k = String(w); return seenW.has(k) ? false : seenW.add(k); });
 
       if (allBlockers.length > 0)
         details += `<details><summary>${allBlockers.length} blocker${allBlockers.length !== 1 ? "s" : ""}</summary>
@@ -302,17 +326,17 @@ function renderStagesTab(stages, blockerLog) {
 
       return `
         <tr id="sr-${esc(s.stage)}">
-          <td class="stage-name">${esc(s.name)}<span class="stage-id">${esc(s.stage)}</span></td>
+          <td class="stage-name">${esc(s.name)}<br><span class="stage-id">${esc(s.stage)}</span></td>
           <td>${statusCell}</td>
           <td style="white-space:nowrap">${esc(when)}</td>
-          <td style="white-space:nowrap">${esc(dur)}</td>
+          ${hasDuration ? `<td style="white-space:nowrap">${esc(dur)}</td>` : ""}
           <td>${details}</td>
         </tr>`;
     });
 
     tableHtml = `
       <table>
-        <thead><tr><th>Stage</th><th>Status</th><th>Completed</th><th>Duration</th><th>Details</th></tr></thead>
+        <thead><tr><th>Stage</th><th>Status</th><th>Completed</th>${hasDuration ? "<th>Duration</th>" : ""}<th>Details</th></tr></thead>
         <tbody>${rows.join("")}</tbody>
       </table>`;
   }
@@ -335,7 +359,7 @@ function renderDocumentsTab(documents) {
   }
 
   const navItems = documents.map((doc, idx) =>
-    `<div class="doc-nav-item${idx === 0 ? " active" : ""}" data-doc="${idx}">${esc(doc.label)}</div>`
+    `<div class="doc-nav-item${idx === 0 ? " active" : ""}" data-doc="${idx}" title="${esc(doc.label)}">${esc(doc.label)}</div>`
   ).join("");
 
   const panes = documents.map((doc, idx) => {
@@ -438,6 +462,17 @@ const CSS = `
     padding: 0.6rem 0.9rem; color: #7f1d1d; font-size: 0.85rem; margin-bottom: 1rem;
   }
   .halt-label { font-weight: 600; }
+  .abandoned-at {
+    font-size: 0.82rem; color: #6b7280; margin-bottom: 0.75rem;
+  }
+  .abandoned-at code {
+    background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 0.8em; color: #374151;
+  }
+  .summary-section { margin-bottom: 1.5rem; }
+  .section-label {
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #9ca3af; margin-bottom: 0.5rem;
+  }
   .stat-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; }
   .stat-chip {
     background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
@@ -469,7 +504,7 @@ const CSS = `
   tbody tr:hover { background: #f0f9ff; }
   tbody td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
   .stage-name { font-weight: 500; }
-  .stage-id { color: #9ca3af; font-size: 0.72rem; margin-left: 5px; }
+  .stage-id { display: block; color: #9ca3af; font-size: 0.72rem; margin-top: 1px; }
   details { margin-top: 4px; }
   details summary {
     cursor: pointer; font-size: 0.78rem; color: #6b7280;
@@ -489,13 +524,14 @@ const CSS = `
   }
   @keyframes highlightRow {
     0%   { background: #bfdbfe; }
-    100% { background: transparent; }
+    80%  { background: #eff6ff; }
+    100% { background: #fff; }
   }
-  .stage-highlight { animation: highlightRow 2s ease-out; }
+  .stage-highlight { animation: highlightRow 2s ease-out forwards; }
 
   /* Documents tab */
   .doc-layout {
-    display: grid; grid-template-columns: 200px 1fr;
+    display: grid; grid-template-columns: 240px 1fr;
     border: 1px solid #e5e7eb; border-radius: 8px;
     overflow: hidden; min-height: 500px;
   }

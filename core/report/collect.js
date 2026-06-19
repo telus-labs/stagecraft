@@ -30,6 +30,24 @@ function readText(p) {
   try { return fs.readFileSync(p, "utf8"); } catch { return null; }
 }
 
+// Normalize a gate's blockers/warnings array: gates may store items as plain
+// strings or as objects { id, summary, file, line }. Always return strings.
+function normalizeItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.map(item => {
+    if (typeof item === "string") return item;
+    if (item && typeof item === "object") {
+      const id = item.id || "";
+      const summary = item.summary || item.message || item.description || "";
+      const loc = item.file
+        ? (item.line != null ? `${item.file}:${item.line}` : item.file)
+        : "";
+      return [id, summary, loc ? `(${loc})` : ""].filter(Boolean).join(" ");
+    }
+    return String(item);
+  }).filter(Boolean);
+}
+
 // Determine run final status from run-state.json + last run-log event.
 function finalStatus(runState, logPath) {
   const last = lastMatchingEvent(logPath, () => true);
@@ -188,8 +206,8 @@ function collectReport(cwd, opts = {}) {
         entry.status = gate.status || null;
         entry.timestamp = gate.timestamp || null;
         entry.durationMs = gate.duration_ms || null;
-        entry.blockers = gate.blockers || [];
-        entry.warnings = gate.warnings || [];
+        entry.blockers = normalizeItems(gate.blockers);
+        entry.warnings = normalizeItems(gate.warnings);
         stageMap.set(parsed.stage, entry);
       } else {
         // Workstream gate
@@ -209,8 +227,8 @@ function collectReport(cwd, opts = {}) {
           status: gate.status || null,
           timestamp: gate.timestamp || null,
           durationMs: gate.duration_ms || null,
-          blockers: gate.blockers || [],
-          warnings: gate.warnings || [],
+          blockers: normalizeItems(gate.blockers),
+          warnings: normalizeItems(gate.warnings),
         });
         stageMap.set(parsed.stage, entry);
       }
