@@ -2,15 +2,15 @@
 
 ## Roadmap posture
 
-There is no emergency batch. Highest priority closes a browser trust boundary and
-turns recently landed portability work into evidence-backed support. The next
-structural investment is the autonomous driver; learning features remain gated on
-real operational data.
+There is no emergency or ungated implementation batch. Batches 1–3 and the
+instrumentation portion of Proposal 4.1 are complete. The active priority is
+real-project evidence collection; learning features remain gated on that operational
+data and human review.
 
 ## Batch 1 — Immediate
 
-No P0 work. PR #232 is the only current merge gate: it resolves GitHub #231 with an
-npm deploy adapter and is green. Merge it before overlapping deploy-adapter work.
+Complete. PR #232 resolved GitHub #231 with the npm deploy adapter; no P0 issue or
+implementation merge gate remains.
 
 ## Batch 2 — Weeks 1–2
 
@@ -94,7 +94,7 @@ npm deploy adapter and is green. Merge it before overlapping deploy-adapter work
   acceptance for successful fix/retry resolutions so H3 readiness can be measured
   without exporting resolution text. Capability gates remain closed pending real
   evidence and review. See
-  [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md)
+  [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md),
   [`plans/phase-17-durable-evidence-instrumentation.md`](../../plans/phase-17-durable-evidence-instrumentation.md),
   and [`plans/phase-18-accepted-resolution-evidence.md`](../../plans/phase-18-accepted-resolution-evidence.md).
 

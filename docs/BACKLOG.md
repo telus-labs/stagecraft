@@ -141,8 +141,8 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 
 No ungated implementation item remains from the audit's immediate and targeted
 improvement batches. Phase 16 completed privacy-safe readiness/export, Phase 17 made
-dispatch evidence durable, and Phase 18 adds explicit accepted-resolution evidence for
-H3. The next horizon is real collection, followed by review rather than
+dispatch evidence durable, and Phase 18 added explicit accepted-resolution evidence
+for H3. The next horizon is real collection, followed by review rather than
 calendar-driven capability activation.
 
 Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),

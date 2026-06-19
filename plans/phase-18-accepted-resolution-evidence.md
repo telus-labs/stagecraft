@@ -1,6 +1,6 @@
 # Phase 18 — Accepted Resolution Evidence
 
-**Status:** Item 18.1 implemented; pending merge.
+**Status:** Item 18.1 complete (PR #262); operational collection in progress.
 **Roadmap item:** Audit P3-1 follow-through / GitHub #142 evidence acquisition.
 **Decision:** [ADR-012](../docs/adr/012-explicit-resolution-acceptance.md).
 **Purpose:** make H3's human-accepted, derivable-resolution threshold measurable without
