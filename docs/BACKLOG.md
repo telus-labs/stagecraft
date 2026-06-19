@@ -155,11 +155,11 @@ and fix/ruling/merge transitions landed as three behavior-preserving slices whil
 
 ### Evidence-gated next horizon
 
-- **P3-1 — evidence readiness and export.** The privacy threat model, minimum-data
-  contract, pseudonymous project identity, consent boundary, and three-PR sequence are
-  proposed in [`plans/phase-16-evidence-readiness-and-export.md`](../plans/phase-16-evidence-readiness-and-export.md).
-  Implementation remains gated on approval of that proposal; it does not open any of
-  the capability gates below by itself.
+- **P3-1 — evidence readiness and export.** PR #246 approved the privacy threat model,
+  minimum-data contract, pseudonymous project identity, consent boundary, and
+  three-PR sequence in [`plans/phase-16-evidence-readiness-and-export.md`](../plans/phase-16-evidence-readiness-and-export.md).
+  Phase 16.2 adds read-only local readiness; aggregate export remains Phase 16.3. None
+  of this work opens the capability gates below by itself.
 
 - **D5 maturation — continuous adaptive routing.** Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. **Evidence review done (2026-06-14, `plans/adaptive-routing-evidence.md`):** zero real-run telemetry — the only gate data on disk is the hand-authored `examples/sms-opt-in` fixture (max 4 dispatches per role, no cost fields). The tool's MIN_DISPATCHES=5 guard fires for all 6 roles; no signal, no recommendations. Gate stays shut pending ≥5 dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. ADR-007 Tier 1 (liveness heartbeat + observe-only stall probe) implemented in Phase 11.1; ADR-008 (advisory sweep + `--fail-on-advisory`) implemented in Phase 11.2; ADR-007 Tier 2 (kill policy + `--watch`) evidence-gated in 11.4.
 - **H3 — Recipe factory (escalation→recipe learning)** (Phase 3 of [ADR-003](adr/003-bounded-autonomous-execution.md) · [design](autonomous-execution-design.md)). Persist resolved escalations as semantically-indexed fix-recipes via the existing `core/memory/` embedding store (D7); `computeFixSteps` consults it on a FAIL signature before escalating, so recurring *derivable* failures resolve deterministically. **Evidence review done (2026-06-14, `plans/h3-ground-truth.md`):** zero real run logs/archives and no recurring unresolved class. Gate stays shut pending ≥2 real projects each with ≥5 autonomous runs reaching fix-and-retry. Tracked by GitHub #142.
