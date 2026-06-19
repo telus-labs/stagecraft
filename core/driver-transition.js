@@ -17,6 +17,7 @@ function transitionResult(control, {
   statePatch = {},
   logEvents = [],
   emittedEvents = [],
+  details = {},
 } = {}) {
   if (!VALID_CONTROLS.has(control)) {
     throw new TypeError(`invalid driver transition control: ${control}`);
@@ -30,8 +31,11 @@ function transitionResult(control, {
   if (!Array.isArray(logEvents) || !Array.isArray(emittedEvents)) {
     throw new TypeError("driver transition events must be arrays");
   }
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    throw new TypeError("driver transition details must be an object");
+  }
 
-  return { control, summaryPatch, statePatch, logEvents, emittedEvents };
+  return { control, summaryPatch, statePatch, logEvents, emittedEvents, details };
 }
 
 function applyTransitionResult(result, {

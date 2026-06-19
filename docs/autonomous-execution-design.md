@@ -321,9 +321,11 @@ and retains ownership of the loop, lock lifecycle, and final persistence. This k
 handler extraction behavior-preserving: handlers may decide a transition, but they
 cannot quietly acquire locks, spin a second loop, or finalize run state.
 
-The extraction is deliberately sequenced. Characterization tests first pin summary,
-`run-state.json`, and `run-log.jsonl` outcomes; dispatch/transient handling moves
-next; fix/ruling/merge handling moves only after the preceding slice is reviewed.
+The extraction is deliberately sequenced. Characterization tests pin summary,
+`run-state.json`, and `run-log.jsonl` outcomes. Pure dispatch handlers now decide
+authority guards, normalize host results, and classify successful, transient, and
+structural outcomes; `run()` still performs invocation, persistence, retry delay,
+and loop control. Fix/ruling/merge handling moves only after this slice is reviewed.
 
 ### 4.1 `devteam run`
 
