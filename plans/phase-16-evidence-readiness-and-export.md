@@ -1,6 +1,7 @@
 # Phase 16 — Evidence Readiness and Privacy-Safe Export
 
-**Status:** Proposed. Privacy and schema review gates implementation.
+**Status:** In progress. PR 16.1 privacy/schema review merged as PR #246; PR 16.2
+implements local evidence readiness.
 **Roadmap item:** Audit P3-1 / Proposal 4.1.
 **Purpose:** make the evidence thresholds for GitHub #142–#145 measurable without
 turning Stagecraft's local audit trail into a telemetry product.
@@ -239,12 +240,14 @@ quietly widen the privacy surface.
 
 ## 8. Implementation sequence
 
-### PR 16.1 — Privacy model and bundle contract (this PR)
+### PR 16.1 — Privacy model and bundle contract
 
 - approve data inventory, threat model, identity design, consent boundary, suppression
   threshold, bundle contract, and command semantics;
 - no runtime behavior or data collection changes;
 - update current roadmap/backlog pointers.
+
+**Complete:** merged as PR #246.
 
 ### PR 16.2 — Local evidence readiness
 
@@ -255,6 +258,9 @@ quietly widen the privacy surface.
   be decided from one project;
 - include malformed, oversized, incomplete, and bounded-isolation fixtures;
 - prove the command is read-only by snapshotting the target tree before/after tests.
+
+**Implemented in the current PR.** The analyzer reports unavailable durable-routing
+and accepted-resolution signals explicitly rather than deriving them from snapshots.
 
 ### PR 16.3 — Opt-in aggregate export
 

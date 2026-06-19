@@ -150,6 +150,11 @@ Commands:
                                    last_action / iterations / cost_usd /
                                    last_heartbeat_age_ms / last_event_age_ms /
                                    stall_detected. Read-only; no --watch.
+  evidence status [--json]         Read-only evidence readiness for #142-#145.
+       [--feature <name>]          Aggregates bounded run logs, current gates,
+                                   and gate archives; reports local threshold
+                                   progress separately from cross-project
+                                   conditions. Does not export or transmit data.
   summary [--json]                 One-screen pipeline state report.
   log [--follow] [--json]          Chronological event timeline: every gate
                                    and every artifact write, in mtime order,

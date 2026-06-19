@@ -1,0 +1,246 @@
+"use strict";
+
+const { describe, it, afterEach } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { REPO_ROOT, makeTargetProject, cleanup, runCLI } = require("./_helpers");
+const { readJsonLinesBounded, readGatesBounded, readEvidenceSources } = require(
+  path.join(REPO_ROOT, "core", "evidence", "readers"),
+);
+const { analyzeEvidence, extractRouting } = require(
+  path.join(REPO_ROOT, "core", "evidence", "analyzer"),
+);
+
+let dirs = [];
+function track(cwd) { dirs.push(cwd); return cwd; }
+afterEach(() => { dirs.forEach(cleanup); dirs = []; });
+
+function writeLog(root, events) {
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "run-log.jsonl"),
+    events.map((event) => JSON.stringify(event)).join("\n") + "\n",
+  );
+}
+
+function treeSnapshot(root) {
+  const snapshot = {};
+  function visit(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(dir, entry.name);
+      const relative = path.relative(root, full).replace(/\\/g, "/");
+      if (entry.isDirectory()) visit(full);
+      else if (entry.isFile()) snapshot[relative] = fs.readFileSync(full, "base64");
+      else snapshot[relative] = entry.isSymbolicLink() ? "symlink" : "other";
+    }
+  }
+  visit(root);
+  return snapshot;
+}
+
+describe("evidence bounded readers", () => {
+  it("streams valid log records and reports malformed and oversized lines", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const file = path.join(cwd, "run-log.jsonl");
+    fs.writeFileSync(file, [
+      JSON.stringify({ outcome: "run-start", intent: "feature" }),
+      "not-json",
+      JSON.stringify({ padding: "x".repeat(100) }),
+      JSON.stringify({ outcome: "complete" }),
+    ].join("\n") + "\n");
+
+    const result = readJsonLinesBounded(file, { maxBytes: 10_000, maxLineBytes: 60 });
+    assert.deepEqual(result.records.map((record) => record.outcome), ["run-start", "complete"]);
+    assert.equal(result.quality.malformed_records, 1);
+    assert.equal(result.quality.oversized_records, 1);
+    assert.equal(result.quality.truncated_sources, 0);
+  });
+
+  it("reports truncation and refuses symlinked gate sources", { skip: process.platform === "win32" }, () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const log = path.join(cwd, "run-log.jsonl");
+    fs.writeFileSync(log, `${JSON.stringify({ outcome: "run-start", intent: "feature" })}\n`.repeat(20));
+    const truncated = readJsonLinesBounded(log, { maxBytes: 40, maxLineBytes: 100 });
+    assert.equal(truncated.quality.truncated_sources, 1);
+
+    const gates = path.join(cwd, "gates");
+    fs.mkdirSync(gates);
+    const outside = path.join(cwd, "outside.json");
+    fs.writeFileSync(outside, JSON.stringify({ stage: "stage-01" }));
+    fs.symlinkSync(outside, path.join(gates, "stage-01.json"));
+    const result = readGatesBounded(gates);
+    assert.equal(result.records.length, 0);
+    assert.equal(result.quality.symlink_sources, 1);
+
+    fs.unlinkSync(path.join(gates, "stage-01.json"));
+    const archiveTarget = path.join(cwd, "archive-target");
+    fs.mkdirSync(archiveTarget);
+    fs.writeFileSync(path.join(archiveTarget, "stage-04.attempt-1.json"), JSON.stringify({
+      stage: "stage-04", status: "FAIL",
+    }));
+    fs.symlinkSync(archiveTarget, path.join(gates, "archive"));
+    const directoryResult = readGatesBounded(gates);
+    assert.equal(directoryResult.records.length, 0);
+    assert.equal(directoryResult.quality.symlink_sources, 1);
+
+    const pipelineTarget = path.join(cwd, "pipeline-target");
+    fs.mkdirSync(pipelineTarget);
+    const pipelineLink = path.join(cwd, "pipeline-link");
+    fs.symlinkSync(pipelineTarget, pipelineLink);
+    const rootResult = readEvidenceSources(pipelineLink);
+    assert.equal(rootResult.events.length, 0);
+    assert.equal(rootResult.quality.symlink_sources, 1);
+  });
+
+  it("preserves UTF-8 characters split across read chunks", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const file = path.join(cwd, "run-log.jsonl");
+    const prefix = "{\"padding\":\"";
+    const beforeCharacter = "\",\"value\":\"caf";
+    const padding = "x".repeat((64 * 1024) - 1 - Buffer.byteLength(prefix + beforeCharacter));
+    fs.writeFileSync(file, `${prefix}${padding}${beforeCharacter}é"}\n`);
+    const result = readJsonLinesBounded(file, { maxBytes: 100_000, maxLineBytes: 100_000 });
+    assert.equal(result.quality.malformed_records, 0);
+    assert.equal(result.records[0].value, "café");
+  });
+
+  it("bounds gate size and count while reporting malformed input", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const gates = path.join(cwd, "gates");
+    fs.mkdirSync(gates);
+    fs.writeFileSync(path.join(gates, "stage-01.json"), "not-json");
+    fs.writeFileSync(path.join(gates, "stage-02.json"), JSON.stringify({ padding: "x".repeat(200) }));
+    fs.writeFileSync(path.join(gates, "stage-03.json"), JSON.stringify({ stage: "stage-03" }));
+
+    const result = readGatesBounded(gates, { maxFiles: 2, maxGateBytes: 100 });
+    assert.equal(result.records.length, 0);
+    assert.equal(result.quality.malformed_records, 1);
+    assert.equal(result.quality.oversized_records, 1);
+    assert.equal(result.quality.truncated_sources, 1);
+  });
+});
+
+describe("evidence analyzer", () => {
+  it("aggregates runs, recovery, rulings, stalls, and readiness without free-form text", () => {
+    const secret = "sk-secret-free-form-value";
+    const report = analyzeEvidence({
+      events: [
+        { outcome: "run-start", intent: "feature", reason: secret },
+        { outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect", blockers: [secret] },
+        { outcome: "auto-ruled", grant_class: "formatting-only", ruling: secret },
+        { outcome: "stall-detected", stage: "stage-04", stall_class: "observed", reason: secret },
+        { outcome: "complete" },
+        { outcome: "run-start", intent: "repair" },
+        { outcome: "convergence-halt", stage: "stage-04", failure_class: "code-defect" },
+      ],
+      gates: [],
+      quality: { malformed_records: 0 },
+    });
+
+    assert.equal(report.scope.run_count, 2);
+    assert.equal(report.scope.complete_run_count, 1);
+    assert.equal(report.scope.repair_run_count, 1);
+    assert.deepEqual(report.recovery[0], {
+      stage: "stage-04", failure_class: "code-defect", observations: 2, runs: 2,
+    });
+    assert.equal(report.rulings[0].ruling_class, "formatting-only");
+    assert.equal(report.stalls[0].stall_class, "observed");
+    assert.equal(report.readiness[0].portfolio_status, "not-assessable");
+    assert.match(JSON.stringify(report), /accepted-resolution-signal-unavailable/);
+    assert.doesNotMatch(JSON.stringify(report), new RegExp(secret));
+  });
+
+  it("does not double-count merged and direct current workstream gates", () => {
+    const routing = extractRouting([
+      {
+        source: "current",
+        source_id: "stage-04.json",
+        gate: {
+          stage: "stage-04",
+          status: "PASS",
+          workstreams: [{ workstream: "backend", host: "codex", status: "PASS" }],
+        },
+      },
+      {
+        source: "current",
+        source_id: "stage-04.backend.json",
+        gate: {
+          stage: "stage-04", workstream: "backend", host: "codex", model: "gpt-5",
+          status: "PASS", cost_usd: 0.25,
+        },
+      },
+    ]);
+    assert.equal(routing.length, 1);
+    assert.equal(routing[0].gate_observations, 1);
+    assert.equal(routing[0].cost_observations, 1);
+  });
+});
+
+describe("devteam evidence status", () => {
+  it("reports an empty project successfully", () => {
+    const cwd = track(makeTargetProject());
+    const result = runCLI(["evidence", "status", "--json", "--cwd", cwd]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.schema_version, "1.0");
+    assert.equal(report.scope.run_count, 0);
+    assert.equal(report.readiness.length, 4);
+    const human = runCLI(["evidence", "status", "--cwd", cwd]);
+    assert.match(human.stdout, /no evidence sources found/);
+  });
+
+  it("is read-only and excludes hostile free-form values", () => {
+    const cwd = track(makeTargetProject());
+    const secret = `ghp_${"A".repeat(36)}`;
+    writeLog(path.join(cwd, "pipeline"), [
+      { outcome: "run-start", intent: "feature", reason: secret },
+      { outcome: "fix-retry", stage: "stage-04", failure_class: "code-defect", blockers: [secret] },
+      { outcome: "complete", reason: secret },
+    ]);
+    fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.backend.json"), JSON.stringify({
+      stage: "stage-04",
+      workstream: "backend",
+      host: "codex",
+      model: secret,
+      status: "FAIL",
+      blockers: [secret],
+      warnings: [secret],
+    }));
+    const before = treeSnapshot(cwd);
+
+    const result = runCLI(["evidence", "status", "--json", "--cwd", cwd]);
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.doesNotMatch(result.stdout, new RegExp(secret));
+    assert.deepEqual(treeSnapshot(cwd), before);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.routing[0].model, "other");
+  });
+
+  it("selects a bounded pipeline root from --feature", () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: generic\npipeline:\n  default_track: full\n  isolation: bounded\n",
+    }));
+    writeLog(path.join(cwd, "pipeline", "changes", "checkout-retry"), [
+      { outcome: "run-start", intent: "repair" },
+      { outcome: "complete" },
+    ]);
+    const result = runCLI([
+      "evidence", "status", "--json", "--cwd", cwd, "--feature", "Checkout retry",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.scope.run_count, 1);
+    assert.equal(report.scope.repair_run_count, 1);
+  });
+
+  it("lists the command in global help and rejects unknown subcommands", () => {
+    const help = runCLI(["help"]);
+    assert.match(help.stdout, /evidence status/);
+    const bad = runCLI(["evidence", "export"]);
+    assert.equal(bad.status, 2);
+    assert.match(bad.stderr, /Usage: devteam evidence status/);
+  });
+});

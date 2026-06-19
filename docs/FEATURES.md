@@ -230,6 +230,13 @@ Recording *what* decided a stage is only half the audit story; the record also h
 
 The pipeline records enough data to identify which model performs best for each role on your specific codebase, without manual analysis.
 
+### Evidence readiness — measure before opening capability gates
+
+`devteam evidence status` performs a read-only, bounded aggregation of local run logs
+and gates for the #142–#145 capability thresholds. It reports local contribution
+separately from cross-project conditions and explicitly identifies signals the current
+audit trail cannot prove. See [Evidence Readiness](evidence.md).
+
 ### Cost and token tracking — know what each stage costs
 
 Gates record `tokens_in`, `tokens_out`, `cost_usd`, `model`, and `duration_ms` per stage and per workstream.
