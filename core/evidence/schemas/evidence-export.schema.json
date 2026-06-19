@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:stagecraft:schema:evidence-export:1.0",
+  "title": "Stagecraft privacy-safe evidence export",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "stagecraft_version", "generated_date", "project_ref", "scope", "quality", "routing", "recovery", "rulings", "stalls", "readiness", "suppressed_observations", "payload_sha256"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "stagecraft_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$" },
+    "generated_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "project_ref": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "scope": { "$ref": "#/$defs/scope" },
+    "quality": { "$ref": "#/$defs/quality" },
+    "routing": { "type": "array", "items": { "$ref": "#/$defs/routing" } },
+    "recovery": { "type": "array", "items": { "$ref": "#/$defs/recovery" } },
+    "rulings": { "type": "array", "items": { "$ref": "#/$defs/ruling" } },
+    "stalls": { "type": "array", "items": { "$ref": "#/$defs/stall" } },
+    "readiness": { "type": "array", "items": { "$ref": "#/$defs/readiness" } },
+    "suppressed_observations": { "type": "integer", "minimum": 0 },
+    "payload_sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["project_count", "run_count", "complete_run_count", "repair_run_count"],
+      "properties": {
+        "project_count": { "const": 1 },
+        "run_count": { "type": "integer", "minimum": 0 },
+        "complete_run_count": { "type": "integer", "minimum": 0 },
+        "repair_run_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "quality": {
+      "type": "object", "additionalProperties": false,
+      "required": ["log_present", "gate_files", "malformed_records", "oversized_records", "unreadable_sources", "truncated_sources", "symlink_sources", "orphan_events", "cost_coverage_dispatches"],
+      "properties": {
+        "log_present": { "type": "boolean" },
+        "gate_files": { "type": "integer", "minimum": 0 },
+        "malformed_records": { "type": "integer", "minimum": 0 },
+        "oversized_records": { "type": "integer", "minimum": 0 },
+        "unreadable_sources": { "type": "integer", "minimum": 0 },
+        "truncated_sources": { "type": "integer", "minimum": 0 },
+        "symlink_sources": { "type": "integer", "minimum": 0 },
+        "orphan_events": { "type": "integer", "minimum": 0 },
+        "cost_coverage_dispatches": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "routing": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "host", "model", "gate_observations", "pass", "warn", "fail", "escalate", "cost_observations", "total_cost_usd", "duration_observations", "total_duration_ms"],
+      "properties": {
+        "role": { "$ref": "#/$defs/category" }, "host": { "$ref": "#/$defs/category" }, "model": { "$ref": "#/$defs/category" },
+        "gate_observations": { "$ref": "#/$defs/count" }, "pass": { "$ref": "#/$defs/count" }, "warn": { "$ref": "#/$defs/count" }, "fail": { "$ref": "#/$defs/count" }, "escalate": { "$ref": "#/$defs/count" },
+        "cost_observations": { "$ref": "#/$defs/count" }, "total_cost_usd": { "$ref": "#/$defs/number" },
+        "duration_observations": { "$ref": "#/$defs/count" }, "total_duration_ms": { "$ref": "#/$defs/number" }
+      }
+    },
+    "recovery": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "failure_class", "observations", "runs"],
+      "properties": { "stage": { "$ref": "#/$defs/category" }, "failure_class": { "$ref": "#/$defs/category" }, "observations": { "$ref": "#/$defs/count" }, "runs": { "$ref": "#/$defs/count" } }
+    },
+    "ruling": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ruling_class", "observations"],
+      "properties": { "ruling_class": { "$ref": "#/$defs/category" }, "observations": { "$ref": "#/$defs/count" } }
+    },
+    "stall": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "stall_class", "observations"],
+      "properties": { "stage": { "$ref": "#/$defs/category" }, "stall_class": { "$ref": "#/$defs/category" }, "observations": { "$ref": "#/$defs/count" } }
+    },
+    "readiness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["capability", "issue", "status", "portfolio_status", "local_conditions", "portfolio_reason_code"],
+      "properties": {
+        "capability": { "$ref": "#/$defs/category" }, "issue": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["not-ready", "threshold-met-review-required"] },
+        "portfolio_status": { "enum": ["not-assessable", "not-ready", "threshold-met-review-required"] },
+        "local_conditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+        "portfolio_reason_code": { "anyOf": [{ "$ref": "#/$defs/category" }, { "type": "null" }] }
+      }
+    },
+    "condition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "value", "threshold", "met", "reason_code"],
+      "properties": {
+        "id": { "$ref": "#/$defs/category" }, "value": { "$ref": "#/$defs/number" }, "threshold": { "$ref": "#/$defs/number" }, "met": { "type": "boolean" },
+        "reason_code": { "anyOf": [{ "$ref": "#/$defs/category" }, { "type": "null" }] }
+      }
+    },
+    "category": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,79}$" },
+    "count": { "type": "integer", "minimum": 0 },
+    "number": { "type": "number", "minimum": 0 }
+  }
+}

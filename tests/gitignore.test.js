@@ -29,6 +29,7 @@ describe("writeGitignoreBlock", () => {
     assert.ok(content.includes(BLOCK_END));
     assert.ok(content.includes("pipeline/run.lock"));
     assert.ok(content.includes(".devteam/memory/"));
+    assert.ok(content.includes(".devteam/evidence-project-id"));
   });
 
   it("appends block to existing .gitignore with no block; preserves existing content", () => {

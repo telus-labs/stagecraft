@@ -239,8 +239,8 @@ describe("devteam evidence status", () => {
   it("lists the command in global help and rejects unknown subcommands", () => {
     const help = runCLI(["help"]);
     assert.match(help.stdout, /evidence status/);
-    const bad = runCLI(["evidence", "export"]);
+    const bad = runCLI(["evidence", "unknown"]);
     assert.equal(bad.status, 2);
-    assert.match(bad.stderr, /Usage: devteam evidence status/);
+    assert.match(bad.stderr, /Usage: devteam evidence/);
   });
 });

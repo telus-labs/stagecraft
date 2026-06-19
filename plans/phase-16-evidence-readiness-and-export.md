@@ -1,7 +1,8 @@
 # Phase 16 — Evidence Readiness and Privacy-Safe Export
 
-**Status:** In progress. PR 16.1 privacy/schema review merged as PR #246; PR 16.2
-implements local evidence readiness.
+**Status:** Complete. PR 16.1 privacy/schema review merged as PR #246; PR 16.2
+implements local evidence readiness; PR 16.3 implements opt-in export and portfolio
+analysis.
 **Roadmap item:** Audit P3-1 / Proposal 4.1.
 **Purpose:** make the evidence thresholds for GitHub #142–#145 measurable without
 turning Stagecraft's local audit trail into a telemetry product.
@@ -25,8 +26,8 @@ by the operator. Upload, collection, automatic submission, background telemetry,
 cross-project discovery are permanent non-goals unless a later ADR changes the trust
 model.
 
-The implementation is split into three PRs. PR 16.1 (this proposal) must be approved
-before PR 16.2 or 16.3 begins.
+The implementation was split into three reviewable slices, with the privacy model
+approved before runtime behavior was added.
 
 ---
 
@@ -111,7 +112,7 @@ aggregation boundary. There is no trusted Stagecraft server in this design.
 | Identity leak through repo names, paths, remotes, feature slugs, timestamps, or Git metadata | never read Git identity; exclude paths/change IDs; use date-only generation time | rare category combinations may fingerprint a small project |
 | Cross-export tracking | random local 128-bit identity, exported only as a domain-separated SHA-256 project reference; documented rotation | stable reference intentionally permits correlation across exports until rotated |
 | Accidental export | status is read-only; export requires an explicit subcommand, destination, and consent flag; no default destination and no network | shell history records the destination path |
-| Symlink/path overwrite | refuse existing destination unless `--force`; use exclusive create; reject directories and non-regular existing targets; do not follow a destination symlink | an attacker controlling parent directories can still race local writes; document trusted-directory requirement |
+| Symlink/path overwrite | require a new destination; use exclusive create; reject directories and symlinked parents; never follow or overwrite a destination symlink | an attacker controlling parent directories can still race local writes; document trusted-directory requirement |
 | Log injection / malformed JSON / huge files | line-by-line bounded parsing, type checks, per-file byte ceiling, malformed/truncated counters | skipped records reduce completeness; readiness must report that degradation |
 | Tampered evidence | include deterministic canonical-payload SHA-256 digest and source quality counters; optionally verify gate chains locally | digest detects accidental modification, not malicious regeneration by a local attacker |
 | Re-identification from sparse aggregates | suppress dimensions with fewer than 3 observations in export; merge into `other`; status remains unsuppressed locally | aggregate totals and unusual host/model combinations can still be identifying |
@@ -224,7 +225,7 @@ quietly widen the privacy surface.
 
 - requires `--out` and `--consent`;
 - writes one schema-valid JSON document using exclusive-create semantics;
-- supports `--force` only for an existing regular file selected by the operator;
+- never overwrites; the operator must select a new destination;
 - never sends network requests and never reads host transcripts or source files;
 - records suppressed and malformed counts so privacy/quality tradeoffs stay visible;
 - exits non-zero without writing if identity creation, source analysis, schema
@@ -259,7 +260,7 @@ quietly widen the privacy surface.
 - include malformed, oversized, incomplete, and bounded-isolation fixtures;
 - prove the command is read-only by snapshotting the target tree before/after tests.
 
-**Implemented in the current PR.** The analyzer reports unavailable durable-routing
+**Complete.** The analyzer reports unavailable durable-routing
 and accepted-resolution signals explicitly rather than deriving them from snapshots.
 
 ### PR 16.3 — Opt-in aggregate export
@@ -296,14 +297,10 @@ Phase 16 is complete only when:
 8. lint, consistency, and the full CI-shaped suite pass on Linux, macOS, and the
    existing Windows smoke surface.
 
-## 10. Open review questions
+## 10. Approved implementation decisions
 
-These require approval before implementation:
-
-1. Is stable cross-export correlation via a rotatable random project identity acceptable,
-   or should every export be unlinkable by default?
-2. Is the minimum export cell size of 3 sufficient for expected early adopters, or
-   should v1 use 5 and accept less useful bundles?
-3. Should model identifiers be exported as validated names, grouped by provider, or
-   omitted until D5 has enough cost evidence to justify the fingerprinting risk?
-4. Should `--force` exist in v1, or should export always require a new destination?
+1. Cross-export correlation uses a stable, rotatable random project identity.
+2. The minimum exported dimensional cell size is 3.
+3. Validated model identifiers are included; malformed or secret-shaped values collapse
+   locally to `other` and are rejected at the bundle boundary.
+4. Export always requires a new destination. There is no `--force` in v1.

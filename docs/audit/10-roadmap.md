@@ -79,7 +79,7 @@ npm deploy adapter and is green. Merge it before overlapping deploy-adapter work
 
 ## Batch 4 — Month 2+
 
-### Proposal 4.1 — Evidence readiness and export
+### Proposal 4.1 — Evidence readiness and export (implemented)
 
 - **Item:** P3-1.
 - **Proposal:** local `devteam evidence status` plus an explicitly opt-in, redacted
@@ -87,10 +87,10 @@ npm deploy adapter and is green. Merge it before overlapping deploy-adapter work
 - **Validation criterion:** two external projects can assess #142–#145 without manual
   archaeology and exports contain no source, prompts, secrets, or personal text.
 - **Estimate:** 2–3 weeks including threat/privacy review.
-- **Current status:** PR #246 approved the privacy/schema proposal in
-  [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md).
-  PR 16.2 implements read-only local status; PR 16.3 remains the separately consented,
-  aggregate-only export and portfolio-analysis slice.
+- **Current status:** Phase 16 implements the approved privacy model, local status,
+  separately consented aggregate export, project identity lifecycle, and explicit
+  portfolio analysis. Capability gates remain closed pending real evidence and review.
+  See [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md).
 
 ### Proposal 4.2 — Conversational upstream experiment
 
