@@ -12,7 +12,7 @@ A living list of work beyond the initial migration, organized into seven buckets
 - [E. Developer experience](#e-developer-experience)
 - [F. Integrations — where the team plugs in](#f-integrations--where-the-team-plugs-in)
 - [G. Innovation bets — speculative, future-oriented](#g-innovation-bets--speculative-future-oriented)
-- [Priority queue](#priority-queue-2026-06-18--audit-refresh)
+- [Priority queue](#priority-queue-2026-06-19--phase-19-closeout)
 - [Staying ahead of the curve — bets](#staying-ahead-of-the-curve--bets)
 
 **Cross-references.** Items tagged `[cmp-E-N]` were added or refined on 2026-06-03 after the comparative analysis against six adjacent AI-dev frameworks ([`comparative-analysis.md`](comparative-analysis.md)). Items tagged `[hist-N]` came from `audit-archive/HISTORY.md` § Between-cycle observations. Where multiple sources converge on the same idea, that's recorded inline.
@@ -32,7 +32,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | B | B4 | Observability gate | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B | B5 | Migration safety stage | 5 | 3 | v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | B | B6 | Documentation gate | 3 | 2 | landed in PR #225 · [CHANGELOG](../CHANGELOG.md#unreleased) |
-| B | B7 | Multi-language QA | 4 | 4 | Unreleased · Phase 19 polyglot orchestrator verification |
+| B | B7 | Multi-language QA | 4 | 4 | Unreleased · Phase 19 · PR #264 |
 | B | B8 | Cross-artifact consistency analyze `[cmp-E-1]` | 4 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B9 | Bounded workspace deltas `[cmp-E-2]` | 4 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B10 | Discover Standards preprocessing `[cmp-E-5]` | 3 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
@@ -131,7 +131,7 @@ Retrospective stage proposes changes to `stages.js` / `roles/` / `rules/` based 
 
 ---
 
-## Priority queue (2026-06-18 — audit refresh)
+## Priority queue (2026-06-19 — Phase 19 closeout)
 
 The full evidence, effort/risk ratings, dependencies, and PR sequence now live in the
 [current audit backlog](audit/09-backlog.md) and [roadmap](audit/10-roadmap.md).
@@ -140,9 +140,10 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 
 No ungated implementation item remains from the audit's immediate and targeted
 improvement batches. Phase 16 completed privacy-safe readiness/export, Phase 17 made
-dispatch evidence durable, and Phase 18 added explicit accepted-resolution evidence
-for H3. The next horizon is real collection, followed by review rather than
-calendar-driven capability activation.
+dispatch evidence durable, Phase 18 added explicit accepted-resolution evidence for
+H3, and Phase 19 shipped polyglot verification in PR #264. The next capability horizon
+is real collection followed by review, not calendar-driven activation. E9 conversational
+stage mode remains a discovery proposal until five real users report upstream rigidity.
 
 Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),
 native Windows CI evidence, support wording, and A6 promotion (PR #236), and bounded

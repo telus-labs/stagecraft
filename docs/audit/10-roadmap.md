@@ -2,10 +2,10 @@
 
 ## Roadmap posture
 
-There is no emergency implementation batch. Batches 1–3 and the instrumentation
-portion of Proposal 4.1 are complete. Real-project evidence collection remains the
-active learning priority; user-directed Phase 19 advances independent B7 polyglot QA
-without bypassing any evidence gate.
+There is no emergency implementation batch. Batches 1–3, Proposal 4.1 instrumentation,
+and Phase 19 polyglot verification are complete. Real-project evidence collection is
+the active learning priority. Proposal 4.2 remains discovery-gated and issues #142–#145
+remain evidence-gated.
 
 ## Batch 1 — Immediate
 
@@ -105,6 +105,8 @@ implementation merge gate remains.
   existing brief/gate pair.
 - **Validation criterion:** five real users request it and controlled comparison
   improves AC completeness or reduces clarification retries.
+- **Current status:** discovery threshold not met as of 2026-06-19; implementation and
+  adapter-contract ADR work have not started.
 - **Estimate:** discovery first; 3–5 weeks if validated.
 
 ### Proposal 4.3 — Polyglot orchestrator verification (Phase 19)
@@ -114,7 +116,7 @@ implementation merge gate remains.
   orchestrator-stamped pre-review, QA, and repair verification.
 - **Validation criterion:** mixed-language projects run every detected suite, preserve
   explicit overrides, and fail with per-language evidence when one suite fails.
-- **Current status:** implementation and documentation are in
+- **Current status:** complete in PR #264. Implementation and documentation are in
   [`plans/phase-19-polyglot-verification.md`](../../plans/phase-19-polyglot-verification.md).
 - **Estimate:** one bundled PR; independent of #142–#145.
 
@@ -124,7 +126,8 @@ implementation merge gate remains.
 - PR 2.3 waits for Windows wording from PR 2.2.
 - PR 3.1 and driver-refactor design can run concurrently.
 - PR 3.3 waits for PR 2.3 but can run beside driver extraction.
-- Proposals 4.1–4.3 are independent and do not bypass issue gates.
+- Proposals 4.1 and 4.3 are complete. Proposal 4.2 waits for its five-user discovery
+  threshold and does not bypass issue gates.
 
 ## Roadmap risks
 
