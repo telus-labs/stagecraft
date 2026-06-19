@@ -9,7 +9,7 @@ const { REPO_ROOT, makeTargetProject, cleanup, runCLI } = require("./_helpers");
 const { readJsonLinesBounded, readGatesBounded, readEvidenceSources } = require(
   path.join(REPO_ROOT, "core", "evidence", "readers"),
 );
-const { analyzeEvidence, extractRouting } = require(
+const { analyzeEvidence, extractRouting, extractDurableRouting } = require(
   path.join(REPO_ROOT, "core", "evidence", "analyzer"),
 );
 
@@ -175,6 +175,79 @@ describe("evidence analyzer", () => {
     assert.equal(routing.length, 1);
     assert.equal(routing[0].gate_observations, 1);
     assert.equal(routing[0].cost_observations, 1);
+  });
+
+  it("prefers durable dispatch history and opens only the durable-history condition", () => {
+    const events = [{ outcome: "run-start", intent: "feature" }];
+    for (const host of ["codex", "claude-code"]) {
+      for (let index = 0; index < 5; index++) {
+        events.push({
+          outcome: "dispatch-observation",
+          stage: "stage-04",
+          role: "backend",
+          host,
+          model: `${host}-model`,
+          status: "PASS",
+          cost_usd: 0.1,
+          duration_ms: 100,
+          reason: "excluded free-form value",
+        });
+      }
+    }
+    events.push({ outcome: "complete" });
+    const report = analyzeEvidence({
+      events,
+      gates: [{
+        source: "current",
+        source_id: "stage-04.backend.json",
+        gate: {
+          stage: "stage-04", workstream: "backend", host: "legacy-host",
+          model: "legacy-model", status: "FAIL",
+        },
+      }],
+    });
+
+    assert.equal(extractDurableRouting(events).length, 2);
+    assert.equal(report.routing.length, 2);
+    assert.ok(report.routing.every((row) => row.host !== "legacy-host"));
+    const routingReadiness = report.readiness.find(
+      (item) => item.capability === "d5-continuous-routing",
+    );
+    assert.equal(routingReadiness.local_conditions.find(
+      (item) => item.id === "comparable-roles",
+    ).met, true);
+    assert.equal(routingReadiness.local_conditions.find(
+      (item) => item.id === "cost-covered-observations",
+    ).value, 10);
+    assert.equal(routingReadiness.local_conditions.find(
+      (item) => item.id === "durable-dispatch-history",
+    ).value, 10);
+    assert.doesNotMatch(JSON.stringify(report), /excluded free-form value/);
+  });
+
+  it("keeps legacy gate snapshots visible without treating them as durable history", () => {
+    const report = analyzeEvidence({
+      events: [{ outcome: "run-start", intent: "feature" }],
+      gates: [{
+        source: "current",
+        source_id: "stage-04.backend.json",
+        gate: {
+          stage: "stage-04", workstream: "backend", host: "codex",
+          model: "gpt-5", status: "PASS", cost_usd: 0.2,
+        },
+      }],
+    });
+    assert.equal(report.routing.length, 1);
+    const condition = report.readiness.find(
+      (item) => item.capability === "d5-continuous-routing",
+    ).local_conditions.find((item) => item.id === "durable-dispatch-history");
+    assert.deepEqual(condition, {
+      id: "durable-dispatch-history",
+      value: 0,
+      threshold: 1,
+      met: false,
+      reason_code: "durable-dispatch-history-unavailable",
+    });
   });
 });
 

@@ -89,8 +89,11 @@ npm deploy adapter and is green. Merge it before overlapping deploy-adapter work
 - **Estimate:** 2–3 weeks including threat/privacy review.
 - **Current status:** Phase 16 implements the approved privacy model, local status,
   separately consented aggregate export, project identity lifecycle, and explicit
-  portfolio analysis. Capability gates remain closed pending real evidence and review.
-  See [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md).
+  portfolio analysis. Phase 17 adds durable allowlisted dispatch observations so D5
+  evidence begins accumulating during normal runs. Capability gates remain closed
+  pending real evidence and review. See
+  [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md)
+  and [`plans/phase-17-durable-evidence-instrumentation.md`](../../plans/phase-17-durable-evidence-instrumentation.md).
 
 ### Proposal 4.2 — Conversational upstream experiment
 

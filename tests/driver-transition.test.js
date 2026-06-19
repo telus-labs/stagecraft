@@ -340,7 +340,7 @@ describe("driver transition characterization", () => {
       iterations: 2,
     });
     assert.deepEqual(persisted.outcomes, [
-      "run-start", "heartbeat", "dispatched", "heartbeat", "complete",
+      "run-start", "heartbeat", "dispatch-observation", "dispatched", "heartbeat", "complete",
     ]);
     assert.equal(persisted.state.last_action, "pipeline-complete");
     assert.equal(persisted.state.retries.requirements, 1);
@@ -375,8 +375,8 @@ describe("driver transition characterization", () => {
     assert.equal(summary.completed, true);
     assert.deepEqual(persisted.outcomes, [
       "run-start",
-      "heartbeat", "dispatched", "transient-retry",
-      "heartbeat", "dispatched",
+      "heartbeat", "dispatch-observation", "dispatched", "transient-retry",
+      "heartbeat", "dispatch-observation", "dispatched",
       "heartbeat", "complete",
     ]);
     assert.equal(persisted.state.retries.requirements, 2);
