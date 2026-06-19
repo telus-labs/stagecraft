@@ -24,7 +24,7 @@ const { loadConfig, changeIdFromFeature, changeIdFromSymptom } = require("./conf
 const { pipelineRoot, gatesDir: getGatesDir, logsDir: getLogsDir, prefixPipelineRelative } = require("./paths");
 const { orderedStageNamesForTrack, STAGES } = require("./pipeline/stages");
 const { runAdvise } = require("./advise");
-const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
+const { MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate, pruneArchives } = require("./gates/archive");
 const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
@@ -35,6 +35,13 @@ const {
   transitionResult,
   applyTransitionResult,
 } = require("./driver-transition");
+const {
+  dispatchGuardTransition,
+  normalizeDispatchResults,
+  dispatchOutcomeTransition,
+  targetedFixNoChangeTransition,
+  scopeGateTransition,
+} = require("./driver-dispatch");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -779,6 +786,12 @@ async function run(opts = {}) {
     iterations: 0,
     cost_usd: 0,
   };
+  const applyTransition = (result) => applyTransitionResult(result, {
+    summary,
+    state,
+    logEvent: (entry) => logEvent(cwd, changeId, entry),
+    onEvent,
+  });
 
   // runStart stoplist check (Phase 1 § 1.1 check-point 1 of 2): refuse before
   // any dispatch when the resolved track is in STOPLIST_TRACKS and the brief or
@@ -1234,41 +1247,20 @@ async function run(opts = {}) {
       }
 
       if (r.action === "run-stage" || r.action === "continue-stage") {
-        // Consequence ceiling — irreversible/outward-facing stages need a grant.
-        if (CONSEQUENCE_CEILING.has(r.name) && !allowStages.has(r.name)) {
-          summary.halted = true;
-          summary.halt_action = "ceiling";
-          summary.halt_reason = `consequence ceiling: "${r.name}" requires an explicit human grant (--allow-stage ${r.name})`;
-          logEvent(cwd, changeId, { ...base, outcome: "ceiling-halt" });
-          onEvent({ type: "ceiling", ...base });
+        const guardTransition = dispatchGuardTransition({
+          action: r,
+          base,
+          consequenceCeiling: CONSEQUENCE_CEILING,
+          allowStages,
+          order,
+          untilIndex,
+          until: opts.until,
+          budgetUsd,
+          spent: budgetUsd == null ? 0 : totalCostUsd(cwd, changeId),
+        });
+        if (guardTransition) {
+          applyTransition(guardTransition);
           break;
-        }
-
-        // --until boundary (inclusive): stop before dispatching a later stage.
-        if (untilIndex >= 0) {
-          const idx = order.indexOf(r.name);
-          if (idx > untilIndex) {
-            summary.halted = true;
-            summary.halt_action = "until";
-            summary.halt_reason = `reached --until boundary "${opts.until}"`;
-            logEvent(cwd, changeId, { ...base, outcome: "until-halt" });
-            onEvent({ type: "until", ...base });
-            break;
-          }
-        }
-
-        // Budget — pre-dispatch check. Cost is only known AFTER a dispatch, so
-        // this prevents the NEXT stage, not an overrun of the current one.
-        if (budgetUsd != null) {
-          const spent = totalCostUsd(cwd, changeId);
-          if (spent >= budgetUsd) {
-            summary.halted = true;
-            summary.halt_action = "budget";
-            summary.halt_reason = `budget cap reached: $${spent.toFixed(2)} ≥ $${budgetUsd.toFixed(2)}`;
-            logEvent(cwd, changeId, { ...base, outcome: "budget-halt", cost_usd: spent });
-            onEvent({ type: "budget", ...base, cost_usd: spent });
-            break;
-          }
         }
 
         // Check-point 2 (Phase 1 § 1.1): re-run the stoplist immediately before
@@ -1367,16 +1359,9 @@ async function run(opts = {}) {
             source_stage: targetedFix.source_stage,
           });
         }
-        const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
+        const dispatch = normalizeDispatchResults(runResult);
+        const { results, timedOut: anyTimedOut, wroteGate, stubGate: anyStubGate, exitCode } = dispatch;
         const durationMs = Date.now() - t0;
-        const nonSkipped = results.filter((x) => !x.skipped);
-        const anyTimedOut = results.some((x) => x.timedOut);
-        const wroteGate = nonSkipped.every((x) => x.gatePath);
-        // §stub-gate: true when any workstream left a pre-seeded stub intact.
-        const anyStubGate = nonSkipped.some((x) => x.stubGate);
-        // exitCode is 0 only when every dispatched workstream cleanly exited 0;
-        // any non-zero/null (timeout) collapses to 1 for classification.
-        const exitCode = nonSkipped.length > 0 && nonSkipped.every((x) => x.exitCode === 0) ? 0 : 1;
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
         // Phase 12.2: track stage IDs in state for `devteam commit` cursor.
         if (r.stage && !state.stages_advanced.includes(r.stage)) state.stages_advanced.push(r.stage);
@@ -1392,13 +1377,20 @@ async function run(opts = {}) {
         // Dispatch-time classification (PR-B) — replaces PR-A's no-progress
         // guard. A dispatch that wrote no gate is transient (backoff + retry)
         // until the transient budget is spent, then structural (halt).
-        const dispatchClass = classifyDispatch(
-          { wroteGate, exitCode, timedOut: anyTimedOut, stubGate: anyStubGate },
-          { transientRetries: state.transient[r.name] || 0, maxTransientRetries },
-        );
-        if (dispatchClass === "ok") {
-          state.transient[r.name] = 0;
-          saveRunState(cwd, changeId, state);
+        const outcomeTransition = dispatchOutcomeTransition({
+          action: r,
+          base,
+          transient: state.transient,
+          maxTransientRetries,
+          retryDelayMs,
+          wroteGate,
+          exitCode,
+          timedOut: anyTimedOut,
+          stubGate: anyStubGate,
+        });
+        applyTransition(outcomeTransition);
+        saveRunState(cwd, changeId, state);
+        if (outcomeTransition.details.dispatchClass === "ok") {
 
           if (
             targetedFix
@@ -1406,29 +1398,12 @@ async function run(opts = {}) {
             && targetedFixChanged(cwd, targetedFixSnapshot) === false
           ) {
             const evidence = targetedFixNoSourceChangeEvidence(targetedFixSnapshot);
-            summary.halted = true;
-            summary.halt_action = "resolve-escalation";
-            summary.halt_failure_class = "convergence-exhausted";
-            summary.halt_reason =
-              `targeted fix for "${r.name}" returned without modifying blocker file(s): `
-              + `${evidence}; escalating for a ruling`;
-            summary.blockers = [];
-            summary.no_source_change_evidence = evidence;
-            logEvent(cwd, changeId, {
-              ...base,
-              outcome: "targeted-fix-no-source-change",
-              no_source_change_evidence: evidence,
+            applyTransition(targetedFixNoChangeTransition({
+              action: r,
+              base,
+              evidence,
               workstream: targetedFix.workstream,
-            });
-            onEvent({
-              type: "halt",
-              ...base,
-              action: "resolve-escalation",
-              failure_class: "convergence-exhausted",
-              reason: summary.halt_reason,
-              no_source_change_evidence: evidence,
-              workstream: targetedFix.workstream,
-            });
+            }));
             _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
             break;
           }
@@ -1442,42 +1417,24 @@ async function run(opts = {}) {
           const affectedFiles = opts.affectedFiles || state.affectedFiles || null;
           if (r.stage === "stage-04" && affectedFiles) {
             const outOfScope = _checkScopeGate(cwd, affectedFiles);
-            if (outOfScope.length > 0) {
-              summary.halted = true;
-              summary.halt_action = "scope-gate";
-              summary.halt_failure_class = "scope-gate";
-              summary.halt_reason = `repair scope gate: build touched files outside the diagnosed affected-files set: ${outOfScope.join(", ")}`;
-              summary.out_of_scope = outOfScope;
-              logEvent(cwd, changeId, { ...base, outcome: "scope-gate-fail", out_of_scope: outOfScope });
-              onEvent({ type: "halt", ...base, action: "scope-gate", reason: summary.halt_reason, out_of_scope: outOfScope });
+            const scopeTransition = scopeGateTransition({ base, outOfScope });
+            if (scopeTransition) {
+              applyTransition(scopeTransition);
               break;
             }
           }
 
           continue;
         }
-        if (dispatchClass === "transient") {
-          state.transient[r.name] = (state.transient[r.name] || 0) + 1;
-          saveRunState(cwd, changeId, state);
+        if (outcomeTransition.details.retry) {
           // §stub-gate: delete the stub so next() doesn't treat it as a completed
           // stage gate on the retry loop. The pre-seed runs again before re-dispatch.
-          if (anyStubGate && r.stage) {
+          if (outcomeTransition.details.removeStubGate && r.stage) {
             try { fs.unlinkSync(path.join(gatesDir(cwd, changeId), `${r.stage}.json`)); } catch { /* already gone */ }
           }
-          logEvent(cwd, changeId, { ...base, outcome: "transient-retry", attempt: state.transient[r.name], stub_gate: anyStubGate || undefined });
-          onEvent({ type: "transient-retry", ...base, attempt: state.transient[r.name], delay_ms: retryDelayMs });
           await _sleep(retryDelayMs);
           continue;
         }
-        // structural-input — retrying the same dispatch cannot help.
-        summary.halted = true;
-        summary.halt_action = "structural-input";
-        summary.halt_failure_class = "structural-input";
-        summary.halt_reason =
-          `dispatch of "${r.name}" produced no gate and is not transient ` +
-          `(clean exit with no output, or repeated failure) — input is structurally unworkable`;
-        logEvent(cwd, changeId, { ...base, outcome: "structural-halt" });
-        onEvent({ type: "structural", ...base });
         break;
       }
 

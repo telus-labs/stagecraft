@@ -9,6 +9,13 @@ const {
   transitionResult,
   applyTransitionResult,
 } = require(path.join(REPO_ROOT, "core", "driver-transition"));
+const {
+  dispatchGuardTransition,
+  normalizeDispatchResults,
+  dispatchOutcomeTransition,
+  targetedFixNoChangeTransition,
+  scopeGateTransition,
+} = require(path.join(REPO_ROOT, "core", "driver-dispatch"));
 
 let dirs = [];
 function track(cwd) { dirs.push(cwd); return cwd; }
@@ -56,6 +63,109 @@ describe("driver transition result", () => {
       () => transitionResult(TRANSITION_CONTROLS.CONTINUE, { logEvents: {} }),
       /events must be arrays/,
     );
+  });
+});
+
+describe("driver dispatch handlers", () => {
+  const action = { action: "run-stage", stage: "stage-01", name: "requirements" };
+  const base = { iteration: 1, stage: "stage-01", name: "requirements", action: "run-stage" };
+
+  it("returns typed ceiling, until, and budget guard halts", () => {
+    const common = {
+      action,
+      base,
+      consequenceCeiling: new Set(),
+      allowStages: new Set(),
+      order: ["requirements", "build"],
+      untilIndex: -1,
+      until: null,
+      budgetUsd: null,
+      spent: 0,
+    };
+    const ceiling = dispatchGuardTransition({
+      ...common,
+      consequenceCeiling: new Set(["requirements"]),
+    });
+    const until = dispatchGuardTransition({
+      ...common,
+      action: { ...action, name: "build" },
+      untilIndex: 0,
+      until: "requirements",
+    });
+    const budget = dispatchGuardTransition({ ...common, budgetUsd: 5, spent: 5 });
+
+    assert.equal(ceiling.summaryPatch.halt_action, "ceiling");
+    assert.equal(until.summaryPatch.halt_action, "until");
+    assert.equal(budget.summaryPatch.halt_action, "budget");
+    assert.equal(dispatchGuardTransition(common), null);
+  });
+
+  it("normalizes array and wrapped dispatch results", () => {
+    const direct = normalizeDispatchResults([
+      { gatePath: "gate", exitCode: 0 },
+      { skipped: true, gatePath: null, exitCode: null },
+    ]);
+    const wrapped = normalizeDispatchResults({
+      results: [{ gatePath: null, exitCode: 1, timedOut: true, stubGate: true }],
+    });
+
+    assert.deepEqual(direct, {
+      results: [
+        { gatePath: "gate", exitCode: 0 },
+        { skipped: true, gatePath: null, exitCode: null },
+      ],
+      timedOut: false,
+      wroteGate: true,
+      stubGate: false,
+      exitCode: 0,
+    });
+    assert.equal(wrapped.timedOut, true);
+    assert.equal(wrapped.wroteGate, false);
+    assert.equal(wrapped.stubGate, true);
+    assert.equal(wrapped.exitCode, 1);
+  });
+
+  it("returns typed ok, transient, and structural dispatch outcomes", () => {
+    const common = {
+      action,
+      base,
+      transient: {},
+      maxTransientRetries: 1,
+      retryDelayMs: 25,
+      timedOut: false,
+      stubGate: false,
+    };
+    const ok = dispatchOutcomeTransition({ ...common, wroteGate: true, exitCode: 0 });
+    const transient = dispatchOutcomeTransition({ ...common, wroteGate: false, exitCode: 1 });
+    const structural = dispatchOutcomeTransition({
+      ...common,
+      transient: { requirements: 1 },
+      wroteGate: false,
+      exitCode: 1,
+    });
+
+    assert.equal(ok.details.dispatchClass, "ok");
+    assert.equal(ok.statePatch.transient.requirements, 0);
+    assert.equal(transient.details.retry, true);
+    assert.equal(transient.statePatch.transient.requirements, 1);
+    assert.equal(transient.logEvents[0].outcome, "transient-retry");
+    assert.equal(structural.control, TRANSITION_CONTROLS.HALT);
+    assert.equal(structural.summaryPatch.halt_action, "structural-input");
+  });
+
+  it("builds targeted-fix and scope-gate halt results", () => {
+    const targeted = targetedFixNoChangeTransition({
+      action: { ...action, name: "build" },
+      base,
+      evidence: "Dockerfile",
+      workstream: "platform",
+    });
+    const scope = scopeGateTransition({ base, outOfScope: ["README.md"] });
+
+    assert.equal(targeted.summaryPatch.halt_failure_class, "convergence-exhausted");
+    assert.equal(targeted.logEvents[0].outcome, "targeted-fix-no-source-change");
+    assert.equal(scope.summaryPatch.halt_action, "scope-gate");
+    assert.equal(scopeGateTransition({ base, outOfScope: [] }), null);
   });
 });
 
