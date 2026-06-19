@@ -21,7 +21,7 @@ When a PR touches `pipeline/` or `.devteam/`:
 2. **Checks out Stagecraft** at a pinned version (configurable env var).
 3. **Skips cleanly** if the PR includes no gates. If `pipeline/gates/` is empty or absent, the workflow short-circuits with a `::notice::` and exits green.
 4. **Validates** every gate file with Stagecraft's validator. Exit codes propagate: 0 PASS/WARN (job stays green), 1 malformed (fail), 2 FAIL gate (fail), 3 ESCALATE (fail — surfaces needs-resolution).
-5. **Verifies the tamper-evident gate chain (C6)** with `devteam verify-chain`. Each stage gate commits to a hash of its predecessor; CI recomputes the chain. Exit 0 = intact (unstamped gates reported, not fatal); exit 1 = a stamped gate's recorded `prev_hash` no longer matches its predecessor — an earlier gate changed after it was chained (tampering, or a deliberate earlier-stage re-run that wasn't re-stamped; fix with `devteam stamp-chain` locally). **Blocking by design** — a tamper-evident audit trail is only meaningful if a break fails the build; add `continue-on-error: true` to the step if your project hasn't adopted gate chaining yet.
+5. **Verifies the authenticated gate chain (C6)** with `devteam verify-chain`. CI recomputes predecessor hashes and verifies HMACs when `DEVTEAM_SIGNING_SECRET` is configured. Exit 1 means a hash break, invalid MAC, or signed-only policy violation. Legacy unsigned gates remain warnings unless `pipeline.require_signed_gates: true` is set. **Blocking by design** — an authenticated audit trail is only meaningful when verification failure stops promotion.
 6. **Posts each gate as a GitHub check run** on the PR head commit via `scripts/pr-publish.js`. PASS→success, WARN→neutral, FAIL/ESCALATE→failure. Reviewers see "15/18 stages passing" in the PR's status bar with click-through to per-stage detail.
 7. **Reproducibility drift check** (advisory, doesn't block merge): runs `devteam reproduce` on each gate, surfacing any drift between the recorded `system_prompt_hash` and what would render today.
 
@@ -40,11 +40,12 @@ devteam ci show                          # print the template to stdout (preview
 
 After install:
 
-1. Open `.github/workflows/stagecraft-pr-checks.yml` and edit the two env vars at the top:
+1. Open `.github/workflows/stagecraft-pr-checks.yml` and edit the two Stagecraft env vars at the top:
    - `STAGECRAFT_REPO`: where to fetch Stagecraft from (e.g. `your-org/stagecraft`)
    - `STAGECRAFT_REF`: which Stagecraft version/tag/sha to pin
-2. Commit + push the workflow file.
-3. Open a PR that touches `pipeline/gates/` and watch the checks fire.
+2. Optional authenticated enforcement: add a repository Actions secret named `DEVTEAM_SIGNING_SECRET`, use the same protected secret while running/stamping Stagecraft, and set `pipeline.require_signed_gates: true` in `.devteam/config.yml`. Pull requests from forks do not receive repository secrets and therefore fail strict verification by design.
+3. Commit + push the workflow file.
+4. Open a PR that touches `pipeline/gates/` and watch the checks fire.
 
 ## Required GitHub permissions
 

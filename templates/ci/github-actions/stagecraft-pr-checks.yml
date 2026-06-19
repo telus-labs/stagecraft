@@ -45,6 +45,9 @@ jobs:
       # CUSTOMIZE — point at your Stagecraft fork / release.
       STAGECRAFT_REPO: anthropics/stagecraft
       STAGECRAFT_REF:  v0.8.0
+      # Optional. Add this repository secret and set
+      # pipeline.require_signed_gates: true for authenticated enforcement.
+      DEVTEAM_SIGNING_SECRET: ${{ secrets.DEVTEAM_SIGNING_SECRET }}
     steps:
       - name: Check out the target project
         uses: actions/checkout@v5
@@ -94,16 +97,14 @@ jobs:
         #   2 — FAIL gate (job fails — surface the broken stage)
         #   3 — ESCALATE gate (job fails — needs human resolution)
 
-      - name: Verify the tamper-evident gate chain (C6)
+      - name: Verify the authenticated gate chain (C6)
         if: steps.gates_present.outputs.present == 'true'
         run: node .stagecraft/bin/devteam verify-chain
-        # Each stage gate commits to a hash of its predecessor; this recomputes
-        # the chain. Exit codes:
-        #   0 — chain intact (unstamped gates are reported, not fatal)
-        #   1 — a stamped gate's recorded prev_hash no longer matches its
-        #       predecessor: an earlier gate changed after it was chained —
-        #       tampering, or a deliberate earlier-stage re-run that wasn't
-        #       re-stamped (run `devteam stamp-chain` locally and re-push).
+        # Recomputes predecessor hashes and verifies HMACs when the secret is
+        # available. pipeline.require_signed_gates makes unsigned, unstamped,
+        # or unverifiable gates fatal. Exit codes:
+        #   0 — configured chain policy satisfied
+        #   1 — hash break, invalid MAC, or signed-only policy violation
         # Blocking by design: a tamper-evident audit trail is only meaningful
         # if a break fails the build. If your project hasn't adopted gate
         # chaining yet, add `continue-on-error: true` to make this advisory.

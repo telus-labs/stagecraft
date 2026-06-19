@@ -157,6 +157,16 @@
         "algo": {
           "type": "string",
           "description": "Hashing scheme, e.g. 'sha256-canonical-json' (sorted-key JSON serialization hashed with SHA-256)."
+        },
+        "mac_algo": {
+          "type": "string",
+          "const": "hmac-sha256-canonical-json",
+          "description": "Authentication scheme used for chain.mac. Present when DEVTEAM_SIGNING_SECRET was available while stamping."
+        },
+        "mac": {
+          "type": "string",
+          "pattern": "^hmac-sha256:[0-9a-f]{64}$",
+          "description": "HMAC-SHA256 over canonical JSON of the complete gate, excluding only this field. Authenticates gate content and chain metadata with DEVTEAM_SIGNING_SECRET."
         }
       },
       "additionalProperties": true

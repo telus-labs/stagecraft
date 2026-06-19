@@ -5,7 +5,14 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
-const { stampChain, verifyChain, stampAll, canonicalGateHash } = require(path.join(REPO_ROOT, "core", "gates", "chain"));
+const {
+  stampChain,
+  verifyChain,
+  stampAll,
+  canonicalGateHash,
+  canonicalGateMac,
+  MAC_ALGO,
+} = require(path.join(REPO_ROOT, "core", "gates", "chain"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -18,7 +25,7 @@ function seedAndStamp(cwd) {
   seedGate(cwd, "stage-01", { status: "PASS" });
   seedGate(cwd, "stage-02", { status: "PASS" });
   seedGate(cwd, "stage-03", { status: "PASS" });
-  stampAll(gatesDirOf(cwd), "full");
+  stampAll(gatesDirOf(cwd), "full", { secret: null });
 }
 
 describe("gate chain: stamp", () => {
@@ -37,6 +44,22 @@ describe("gate chain: stamp", () => {
     const a = { status: "PASS", stage: "stage-01", blockers: [] };
     const b = { blockers: [], stage: "stage-01", status: "PASS" };
     assert.equal(canonicalGateHash(a), canonicalGateHash(b));
+  });
+
+  it("signs the complete canonical gate when a secret is supplied", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    const result = stampChain(gatesDirOf(cwd), "requirements", "full", { secret: "test-secret" });
+    const gate = JSON.parse(fs.readFileSync(path.join(gatesDirOf(cwd), "stage-01.json"), "utf8"));
+    assert.equal(result.signed, true);
+    assert.equal(gate.chain.mac_algo, MAC_ALGO);
+    assert.equal(gate.chain.mac, canonicalGateMac(gate, "test-secret"));
+  });
+
+  it("MAC canonicalization is independent of key order", () => {
+    const a = { stage: "stage-01", status: "PASS", chain: { algo: "sha256-canonical-json", mac_algo: MAC_ALGO } };
+    const b = { chain: { mac_algo: MAC_ALGO, algo: "sha256-canonical-json" }, status: "PASS", stage: "stage-01" };
+    assert.equal(canonicalGateMac(a, "test-secret"), canonicalGateMac(b, "test-secret"));
   });
 });
 
@@ -68,7 +91,7 @@ describe("gate chain: verify", () => {
     const cwd = track(makeTargetProject());
     seedGate(cwd, "stage-01", { status: "PASS" });
     seedGate(cwd, "stage-02", { status: "PASS" }); // never stamped
-    stampChain(gatesDirOf(cwd), "requirements", "full"); // stamp only stage-01
+    stampChain(gatesDirOf(cwd), "requirements", "full", { secret: null }); // stamp only stage-01
     const r = verifyChain(gatesDirOf(cwd), "full");
     assert.deepEqual(r.unstamped, ["stage-02"]);
   });
@@ -80,7 +103,7 @@ describe("gate chain: verify", () => {
       status: "PASS",
       resolved_by: { authority: "auto-rule:formatting-only", grant_class: "formatting-only", ruling: "accept defaults", ts: "2026-06-10T00:00:00Z" },
     });
-    stampAll(gatesDirOf(cwd), "full");
+    stampAll(gatesDirOf(cwd), "full", { secret: null });
     const r = verifyChain(gatesDirOf(cwd), "full");
     assert.equal(r.ok, true);
     assert.ok(r.resolved.some((x) => x.stage === "stage-02" && x.authority === "auto-rule:formatting-only"));
@@ -94,7 +117,91 @@ describe("gate chain: verify", () => {
     g1.status = "WARN";
     fs.writeFileSync(p1, JSON.stringify(g1, null, 2) + "\n");
     assert.equal(verifyChain(gatesDirOf(cwd), "full").ok, false);
-    stampAll(gatesDirOf(cwd), "full"); // deliberate re-stamp
+    stampAll(gatesDirOf(cwd), "full", { secret: null }); // deliberate re-stamp
     assert.equal(verifyChain(gatesDirOf(cwd), "full").ok, true);
+  });
+
+  it("verifies every signed gate with the correct secret", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedGate(cwd, "stage-02", { status: "PASS" });
+    stampAll(gatesDirOf(cwd), "full", { secret: "test-secret" });
+    const r = verifyChain(gatesDirOf(cwd), "full", { secret: "test-secret", requireSigned: true });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.unsigned, []);
+    assert.deepEqual(r.invalid_macs, []);
+  });
+
+  it("rejects a signed gate when content changes or the secret is wrong", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    stampAll(gatesDirOf(cwd), "full", { secret: "test-secret" });
+    const gatePath = path.join(gatesDirOf(cwd), "stage-01.json");
+    const gate = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    gate.status = "WARN";
+    fs.writeFileSync(gatePath, JSON.stringify(gate, null, 2) + "\n");
+    assert.deepEqual(verifyChain(gatesDirOf(cwd), "full", { secret: "test-secret" }).invalid_macs, [
+      { stage: "stage-01", reason: "mac-mismatch" },
+    ]);
+    assert.equal(verifyChain(gatesDirOf(cwd), "full", { secret: "wrong-secret" }).ok, false);
+  });
+
+  it("warns when signed gates cannot be verified, and signed-only mode fails", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    stampAll(gatesDirOf(cwd), "full", { secret: "test-secret" });
+    const compatible = verifyChain(gatesDirOf(cwd), "full", { secret: null });
+    assert.equal(compatible.ok, true);
+    assert.deepEqual(compatible.unverified_signatures, ["stage-01"]);
+    assert.equal(verifyChain(gatesDirOf(cwd), "full", { secret: null, requireSigned: true }).ok, false);
+  });
+
+  it("rejects malformed MACs even when the signing secret is unavailable", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    stampAll(gatesDirOf(cwd), "full", { secret: "test-secret" });
+    const gatePath = path.join(gatesDirOf(cwd), "stage-01.json");
+    const gate = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    gate.chain.mac = "hmac-sha256:not-a-mac";
+    fs.writeFileSync(gatePath, JSON.stringify(gate, null, 2) + "\n");
+    const r = verifyChain(gatesDirOf(cwd), "full", { secret: null });
+    assert.equal(r.ok, false);
+    assert.deepEqual(r.invalid_macs, [{ stage: "stage-01", reason: "malformed-mac" }]);
+    assert.deepEqual(r.unverified_signatures, []);
+  });
+
+  it("signed-only mode rejects unsigned history and hash-only re-stamping", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    seedGate(cwd, "stage-02", { status: "PASS" });
+    stampAll(gatesDirOf(cwd), "full", { secret: "test-secret" });
+
+    const gatePath = path.join(gatesDirOf(cwd), "stage-01.json");
+    const gate = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    gate.status = "WARN";
+    fs.writeFileSync(gatePath, JSON.stringify(gate, null, 2) + "\n");
+    for (const stage of ["stage-01", "stage-02"]) {
+      const stagePath = path.join(gatesDirOf(cwd), `${stage}.json`);
+      const stagedGate = JSON.parse(fs.readFileSync(stagePath, "utf8"));
+      delete stagedGate.chain.mac;
+      delete stagedGate.chain.mac_algo;
+      fs.writeFileSync(stagePath, JSON.stringify(stagedGate, null, 2) + "\n");
+    }
+    stampAll(gatesDirOf(cwd), "full", { secret: null });
+
+    const r = verifyChain(gatesDirOf(cwd), "full", { secret: "test-secret", requireSigned: true });
+    assert.equal(r.ok, false);
+    assert.deepEqual(r.unsigned, ["stage-01", "stage-02"]);
+  });
+
+  it("refuses to overwrite an authenticated gate when the secret is absent", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { status: "PASS" });
+    stampAll(gatesDirOf(cwd), "full", { secret: "test-secret" });
+    const before = fs.readFileSync(path.join(gatesDirOf(cwd), "stage-01.json"), "utf8");
+    const r = stampAll(gatesDirOf(cwd), "full", { secret: null });
+    assert.deepEqual(r.stamped, []);
+    assert.match(r.failed[0].reason, /refusing to overwrite/);
+    assert.equal(fs.readFileSync(path.join(gatesDirOf(cwd), "stage-01.json"), "utf8"), before);
   });
 });

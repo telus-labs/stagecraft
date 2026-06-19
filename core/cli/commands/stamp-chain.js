@@ -26,6 +26,15 @@ function run(positional, _flags) {
     || config.pipeline.default_track || "full";
   const r = stampAll(getGatesDir(cwd, null), track);
   console.log(`Stamped chain on ${r.stamped.length} stage gate(s): ${r.stamped.join(", ") || "(none)"}`);
+  if (r.signed.length) {
+    console.log(`Authenticated ${r.signed.length} stage gate(s) with DEVTEAM_SIGNING_SECRET.`);
+  } else if (r.stamped.length) {
+    console.log("No DEVTEAM_SIGNING_SECRET set; gates were stamped without authentication.");
+  }
+  for (const failure of r.failed) {
+    console.error(`Could not stamp ${failure.stage}: ${failure.reason}`);
+  }
+  if (r.failed.length) process.exit(1);
 }
 
 module.exports = { name, flags, run };

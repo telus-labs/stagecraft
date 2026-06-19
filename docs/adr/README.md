@@ -50,6 +50,7 @@ What else was on the table and why we didn't pick those.
 | [008](008-exit-semantics.md) | Exit semantics: pipeline-complete exit code when `advise` still reports blockers; four options and CI implications | Accepted |
 | [009](009-repair-mode.md) | Repair mode: `devteam run --repair` as an intent flag (orthogonal to `--track`); fix-aware artifacts on existing stages, reusing PATCH MODE + the spec→stamp chain | Accepted |
 | [010](010-git-integration.md) | Git integration: managed gitignore block via `devteam init`, `devteam commit` as primary git interface, `--auto-commit` on clean halts, `last_committed_stage_index` cursor | Accepted |
+| [011](011-authenticated-gate-chain.md) | Authenticated gate chain: optional HMAC-SHA256, explicit signed-only policy, provider-neutral KMS path deferred | Accepted |
 
 ### Deferred
 

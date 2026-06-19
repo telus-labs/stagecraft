@@ -112,13 +112,21 @@ Stage-level gates carry an optional `chain` field committed by the orchestrator
   "chain": {
     "prev_stage": "stage-04",
     "prev_hash": "sha256:…",
-    "algo": "sha256-canonical-json"
+    "algo": "sha256-canonical-json",
+    "mac_algo": "hmac-sha256-canonical-json",
+    "mac": "hmac-sha256:…"
   }
 }
 ```
 
-Use `devteam verify-chain` to check; `devteam stamp-chain` to re-stamp after
-a deliberate earlier-stage re-run. See `core/gates/chain.js`.
+When `DEVTEAM_SIGNING_SECRET` is set, stamping also authenticates the complete
+gate (including predecessor metadata) with HMAC-SHA256. The secret is never
+accepted as a CLI argument or written to disk. Use `devteam verify-chain` to
+check; add `--require-signed`, or set `pipeline.require_signed_gates: true`, to
+reject unsigned or unverifiable gates. Without signed-only policy, legacy
+unsigned gates remain compatible and are reported as warnings. Use
+`devteam stamp-chain` after a deliberate earlier-stage re-run. See
+`core/gates/chain.js` and ADR-011.
 
 ## What the validator enforces
 

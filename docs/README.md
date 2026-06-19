@@ -41,6 +41,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [BACKLOG.md](BACKLOG.md) — prioritized open ideas by bucket
 - [TESTING.md](TESTING.md) — test structure and guidance
 - [adr/README.md](adr/README.md) — architecture decision records index
+- [adr/011-authenticated-gate-chain.md](adr/011-authenticated-gate-chain.md) — HMAC gate authentication, strict policy, and trust boundaries
 - [autonomous-execution-design.md](autonomous-execution-design.md) — design notes for the bounded autonomous driver (companion to ADR-003)
 - [spec-authoring.md](spec-authoring.md) — writing AC-N criteria and scaffolding the spec file
 - [migration-safety.md](migration-safety.md) — veto criteria, gate fields, and the migration heuristic
