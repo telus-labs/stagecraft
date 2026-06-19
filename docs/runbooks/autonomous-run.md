@@ -39,6 +39,32 @@ the driver auto-rules a given escalation **at most once** — if it re-escalates
 it halts. The grant is **CLI-only and per-run** (nothing persists in the repo),
 and is an **allowlist only** (no wildcard).
 
+### Choosing which classes to pass
+
+There is no fixed enumeration of valid classes. The class slug is whatever the
+Principal writes in its `[class: <slug>]` suffix — it varies by project and
+ruling content. To discover what classes a run will actually emit, **do a dry
+run without `--auto-rule`**: the driver halts at each escalation, and
+`pipeline/run-log.jsonl` records the `grant_class` the Principal used. Review
+those entries, decide which categories you are comfortable approving
+autonomously, and re-run with `--auto-rule` set to exactly those slugs.
+
+Common classes the Principal emits (from its own examples):
+
+| Class | Typical ruling content |
+|---|---|
+| `formatting-only` | Whitespace, naming style, no semantic change |
+| `doc-only` | Comment or documentation update only |
+| `known-safe-dependency-bump` | Version bump with no breaking API change |
+| `scope-cut` | Removing a deliverable from scope |
+| `security-tradeoff` | Accepting a documented security constraint |
+| `diagnosis-approved` | Special: auto-approves the repair-mode diagnosis gate (see [§ Repair mode](#repair-mode-devteam-run---repair-adr-009)) |
+
+The Principal's prompt instructs it to pick the **narrowest honest class** and
+never inflate a class to match a suspected grant. `unclassified` is the
+fallback when the ruling doesn't fit a narrow category — it is never
+auto-applied regardless of what you pass.
+
 ---
 
 ## Pre-run checklist
