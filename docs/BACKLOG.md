@@ -32,6 +32,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | B | B4 | Observability gate | 4 | 2 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | B | B5 | Migration safety stage | 5 | 3 | v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | B | B6 | Documentation gate | 3 | 2 | landed in PR #225 · [CHANGELOG](../CHANGELOG.md#unreleased) |
+| B | B7 | Multi-language QA | 4 | 4 | Unreleased · Phase 19 polyglot orchestrator verification |
 | B | B8 | Cross-artifact consistency analyze `[cmp-E-1]` | 4 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B9 | Bounded workspace deltas `[cmp-E-2]` | 4 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | B | B10 | Discover Standards preprocessing `[cmp-E-5]` | 3 | 3 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
@@ -81,9 +82,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 
 ## B. Pipeline depth — more/richer stages
 
-| # | Idea | I | E | Notes |
-|---|---|---|---|---|
-| B7 | **Multi-language QA** | 4 | 4 | Stage 6 currently assumes one test framework. Real projects have JS + Python + Go. Per-language test runners with a merged report. |
+No open items. B7 moved to [Shipped](#shipped) in Phase 19.
 
 ## C. Quality & safety — enforcement, sandboxing, scanning
 

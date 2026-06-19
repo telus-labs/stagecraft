@@ -211,7 +211,7 @@ Commands:
                                    the orchestrator's truth disagrees with the
                                    model's claim. Commands resolve from
                                    .devteam/config.yml pipeline.verify.* or
-                                   package.json scripts.
+                                   auto-discovered Node, pytest, and Go suites.
   replay <stage-id> [--dry-run]    Re-run a recorded stage with CURRENT
        [--json]                     config and diff the result. Writes the
                                    new gate to pipeline/gates/replay/<stage>.

@@ -20,9 +20,9 @@ const DEFAULTS = {
     skip_stages: [],
     // verify: optional. Holds orchestrator-stamped verification commands
     // for stages that the orchestrator can verify directly (stage-04a
-    // and stage-06 today). Absent means "discover from package.json
-    // scripts or skip"; explicit null on a field means "skip even if
-    // discoverable." See core/verify/runner.js → resolveCommands.
+    // and stage-06 today). Absent test config discovers Node, pytest,
+    // and Go suites; explicit null means "skip even if discoverable."
+    // See core/verify/runner.js.
     verify: {},
     // G6: custom_stages overrides default_track when set. An array of
     // stage names, e.g. ["requirements","build","pre-review","peer-review"].
@@ -189,7 +189,7 @@ function renderDefaultConfig(hosts, opts = {}) {
   lines.push("  # skip_stages: []     # stage names to skip, e.g. [red-team]");
   lines.push("  # verify:             # orchestrator-stamped verification commands");
   lines.push("  #   lint_command: \"npm run lint\"   # override; defaults to package.json scripts.lint");
-  lines.push("  #   test_command: \"npm test\"      # override; set to null to disable");
+  lines.push("  #   test_command: \"npm test\"      # exclusive override; null disables auto-discovery");
   lines.push("");
   if (opts.adapter) {
     lines.push("deploy:");

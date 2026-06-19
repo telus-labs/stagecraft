@@ -1084,6 +1084,23 @@ Skipped stages are silently passed over by `devteam next` and shown as `skipped 
 
 Note that `skip_stages` accepts stage names (e.g. `red-team`, `verification-beyond-tests`), not stage IDs (e.g. `stage-04c`). Run `devteam stages` to see valid names.
 
+### Verification commands
+
+Without configuration, orchestrator verification runs every detected Node, pytest, and
+Go test suite. Use an exclusive command when the project has a different runner or a
+single monorepo entry point:
+
+```yaml
+pipeline:
+  verify:
+    lint_command: "npm run lint"
+    test_command: "make test"  # replaces automatic Node/pytest/Go discovery
+```
+
+Set either value to `null` to disable that check explicitly. See
+[`docs/TESTING.md`](TESTING.md#target-project-test-discovery) for discovery signals and
+the stamped aggregate result.
+
 ### Controlling token cost
 
 Three factors you control drive most of the token cost per stage:

@@ -25,7 +25,8 @@ async function run(positional, _flags) {
     console.error("                         all_acceptance_criteria_met and the test exit code");
     console.error("");
     console.error("Commands resolve from .devteam/config.yml pipeline.verify.{lint,test}_command");
-    console.error("if set; otherwise from package.json scripts.{lint,test}; otherwise skipped.");
+    console.error("if set. Otherwise lint uses package.json scripts.lint; tests discover");
+    console.error("package.json scripts.test, pytest projects, and Go modules.");
     console.error("");
     console.error("On verification failure, the gate's status flips to FAIL and the orchestrator");
     console.error("records a structured _orchestrator_stamped entry with commands, exit codes,");
@@ -61,6 +62,12 @@ async function run(positional, _flags) {
     } else if (run.command) {
       const exitLabel = run.exit_code === 0 ? "✓" : `✗ exit ${run.exit_code}`;
       console.log(`   ${r}: ${exitLabel}  $ ${run.command}  (${run.duration_ms}ms)`);
+      if (Array.isArray(run.suites)) {
+        for (const suite of run.suites) {
+          const suiteExit = suite.exit_code === 0 ? "✓" : `✗ exit ${suite.exit_code}`;
+          console.log(`      ${suite.id}: ${suiteExit}  $ ${suite.command}  (${suite.duration_ms}ms)`);
+        }
+      }
     } else if (run.unmapped_acs) {
       console.log(`   ${r}: brief has ${run.brief_ac_count} AC(s), report covers ${run.report_ac_count}, unmapped: ${run.unmapped_acs.join(", ") || "none"}`);
     }

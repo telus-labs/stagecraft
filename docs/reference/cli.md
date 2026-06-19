@@ -292,7 +292,7 @@ Report what was recorded for a stage (model version, temperature, seed, prompt h
 
 ### `devteam verify <stage-id> [options]`
 
-Orchestrator-stamped verification: run configured commands and rewrite gate fields with observed reality.
+Orchestrator-stamped verification: run configured or auto-discovered Node, pytest, and Go suites, then rewrite gate fields with observed reality.
 
 | Flag   | Type   | Description              |
 | ------ | ------ | ------------------------ |
