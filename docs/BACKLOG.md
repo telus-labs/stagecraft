@@ -139,16 +139,27 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 
 ### Immediate and near-term
 
-1. **Dashboard HTML safety + lifecycle (audit P1-1/P1-4).** PR #235 adds
-   text-safe rendering, hostile-gate regressions, browser hardening, and timer cleanup.
-2. **Current-truth reconciliation (audit P1-3).** Correct stale schema vocabulary,
-   canonical tool-budget ownership, support wording, counts, links, and comments.
-3. **Bound transcript memory (audit P2-1).** Replace unbounded in-memory host
-   transcript accumulation with a bounded durable writer.
-4. **Decompose the autonomous driver (audit P2-2).** Extract transition handlers
-   under characterization tests without mixing capability changes.
+No ungated implementation item remains from the audit's immediate and targeted
+improvement batches. The next implementation horizon requires the evidence and
+privacy work described below.
+
+Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),
+native Windows CI evidence, support wording, and A6 promotion (PR #236), and bounded
+durable transcript streaming (PR #237). Current-truth reconciliation removed the
+remaining P1-3 ownership, vocabulary, comment, count, link, and provider drift.
+Stable-fact consistency now locks schema vocabulary, Node/platform support, and the
+absence of volatile test totals while leaving audit history untouched (audit P2-3).
+The autonomous driver decomposition is complete: characterization, dispatch/transient,
+and fix/ruling/merge transitions landed as three behavior-preserving slices while
+`run()` retained lock, loop, effect, and final-persistence ownership (audit P2-2).
 
 ### Evidence-gated next horizon
+
+- **P3-1 — evidence readiness and export.** PR #246 approved the privacy threat model,
+  minimum-data contract, pseudonymous project identity, consent boundary, and
+  three-PR sequence in [`plans/phase-16-evidence-readiness-and-export.md`](../plans/phase-16-evidence-readiness-and-export.md).
+  Phase 16.2 adds read-only local readiness; aggregate export remains Phase 16.3. None
+  of this work opens the capability gates below by itself.
 
 - **D5 maturation — continuous adaptive routing.** Today D5 proposes role-level swaps; the mature form re-routes the *next* run based on the prior run's outcomes automatically. **Evidence review done (2026-06-14, `plans/adaptive-routing-evidence.md`):** zero real-run telemetry — the only gate data on disk is the hand-authored `examples/sms-opt-in` fixture (max 4 dispatches per role, no cost fields). The tool's MIN_DISPATCHES=5 guard fires for all 6 roles; no signal, no recommendations. Gate stays shut pending ≥5 dispatches per (role, host) pair across ≥2 real user projects and cost telemetry. ADR-007 Tier 1 (liveness heartbeat + observe-only stall probe) implemented in Phase 11.1; ADR-008 (advisory sweep + `--fail-on-advisory`) implemented in Phase 11.2; ADR-007 Tier 2 (kill policy + `--watch`) evidence-gated in 11.4.
 - **H3 — Recipe factory (escalation→recipe learning)** (Phase 3 of [ADR-003](adr/003-bounded-autonomous-execution.md) · [design](autonomous-execution-design.md)). Persist resolved escalations as semantically-indexed fix-recipes via the existing `core/memory/` embedding store (D7); `computeFixSteps` consults it on a FAIL signature before escalating, so recurring *derivable* failures resolve deterministically. **Evidence review done (2026-06-14, `plans/h3-ground-truth.md`):** zero real run logs/archives and no recurring unresolved class. Gate stays shut pending ≥2 real projects each with ≥5 autonomous runs reaching fix-and-retry. Tracked by GitHub #142.

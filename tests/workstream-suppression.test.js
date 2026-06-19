@@ -10,7 +10,6 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
-const os = require("node:os");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
 const { computeDispatchPlan, mergeWorkstreamGates } = require(path.join(REPO_ROOT, "core", "orchestrator"));

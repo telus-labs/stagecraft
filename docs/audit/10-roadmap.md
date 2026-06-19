@@ -87,6 +87,10 @@ npm deploy adapter and is green. Merge it before overlapping deploy-adapter work
 - **Validation criterion:** two external projects can assess #142–#145 without manual
   archaeology and exports contain no source, prompts, secrets, or personal text.
 - **Estimate:** 2–3 weeks including threat/privacy review.
+- **Current status:** PR #246 approved the privacy/schema proposal in
+  [`plans/phase-16-evidence-readiness-and-export.md`](../../plans/phase-16-evidence-readiness-and-export.md).
+  PR 16.2 implements read-only local status; PR 16.3 remains the separately consented,
+  aggregate-only export and portfolio-analysis slice.
 
 ### Proposal 4.2 — Conversational upstream experiment
 

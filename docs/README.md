@@ -22,6 +22,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [ci.md](ci.md) — GitHub Actions workflow template and environment variables
 - [memory.md](memory.md) — persistent project memory: embedder options and shared store
 - [observability.md](observability.md) — OpenTelemetry span schema and collector setup
+- [evidence.md](evidence.md) — read-only readiness for evidence-gated capabilities
 - [reproducibility.md](reproducibility.md) — gate fingerprint fields, replay readiness, drift detection
 - [runbooks/escalation.md](runbooks/escalation.md) — what to read and decide when `devteam next` says `resolve-escalation`
 - [runbooks/fix-and-retry.md](runbooks/fix-and-retry.md) — fix-and-retry halt: red-team, QA, pre-review, peer-review (11 cases)

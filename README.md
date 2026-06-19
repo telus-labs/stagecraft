@@ -116,7 +116,7 @@ Full feature catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**.
 
 **Platform:** macOS, Linux, and native Windows are supported. CI exercises the core Windows portability surface on Node 22: CLI startup, initialization, diagnostics, quoted host commands, executable discovery, and timeout termination. WSL2 remains a supported option when a host CLI or project toolchain expects a POSIX shell.
 
-- Node.js ≥ 18
+- Node.js ≥ 20
 - At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), **Gemini CLI** (`gemini --version` works), or just a terminal (generic adapter — prompts rendered for manual use, no automation)
 - Git (recommended for version-controlling artifacts; the pipeline itself does not require it)
 

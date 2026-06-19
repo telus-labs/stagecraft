@@ -1,0 +1,1 @@
+- Reconcile current documentation and maintenance guidance with shipped Windows support, canonical role-tool ownership, performance-gate vocabulary, bounded autonomy, and supported embedding providers.

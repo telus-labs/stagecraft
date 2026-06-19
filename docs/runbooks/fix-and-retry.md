@@ -572,8 +572,8 @@ devteam next
 The build agent was denied a tool call it attempted. Two distinct shapes:
 
 **Shape A — native tool-budget denial (claude-code host).** The host enforced the role's
-declared `tools:` budget (from `ROLE_FRONTMATTER` in `hosts/claude-code/adapter.js`). Claude
-Code refused the tool call at the boundary; the workstream gate records `dispatched_tool_budget`
+declared tool budget from `core/roles.js`, rendered as the subagent's `tools:` frontmatter.
+Claude Code refused the tool call at the boundary; the workstream gate records `dispatched_tool_budget`
 showing what was permitted. The agent's reasoning or a task in `pipeline/logs/` may reference a
 permission error.
 

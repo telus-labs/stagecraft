@@ -34,8 +34,8 @@ const DEFAULTS = {
     // ADR-003 / H1: retry budget before `next()` escalates a still-FAIL stage
     // (failure_class "convergence-exhausted") instead of returning
     // fix-and-retry again. Count-based ceiling on the gate's retry_number.
-    // Progress-based detection (blocker count decreasing across attempts) is a
-    // follow-up — it requires gate archiving, which this layer does not add.
+    // This count ceiling complements the archived-attempt progress and
+    // convergence checks in core/gates/convergence.js.
     // 0 = escalate on the first FAIL.
     max_retries: 2,
     // ADR-006: when true, an inferred pipeline/track.json at medium/low confidence
@@ -230,9 +230,8 @@ function changeIdFromSymptom(symptom) { return changeIdFromFeature(symptom); }
 // usage and asserts this list matches reality — so the fence cannot silently
 // go stale when a command is wired.
 //
-// All seven commands were wired in commit 2 of Phase 5.4; this list is now
-// empty. It remains exported so the meta-test can assert that parity holds
-// and so that future additions can be caught before they silently misread paths.
+// The list is empty now. It remains exported so the meta-test can assert parity
+// and catch future commands before they silently misread bounded paths.
 const BOUNDED_UNWIRED_COMMANDS = [];
 
 // Throw if isolation:bounded is active for an unwired command and the

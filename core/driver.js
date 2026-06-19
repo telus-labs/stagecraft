@@ -1,18 +1,10 @@
-// Bounded autonomous driver (ADR-003 / BACKLOG H2, Phase 1 PR-A).
+// Bounded autonomous driver (ADR-003, ADR-006, ADR-009).
 //
-// `devteam run` advances the pipeline unattended on the happy path and HALTS
-// cleanly at the first thing that needs a human — it does not auto-fix or
-// auto-rule yet (that is PR-B / Phase 2). The driver is deterministic CODE; the
-// only LLMs in the loop are the dispatched workstream agents inside
-// runStageHeadless.
-//
-// The loop is a thin switch over next()'s action + failure_class:
-//   run-stage / continue-stage → dispatch (in-process via runStageHeadless)
-//   merge                       → mergeWorkstreamGates
-//   fold-sign-off               → write stage-07.json, log the event, loop
-//   fix-and-retry               → HALT and surface failure_class (PR-B acts)
-//   resolve-escalation          → HALT for a human ruling/grant
-//   pipeline-complete           → done
+// `devteam run` advances the pipeline through dispatch, merge, targeted repair,
+// derived gate clearing, and granted rulings. Count, progress, consequence, cost,
+// and iteration ceilings keep autonomy bounded; judgment and external blockers
+// halt for a human. The driver is deterministic code. Models run only inside
+// dispatched host workstreams and principal rulings.
 //
 // next() never writes files; fold-sign-off is the mechanism by which the
 // driver persists the auto-fold gate and makes it visible in the audit log.
@@ -32,12 +24,36 @@ const { loadConfig, changeIdFromFeature, changeIdFromSymptom } = require("./conf
 const { pipelineRoot, gatesDir: getGatesDir, logsDir: getLogsDir, prefixPipelineRelative } = require("./paths");
 const { orderedStageNamesForTrack, STAGES } = require("./pipeline/stages");
 const { runAdvise } = require("./advise");
-const { classifyDispatch, MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
+const { MAX_RETRIES_DEFAULT, MAX_TRANSIENT_RETRIES_DEFAULT } = require("./gates/classify");
 const { loadPrincipalOutputs, runRuling, runFixEscalation } = require("./escalation");
 const { archiveGate, pruneArchives } = require("./gates/archive");
 const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 const { upsertSection } = require("./markers");
+const {
+  TRANSITION_CONTROLS,
+  transitionResult,
+  applyTransitionResult,
+} = require("./driver-transition");
+const {
+  dispatchGuardTransition,
+  normalizeDispatchResults,
+  dispatchOutcomeTransition,
+  targetedFixNoChangeTransition,
+  scopeGateTransition,
+} = require("./driver-dispatch");
+const {
+  retryBudgetTransition,
+  convergenceTransition,
+  blockedFixTransition,
+  fixRetryTransition,
+  nonCodeFixTransition,
+  rulingPreflightTransition,
+  rulingOutcomeTransition,
+  rulingAppliedTransition,
+  rulingDispatchVerificationTransition,
+  mergeTransition,
+} = require("./driver-recovery");
 
 // Default escalation runners: render + dispatch the Principal / applicator
 // IN-PROCESS via core/escalation.js (no subprocess hop). Both are injectable
@@ -782,6 +798,12 @@ async function run(opts = {}) {
     iterations: 0,
     cost_usd: 0,
   };
+  const applyTransition = (result) => applyTransitionResult(result, {
+    summary,
+    state,
+    logEvent: (entry) => logEvent(cwd, changeId, entry),
+    onEvent,
+  });
 
   // runStart stoplist check (Phase 1 § 1.1 check-point 1 of 2): refuse before
   // any dispatch when the resolved track is in STOPLIST_TRACKS and the brief or
@@ -802,10 +824,8 @@ async function run(opts = {}) {
     return true; // halted
   }
 
-  // ADR-009 §Decision.1: patchItems for repair mode. Populated from the symptom
-  // until 10.2's diagnosis supplies an affected-files list + structured items.
-  // 10.2: made mutable — updated from the diagnosis gate's affected_files once
-  // stage-01 PASSes, so the build stage receives a structured list not just the symptom.
+  // Repair mode starts with the reported symptom, then replaces it with the
+  // diagnosis gate's affected_files after stage-01 passes.
   let repairPatchItems = opts.repair ? [opts.repair] : null;
 
   try {
@@ -955,7 +975,6 @@ async function run(opts = {}) {
       };
 
       if (r.action === "pipeline-complete") {
-        summary.completed = true;
         // ADR-008: post-completion advise sweep. Classify all noted_for_followup
         // items to surface advisory blockers without altering the exit contract.
         // Best-effort: a sweep failure must never break a clean run.
@@ -974,8 +993,16 @@ async function run(opts = {}) {
           summary.advisory_blockers_count = adviseResult.unresolvedBlockers;
           summary.advisory_breakdown = breakdown;
         } catch { /* sweep failure must never break the run */ }
-        logEvent(cwd, changeId, { ...base, outcome: "complete" });
-        onEvent({ type: "complete", ...base });
+        applyTransitionResult(transitionResult(TRANSITION_CONTROLS.COMPLETE, {
+          summaryPatch: { completed: true },
+          logEvents: [{ ...base, outcome: "complete" }],
+          emittedEvents: [{ type: "complete", ...base }],
+        }), {
+          summary,
+          state,
+          logEvent: (entry) => logEvent(cwd, changeId, entry),
+          onEvent,
+        });
         break;
       }
 
@@ -1023,14 +1050,11 @@ async function run(opts = {}) {
 
       if (r.action === "fix-and-retry" && r.failure_class === "code-defect") {
         const attempts = state.fixRetries[r.name] || 0;
-        if (attempts >= maxRetries) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "convergence-exhausted";
-          summary.halt_reason = `driver retry budget exhausted for "${r.name}" (${attempts}/${maxRetries}); escalating`;
-          summary.blockers = r.blockers || [];
-          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt" });
-          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers });
+        const budgetTransition = retryBudgetTransition({
+          action: r, base, attempts, maxRetries,
+        });
+        if (budgetTransition) {
+          applyTransition(budgetTransition);
           _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
@@ -1046,14 +1070,9 @@ async function run(opts = {}) {
         const progress = detectNoProgress(gatesDir(cwd, changeId), r.stage);
         if (progress.noProgress) {
           const evidence = noProgressEvidence(progress.stuckBlockers, progress.attempts);
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "convergence-exhausted";
-          summary.halt_reason = `no-progress convergence for "${r.name}": ${evidence}; escalating for a ruling`;
-          summary.blockers = r.blockers || [];
-          summary.no_progress_evidence = evidence;
-          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_progress_evidence: evidence, archived: archived || null });
-          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_progress_evidence: evidence });
+          applyTransition(convergenceTransition({
+            action: r, base, kind: "no-progress", evidence, archived,
+          }));
           _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
@@ -1065,14 +1084,9 @@ async function run(opts = {}) {
         const srcCheck = detectNoSourceChange(cwd, gatesDir(cwd, changeId), r.stage, state);
         if (srcCheck.noSourceChange) {
           const evidence = noSourceChangeEvidence(srcCheck.lastAttempt, srcCheck.files);
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "convergence-exhausted";
-          summary.halt_reason = `no-source-change convergence for "${r.name}": ${evidence}; escalating for a ruling`;
-          summary.blockers = r.blockers || [];
-          summary.no_source_change_evidence = evidence;
-          logEvent(cwd, changeId, { ...base, outcome: "convergence-halt", no_source_change_evidence: evidence, archived: archived || null });
-          onEvent({ type: "halt", ...base, action: "resolve-escalation", failure_class: "convergence-exhausted", reason: summary.halt_reason, blockers: r.blockers, no_source_change_evidence: evidence });
+          applyTransition(convergenceTransition({
+            action: r, base, kind: "no-source-change", evidence, archived,
+          }));
           _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
           break;
         }
@@ -1097,27 +1111,25 @@ async function run(opts = {}) {
         // Stages with no recipe (toClear empty) still reach convergence-exhausted —
         // they may recover if the agent self-corrects on retry.
         if (cleared.length === 0 && toClear.length > 0) {
-          summary.halted = true;
-          summary.halt_action = "fix-and-retry";
-          summary.halt_failure_class = "structural-input";
-          summary.halt_reason =
-            `fix steps for "${r.name}" contain no gate clears — cannot make automated progress; `
-            + `run \`devteam next\` for manual fix steps`;
-          summary.blockers = r.blockers || [];
-          summary.fix_steps = r.fix_steps || [];
-          logEvent(cwd, changeId, { ...base, outcome: "no-progress-halt", archived: archived || null });
-          onEvent({ type: "halt", ...base, failure_class: "structural-input", reason: summary.halt_reason, blockers: r.blockers, fix_steps: r.fix_steps });
+          applyTransition(blockedFixTransition({ action: r, base, archived }));
           break;
         }
         writeRunBlockers(cwd, r.name, r.blockers, changeId);
-        state.targetedFix = targetedBuildFixFromRetry(cwd, changeId, r);
-        state.fixRetries[r.name] = attempts + 1;
-        saveRunState(cwd, changeId, state);
-        const target = state.targetedFix
-          ? { workstream: state.targetedFix.workstream, patch_items: state.targetedFix.patchItems.length }
+        const targetedFix = targetedBuildFixFromRetry(cwd, changeId, r);
+        const target = targetedFix
+          ? { workstream: targetedFix.workstream, patch_items: targetedFix.patchItems.length }
           : null;
-        logEvent(cwd, changeId, { ...base, outcome: "fix-retry", attempt: attempts + 1, cleared_gates: cleared.length, archived: archived || null, target });
-        onEvent({ type: "fix-retry", ...base, attempt: attempts + 1, cleared_gates: cleared.length, target });
+        applyTransition(fixRetryTransition({
+          action: r,
+          base,
+          attempts,
+          clearedCount: cleared.length,
+          archived,
+          target,
+          targetedFix,
+          fixRetries: state.fixRetries,
+        }));
+        saveRunState(cwd, changeId, state);
         continue;
       }
 
@@ -1129,17 +1141,15 @@ async function run(opts = {}) {
       if (r.action === "resolve-escalation") {
         const hardStop = r.failure_class === "convergence-exhausted" || CONSEQUENCE_CEILING.has(r.name);
         const alreadyTried = (state.autoRule[r.name] || 0) >= 1;
-        if (grantSet.size === 0 || hardStop || alreadyTried) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = r.failure_class || "judgment-gate";
-          summary.halt_reason = hardStop
-            ? `escalation requires a human (auto-rule never crosses ${r.failure_class === "convergence-exhausted" ? "convergence-exhausted" : "the consequence ceiling"})`
-            : alreadyTried
-              ? `auto-rule already attempted once for "${r.name}" and it re-escalated; halting for a human`
-              : r.reason;
-          logEvent(cwd, changeId, { ...base, outcome: "halt" });
-          onEvent({ type: "halt", ...base });
+        const preflightTransition = rulingPreflightTransition({
+          action: r,
+          base,
+          grantCount: grantSet.size,
+          hardStop,
+          alreadyTried,
+        });
+        if (preflightTransition) {
+          applyTransition(preflightTransition);
           break;
         }
 
@@ -1151,33 +1161,11 @@ async function run(opts = {}) {
         saveRunState(cwd, changeId, state);
         const fresh = loadPrincipalOutputs(cwd).slice(before);
         const latest = fresh.length ? fresh[fresh.length - 1] : null;
-
-        if (!latest || (rr && rr.exitCode !== 0)) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "judgment-gate";
-          summary.halt_reason = "Principal produced no ruling; halting for a human";
-          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-no-output" });
-          onEvent({ type: "halt", ...base });
-          break;
-        }
-        if (latest.type === "cannot-decide") {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "cannot-decide";
-          summary.cannot_decide = { reason_class: latest.reason_class, question: latest.question };
-          summary.halt_reason = `Principal cannot decide (${latest.reason_class}): ${latest.question}`;
-          logEvent(cwd, changeId, { ...base, outcome: "cannot-decide", reason_class: latest.reason_class });
-          onEvent({ type: "cannot-decide", ...base, reason_class: latest.reason_class, question: latest.question });
-          break;
-        }
-        if (!grantSet.has(latest.class)) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_failure_class = "judgment-gate";
-          summary.halt_reason = `ruling class "${latest.class}" is not in the --auto-rule grant; halting for a human`;
-          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-ungranted", ruling_class: latest.class });
-          onEvent({ type: "halt", ...base, ruling_class: latest.class });
+        const outcomeTransition = rulingOutcomeTransition({
+          base, rulingResult: rr, latest, grantSet,
+        });
+        if (outcomeTransition) {
+          applyTransition(outcomeTransition);
           break;
         }
         // Granted class → apply the ruling and resume.
@@ -1195,41 +1183,31 @@ async function run(opts = {}) {
         } catch { /* gates dir may not yet exist */ }
 
         const fr = await _runFixEscalation(cwd, { escalatingGate: r.gate });
-        if (fr && fr.exitCode !== 0) {
-          summary.halted = true;
-          summary.halt_action = "resolve-escalation";
-          summary.halt_reason = `escalation applicator failed (exit ${fr.exitCode}); halting`;
-          logEvent(cwd, changeId, { ...base, outcome: "auto-rule-apply-failed" });
-          onEvent({ type: "halt", ...base });
+        const appliedTransition = rulingAppliedTransition({ base, applyResult: fr, latest });
+        if (appliedTransition.control === TRANSITION_CONTROLS.HALT) {
+          applyTransition(appliedTransition);
           break;
         }
-
         // When the ruling explicitly orders dispatching a build workstream, verify
         // the applicator actually updated or created a build gate. An applicator
         // that ran peer-review instead (or did nothing) would waste the auto-rule
         // grant and cause the stage to cycle until convergence-exhausted.
-        const rulingMentionsBuild = /dispatch\s+(backend|frontend|platform|qa)\s+build\s+workstream/i.test(latest.decision || "");
-        if (rulingMentionsBuild) {
-          let buildGateUpdated = false;
-          try {
-            for (const f of fs.readdirSync(_gatesDir).filter(n => BUILD_GATE_RE.test(n))) {
-              const full = path.join(_gatesDir, f);
-              try {
-                const mtime = fs.statSync(full).mtimeMs;
-                if (!preMtimes[full] || mtime > preMtimes[full]) { buildGateUpdated = true; break; }
-              } catch { /* */ }
-            }
-          } catch { /* ignore */ }
-
-          if (!buildGateUpdated) {
-            summary.halted = true;
-            summary.halt_action = "resolve-escalation";
-            summary.halt_failure_class = "applicator-did-not-dispatch-build";
-            summary.halt_reason = "escalation applicator did not dispatch a build workstream as the ruling required — no build gate was updated; halting for human review";
-            logEvent(cwd, changeId, { ...base, outcome: "applicator-did-not-dispatch-build" });
-            onEvent({ type: "halt", ...base });
-            break;
+        let buildGateUpdated = false;
+        try {
+          for (const f of fs.readdirSync(_gatesDir).filter(n => BUILD_GATE_RE.test(n))) {
+            const full = path.join(_gatesDir, f);
+            try {
+              const mtime = fs.statSync(full).mtimeMs;
+              if (!preMtimes[full] || mtime > preMtimes[full]) { buildGateUpdated = true; break; }
+            } catch { /* */ }
           }
+        } catch { /* gates dir may not exist */ }
+        const dispatchVerification = rulingDispatchVerificationTransition({
+          base, latest, buildGateUpdated,
+        });
+        if (dispatchVerification) {
+          applyTransition(dispatchVerification);
+          if (dispatchVerification.control === TRANSITION_CONTROLS.HALT) break;
 
           // Applicator confirmed build dispatch — reset the one-shot auto-rule
           // counter so a subsequent peer-review escalation for a new reason gets
@@ -1238,7 +1216,7 @@ async function run(opts = {}) {
           saveRunState(cwd, changeId, state);
         }
 
-        const authority = `auto-rule:${latest.class}`;
+        const { authority } = appliedTransition.details;
         // PR-D2: bind the authority record ONTO the escalating gate, so the
         // autonomous-decision provenance inherits C6 tamper-evidence (vs. only
         // living in run-log.jsonl). Best-effort: if the applicator cleared the
@@ -1251,61 +1229,32 @@ async function run(opts = {}) {
             fs.writeFileSync(r.gate, JSON.stringify(g, null, 2) + "\n");
           }
         } catch { /* run-log retains the record */ }
-        logEvent(cwd, changeId, { ...base, outcome: "auto-ruled", grant_class: latest.class, ruling: latest.decision, authority });
-        onEvent({ type: "auto-ruled", ...base, grant_class: latest.class, ruling: latest.decision, authority });
+        applyTransition(appliedTransition);
         continue;
       }
 
       // Non-auto-fixable fix-and-retry classes (state-corruption /
       // external-blocked) halt for a human.
       if (r.action === "fix-and-retry") {
-        summary.halted = true;
-        summary.halt_action = r.action;
-        summary.halt_failure_class = r.failure_class || null;
-        summary.halt_reason = r.reason;
-        summary.blockers = r.blockers || [];
-        summary.fix_steps = r.fix_steps || [];
-        logEvent(cwd, changeId, { ...base, outcome: "halt" });
-        onEvent({ type: "halt", ...base, blockers: r.blockers, fix_steps: r.fix_steps });
+        applyTransition(nonCodeFixTransition({ action: r, base }));
         break;
       }
 
       if (r.action === "run-stage" || r.action === "continue-stage") {
-        // Consequence ceiling — irreversible/outward-facing stages need a grant.
-        if (CONSEQUENCE_CEILING.has(r.name) && !allowStages.has(r.name)) {
-          summary.halted = true;
-          summary.halt_action = "ceiling";
-          summary.halt_reason = `consequence ceiling: "${r.name}" requires an explicit human grant (--allow-stage ${r.name})`;
-          logEvent(cwd, changeId, { ...base, outcome: "ceiling-halt" });
-          onEvent({ type: "ceiling", ...base });
+        const guardTransition = dispatchGuardTransition({
+          action: r,
+          base,
+          consequenceCeiling: CONSEQUENCE_CEILING,
+          allowStages,
+          order,
+          untilIndex,
+          until: opts.until,
+          budgetUsd,
+          spent: budgetUsd == null ? 0 : totalCostUsd(cwd, changeId),
+        });
+        if (guardTransition) {
+          applyTransition(guardTransition);
           break;
-        }
-
-        // --until boundary (inclusive): stop before dispatching a later stage.
-        if (untilIndex >= 0) {
-          const idx = order.indexOf(r.name);
-          if (idx > untilIndex) {
-            summary.halted = true;
-            summary.halt_action = "until";
-            summary.halt_reason = `reached --until boundary "${opts.until}"`;
-            logEvent(cwd, changeId, { ...base, outcome: "until-halt" });
-            onEvent({ type: "until", ...base });
-            break;
-          }
-        }
-
-        // Budget — pre-dispatch check. Cost is only known AFTER a dispatch, so
-        // this prevents the NEXT stage, not an overrun of the current one.
-        if (budgetUsd != null) {
-          const spent = totalCostUsd(cwd, changeId);
-          if (spent >= budgetUsd) {
-            summary.halted = true;
-            summary.halt_action = "budget";
-            summary.halt_reason = `budget cap reached: $${spent.toFixed(2)} ≥ $${budgetUsd.toFixed(2)}`;
-            logEvent(cwd, changeId, { ...base, outcome: "budget-halt", cost_usd: spent });
-            onEvent({ type: "budget", ...base, cost_usd: spent });
-            break;
-          }
         }
 
         // Check-point 2 (Phase 1 § 1.1): re-run the stoplist immediately before
@@ -1404,16 +1353,9 @@ async function run(opts = {}) {
             source_stage: targetedFix.source_stage,
           });
         }
-        const results = Array.isArray(runResult) ? runResult : (runResult.results || []);
+        const dispatch = normalizeDispatchResults(runResult);
+        const { results, timedOut: anyTimedOut, wroteGate, stubGate: anyStubGate, exitCode } = dispatch;
         const durationMs = Date.now() - t0;
-        const nonSkipped = results.filter((x) => !x.skipped);
-        const anyTimedOut = results.some((x) => x.timedOut);
-        const wroteGate = nonSkipped.every((x) => x.gatePath);
-        // §stub-gate: true when any workstream left a pre-seeded stub intact.
-        const anyStubGate = nonSkipped.some((x) => x.stubGate);
-        // exitCode is 0 only when every dispatched workstream cleanly exited 0;
-        // any non-zero/null (timeout) collapses to 1 for classification.
-        const exitCode = nonSkipped.length > 0 && nonSkipped.every((x) => x.exitCode === 0) ? 0 : 1;
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
         // Phase 12.2: track stage IDs in state for `devteam commit` cursor.
         if (r.stage && !state.stages_advanced.includes(r.stage)) state.stages_advanced.push(r.stage);
@@ -1429,13 +1371,20 @@ async function run(opts = {}) {
         // Dispatch-time classification (PR-B) — replaces PR-A's no-progress
         // guard. A dispatch that wrote no gate is transient (backoff + retry)
         // until the transient budget is spent, then structural (halt).
-        const dispatchClass = classifyDispatch(
-          { wroteGate, exitCode, timedOut: anyTimedOut, stubGate: anyStubGate },
-          { transientRetries: state.transient[r.name] || 0, maxTransientRetries },
-        );
-        if (dispatchClass === "ok") {
-          state.transient[r.name] = 0;
-          saveRunState(cwd, changeId, state);
+        const outcomeTransition = dispatchOutcomeTransition({
+          action: r,
+          base,
+          transient: state.transient,
+          maxTransientRetries,
+          retryDelayMs,
+          wroteGate,
+          exitCode,
+          timedOut: anyTimedOut,
+          stubGate: anyStubGate,
+        });
+        applyTransition(outcomeTransition);
+        saveRunState(cwd, changeId, state);
+        if (outcomeTransition.details.dispatchClass === "ok") {
 
           if (
             targetedFix
@@ -1443,29 +1392,12 @@ async function run(opts = {}) {
             && targetedFixChanged(cwd, targetedFixSnapshot) === false
           ) {
             const evidence = targetedFixNoSourceChangeEvidence(targetedFixSnapshot);
-            summary.halted = true;
-            summary.halt_action = "resolve-escalation";
-            summary.halt_failure_class = "convergence-exhausted";
-            summary.halt_reason =
-              `targeted fix for "${r.name}" returned without modifying blocker file(s): `
-              + `${evidence}; escalating for a ruling`;
-            summary.blockers = [];
-            summary.no_source_change_evidence = evidence;
-            logEvent(cwd, changeId, {
-              ...base,
-              outcome: "targeted-fix-no-source-change",
-              no_source_change_evidence: evidence,
+            applyTransition(targetedFixNoChangeTransition({
+              action: r,
+              base,
+              evidence,
               workstream: targetedFix.workstream,
-            });
-            onEvent({
-              type: "halt",
-              ...base,
-              action: "resolve-escalation",
-              failure_class: "convergence-exhausted",
-              reason: summary.halt_reason,
-              no_source_change_evidence: evidence,
-              workstream: targetedFix.workstream,
-            });
+            }));
             _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
             break;
           }
@@ -1479,65 +1411,53 @@ async function run(opts = {}) {
           const affectedFiles = opts.affectedFiles || state.affectedFiles || null;
           if (r.stage === "stage-04" && affectedFiles) {
             const outOfScope = _checkScopeGate(cwd, affectedFiles);
-            if (outOfScope.length > 0) {
-              summary.halted = true;
-              summary.halt_action = "scope-gate";
-              summary.halt_failure_class = "scope-gate";
-              summary.halt_reason = `repair scope gate: build touched files outside the diagnosed affected-files set: ${outOfScope.join(", ")}`;
-              summary.out_of_scope = outOfScope;
-              logEvent(cwd, changeId, { ...base, outcome: "scope-gate-fail", out_of_scope: outOfScope });
-              onEvent({ type: "halt", ...base, action: "scope-gate", reason: summary.halt_reason, out_of_scope: outOfScope });
+            const scopeTransition = scopeGateTransition({ base, outOfScope });
+            if (scopeTransition) {
+              applyTransition(scopeTransition);
               break;
             }
           }
 
           continue;
         }
-        if (dispatchClass === "transient") {
-          state.transient[r.name] = (state.transient[r.name] || 0) + 1;
-          saveRunState(cwd, changeId, state);
+        if (outcomeTransition.details.retry) {
           // §stub-gate: delete the stub so next() doesn't treat it as a completed
           // stage gate on the retry loop. The pre-seed runs again before re-dispatch.
-          if (anyStubGate && r.stage) {
+          if (outcomeTransition.details.removeStubGate && r.stage) {
             try { fs.unlinkSync(path.join(gatesDir(cwd, changeId), `${r.stage}.json`)); } catch { /* already gone */ }
           }
-          logEvent(cwd, changeId, { ...base, outcome: "transient-retry", attempt: state.transient[r.name], stub_gate: anyStubGate || undefined });
-          onEvent({ type: "transient-retry", ...base, attempt: state.transient[r.name], delay_ms: retryDelayMs });
           await _sleep(retryDelayMs);
           continue;
         }
-        // structural-input — retrying the same dispatch cannot help.
-        summary.halted = true;
-        summary.halt_action = "structural-input";
-        summary.halt_failure_class = "structural-input";
-        summary.halt_reason =
-          `dispatch of "${r.name}" produced no gate and is not transient ` +
-          `(clean exit with no output, or repeated failure) — input is structurally unworkable`;
-        logEvent(cwd, changeId, { ...base, outcome: "structural-halt" });
-        onEvent({ type: "structural", ...base });
         break;
       }
 
       if (r.action === "merge") {
         onEvent({ type: "merge", ...base });
         const m = _merge(r.name, { cwd, track: effectiveTrack, changeId });
-        logEvent(cwd, changeId, { ...base, outcome: m.merged ? "merged" : "merge-failed", reason: m.reason || null });
-        if (!m.merged) {
-          summary.halted = true;
-          summary.halt_action = "merge-failed";
-          summary.halt_reason = m.reason || "merge failed";
-          onEvent({ type: "merge-failed", ...base, reason: m.reason });
+        const result = mergeTransition({ base, mergeResult: m });
+        applyTransition(result);
+        if (result.control === TRANSITION_CONTROLS.HALT) {
           break;
         }
         continue;
       }
 
       // Unknown action — halt defensively rather than spin.
-      summary.halted = true;
-      summary.halt_action = r.action;
-      summary.halt_reason = `unhandled action "${r.action}"`;
-      logEvent(cwd, changeId, { ...base, outcome: "unhandled" });
-      onEvent({ type: "unhandled", ...base });
+      applyTransitionResult(transitionResult(TRANSITION_CONTROLS.HALT, {
+        summaryPatch: {
+          halted: true,
+          halt_action: r.action,
+          halt_reason: `unhandled action "${r.action}"`,
+        },
+        logEvents: [{ ...base, outcome: "unhandled" }],
+        emittedEvents: [{ type: "unhandled", ...base }],
+      }), {
+        summary,
+        state,
+        logEvent: (entry) => logEvent(cwd, changeId, entry),
+        onEvent,
+      });
       break;
     }
     } // if (!trackHalted)

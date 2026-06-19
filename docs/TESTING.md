@@ -36,6 +36,7 @@ node --experimental-test-coverage --test tests/*.test.js
 | `cli.test.js` | `bin/devteam` exit codes for known/unknown commands; `--json` outputs valid JSON; `--cwd` honored uniformly. |
 | `observability.test.js` | OpenTelemetry spans emitted at every instrumented call site, with expected attributes, via `InMemorySpanExporter`. |
 | `secret-scan.test.js` | PreToolUse hook: pattern detection, false-positive guards, magic-comment override, path allowlist, end-to-end stdin parsing, snippet redaction. |
+| `evidence-status.test.js` | Bounded evidence readers, aggregate-only readiness analysis, malformed/oversized input handling, bounded isolation, and read-only CLI behavior. |
 | `fanout.test.js` | `computeDispatchPlan` correctness with/without fanout; end-to-end `runStage` producing N×M workstream prompts; `mergeWorkstreamGates` aggregation across all fanout gates. |
 | `dashboard.test.js` | Gate→row expansion (merged stage gates split into workstream rows); per-host / per-role attribution; multi-project rollup; time-window filter; ASCII chart + JSON output. |
 | `pr-publish.test.js` | Gate→check-run translation: PASS→success / WARN→neutral / FAIL+ESCALATE→failure; blockers + warnings + workstreams in summary; auto-detect repo + PR; `--dry-run`. |
@@ -49,7 +50,7 @@ node --experimental-test-coverage --test tests/*.test.js
 | `escalation.test.js` | Escalation-handling end-to-end: `devteam ruling` dispatch, `fix-escalation` encoding, auto-rule grant/deny, `PRINCIPAL-CANNOT-DECIDE` halt. |
 | `chain.test.js` | Multi-stage fix-and-retry chains: blocker propagation across stage boundaries, retry ceiling, convergence-exhausted promotion to escalation. |
 | `archive.test.js` | Gate archiving (`pipeline/gates/archive/<stage>.attempt-N.json`): snapshot-before-clear, diff fields, replay-compatible format. |
-| `consistency-meta.test.js` | `scripts/consistency.js` exits 0 against the live repo; fixture-tree tests for all six check classes (violation detection, clean exits, baseline suppression, non-baselined exit 1). |
+| `consistency-meta.test.js` | `scripts/consistency.js` exits 0 against the live repo; fixture-tree tests cover every prose-vs-code class, including schema vocabulary and support state, with violation detection, clean exits, baseline suppression, and archive exclusions. |
 
 ## Conventions
 
