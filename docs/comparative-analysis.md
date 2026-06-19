@@ -46,7 +46,7 @@ useful distinction is the **source of operational truth**:
 
 ## 3. Stagecraft in June 2026
 
-Stagecraft is v0.7.0: 18 ordered stages, 6 tracks, 4 first-party host adapters, 34 CLI
+Stagecraft is v0.8.0: 18 ordered stages, 6 tracks, 4 first-party host adapters, 34 CLI
 command modules, 50,898 JavaScript lines, 91 test files, and 1,941 passing runtime
 tests. The project has moved substantially beyond the v0.5 snapshot in the prior
 comparison.

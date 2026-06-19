@@ -157,7 +157,7 @@ Decision tree:
   "confidence": "high",
   "reasons": ["description matches quick-change keywords (minor/small fix)"],
   "assessed_at": "2026-06-15T14:00:00Z",
-  "assessed_by": "devteam assess 0.7.0"
+  "assessed_by": "devteam assess 0.8.0"
 }
 ```
 

@@ -1,1 +1,0 @@
-- Add consented, aggregate-only evidence export with a rotatable pseudonymous project identity, strict schema and digest validation, sparse-cell suppression, and explicit multi-bundle portfolio readiness analysis.

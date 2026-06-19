@@ -1,1 +1,0 @@
-- Require Phase 1 and Phase 2 audit findings to include `verified_by` evidence before they can be promoted above LOW confidence.
