@@ -53,11 +53,13 @@ const { parse: parseGherkin, allScenarios, acIdsFor } = require("./gherkin");
 // numbered — duplicates surface as a dedicated drift type.
 //
 // Supported formats:
-//   - AC-1: Users can sign in.         (bullet + bare)
-//   - **AC-2** — Password reset.       (bullet + bold)
+//   - AC-1: Users can sign in.         (dash bullet + bare)
+//   - **AC-2** — Password reset.       (dash bullet + bold)
 //   **AC-3**: Invalid creds.           (bold, no bullet)
 //   AC-4 — Something else.             (bare, no bullet)
-const AC_LINE_RE = /^\s*(?:[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]\s*(.+?)\s*$/;
+//   1. **AC-5** — Numbered list.       (numbered list + bold)
+//   1. AC-6: Numbered list bare.       (numbered list + bare)
+const AC_LINE_RE = /^\s*(?:\d+\.\s+|[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]\s*(.+?)\s*$/;
 
 // When a brief uses a dedicated "Acceptance Criteria" section header,
 // extraction is scoped to that section. This prevents AC references in
