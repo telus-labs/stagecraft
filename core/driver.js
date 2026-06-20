@@ -181,7 +181,7 @@ function blockerFiles(blockers) {
   for (const b of blockers || []) {
     if (!b || typeof b !== "object") continue;
     const file = b.file || b.path || b.filename;
-    if (file && typeof file === "string" && file.trim()) files.push(file.trim());
+    if (file && typeof file === "string" && file.trim()) files.push(file.trim().replace(/:\d+$/, ""));
   }
   return [...new Set(files)];
 }
@@ -1536,4 +1536,4 @@ async function run(opts = {}) {
   return summary;
 }
 
-module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, runStatePath, runLogPath, seedDeployContext };
+module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, runStatePath, runLogPath, seedDeployContext, blockerFiles };
