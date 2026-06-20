@@ -733,7 +733,7 @@ const SCRIPT = `
 // ── Main render ──────────────────────────────────────────────────────────────
 
 function renderHtml(data) {
-  const { meta, brief, stages, blockerLog, documents = [], logStats = null } = data;
+  const { meta, stages, blockerLog, documents = [], logStats = null } = data;
 
   const metaItems = [
     meta.track && `Track: <strong>${esc(meta.track)}</strong>`,

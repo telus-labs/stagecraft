@@ -19,10 +19,15 @@ const flags = {
 function openBrowser(filePath) {
   const platform = process.platform;
   const cmd = platform === "darwin" ? "open"
-    : platform === "win32" ? "cmd"
+    : platform === "win32" ? "explorer.exe"
     : "xdg-open";
-  const args = platform === "win32" ? ["/c", "start", filePath] : [filePath];
-  spawnSync(cmd, args, { stdio: "ignore" });
+  const args = [filePath];
+  // windowsVerbatimArguments avoids the cmd.exe shell layer on Windows,
+  // preventing argument interpretation of special chars in the file path.
+  const options = platform === "win32"
+    ? { stdio: "ignore", windowsVerbatimArguments: true }
+    : { stdio: "ignore" };
+  spawnSync(cmd, args, options);
 }
 
 function run(positional, _flags) {
