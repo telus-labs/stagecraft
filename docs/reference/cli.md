@@ -3,7 +3,7 @@
 
 # CLI Reference
 
-Full `devteam` command reference. 34 commands.
+Full `devteam` command reference. 35 commands.
 Derived from the per-command flag schemas in `core/cli/commands/`.
 Run `npm run docs:generate` to regenerate after adding or changing flags.
 
@@ -247,6 +247,18 @@ Assess evidence-gated capabilities offline, export consented aggregates, manage 
 | --rotate  | bool   | Rotate the local project identity                  |
 | --delete  | bool   | Delete the local project identity                  |
 | --yes     | bool   | Confirm identity mutation or resolution acceptance |
+
+### `devteam report [options]`
+
+Post-run HTML report. Collects all pipeline data — gate statuses, timing, blockers, and documents — and renders a self-contained HTML file opened automatically in the browser. Covers: status badge (COMPLETED / HALTED / INCOMPLETE with halt type), progress bar, header stats (wall-clock time, total compute, retries, stalls, cost), per-stage timing derived from `run-log.jsonl` dispatch events, clickable document links per stage, and all pipeline documents embedded inline (brief, spec, design, reviews, ADRs, test report, and more) with a sidebar navigator. No external dependencies; works offline.
+
+| Flag        | Type    | Description                                          |
+| ----------- | ------- | ---------------------------------------------------- |
+| --cwd       | string  | Target project directory (default: cwd)              |
+| --out       | string  | Output path (default: pipeline/report.html)          |
+| --feature   | string  | Feature name (bounded isolation mode)                |
+| --json      | bool    | Print raw collected data as JSON; skip HTML          |
+| --no-open   | bool    | Write file but don't open browser                    |
 
 ### `devteam ui [options]`
 
