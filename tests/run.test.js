@@ -405,6 +405,44 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     ));
   });
 
+  it("detects source change when blocker file path includes :line suffix", async () => {
+    // Regression: blockerFiles() used to push the raw "file:line" string, so
+    // fs.readFileSync("Dockerfile:16") always threw ENOENT.  Both before- and
+    // after-snapshots recorded { exists: false, hash: null }, causing a spurious
+    // convergence-exhausted halt even when the fix agent modified the real file.
+    const cwd = track(makeTargetProject());
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.platform.json");
+    fs.writeFileSync(victim, "{}");
+    const dockerfilePath = path.join(cwd, "Dockerfile");
+    fs.writeFileSync(dockerfilePath, "FROM node:18-alpine\n");
+    let dispatches = 0;
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "devDeps shipped in image", file: "Dockerfile:16" }],
+        clear_gates: ["pipeline/gates/stage-04.platform.json", "pipeline/gates/stage-04.json"],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      onEvent: () => {},
+      runStageHeadless: async () => {
+        if (dispatches++ === 0) {
+          fs.writeFileSync(dockerfilePath, "FROM node:18-alpine\nCOPY --chown=node . .\nUSER node\n");
+        }
+        return [{ role: "platform", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true, "should continue, not halt, when the real file was modified");
+    assert.ok(!s.halted, "should not set halted flag");
+  });
+
   it("does not target build when fix-and-retry clears multiple workstream gates", async () => {
     const cwd = track(makeTargetProject());
     fs.writeFileSync(path.join(cwd, "pipeline", "gates", "stage-04.backend.json"), "{}");
