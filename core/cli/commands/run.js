@@ -44,6 +44,7 @@ const flags = {
   // threshold; =all also includes PEER_REVIEW_RISK. Default (no flag) exits 0.
   "fail-on-advisory": { type: "toggle", description: "Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold)" },
   "auto-commit":     { type: "boolean", description: "Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)" },
+  watch:             { type: "boolean", description: "Render rolling liveness status on an interactive terminal" },
   help:              { type: "boolean", description: "Show this help" },
 };
 
@@ -60,12 +61,30 @@ function run(positional, _flags) {
     console.error("devteam run: --repair and --feature are mutually exclusive — a run is either a bug fix or a feature, not both");
     process.exit(1);
   }
+  if (_flags.watch && _flags.json) {
+    console.error("devteam run: --watch and --json are mutually exclusive");
+    process.exit(2);
+  }
   const cwd = _flags.cwd || process.cwd();
   const { run: runDriver } = require(path.join(__dirname, "..", "..", "driver"));
   const jsonMode = Boolean(_flags.json);
+  const { createWatchRenderer } = require(path.join(__dirname, "..", "watch-renderer"));
+  const watch = createWatchRenderer({ stream: process.stderr });
+  const watchMode = Boolean(_flags.watch && watch.active);
+  if (_flags.watch && !watch.active) {
+    process.stderr.write("[devteam run] --watch requires an interactive terminal; using line progress output\n");
+  }
+  if (watchMode) {
+    watch.start();
+    process.once("exit", watch.finish);
+  }
 
   const onEvent = (ev) => {
     if (jsonMode) return; // keep stdout clean for the JSON summary
+    if (watchMode) {
+      watch.handle(ev);
+      return;
+    }
     const tag = ev.failure_class ? `  [${ev.failure_class}]` : "";
     switch (ev.type) {
       case "dispatch":     process.stderr.write(`▶️  ${ev.name} (${ev.stage}) — dispatching…\n`); break;
@@ -104,6 +123,7 @@ function run(positional, _flags) {
     force: Boolean(_flags.force),
     onEvent,
   }).then((summary) => {
+    watch.finish();
     if (jsonMode) {
       console.log(JSON.stringify({ schema_version: RUN_SCHEMA_VERSION, ...summary }, null, 2));
     } else {
@@ -166,6 +186,7 @@ function run(positional, _flags) {
     }
     process.exit(cleanStop ? 0 : 1);
   }).catch((err) => {
+    watch.finish();
     console.error(`devteam run: ${err.message}`);
     process.exit(err.code === "ELOCKED" ? 2 : 1);
   });

@@ -58,6 +58,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | E | E6 | `devteam replay <stage-id>` | 3 | 3 | v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | E | E7 | `/goal` integration for convergence-shaped stages | 3 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | E | E8 | Codebase audit feature | 5 | 3 | v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
+| E | E10 | Autonomous run watch mode | 3 | 1 | Unreleased · Phase 20 |
 | F | F1 | GitHub PR integration | 4 | 3 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | F | F4 | CI runner integration | 4 | 3 | v0.4.0 (GitHub Actions only) · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | G | G1 | Multi-model peer review |  |  | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
@@ -141,9 +142,11 @@ The full evidence, effort/risk ratings, dependencies, and PR sequence now live i
 No ungated implementation item remains from the audit's immediate and targeted
 improvement batches. Phase 16 completed privacy-safe readiness/export, Phase 17 made
 dispatch evidence durable, Phase 18 added explicit accepted-resolution evidence for
-H3, and Phase 19 shipped polyglot verification in PR #264. The next capability horizon
-is real collection followed by review, not calendar-driven activation. E9 conversational
-stage mode remains a discovery proposal until five real users report upstream rigidity.
+H3, Phase 19 shipped polyglot verification in PR #264, and Phase 20 implements the
+separable `devteam run --watch` operator UX without enabling active stall response. The
+next capability horizon is real collection followed by review, not calendar-driven
+activation. E9 conversational stage mode remains a discovery proposal until five real
+users report upstream rigidity.
 
 Completed from this audit cycle: dashboard HTML safety and lifecycle (PR #235),
 native Windows CI evidence, support wording, and A6 promotion (PR #236), and bounded

@@ -425,6 +425,11 @@ Files, sized as one PR (two small PRs if the `--watch` rendering is split off):
 The `--watch` rendering (Decision §5, "devteam run --watch") is a UX improvement; it can
 ship in a follow-up PR and is not a prerequisite for the stall-detection safety feature.
 
+**Implementation update (2026-06-19):** the follow-up watch renderer is implemented in
+Phase 20. It consumes callback-only progress samples from the Tier 1 probe, redraws on
+interactive stderr, and falls back to line-oriented output without ANSI when redirected.
+Tier 2 process termination remains evidence-gated and unchanged.
+
 ---
 
 ## Questions for a human reviewer to rule on

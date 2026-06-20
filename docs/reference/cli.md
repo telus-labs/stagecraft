@@ -45,7 +45,7 @@ Inspect pipeline/gates/ and report what to do next: run a stage, merge, fix a FA
 
 ### `devteam run [options]`
 
-Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.
+Bounded autonomous driver with optional TTY watch mode: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.
 
 | Flag               | Type   | Description                                                                                          |
 | ------------------ | ------ | ---------------------------------------------------------------------------------------------------- |
@@ -67,6 +67,7 @@ Bounded autonomous driver: loop next → dispatch → merge until pipeline-compl
 | --json             | bool   | JSON summary on stdout                                                                               |
 | --fail-on-advisory | toggle | Exit 3 if advisory blockers remain after pipeline-complete (=all adds PEER_REVIEW_RISK to threshold) |
 | --auto-commit      | bool   | Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)                |
+| --watch            | bool   | Render rolling liveness status on an interactive terminal                                            |
 
 ### `devteam commit [options]`
 

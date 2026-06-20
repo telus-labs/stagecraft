@@ -62,6 +62,8 @@ Commands:
       [--resume] [--force] [--json] Halts for a human on escalations, the
       [--fail-on-advisory[=all]]    consequence ceiling (sign-off / deploy),
       [--auto-commit]               a budget cap, or a structural failure.
+      [--watch]                    --watch renders rolling liveness on a TTY
+                                   and falls back to line output when redirected.
                                    --fail-on-advisory exits 3 when advisory
                                    blockers remain (=all adds PEER_REVIEW_RISK).
                                    --auto-commit commits pipeline artifacts on

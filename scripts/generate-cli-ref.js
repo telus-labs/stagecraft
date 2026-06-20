@@ -37,7 +37,7 @@ const COMMANDS = [
   {
     name:        "run",
     synopsis:    "devteam run [options]",
-    description: "Bounded autonomous driver: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.",
+    description: "Bounded autonomous driver with optional TTY watch mode: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.",
   },
   {
     name:        "commit",
