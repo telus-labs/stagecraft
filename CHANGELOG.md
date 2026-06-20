@@ -8,10 +8,6 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
-### Added
-
-- **`devteam report` — post-run HTML pipeline report.** New command that collects all pipeline data and renders a self-contained HTML file (`pipeline/report.html`), opened automatically in the default browser. The report is a three-tab SPA: **Summary** (status badge, progress bar, header stats, brief problem statement, AC/scenario counts), **Pipeline** (per-stage timing and dispatch counts, stage document links, workstream breakdown, blockers), and **Documents** (all pipeline artifacts embedded inline — brief, spec, design-spec, build-plan, code reviews, ADRs, test report, accessibility/observability reports — with a sidebar navigator). Status classification is correct: `COMPLETED` (complete event in log), `HALTED` with halt-type subtitle (ceiling-halt, convergence-halt, etc.), or `INCOMPLETE` (no terminal event, waiting for manual advance). The fix looks for terminal events specifically rather than the last event of any type — heartbeats written after a halt no longer mask the real state. Header shows wall-clock time, total model compute time (sum of all dispatch-observation durations), retry count, and stall count, all extracted from `run-log.jsonl`. Per-stage rows show compute time from dispatch events with a "(N dispatches)" annotation when a stage was retried. Stage document links (small blue pills per row) navigate directly to the relevant embedded document. AC and scenario stat chips are clickable and navigate to `brief.md` and `spec.feature` in the Documents tab. `--json` emits the raw collected `ReportData` for scripting. Documented in `help.js`, `docs/reference/cli.md`, `README.md`, and `docs/user-guide.md`.
-
 ---
 
 ## [0.8.0] — 2026-06-19
