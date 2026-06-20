@@ -3,7 +3,8 @@
 // ADR-007 §5: read-only liveness status command. Reads run-state.json and
 // the tail of run-log.jsonl; reports status/current_stage/last_action/
 // iterations/cost_usd/last_heartbeat_age_ms/last_event_age_ms/stall_detected.
-// No --watch (parked in 11.4). No process interaction — purely a file reader.
+// No process interaction — purely a file reader. Live rendering is owned by
+// `devteam run --watch`, which consumes the driver's callback stream.
 
 const fs = require("node:fs");
 const path = require("node:path");

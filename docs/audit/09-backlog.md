@@ -161,7 +161,8 @@ was found, and no data-corruption path was verified.
 ## Parked
 
 - **Evidence-gated implementations:** D5, H3, ADR-005, and ADR-007 Tier 2 remain
-  parked behind GitHub #142–#145. `devteam run --watch` is separable UX.
+  parked behind GitHub #142–#145. The separable `devteam run --watch` UX ships
+  independently in Phase 20 without changing Tier 2 policy.
 - **Coverage threshold:** revisit after three stable snapshots or an escaped regression.
 - **Split `core/orchestrator.js`:** prior >1,000-line trigger is met, but named
   functions remain coherent; driver decomposition has higher value.

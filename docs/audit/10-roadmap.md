@@ -3,7 +3,8 @@
 ## Roadmap posture
 
 There is no emergency implementation batch. Batches 1–3, Proposal 4.1 instrumentation,
-and Phase 19 polyglot verification are complete. Real-project evidence collection is
+and Phase 19 polyglot verification are complete. Phase 20 implements ADR-007's separable
+foreground watch UX without changing stall policy. Real-project evidence collection is
 the active learning priority. Proposal 4.2 remains discovery-gated and issues #142–#145
 remain evidence-gated.
 
@@ -120,14 +121,24 @@ implementation merge gate remains.
   [`plans/phase-19-polyglot-verification.md`](../../plans/phase-19-polyglot-verification.md).
 - **Estimate:** one bundled PR; independent of #142–#145.
 
+### Proposal 4.4 — Foreground autonomous-run watch mode (Phase 20)
+
+- **Source:** ADR-007 section 5 and GitHub #145's explicitly separable UX note.
+- **Proposal:** consume the existing driver callback stream to render rolling liveness
+  on a TTY, with line-oriented fallback when output is redirected.
+- **Boundary:** callback-only display samples are not durable evidence and do not kill,
+  retry, or reclassify a dispatch. Tier 2 remains gated.
+- **Current status:** implementation and documentation are in
+  [`plans/phase-20-run-watch.md`](../../plans/phase-20-run-watch.md).
+
 ## Dependency map
 
 - PR 2.1 and PR 2.2 can run concurrently.
 - PR 2.3 waits for Windows wording from PR 2.2.
 - PR 3.1 and driver-refactor design can run concurrently.
 - PR 3.3 waits for PR 2.3 but can run beside driver extraction.
-- Proposals 4.1 and 4.3 are complete. Proposal 4.2 waits for its five-user discovery
-  threshold and does not bypass issue gates.
+- Proposals 4.1 and 4.3 are complete. Proposal 4.4 is independent display-only work.
+  Proposal 4.2 waits for its five-user discovery threshold; none bypass issue gates.
 
 ## Roadmap risks
 

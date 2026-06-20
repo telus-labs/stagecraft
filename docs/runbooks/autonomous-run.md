@@ -85,6 +85,7 @@ devteam run                                               # reads track.json aut
 
 ```bash
 devteam run                       # drive the configured track to completion
+devteam run --watch               # rolling liveness block on an interactive terminal
 devteam run --json                # structured summary on stdout (for tooling)
 devteam run --until peer-review   # stop after a specific stage
 devteam run --budget-usd 10       # stop before a dispatch once spend ≥ $10
@@ -101,7 +102,10 @@ devteam run --repair "symptom" --repair-at src/auth.js:42      # skip diagnosis;
 
 `--repair` and `--feature` are mutually exclusive. See [§ Repair mode](#repair-mode-devteam-run---repair-adr-009) below and [`docs/runbooks/repair-flow.md`](repair-flow.md) for the diagnosis gate, scope-gate FAIL recovery, and tri-state reproduction.
 
-Progress prints to **stderr**; the `--json` summary prints to **stdout**.
+Progress prints to **stderr**; the `--json` summary prints to **stdout**. `--watch`
+and `--json` are mutually exclusive. When watch output is redirected or stderr is
+not a TTY, Stagecraft prints a warning and uses the existing line-per-event format
+without ANSI control sequences.
 
 ## What it writes
 
@@ -173,7 +177,10 @@ loop-spew** (a model emitting repetitive output indefinitely resets the clock).
 Catching loop-spew requires content-distinct growth and rides with ADR-007
 Tier 2 (not yet shipped).
 
-Use `devteam status` to see the current liveness snapshot at any time.
+Use `devteam status` to see a liveness snapshot at any time. During a foreground run,
+`devteam run --watch` renders a rolling block with the current stage, dispatch elapsed
+time, the latest observed log-growth rate, heartbeat age, and stall status. The display
+consumes callback events from the existing probe and does not poll pipeline files.
 
 **Config:** `autonomy.stall_threshold_ms` (default 300000) and
 `autonomy.stall_min_growth_bytes` (default 512) in `.devteam/config.yml`.

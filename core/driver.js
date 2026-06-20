@@ -570,6 +570,7 @@ function defaultStallProbe(stageName, stageId, cwd, changeId, dispatchStart, opt
 
   let cancelled = false;
   let lastLogBytes = totalLogBytes();
+  let lastSampleLogBytes = lastLogBytes;
   let lastGateMtime = latestGateMtime();
   let lastProgressMs = Date.now();
 
@@ -581,7 +582,23 @@ function defaultStallProbe(stageName, stageId, cwd, changeId, dispatchStart, opt
       const nowBytes = totalLogBytes();
       const nowMtime = latestGateMtime();
       const growth = nowBytes - lastLogBytes;
+      const sampleGrowth = nowBytes - lastSampleLogBytes;
+      lastSampleLogBytes = nowBytes;
       const gateUpdated = nowMtime > lastGateMtime;
+      const elapsedMs = Date.now() - dispatchStart;
+
+      if (_onEvent) {
+        _onEvent({
+          type: "dispatch-progress",
+          stage: stageName,
+          action,
+          iteration,
+          interval_ms: stallPollIntervalMs,
+          log_growth_bytes_last_interval: sampleGrowth,
+          gate_updated: gateUpdated,
+          dispatch_elapsed_ms: elapsedMs,
+        });
+      }
 
       if (growth >= stallMinGrowthBytes || gateUpdated) {
         lastLogBytes = nowBytes;
@@ -593,7 +610,6 @@ function defaultStallProbe(stageName, stageId, cwd, changeId, dispatchStart, opt
       // No qualifying progress signal since lastProgressMs.
       if (Date.now() - lastProgressMs >= stallThresholdMs) {
         if (cancelled) return;
-        const elapsedMs = Date.now() - dispatchStart;
         if (_logEvent) {
           _logEvent({
             outcome: "stall-detected",
@@ -614,6 +630,7 @@ function defaultStallProbe(stageName, stageId, cwd, changeId, dispatchStart, opt
             action,
             iteration,
             stall_threshold_ms: stallThresholdMs,
+            interval_ms: stallPollIntervalMs,
             log_growth_bytes_last_interval: growth,
             gate_updated: gateUpdated,
             dispatch_elapsed_ms: elapsedMs,
