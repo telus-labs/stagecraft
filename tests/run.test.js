@@ -523,6 +523,59 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     assert.deepEqual(dispatchOpts[0].patchItems, ["Fix src/backend/api.js: route handler still fails"]);
   });
 
+  it("does not target build when file_ownership infers a workstream that was never dispatched by stage-04", async () => {
+    // Regression: a post-build stage (e.g. accessibility-audit) can flag a file
+    // whose ownership points to "frontend", but the project has no frontend
+    // workstream — stage-04 only dispatched backend/platform/qa. The old code
+    // inferred workstream: "frontend" anyway, dispatched a build that touched
+    // nothing in index.html, and cycled until fix-retry budgets were exhausted.
+    // The fix: only accept a file-ownership workstream when its gate was in clear_gates.
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-02", {
+      status: "PASS",
+      file_ownership: {
+        "src/frontend/**": "frontend",
+        "src/backend/**": "backend",
+      },
+    });
+    for (const ws of ["backend", "platform", "qa"]) {
+      fs.writeFileSync(path.join(cwd, "pipeline", "gates", `stage-04.${ws}.json`), "{}");
+    }
+    const dispatchOpts = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-06b", name: "accessibility-audit",
+        failure_class: "code-defect",
+        blockers: [{ text: "Missing ARIA on #error", file: "src/frontend/index.html" }],
+        clear_gates: [
+          "pipeline/gates/stage-04.backend.json",
+          "pipeline/gates/stage-04.platform.json",
+          "pipeline/gates/stage-04.qa.json",
+          "pipeline/gates/stage-04.json",
+          "pipeline/gates/stage-06b.json",
+        ],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      runStageHeadless: async (_stageName, opts) => {
+        dispatchOpts.push(opts);
+        return [{ role: "backend", gatePath: "x", exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true);
+    // No targeted workstream or patchItems — ghost "frontend" workstream was rejected
+    assert.equal(dispatchOpts[0].workstream, undefined,
+      "should not target a workstream that was never part of stage-04");
+    assert.equal(dispatchOpts[0].patchItems, undefined);
+  });
+
   it("does not target build when file_ownership maps blockers to multiple owners", async () => {
     const cwd = track(makeTargetProject());
     seedGate(cwd, "stage-02", {
