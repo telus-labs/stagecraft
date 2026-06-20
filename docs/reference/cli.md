@@ -232,6 +232,18 @@ Chronological event timeline: every gate and artifact write in mtime order. --fo
 | --json    | bool   | JSON output (one object per line)     |
 | --follow  | bool   | Tail pipeline/ at 1s poll             |
 
+### `devteam report [options]`
+
+Generate a self-contained HTML report of the most recent pipeline run. Embeds status, per-stage timing, dispatch counts, blocker log, and all pipeline documents. Written to pipeline/report.html and opened in the default browser.
+
+| Flag      | Type   | Description                                 |
+| --------- | ------ | ------------------------------------------- |
+| --cwd     | string | Target project directory (default: cwd)     |
+| --out     | string | Output path (default: pipeline/report.html) |
+| --feature | string | Feature name (for bounded-isolation runs)   |
+| --json    | bool   | Print raw data as JSON; skip HTML           |
+| --no-open | bool   | Write file but don't open browser           |
+
 ### `devteam evidence <status|export|identity|accept-resolution> [options]`
 
 Assess evidence-gated capabilities offline, export consented aggregates, manage project identity, or explicitly accept a successful fix/retry resolution.
@@ -247,18 +259,6 @@ Assess evidence-gated capabilities offline, export consented aggregates, manage 
 | --rotate  | bool   | Rotate the local project identity                  |
 | --delete  | bool   | Delete the local project identity                  |
 | --yes     | bool   | Confirm identity mutation or resolution acceptance |
-
-### `devteam report [options]`
-
-Post-run HTML report. Collects all pipeline data — gate statuses, timing, blockers, and documents — and renders a self-contained HTML file opened automatically in the browser. Covers: status badge (COMPLETED / HALTED / INCOMPLETE with halt type), progress bar, header stats (wall-clock time, total compute, retries, stalls, cost), per-stage timing derived from `run-log.jsonl` dispatch events, clickable document links per stage, and all pipeline documents embedded inline (brief, spec, design, reviews, ADRs, test report, and more) with a sidebar navigator. No external dependencies; works offline.
-
-| Flag        | Type    | Description                                          |
-| ----------- | ------- | ---------------------------------------------------- |
-| --cwd       | string  | Target project directory (default: cwd)              |
-| --out       | string  | Output path (default: pipeline/report.html)          |
-| --feature   | string  | Feature name (bounded isolation mode)                |
-| --json      | bool    | Print raw collected data as JSON; skip HTML          |
-| --no-open   | bool    | Write file but don't open browser                    |
 
 ### `devteam ui [options]`
 
