@@ -298,7 +298,17 @@ Add `--follow` to tail the directory at 1-second poll; new events stream in as g
 
 **3. `devteam ui --open`.** The same data as `devteam log` rendered as a tree, updated via Server-Sent Events when gates change. Suited for two-monitor setups or when a browser view is preferred. See [the web UI](#the-web-ui).
 
-The three options are complementary. A common pattern: `devteam log --follow` in one terminal pane while running the pipeline in another.
+**4. `devteam report`.** Post-run HTML report for reviewing a completed (or halted) run after the fact. Run it once the pipeline is done; it opens `pipeline/report.html` in your browser automatically. The report shows:
+- **Status badge** — COMPLETED, HALTED (with halt type such as "iteration ceiling"), or INCOMPLETE
+- **Progress bar** — color-coded stage pills; click any pill to jump to that stage's detail
+- **Header stats** — wall-clock time, total model compute time, retry count, stall count, cost
+- **Pipeline tab** — per-stage timing and dispatch counts (from `run-log.jsonl`), linked documents, blockers, workstream breakdown
+- **Documents tab** — all pipeline artifacts (brief, spec, design, code reviews, ADRs, test report, etc.) embedded inline with a sidebar navigator
+- **Clickable chips** — AC count and scenario count link directly into `brief.md` and `spec.feature`
+
+Unlike `devteam log` and `devteam ui`, `report` is a **point-in-time snapshot** — it reads whatever is on disk at the moment you run it and writes a standalone HTML file that works offline and can be shared.
+
+The three real-time options are complementary. A common pattern: `devteam log --follow` in one terminal pane while running the pipeline in another, then `devteam report` once it finishes.
 
 ### Answering an open question between stages
 

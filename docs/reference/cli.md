@@ -3,7 +3,7 @@
 
 # CLI Reference
 
-Full `devteam` command reference. 34 commands.
+Full `devteam` command reference. 35 commands.
 Derived from the per-command flag schemas in `core/cli/commands/`.
 Run `npm run docs:generate` to regenerate after adding or changing flags.
 
@@ -231,6 +231,18 @@ Chronological event timeline: every gate and artifact write in mtime order. --fo
 | --feature | string | Feature name (bounded isolation mode) |
 | --json    | bool   | JSON output (one object per line)     |
 | --follow  | bool   | Tail pipeline/ at 1s poll             |
+
+### `devteam report [options]`
+
+Generate a self-contained HTML report of the most recent pipeline run. Embeds status, per-stage timing, dispatch counts, blocker log, and all pipeline documents. Written to pipeline/report.html and opened in the default browser.
+
+| Flag      | Type   | Description                                 |
+| --------- | ------ | ------------------------------------------- |
+| --cwd     | string | Target project directory (default: cwd)     |
+| --out     | string | Output path (default: pipeline/report.html) |
+| --feature | string | Feature name (for bounded-isolation runs)   |
+| --json    | bool   | Print raw data as JSON; skip HTML           |
+| --no-open | bool   | Write file but don't open browser           |
 
 ### `devteam evidence <status|export|identity|accept-resolution> [options]`
 

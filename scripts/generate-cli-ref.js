@@ -120,6 +120,11 @@ const COMMANDS = [
     description: "Chronological event timeline: every gate and artifact write in mtime order. --follow tails at 1-second poll.",
   },
   {
+    name:        "report",
+    synopsis:    "devteam report [options]",
+    description: "Generate a self-contained HTML report of the most recent pipeline run. Embeds status, per-stage timing, dispatch counts, blocker log, and all pipeline documents. Written to pipeline/report.html and opened in the default browser.",
+  },
+  {
     name:        "evidence",
     synopsis:    "devteam evidence <status|export|identity|accept-resolution> [options]",
     description: "Assess evidence-gated capabilities offline, export consented aggregates, manage project identity, or explicitly accept a successful fix/retry resolution.",

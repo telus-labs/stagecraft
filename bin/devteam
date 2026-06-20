@@ -55,6 +55,7 @@ const COMMAND_MODULES = Object.freeze({
   hook: "hook",
   status: "status",
   evidence: "evidence",
+  report: "report",
 });
 
 const commandCache = Object.create(null);

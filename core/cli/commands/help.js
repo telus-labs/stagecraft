@@ -170,6 +170,14 @@ Commands:
                                    with key fields per stage. --follow tails
                                    the pipeline/ directory at 1s poll. Works
                                    in both headless and user-driven modes.
+  report [--out <file>]            Post-run HTML report. Embeds the full
+       [--no-open] [--json]        pipeline story — status badge, progress bar,
+       [--feature "..."]           per-stage timing and dispatch counts, blocker
+                                   log, and all pipeline documents (brief, spec,
+                                   design, reviews, test report, ADRs). Written
+                                   to pipeline/report.html and opened in the
+                                   default browser. --json emits the raw
+                                   collected data without generating HTML.
   doctor                           Pre-flight check: install integrity,
                                    target layout, config validity, adapter
                                    status, host CLIs on PATH.
