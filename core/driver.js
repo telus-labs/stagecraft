@@ -167,14 +167,6 @@ function dispatchObservation(base, result) {
   return observation;
 }
 
-function singleBuildWorkstreamFromClearGates(clearGates) {
-  const ws = new Set();
-  for (const rel of clearGates || []) {
-    const m = String(rel).match(/^pipeline\/gates\/stage-04\.([^./]+)\.json$/);
-    if (m) ws.add(m[1]);
-  }
-  return ws.size === 1 ? [...ws][0] : null;
-}
 
 function blockerFiles(blockers) {
   const files = [];
@@ -301,11 +293,27 @@ function targetedFixNoSourceChangeEvidence(before) {
 
 function targetedBuildFixFromRetry(cwd, changeId, retryAction) {
   const files = blockerFiles(retryAction.blockers);
-  const workstream = singleBuildWorkstreamFromClearGates(retryAction.clear_gates || [])
-    || workstreamFromFileOwnership(
-      loadFileOwnership(cwd, changeId),
-      files
-    );
+
+  // Collect which stage-04 workstreams were actually cleared. These are the
+  // workstreams that exist in this project's build — file_ownership may name
+  // workstreams (e.g. "frontend") that stage-04 never dispatches.
+  const clearedWorkstreams = new Set();
+  for (const rel of retryAction.clear_gates || []) {
+    const m = String(rel).match(/^pipeline\/gates\/stage-04\.([^./]+)\.json$/);
+    if (m) clearedWorkstreams.add(m[1]);
+  }
+
+  // Single cleared workstream → unambiguous; prefer it without consulting ownership.
+  // Multiple cleared workstreams → consult file ownership, but only accept the
+  // result when that workstream was actually dispatched (gate was cleared). This
+  // prevents targeted fixes for workstreams that appear in file_ownership but were
+  // never part of this project's stage-04 plan.
+  let workstream = clearedWorkstreams.size === 1 ? [...clearedWorkstreams][0] : null;
+  if (!workstream) {
+    const fromOwnership = workstreamFromFileOwnership(loadFileOwnership(cwd, changeId), files);
+    if (fromOwnership && clearedWorkstreams.has(fromOwnership)) workstream = fromOwnership;
+  }
+
   if (!workstream) return null;
   const patchItems = blockerPatchItems(retryAction.blockers || []);
   if (patchItems.length === 0) return null;
