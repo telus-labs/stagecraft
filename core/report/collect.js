@@ -48,14 +48,57 @@ function normalizeItems(items) {
   }).filter(Boolean);
 }
 
-// Determine run final status from run-state.json + last run-log event.
+// Determine run final status from run-state.json + run-log terminal events.
+// Looks specifically for terminal events (complete/halt) because heartbeats are
+// written after halt events and the last event of any type would mask the real state.
 function finalStatus(runState, logPath) {
-  const last = lastMatchingEvent(logPath, () => true);
-  if (!last) return runState ? "abandoned" : "no-run";
-  const o = last.outcome || "";
+  const terminal = lastMatchingEvent(logPath, e => {
+    const o = e.outcome || "";
+    return o === "complete" || o.includes("halt");
+  });
+  if (!terminal) return runState ? "incomplete" : "no-run";
+  const o = terminal.outcome || "";
   if (o === "complete") return "completed";
-  if (o.includes("halt")) return "failed";
-  return "abandoned";
+  if (o.includes("halt")) return "halted";
+  return "incomplete";
+}
+
+// Extract timing and retry stats from run-log.jsonl dispatch-observation events.
+function collectLogStats(logPath) {
+  let content;
+  try { content = fs.readFileSync(logPath, "utf8"); } catch { return null; }
+  const events = [];
+  for (const line of content.trimEnd().split("\n")) {
+    if (!line.trim()) continue;
+    try { events.push(JSON.parse(line)); } catch { /* skip malformed */ }
+  }
+  if (events.length === 0) return null;
+
+  const firstTs = events[0].ts || null;
+  const lastTs = events[events.length - 1].ts || null;
+  const wallClockMs = (firstTs && lastTs) ? (new Date(lastTs) - new Date(firstTs)) : null;
+
+  const stageStats = {};
+  let retries = 0;
+  let stalls = 0;
+
+  for (const e of events) {
+    if (e.outcome === "dispatch-observation") {
+      const sid = e.stage;
+      if (!stageStats[sid]) stageStats[sid] = { computeMs: 0, attempts: 0, model: null, host: null };
+      stageStats[sid].computeMs += (e.duration_ms || 0);
+      stageStats[sid].attempts += 1;
+      if (e.model && e.model !== "unknown") stageStats[sid].model = e.model;
+      if (e.host && e.host !== "unknown") stageStats[sid].host = e.host;
+    } else if (e.outcome === "fix-retry" || e.outcome === "transient-retry" || e.outcome === "targeted-fix-dispatch") {
+      retries++;
+    } else if (e.outcome === "stall-detected") {
+      stalls++;
+    }
+  }
+
+  const totalComputeMs = Object.values(stageStats).reduce((sum, s) => sum + s.computeMs, 0);
+  return { wallClockMs, totalComputeMs, retries, stalls, stages: stageStats };
 }
 
 // Extract the problem-statement paragraph from brief.md.
@@ -163,12 +206,17 @@ function collectReport(cwd, opts = {}) {
   // --- 2. Final status ---
   const status = finalStatus(runState, logPath);
 
-  // Get halt reason from terminal log event if failed.
+  // Get halt type and reason from the terminal halt event.
   let haltReason = null;
-  if (status === "failed") {
+  let haltType = null;
+  if (status === "halted") {
     const haltEvent = lastMatchingEvent(logPath, (e) => (e.outcome || "").includes("halt"));
-    haltReason = (haltEvent && haltEvent.halt_reason) || null;
+    haltType = haltEvent ? haltEvent.outcome : null;
+    haltReason = (haltEvent && (haltEvent.reason || haltEvent.halt_reason)) || null;
   }
+
+  // --- 2b. Log stats ---
+  const logStats = collectLogStats(logPath);
 
   // Orchestrator version from any gate (read lazily later).
   let orchestratorVersion = null;
@@ -399,6 +447,7 @@ function collectReport(cwd, opts = {}) {
       costUsd: runState ? (runState.cost_usd || null) : null,
       finalStatus: status,
       haltReason,
+      haltType,
       orchestratorVersion,
       currentStage: runState ? (runState.current_stage || null) : null,
     },
@@ -415,6 +464,7 @@ function collectReport(cwd, opts = {}) {
     blockerLog,
     artifacts,
     documents,
+    logStats,
   };
 }
 

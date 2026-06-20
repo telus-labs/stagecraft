@@ -24,15 +24,41 @@ function badge(status) {
   return `<span class="badge ${cls}">${text}</span>`;
 }
 
-function finalStatusBadge(status) {
+// Stage ID → document kinds produced by that stage (for linking in pipeline tab).
+const STAGE_DOCS = {
+  "stage-01":  ["brief"],
+  "stage-02":  ["design", "build-plan"],
+  "stage-03b": ["spec"],
+  "stage-04":  ["review"],
+  "stage-04a": ["pre-review"],
+  "stage-04b": ["security"],
+  "stage-04c": ["red-team"],
+  "stage-05":  ["review"],
+  "stage-06":  ["test-report"],
+  "stage-06b": ["accessibility"],
+  "stage-06c": ["observability"],
+};
+
+function finalStatusBadge(status, haltType) {
   const map = {
-    completed: ["pass",    "COMPLETED"],
-    failed:    ["fail",    "FAILED"],
-    abandoned: ["neutral", "ABANDONED"],
-    "no-run":  ["neutral", "NO RUN DATA"],
+    completed:  ["pass",    "COMPLETED"],
+    halted:     ["fail",    "HALTED"],
+    incomplete: ["neutral", "INCOMPLETE"],
+    "no-run":   ["neutral", "NO RUN DATA"],
   };
   const [cls, text] = map[status] || ["neutral", esc(status)];
-  return `<span class="badge large ${cls}">${text}</span>`;
+  let suffix = "";
+  if (status === "halted" && haltType) {
+    const typeLabel = ({
+      "convergence-halt": "convergence",
+      "ceiling-halt": "iteration ceiling",
+      "quota-halt": "quota exceeded",
+    })[haltType] || haltType.replace(/-halt$/, "");
+    suffix = ` <span class="halt-type">${esc(typeLabel)}</span>`;
+  } else if (status === "incomplete") {
+    suffix = ` <span class="halt-type">waiting for advance</span>`;
+  }
+  return `<span class="badge large ${cls}">${text}</span>${suffix}`;
 }
 
 function formatDate(isoStr) {
@@ -221,7 +247,7 @@ function renderSummaryTab(data) {
     ? `<div class="halt-box"><span class="halt-label">Halt:</span> ${esc(meta.haltReason)}</div>`
     : "";
 
-  const abandonedAt = (meta.finalStatus === "abandoned" && meta.currentStage)
+  const stoppedAt = (meta.finalStatus === "incomplete" && meta.currentStage)
     ? `<div class="abandoned-at">Stopped at: <code>${esc(meta.currentStage)}</code></div>`
     : "";
 
@@ -229,9 +255,9 @@ function renderSummaryTab(data) {
 
   const statParts = [];
   if (brief.acCount != null)
-    statParts.push(`<div class="stat-chip"><span class="chip-num">${esc(String(brief.acCount))}</span><span class="chip-lbl">ACs</span></div>`);
+    statParts.push(`<div class="stat-chip clickable" data-goto-doc-kind="brief" title="View acceptance criteria in brief.md"><span class="chip-num">${esc(String(brief.acCount))}</span><span class="chip-lbl">ACs</span></div>`);
   if (brief.specScenarios != null)
-    statParts.push(`<div class="stat-chip"><span class="chip-num">${esc(String(brief.specScenarios))}</span><span class="chip-lbl">scenarios</span></div>`);
+    statParts.push(`<div class="stat-chip clickable" data-goto-doc-kind="spec" title="View scenarios in spec.feature"><span class="chip-num">${esc(String(brief.specScenarios))}</span><span class="chip-lbl">scenarios</span></div>`);
   if (brief.acCount != null || brief.specScenarios != null) {
     const driftVal = brief.specDrift
       ? `<span class="drift-warn">detected</span>`
@@ -265,33 +291,63 @@ function renderSummaryTab(data) {
 
   return `
     ${haltHtml}
-    ${abandonedAt}
-    ${progressBar
-      ? `<div class="summary-section"><div class="section-label">Pipeline</div>${progressBar}</div>`
-      : ""}
+    ${stoppedAt}
+    ${progressBar ? `<div class="summary-section">${progressBar}</div>` : ""}
     ${briefSection}`;
 }
 
-// ── Tab: Stages ──────────────────────────────────────────────────────────────
+// ── Tab: Pipeline (formerly Stages) ─────────────────────────────────────────
 
-function renderStagesTab(stages, blockerLog) {
+function renderStagesTab(stages, blockerLog, documents, logStats) {
   let tableHtml;
   if (!stages || stages.length === 0) {
     tableHtml = '<p class="no-data">No stage gate files found.</p>';
   } else {
-    const hasDuration = stages.some(s =>
+    // Build kind → first document index map for stage doc links.
+    const docKindIdx = {};
+    if (documents && documents.length > 0) {
+      documents.forEach((doc, idx) => {
+        if (!(doc.kind in docKindIdx)) docKindIdx[doc.kind] = idx;
+      });
+    }
+
+    const hasGateDuration = stages.some(s =>
       s.durationMs != null || s.workstreams.some(w => w.durationMs != null));
+    const hasLogDuration = logStats && Object.values(logStats.stages).some(s => s.computeMs > 0);
+    const hasDuration = hasGateDuration || hasLogDuration;
 
     const rows = stages.map(s => {
       const statusCell = s.status ? badge(s.status) : '<span class="badge neutral">—</span>';
       const when = s.timestamp ? formatDate(s.timestamp) : "—";
-      const dur = s.durationMs != null
-        ? formatDuration(s.durationMs)
-        : s.workstreams.length > 0 && s.workstreams[0].durationMs != null
-          ? formatDuration(s.workstreams.reduce((sum, w) => sum + (w.durationMs || 0), 0))
-          : "—";
 
-      let details = "";
+      // Duration: prefer gate file duration, fall back to log compute time.
+      let durHtml = "—";
+      if (s.durationMs != null) {
+        durHtml = esc(formatDuration(s.durationMs));
+      } else if (s.workstreams.length > 0 && s.workstreams[0].durationMs != null) {
+        durHtml = esc(formatDuration(s.workstreams.reduce((sum, w) => sum + (w.durationMs || 0), 0)));
+      } else if (logStats && logStats.stages[s.stage] && logStats.stages[s.stage].computeMs > 0) {
+        const ls = logStats.stages[s.stage];
+        durHtml = esc(formatDuration(ls.computeMs));
+        if (ls.attempts > 1) durHtml += ` <span class="dispatch-count">${ls.attempts} dispatches</span>`;
+      }
+
+      // Stage document links for the details cell.
+      const stageDocs = STAGE_DOCS[s.stage] || [];
+      const docLinks = stageDocs
+        .map(kind => {
+          if (kind in docKindIdx) {
+            const idx = docKindIdx[kind];
+            const label = documents[idx].label;
+            return `<span class="stage-doc-link" data-goto-doc-idx="${idx}" title="Open ${esc(label)}">${esc(label)}</span>`;
+          }
+          return null;
+        })
+        .filter(Boolean);
+      const docLinksHtml = docLinks.length
+        ? `<div class="stage-doc-links">${docLinks.join("")}</div>` : "";
+
+      let details = docLinksHtml;
 
       if (s.workstreams.length > 0) {
         const wsRows = s.workstreams.map(w => `
@@ -329,7 +385,7 @@ function renderStagesTab(stages, blockerLog) {
           <td class="stage-name">${esc(s.name)}<br><span class="stage-id">${esc(s.stage)}</span></td>
           <td>${statusCell}</td>
           <td style="white-space:nowrap">${esc(when)}</td>
-          ${hasDuration ? `<td style="white-space:nowrap">${esc(dur)}</td>` : ""}
+          ${hasDuration ? `<td style="white-space:nowrap" class="dur-cell">${durHtml}</td>` : ""}
           <td>${details}</td>
         </tr>`;
     });
@@ -359,7 +415,7 @@ function renderDocumentsTab(documents) {
   }
 
   const navItems = documents.map((doc, idx) =>
-    `<div class="doc-nav-item${idx === 0 ? " active" : ""}" data-doc="${idx}" title="${esc(doc.label)}">${esc(doc.label)}</div>`
+    `<div class="doc-nav-item${idx === 0 ? " active" : ""}" data-doc="${idx}" data-doc-kind="${esc(doc.kind)}" title="${esc(doc.label)}">${esc(doc.label)}</div>`
   ).join("");
 
   const panes = documents.map((doc, idx) => {
@@ -479,8 +535,11 @@ const CSS = `
     padding: 0.35rem 0.75rem; display: flex; align-items: baseline; gap: 0.3rem;
     font-size: 0.82rem;
   }
+  .stat-chip.clickable { cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+  .stat-chip.clickable:hover { border-color: #93c5fd; background: #eff6ff; }
   .chip-num { font-size: 1.1rem; font-weight: 700; color: #111827; }
   .chip-lbl { color: #6b7280; font-size: 0.75rem; }
+  .halt-type { font-size: 0.75rem; color: #6b7280; font-style: italic; margin-left: 4px; }
   .drift-warn { color: #78350f; font-weight: 600; }
   .no-drift { color: #065f46; font-weight: 600; }
   .problem {
@@ -516,6 +575,18 @@ const CSS = `
   .ws-table td { padding: 3px 6px; border-bottom: 1px solid #f3f4f6; }
   .blockers-list { margin: 6px 0 0 1rem; padding: 0; list-style: disc; color: #7f1d1d; }
   .warnings-list { margin: 6px 0 0 1rem; padding: 0; list-style: disc; color: #78350f; }
+  .dispatch-count {
+    display: inline-block; font-size: 0.7rem; color: #9ca3af;
+    background: #f3f4f6; border-radius: 3px; padding: 0 4px; margin-left: 4px;
+  }
+  .dur-cell { color: #374151; }
+  .stage-doc-links { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .stage-doc-link {
+    font-size: 0.72rem; color: #2563eb; background: #eff6ff;
+    border: 1px solid #bfdbfe; border-radius: 4px; padding: 1px 7px;
+    cursor: pointer; white-space: nowrap; transition: background 0.1s;
+  }
+  .stage-doc-link:hover { background: #dbeafe; }
   .blocker-pre {
     background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px;
     padding: 1rem; font-size: 0.8rem; white-space: pre-wrap;
@@ -611,13 +682,33 @@ const SCRIPT = `
     });
   });
 
-  // Stage pip click → switch to Stages tab and highlight the row
+  // Navigate to Documents tab and show a specific document by index.
+  function showDoc(idx) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+    document.querySelector('.tab-btn[data-tab="documents"]').classList.add('active');
+    document.getElementById('tab-documents').classList.remove('hidden');
+    document.querySelectorAll('.doc-nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.doc-pane').forEach(p => p.classList.add('hidden'));
+    var item = document.querySelector('.doc-nav-item[data-doc="' + idx + '"]');
+    if (item) item.classList.add('active');
+    var pane = document.getElementById('doc-' + idx);
+    if (pane) pane.classList.remove('hidden');
+  }
+
+  // Navigate to Documents tab and show the first document matching a kind.
+  function showDocByKind(kind) {
+    var item = document.querySelector('.doc-nav-item[data-doc-kind="' + kind + '"]');
+    if (item) showDoc(item.dataset.doc);
+  }
+
+  // Stage pip click → switch to Pipeline tab and highlight the row.
   document.querySelectorAll('.stage-pip[data-stage]').forEach(pip => {
     pip.addEventListener('click', () => {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-      document.querySelector('.tab-btn[data-tab="stages"]').classList.add('active');
-      document.getElementById('tab-stages').classList.remove('hidden');
+      document.querySelector('.tab-btn[data-tab="pipeline"]').classList.add('active');
+      document.getElementById('tab-pipeline').classList.remove('hidden');
       const row = document.getElementById('sr-' + pip.dataset.stage);
       if (row) {
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -627,18 +718,32 @@ const SCRIPT = `
       }
     });
   });
+
+  // Stage doc links → Documents tab.
+  document.querySelectorAll('.stage-doc-link[data-goto-doc-idx]').forEach(el => {
+    el.addEventListener('click', function() { showDoc(this.dataset.gotoDocIdx); });
+  });
+
+  // Clickable stat chips (ACs, scenarios) → Documents tab.
+  document.querySelectorAll('.stat-chip[data-goto-doc-kind]').forEach(el => {
+    el.addEventListener('click', function() { showDocByKind(this.dataset.gotoDocKind); });
+  });
 `;
 
 // ── Main render ──────────────────────────────────────────────────────────────
 
 function renderHtml(data) {
-  const { meta, brief, stages, blockerLog, documents = [] } = data;
+  const { meta, brief, stages, blockerLog, documents = [], logStats = null } = data;
 
   const metaItems = [
     meta.track && `Track: <strong>${esc(meta.track)}</strong>`,
     meta.startedAt && `Started: <strong>${esc(formatDate(meta.startedAt))}</strong>`,
     `Iterations: <strong>${esc(String(meta.iterations))}</strong>`,
+    logStats && logStats.wallClockMs != null && `Wall clock: <strong>${esc(formatDuration(logStats.wallClockMs))}</strong>`,
+    logStats && logStats.totalComputeMs > 0 && `Compute: <strong>${esc(formatDuration(logStats.totalComputeMs))}</strong>`,
     meta.costUsd != null && `Cost: <strong>${esc(formatCost(meta.costUsd))}</strong>`,
+    logStats && logStats.retries > 0 && `Retries: <strong>${esc(String(logStats.retries))}</strong>`,
+    logStats && logStats.stalls > 0 && `Stalls: <strong>${esc(String(logStats.stalls))}</strong>`,
     meta.orchestratorVersion && `<span style="color:#d1d5db">${esc(meta.orchestratorVersion)}</span>`,
   ].filter(Boolean).join(" &nbsp;·&nbsp; ");
 
@@ -664,14 +769,14 @@ function renderHtml(data) {
   <div class="report-header">
     <div class="report-title">
       <h1>${esc(meta.feature)}</h1>
-      ${finalStatusBadge(meta.finalStatus)}
+      ${finalStatusBadge(meta.finalStatus, meta.haltType)}
     </div>
     <div class="header-meta">${metaItems}</div>
   </div>
 
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="summary">Summary</button>
-    <button class="tab-btn" data-tab="stages">Stages${stagesCount > 0 ? ` <span class="tab-count">${stagesCount}</span>` : ""}</button>
+    <button class="tab-btn" data-tab="pipeline">Pipeline${stagesCount > 0 ? ` <span class="tab-count">${stagesCount}</span>` : ""}</button>
     <button class="tab-btn" data-tab="documents">Documents${docsCount > 0 ? ` <span class="tab-count">${docsCount}</span>` : ""}</button>
   </div>
 
@@ -679,8 +784,8 @@ function renderHtml(data) {
     ${renderSummaryTab(data)}
   </div>
 
-  <div id="tab-stages" class="tab-pane hidden">
-    ${renderStagesTab(stages, blockerLog)}
+  <div id="tab-pipeline" class="tab-pane hidden">
+    ${renderStagesTab(stages, blockerLog, documents, logStats)}
   </div>
 
   <div id="tab-documents" class="tab-pane hidden">
