@@ -78,7 +78,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | # | Idea | I | E | Notes |
 |---|---|---|---|---|
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
-| A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs the stage on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). |
+| A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs one workstream on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). [Phase 21 plan proposed for review.](../plans/phase-21-cloud-runner-adapter.md) |
 | A5 | **API-direct adapter** (no host CLI; talks to Anthropic / OpenAI / Google APIs directly) | 3 | 3 | For users who don't want to install claude-code or codex but still want orchestration. Lighter dependency footprint. |
 
 ## B. Pipeline depth — more/richer stages
