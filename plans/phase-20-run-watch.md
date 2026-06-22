@@ -1,6 +1,6 @@
 # Phase 20 — Autonomous Run Watch Mode
 
-**Status:** Item 20.1 implemented; pending merge.
+**Status:** Complete. Merged in PR #268.
 **Source:** ADR-007 section 5 and GitHub #145's explicitly ungated UX follow-up.
 **Purpose:** make long foreground autonomous runs observable without changing driver
 decisions, stall thresholds, or process-lifecycle policy.

@@ -61,7 +61,7 @@ Reading the recent commit log:
 ## Stable / not actively evolving
 
 - `LICENSE` — last touched 2026-05-26 (first commit). MIT.
-- `ARCHITECTURE.md` — 14.5KB, last touched 2026-05-28. The 11 locked design decisions are still authoritative; subsequent work has respected them. **This is a strong signal:** the architectural seam (spine + adapter, gate as contract, no model calls in core) has held under 99 commits of growth.
+- `ARCHITECTURE.md` — 14.5KB, last touched 2026-05-28. The 11 locked design decisions are still authoritative; subsequent work has respected them. **This is a strong signal:** the architecture (spine + adapter, gate as contract, no model calls in core) has held under 99 commits of growth.
 - `core/router.js` — 47 lines, essentially unchanged since week 1. Single responsibility, well-bounded.
 - Most schema files under `core/gates/schemas/` — schemas evolved early, then stabilized.
 - `examples/` and `templates/` — mostly untouched. Templates are the rendered artifacts the model copies; they're stable by intent.

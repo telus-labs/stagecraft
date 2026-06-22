@@ -150,7 +150,7 @@ core/orchestrator.js : next() walks STAGES_BY_TRACK
 
 - **Architectural simplicity.** Spine + adapter pattern. No framework, no DI container, no plugin loader at runtime — adapters resolve via a 47-line `core/router.js`. The whole thing is readable.
 - **Single source of truth discipline.** Role briefs in `roles/`, rules in `rules/`, skills in `skills/`. Adapters render into host-specific paths at install. Edits to installed copies in target projects are not the contract.
-- **Gate-as-seam.** Stages communicate only through JSON files; the orchestrator never holds in-memory state. Makes the pipeline reconstructable from `pipeline/gates/` alone.
+- **Gate-as-contract.** Stages communicate only through JSON files; the orchestrator never holds in-memory state. Makes the pipeline reconstructable from `pipeline/gates/` alone.
 - **No build step.** Pure Node, no transpilation, no bundler. The repo is shippable as-is via `npm link`. CI is fast (~10s).
 - **Test count tracks features.** 49 test files for ~9k lines of core code; ratio is healthy. Recent additions (auto-fold, derive-approvals, orchestrator-stamped verification) all shipped with tests in lockstep.
 - **`node:` prefix discipline + stdout/stderr separation** — small conventions, consistently held across the codebase.

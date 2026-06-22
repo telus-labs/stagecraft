@@ -23,7 +23,7 @@ Replace both forks with a **single model-agnostic core** plus **per-host adapter
 - `hosts/<name>/` owns the host-specific surface: how to install into a target project, how to render a stage prompt for this host, optionally how to drive the host CLI headlessly.
 - Shared content (`roles/`, `rules/`, `skills/`, `templates/`) lives once at the repo root. Adapters render these into host-expected paths at install time.
 
-A single `.devteam/config.yml` in the target project routes each (stage, role) workstream to a host. A single pipeline run can dispatch different workstreams to different hosts; the gate JSON seam makes the handoff safe.
+A single `.devteam/config.yml` in the target project routes each (stage, role) workstream to a host. A single pipeline run can dispatch different workstreams to different hosts; the gate JSON contract makes the handoff safe.
 
 ## Consequences
 
@@ -32,7 +32,7 @@ A single `.devteam/config.yml` in the target project routes each (stage, role) w
 - One source of truth. No more parity-check; drift becomes structurally impossible because there's nothing to drift between.
 - Adding a host is a self-contained task: implement the contract in `hosts/<new>/adapter.js`. Estimated 200-300 lines.
 - Multi-host installs (`devteam init --host claude-code,codex`) are first-class — you can route backend to one host and frontend to another in the same pipeline run.
-- The gate JSON contract becomes the stable seam — versionable, testable, documentable. Anything host-specific lives in the adapter.
+- The gate JSON is the stable contract — versionable, testable, documentable. Anything host-specific lives in the adapter.
 
 **Negative:**
 

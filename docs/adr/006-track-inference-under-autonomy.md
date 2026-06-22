@@ -279,7 +279,7 @@ All three pass before the driver enters its main loop.
    resulting track name, not its provenance. The stoplist would catch the worst cases, but
    a silent high-confidence mis-inference (e.g. all YAML files → config-only when one of
    them is a database migration config) would advance past stages that should have fired.
-   "Ship the seam, not the magic" applies here as much as to ADR-004.
+   "Ship the contract, not the magic" applies here as much as to ADR-004.
 
 3. **Warn on inferred tracks in CI too, never halt.** Softer; still surfaces the issue.
    Rejected: a non-blocking warning in a 30-minute unattended run is not a guard — it is

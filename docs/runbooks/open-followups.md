@@ -122,7 +122,7 @@ This is the manual equivalent of what a JIRA integration performs automatically.
 
 ---
 
-## Production feedback (G3 seam)
+## Production feedback (G3 contract)
 
 Open followups cover work deferred **before** deploy. For signals that only
 become visible **after** deploy — SLO regressions, incidents, adoption gaps —

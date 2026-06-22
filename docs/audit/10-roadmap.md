@@ -128,7 +128,7 @@ implementation merge gate remains.
   on a TTY, with line-oriented fallback when output is redirected.
 - **Boundary:** callback-only display samples are not durable evidence and do not kill,
   retry, or reclassify a dispatch. Tier 2 remains gated.
-- **Current status:** implementation and documentation are in
+- **Current status:** complete. Merged in PR #268. Implementation and documentation are in
   [`plans/phase-20-run-watch.md`](../../plans/phase-20-run-watch.md).
 
 ## Dependency map

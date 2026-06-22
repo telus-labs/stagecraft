@@ -181,7 +181,7 @@ Dispatch still rechecks compatibility so a stale doctor result cannot authorize 
 Ship a small self-hostable reference worker under the cloud-runner host boundary, not in
 `core/`. It:
 
-- authenticates requests through a replaceable middleware seam;
+- authenticates requests through a replaceable middleware interface;
 - maps the requested profile to server-owned command/image/resource limits;
 - creates a fresh workspace per job and expands only verified input paths;
 - invokes a configured Stagecraft-compatible model host with the submitted prompt;

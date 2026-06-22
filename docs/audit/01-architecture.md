@@ -2,7 +2,7 @@
 
 ## Architectural shape
 
-Stagecraft remains a **model-neutral spine with host adapters**. The durable seam is
+Stagecraft remains a **model-neutral spine with host adapters**. The durable contract is
 the on-disk gate: a host/model writes an artifact and gate JSON; core validates the
 gate and makes the next deterministic scheduling decision.
 
@@ -154,7 +154,7 @@ credentials). They are referenced by deploy instructions rather than loaded by c
 
 ## Architectural strengths to preserve
 
-1. **Gate JSON is the seam.** Models, hosts, and core can evolve independently.
+1. **Gate JSON is the contract.** Models, hosts, and core can evolve independently.
 2. **Core remains model-neutral.** No provider SDK or model invocation leaked inward.
 3. **Single sources of truth are increasingly mechanical.** Generated docs and
    consistency checks reduce transcription drift.

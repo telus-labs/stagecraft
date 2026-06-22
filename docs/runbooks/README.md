@@ -27,7 +27,7 @@ Find your symptom below and jump to the section that covers it. Each row links t
 | Deploy FAIL — need to rollback | [deploy-failure.md](deploy-failure.md) | [§ Rollback path](deploy-failure.md#rollback-path) |
 | Deploy FAIL — retry after fix | [deploy-failure.md](deploy-failure.md) | [§ Retry after fix](deploy-failure.md#retry-after-fix) |
 | Extract tickets from `open_followups[]` after pipeline completes | [open-followups.md](open-followups.md) | [§ Step 2 — Print ticket stubs](open-followups.md#step-2--print-ticket-stubs) |
-| Production feedback via G3 seam | [open-followups.md](open-followups.md) | [§ Production feedback](open-followups.md#production-feedback-g3-seam) |
+| Production feedback via G3 contract | [open-followups.md](open-followups.md) | [§ Production feedback](open-followups.md#production-feedback-g3-contract) |
 | `devteam run` halted unexpectedly | [autonomous-run.md](autonomous-run.md) | [§ Why it halted — and what to do](autonomous-run.md#why-it-halted--and-what-to-do) |
 | `devteam run` exited with code 2 (locked) | [autonomous-run.md](autonomous-run.md) | [§ Exit codes](autonomous-run.md#exit-codes) |
 | Diagnosis gate landed as ESCALATE — how to approve | [repair-flow.md](repair-flow.md) | [§ The diagnosis gate](repair-flow.md#the-diagnosis-gate--what-youre-looking-at) |
@@ -38,7 +38,7 @@ Find your symptom below and jump to the section that covers it. Each row links t
 
 - [escalation.md](escalation.md) — what to read, how to decide, and how to encode the result when `devteam next` says `resolve-escalation`
 - [fix-and-retry.md](fix-and-retry.md) — 13 fix-and-retry cases: red-team, QA, pre-review, peer-review (both failure shapes), PM sign-off, accessibility (three-path recipe), consistency, verification, preflight, advise, license-gate, tool-budget denial
-- [open-followups.md](open-followups.md) — extract ticket stubs from `open_followups[]`; field mapping to JIRA, Linear, GitHub Issues; production feedback seam
+- [open-followups.md](open-followups.md) — extract ticket stubs from `open_followups[]`; field mapping to JIRA, Linear, GitHub Issues; production feedback contract
 - [deploy-failure.md](deploy-failure.md) — Stage 8 failure: classify the shape, adapter-specific diagnostics, rollback, retry
 - [autonomous-run.md](autonomous-run.md) — `devteam run` reference: autonomous escalation resolution, launch, exit codes, halts, consequence ceiling, honest limitations
 - [repair-flow.md](repair-flow.md) — `devteam run --repair` reference: diagnosis gate approval, scope-gate FAIL recovery, tri-state reproduction

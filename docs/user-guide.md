@@ -568,7 +568,7 @@ With three hosts and four review areas, Stage 5 produces 12 parallel workstreams
 
 ### Multi-host in headless mode
 
-Headless mode (`--headless`) works normally in multi-host setups. Each workstream spawns its own host CLI process; they run concurrently within a stage. Every host you route work to must support headless (all three shipped adapters do). In an unattended pipeline loop, mixed-host stages produce gates through the same seam and advance the pipeline normally.
+Headless mode (`--headless`) works normally in multi-host setups. Each workstream spawns its own host CLI process; they run concurrently within a stage. Every host you route work to must support headless (all three shipped adapters do). In an unattended pipeline loop, mixed-host stages produce gates through the same contract and advance the pipeline normally.
 
 ### When single-host is the right call
 

@@ -241,7 +241,7 @@ routing:
     backend: codex
 ```
 
-`devteam stage build` will produce 4 prompts; backend's points at Codex's role prompt path, the rest point at Claude Code subagents. Each writes its own workstream gate; the orchestrator merges across the seam.
+`devteam stage build` will produce 4 prompts; backend's points at Codex's role prompt path, the rest point at Claude Code subagents. Each writes its own workstream gate; the orchestrator merges at the contract boundary.
 
 ### Which adapter handles the merge?
 
@@ -766,7 +766,7 @@ The blockers list in the merged gate concatenates blockers from all FAILing work
 
 No. Each workstream is a fresh dispatch with its own prompt. The shared state is the files on disk (`pipeline/brief.md`, `pipeline/design-spec.md`, prior gates, etc.). One workstream's output becomes another workstream's input through the file system, not through model state.
 
-This is by design. Cross-workstream context-sharing would tie workstreams to specific hosts (which model can share state with which other model?) and break the model-agnostic story. The gate JSON + artifact files are the seam.
+This is by design. Cross-workstream context-sharing would tie workstreams to specific hosts (which model can share state with which other model?) and break the model-agnostic story. The gate JSON + artifact files are the contract.
 
 ### What if my OTel collector goes down mid-pipeline?
 

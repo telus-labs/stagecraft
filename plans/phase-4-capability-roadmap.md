@@ -54,7 +54,7 @@ Output: a short `plans/phase-4-ground-truth.md` notes file. Adjust the items bel
      just the inspiration (budgets expressed in MCP-tool vocabulary)? The ADR must pick.
      Recommendation to evaluate first: start with **host-native tool pinning** (claude-code
      subagent `tools:` frontmatter — near-zero new machinery) and defer an MCP mediation layer
-     until a second host can enforce it; ship the seam, not the server.
+     until a second host can enforce it; ship the contract, not the server.
   4. Gate visibility: dispatched tool budget recorded on the workstream gate (like host/model
      are today) so the audit trail shows what the role *could* do.
 - **Implementation sketch (post-ADR):** extend role frontmatter table
@@ -110,7 +110,7 @@ the loop the brief opened (the sms-opt-in example brief already declares named m
 deprioritized F2/F3/F5 integrations; honor that):**
 1. Define `pipeline/production-feedback.md` (template + conventions entry): operator-curated,
    freeform sections keyed by brief metric/SLO names plus an incidents list. No automated
-   ingestion — the file *is* the integration seam; Jira/Datadog automation can write it later
+   ingestion — the file *is* the integration point; Jira/Datadog automation can write it later
    without framework changes.
 2. Stage-09 (retrospective) `readFirst` includes it when present; rules/stage-09 retrospective
    guidance gains a "production deltas vs brief SLOs" section; retrospective gate gains an
@@ -154,8 +154,8 @@ accumulated actual autonomous runtime.
 
 Per docs/BACKLOG.md's own deprioritizations, which the review endorsed: IDE/VS Code adapters
 (A2/E3 — "maintenance treadmill"), Jira/Slack/pre-commit integrations (F2/F3/F5 — "none changes
-what Stagecraft can do"; G3's file-seam covers the need), self-modifying pipeline (G9 —
-"premature"), documentation gate (B6). The moat is the gate-JSON state seam + the verification
+what Stagecraft can do"; G3's file-contract covers the need), self-modifying pipeline (G9 —
+"premature"), documentation gate (B6). The moat is the gate-JSON state contract + the verification
 spine; breadth of integrations is not.
 
 ## Sequencing & exit criteria
@@ -164,5 +164,5 @@ spine; breadth of integrations is not.
 sensitive bet) → 4.3 → 4.4 (ADRs, interleaved as discussion bandwidth allows).
 
 **Phase exit:** G10 shipped with per-host enforcement levels declared; convergence breaker
-progress-based on both paths with no agent-falsifiable inputs; production feedback seam shipped;
+progress-based on both paths with no agent-falsifiable inputs; production feedback contract shipped;
 four ADRs accepted or explicitly rejected. H3 remains gated on evidence, by design.

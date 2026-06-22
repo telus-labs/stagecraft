@@ -182,7 +182,7 @@ For symmetry, the absence of findings is itself useful audit signal:
 - **No security vulnerabilities** above LOW. `npm audit` is clean. Subprocess hygiene clean. js-yaml in safe mode. No `eval` / `new Function`. UI server defensively guards non-loopback binding.
 - **No performance issues.** CLI cold-start is fast, test suite is fast, no leaks, no async/sync confusion.
 - **No test debt.** 778 tests in lockstep with features, 0 skipped, 0 todo, +400 since prior audit. The "tests in lockstep with contract change" convention is holding under velocity.
-- **No architectural regressions.** The 11 locked design decisions in `ARCHITECTURE.md` are unchanged after 99 commits. Spine + adapter pattern intact. Gate JSON as the seam intact. Core never invokes a model intact.
+- **No architectural regressions.** The 11 locked design decisions in `ARCHITECTURE.md` are unchanged after 99 commits. Spine + adapter pattern intact. Gate JSON as the contract intact. Core never invokes a model intact.
 - **No prior-audit items deferred.** Every actionable P1/P2/P3 from 2026-05-28 shipped in 6 days.
 
 ## Audit-archive convention validation

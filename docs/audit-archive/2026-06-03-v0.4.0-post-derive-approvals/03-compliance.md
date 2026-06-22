@@ -14,7 +14,7 @@ The documented load-bearing conventions (`AGENTS.md` § Conventions, § Load-bea
 | No comments-as-documentation in code | ✅ Held | Spot-checks of `core/orchestrator.js`, `core/gates/validator.js` show short "why" comments only; no multi-paragraph docstrings. |
 | Single source of truth for roles / rules / skills | ✅ Held (C-1 RETRACTED) | See finding C-1 below — the apparent gap was a false reading. |
 | `process.exit(N)` rather than throwing for CLI errors | ✅ Held | 5 `process.exit` calls in `bin/devteam` for the error paths; CLI subcommands consistently exit rather than throw. |
-| 11 locked design decisions (ARCHITECTURE.md) | ✅ Held | 99 commits since prior audit, none touched `ARCHITECTURE.md`. Architectural seam stable. |
+| 11 locked design decisions (ARCHITECTURE.md) | ✅ Held | 99 commits since prior audit, none touched `ARCHITECTURE.md`. Architectural contract stable. |
 | Per-PR test in lockstep with contract change | ✅ Held | All recent CLI additions (ruling, derive-approvals, restart, log) shipped with tests. Suite grew 378 → 778 (+400) since prior audit. |
 
 ## Findings

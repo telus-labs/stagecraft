@@ -115,7 +115,7 @@ For symmetry, the absence of findings is itself useful:
 - **No `npm audit` issues.** Resolved during P2 of the previous audit by removing `@opentelemetry/sdk-node`.
 - **No broken builds or failing tests.** 378/378 green; 185/185 consistency checks pass.
 - **No dead code.** Previous round removed the budget guard; nothing else flagged.
-- **No major architectural issues.** Core/adapter separation honored. Gate JSON as the seam. Single source of truth for roles, stages, schemas.
+- **No major architectural issues.** Core/adapter separation honored. Gate JSON as the contract. Single source of truth for roles, stages, schemas.
 
 ## Recommended cadence
 

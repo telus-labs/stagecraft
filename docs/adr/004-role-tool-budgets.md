@@ -50,7 +50,7 @@ what is missing is a human-readable record of the *declared* budget for audit le
 
 The roadmap (plans/phase-4-capability-roadmap.md §4.1) identifies four design questions
 this ADR must answer and recommends that an MCP mediation server be deferred in favour of
-host-native tool pinning first ("ship the seam, not the server").
+host-native tool pinning first ("ship the contract, not the server").
 
 ## Decision
 
@@ -116,9 +116,9 @@ codex/gemini-cli/generic have no native enforcement point an MCP server could im
 Adding a sidecar would create new failure modes (crash, timeout, port conflicts) while
 providing no meaningful additional enforcement on the hosts that actually need it.
 
-**Position adopted: ship the seam, not the server.** The canonical `toolBudget` on the
-dispatch descriptor and the `dispatched_tool_budget` on the workstream gate are the seam.
-Any future host with native MCP enforcement can plug into that seam without requiring an
+**Position adopted: ship the contract, not the server.** The canonical `toolBudget` on the
+dispatch descriptor and the `dispatched_tool_budget` on the workstream gate are the contract.
+Any future host with native MCP enforcement can plug into that contract without requiring an
 ADR revision.
 
 **MCP mediation revisit criterion:** if a second host appears with host-native MCP tool

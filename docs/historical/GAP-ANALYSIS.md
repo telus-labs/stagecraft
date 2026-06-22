@@ -66,7 +66,7 @@ This section is the load-bearing part of this doc — it's the **feature invento
 ### Architecture
 
 - **Single model-agnostic core** with per-host adapters. No more dual-fork drift. The orchestrator never invokes a model; the adapter is the only place that knows about host invocation primitives.
-- **Formal host-adapter contract** (`core/adapters/host-adapter.md`) — interface declared, capabilities negotiated, gate JSON used as the stable seam between hosts. Adapters can be added without forking core.
+- **Formal host-adapter contract** (`core/adapters/host-adapter.md`) — interface declared, capabilities negotiated, gate JSON used as the stable contract between hosts. Adapters can be added without forking core.
 - **Generic adapter** (`hosts/generic/`) — a third reference host with no in-host integration. Proves the contract is genuinely host-neutral rather than Claude/Codex-shaped.
 - **Per-(stage, role) routing** (`routing.stages > routing.roles > routing.default_host`) — a single pipeline run can dispatch different roles in the same stage to different hosts.
 - **Shared headless-invoke helper** (`core/adapters/headless.js`) — every adapter with `capabilities.headless: true` wires `invoke()` to the same code path.

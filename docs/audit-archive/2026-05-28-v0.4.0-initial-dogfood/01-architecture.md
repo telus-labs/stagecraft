@@ -2,7 +2,7 @@
 
 ## Summary
 
-Stagecraft is a **two-workflow orchestrator** with strict separation between the model-agnostic core (`core/`) and per-host adapters (`hosts/<host>/`). The core never invokes a model; adapters do, via host-specific primitives. The two workflows are: (1) a 13-stage pipeline that builds features, decomposing into per-workstream dispatches that produce gate JSON; (2) a 4-phase audit that analyzes existing code and produces a roadmap. Both write to disk as the seam — there's no in-memory state outside an active CLI invocation.
+Stagecraft is a **two-workflow orchestrator** with strict separation between the model-agnostic core (`core/`) and per-host adapters (`hosts/<host>/`). The core never invokes a model; adapters do, via host-specific primitives. The two workflows are: (1) a 13-stage pipeline that builds features, decomposing into per-workstream dispatches that produce gate JSON; (2) a 4-phase audit that analyzes existing code and produces a roadmap. Both write to disk as the contract — there's no in-memory state outside an active CLI invocation.
 
 ## Component inventory
 
@@ -144,7 +144,7 @@ Positive findings worth preserving:
 
 - **Strict core / adapter separation.** The core never invokes a model. This invariant is what makes multi-host possible. Easy to violate accidentally during a refactor; the contract test catches some of it but most of the discipline is cultural.
 - **Single source of truth.** Role briefs live in `roles/<role>.md`; adapters render them per-host at install time. No drift between hosts because there's nowhere to drift to.
-- **Gate JSON as the seam.** Every stage's output is a validated JSON file. Pipeline state is reconstructable from `pipeline/gates/` alone — no hidden state, no database, no cache. This makes resumability and auditability free.
+- **Gate JSON as the contract.** Every stage's output is a validated JSON file. Pipeline state is reconstructable from `pipeline/gates/` alone — no hidden state, no database, no cache. This makes resumability and auditability free.
 - **Tests are fast and offline.** 378 tests in ~1.5 seconds, no network, no model calls. `DEVTEAM_EMBEDDING_PROVIDER=stub` and `DEVTEAM_HEADLESS_COMMAND=true|false` keep CI green without external services.
 - **Consistency lint** (185 checks). Catches cross-artifact drift (schemas ↔ stages ↔ role briefs ↔ rules) at lint time, before tests run.
 - **Subprocess discipline for the validator.** `core/gates/validator.js` is a subprocess (spawned by hooks and by `bin/devteam validate`). Its `process.exit()` discipline doesn't pollute the rest of the codebase. Recent `gatesDir()` / `lessonsFile()` lazy lookup makes it require()-able too.

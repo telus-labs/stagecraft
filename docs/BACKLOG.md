@@ -58,7 +58,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | E | E6 | `devteam replay <stage-id>` | 3 | 3 | v0.4.0 · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | E | E7 | `/goal` integration for convergence-shaped stages | 3 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | E | E8 | Codebase audit feature | 5 | 3 | v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
-| E | E10 | Autonomous run watch mode | 3 | 1 | Unreleased · Phase 20 |
+| E | E10 | Autonomous run watch mode | 3 | 1 | PR #268 · Phase 20 |
 | F | F1 | GitHub PR integration | 4 | 3 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | F | F4 | CI runner integration | 4 | 3 | v0.4.0 (GitHub Actions only) · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | G | G1 | Multi-model peer review |  |  | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
@@ -196,7 +196,7 @@ Five items that the comparative analysis or shifted context argues against inves
 Six positioning bets about where software development is heading.
 
 ### 1. Models keep getting smarter, cheaper, faster.
-Design the contract assuming 10× capability in 2 years. The schema (gate JSON), the seam (per-workstream gates merged to stage), and the routing layer should outlive the specific models we route to today.
+Design the contract assuming 10× capability in 2 years. The schema (gate JSON), the contract (per-workstream gates merged to stage), and the routing layer should outlive the specific models we route to today.
 
 ### 2. Diversity beats monoculture.
 Single-model agentic systems are giving way to multi-model coordinated systems. For non-trivial tasks, the stronger outcome usually involves 2–3 different model families. The routing layer is already built for this; the next step is making diversity structurally load-bearing (G1 multi-model peer review, D4/D5 adaptive routing).

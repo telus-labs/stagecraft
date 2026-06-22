@@ -1,6 +1,6 @@
 # Walkthrough: Stage-04 split host
 
-A trace of the multi-host contract: one feature, the `full` track, backend on Codex and everything else on Claude Code. This walkthrough shows how the gate JSON seam, role-keyed routing, and capability negotiation cooperate when a single stage fans out to two different hosts.
+A trace of the multi-host contract: one feature, the `full` track, backend on Codex and everything else on Claude Code. This walkthrough shows how the gate JSON contract, role-keyed routing, and capability negotiation cooperate when a single stage fans out to two different hosts.
 
 > Historical note: this document originally proposed contract changes (per-role routing, per-workstream gates, capability `enforces` declarations, host-neutral context files) needed to make a split-host pipeline viable. Those changes have shipped. The trace below shows the resulting flow.
 
@@ -110,7 +110,7 @@ The merged gate's `workstreams[]` array lists each contributing workstream with 
 
 ### Stage 04a — Pre-review (Platform → claude-code)
 
-Platform reads every workstream's `pipeline/pr-*.md`, including `pr-backend.md` written by Codex. The reviewer reads files on disk; which host produced which PR summary is irrelevant at this stage. This is the gate-JSON-as-seam principle: artifacts are exchanged through the filesystem, not through host-specific channels.
+Platform reads every workstream's `pipeline/pr-*.md`, including `pr-backend.md` written by Codex. The reviewer reads files on disk; which host produced which PR summary is irrelevant at this stage. This is the gate-JSON-as-contract principle: artifacts are exchanged through the filesystem, not through host-specific channels.
 
 What *is* asymmetric here: the `allowed_writes` enforcement. Claude Code's hooks block writes outside the role's `allowedWrites` at tool-call time. Codex has no equivalent — the prompt instructs the model not to write outside `src/backend/`, and the validator audits the diff after the fact (`npm run audit:writes` is the recommended post-hoc check; see `core/pipeline/stages.js:102-107` for the per-role allowed-writes table). The pre-review gate flags an `enforcement_method` warning when any workstream ran on a `prompt-only` host.
 
@@ -144,7 +144,7 @@ devteam next
 
 The five things that hold up cleanly across the host boundary:
 
-1. **Gate JSON as a stable seam.** Stage 05 reads Stage 04's `pr-backend.md` without knowing it was written by Codex. The merged stage-04 gate records `host: codex` for audit, but no other stage branches on host.
+1. **Gate JSON as a stable contract.** Stage 05 reads Stage 04's `pr-backend.md` without knowing it was written by Codex. The merged stage-04 gate records `host: codex` for audit, but no other stage branches on host.
 2. **Per-role routing.** `routing.roles.backend = codex` is honoured at every stage that dispatches backend (Stage 04, Stage 05's backend reviewer). Single-role stages (PM, Principal) and multi-role stages (build, peer-review) use the same resolution path.
 3. **Per-workstream gates merging into stage gates.** `stage-04.backend.json` + `stage-04.frontend.json` + ... → `stage-04.json` with a `workstreams[]` array. The orchestrator owns the merge; adapters never see each other's output.
 4. **Capability negotiation.** The orchestrator reads `capabilities.json`, knows Codex has no hooks, and falls back to gate-file polling instead of waiting for a `Stop` event. The user types `devteam stage build --headless` once; the orchestrator handles the rest.

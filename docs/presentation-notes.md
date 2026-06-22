@@ -71,7 +71,7 @@ Read the bullets briefly. Land on the last line:
 
 Walk the rows. Spend a bit more time on three:
 
-1. **Different model per role, by config.** "Claude is good at design. Codex is fast at backend. You can route different roles to different models in the same run. The seam between them is JSON, not a model API."
+1. **Different model per role, by config.** "Claude is good at design. Codex is fast at backend. You can route different roles to different models in the same run. The contract between them is JSON, not a model API."
 
 2. **Approvals in stage-05.json.** Pull up a real gate JSON for a few seconds. Point at the `workstreams: [{ role, host, status, ... }]` array.
 
@@ -179,7 +179,7 @@ Don't explain every stage. Cover three properties of the whole:
 
 > "Active engagement on a full pipeline run is usually 5 to 10 minutes of decisions over a 30 to 60 minute wall-clock. You don't write boilerplate, shuffle files between agents, track who reviewed what, or compute aggregate status. You decide what to build, whether each gate is good enough, and what to do when the pipeline halts."
 
-**Transition.** Here's the technical seam that makes multi-host work.
+**Transition.** Here's the technical contract that makes multi-host work.
 
 ---
 
@@ -217,7 +217,7 @@ Don't explain every stage. Cover three properties of the whole:
 
 > "Adding a new host (Cursor, Aider, Cline) is implementing five methods against a 150-line contract. Not a fork, not a rewrite. A directory under `hosts/`."
 
-> "Inside one run, you can mix hosts. The routing config says 'backend on Codex, frontend on Claude, QA on Gemini, review back on Claude.' Each workstream writes its own gate; the orchestrator merges across hosts through the same JSON seam."
+> "Inside one run, you can mix hosts. The routing config says 'backend on Codex, frontend on Claude, QA on Gemini, review back on Claude.' Each workstream writes its own gate; the orchestrator merges across hosts through the same JSON contract."
 
 **Transition.** Here's how that routing looks in config.
 

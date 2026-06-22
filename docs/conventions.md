@@ -245,7 +245,7 @@ Marks an artifact to skip persistent memory ingest.
 | Override secret-scan | source file | `// devteam-allow-secret: <reason>` |
 | Skip memory ingest | artifact file | `stagecraft-no-memory` |
 
-## `pipeline/production-feedback.md` (G3 — production feedback seam)
+## `pipeline/production-feedback.md` (G3 — production feedback contract)
 
 An operator-curated file written **after deploy** (not by any pipeline agent).
 Its purpose is to close the brief→production loop: the brief names SLOs and
@@ -259,7 +259,7 @@ metrics; this file records what production actually showed.
   to `pipeline/retrospective.md`, and records `production_feedback_reviewed: true` in the gate.
 - **When absent:** Stage 9 skips this section and stamps `production_feedback_reviewed: "absent"`.
   `devteam next` on a completed pipeline mentions the file once as an optional follow-up.
-- **Integration seam by design:** automated tools (Datadog alerts → file, Jira comments → file) can write
+- **Integration point by design:** automated tools (Datadog alerts → file, Jira comments → file) can write
   to this path without any framework changes. The file is the integration protocol.
 
 See `docs/runbooks/open-followups.md` for how the open-followups runbook cross-references this file.

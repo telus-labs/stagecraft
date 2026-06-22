@@ -84,7 +84,7 @@ testing:
 - `opts.runStageHeadless` — injectable dispatch function
 
 A stall detector that runs *alongside* a dispatch (not inside `runHeadless`) needs an
-additional seam: a way to poll the log file and gate directory at configurable intervals
+additional interface: a way to poll the log file and gate directory at configurable intervals
 while the dispatch Promise is pending. `Promise.race(dispatch, stallTimer)` is the natural
 shape; `opts.sleep` already sets the precedent for injectable timers.
 

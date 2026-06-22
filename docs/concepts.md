@@ -16,7 +16,7 @@ Six primitives make up Stagecraft. Every other doc assumes you know these terms.
 | **Role** | `roles/<role>.md` | The framework + your customizations | A named seat at the team — `pm`, `principal`, `backend`, `frontend`, `platform`, `qa`, `reviewer`, `security`. A role's brief is the source of truth for what it does, reads, and writes. |
 | **Workstream** | derived at dispatch time | The orchestrator | One dispatch of a stage to one role. Single-role stages have one workstream; multi-role stages (build, peer-review) have several. **The workstream is the unit of gate identity.** Stage 5 (peer-review) is a special case — see the §stage-05 vocabulary callout below. |
 | **Host** | `hosts/<host>/` | You choose at `devteam init` | The AI tool that actually runs the model: `claude-code`, `codex`, `gemini-cli`, or `generic` (no host). |
-| **Gate** | `pipeline/gates/<stage>*.json` | The model writes it; the validator enforces it | A JSON record of one workstream's (or stage's) outcome. **The stable seam between stages.** Required fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. |
+| **Gate** | `pipeline/gates/<stage>*.json` | The model writes it; the validator enforces it | A JSON record of one workstream's (or stage's) outcome. **The stable contract between stages.** Required fields: `stage`, `status`, `orchestrator`, `track`, `timestamp`, `blockers`, `warnings`. |
 | **Track** | `core/pipeline/stages.js` | Your `.devteam/config.yml` (`pipeline.default_track`) | Which stages run for this kind of change. Six tracks: `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Tracks shape *which* stages run; never *what* a stage does. |
 
 The rest of this page builds on these six concepts.

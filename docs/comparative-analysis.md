@@ -91,7 +91,7 @@ Material capabilities added or matured since that snapshot include:
 
 The current differentiator is therefore not “more stages.” It is the combination of:
 
-1. **An executable state seam.** Gate JSON drives deterministic next actions and can be
+1. **An executable state contract.** Gate JSON drives deterministic next actions and can be
    mechanically overruled when model claims conflict with observed checks.
 2. **Heterogeneous dispatch.** Roles and stages in one run can use different host CLIs,
    including N-way review fanout.
@@ -212,7 +212,7 @@ integration direction rather than a current capability claim.
 
 - **Conversational upstream stages:** BMAD, Kiro, and OpenSpec all show demand for
   clarification before artifact production. Stagecraft should require user evidence
-  and preserve the final artifact/gate seam in any experiment.
+  and preserve the final artifact/gate contract in any experiment.
 - **Continuous standards deployment:** Agent OS shows value beyond one-shot discovery.
   Validate whether Stagecraft users experience convention drift before adding hooks.
 - **Evaluation harnesses:** AI-DLC's golden/semantic/NFR evaluator is strategically
@@ -226,7 +226,7 @@ integration direction rather than a current capability claim.
 - Becoming an IDE or model provider.
 - Rebuilding remote session UI, collaboration, or a sandbox fleet already supplied by
   execution runtimes such as Omnigent.
-- Maintaining first-party adapters for every coding agent; use the plugin seam.
+- Maintaining first-party adapters for every coding agent; use the plugin interface.
 - Self-modifying pipeline rules before multi-project evidence exists.
 - Learning-based routing or recipes without sufficient comparative observations.
 

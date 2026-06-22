@@ -144,7 +144,7 @@ was found, and no data-corruption path was verified.
 
 ### P3-2 — Evaluate an upstream conversational refinement contract
 
-- **Theme:** Competitive differentiation without losing the gate seam.
+- **Theme:** Competitive differentiation without losing the gate contract.
 - **Source:** BACKLOG E9 and refreshed comparative analysis.
 - **Description:** prototype a host-neutral session capability for requirements/design/
   clarification that ends in the same artifact and gate contract. Validate whether it

@@ -178,7 +178,7 @@ comparison, interactive-path parity, and operator surface remain entirely unbuil
 
 ### Relevant to 4.1 / 4.3 that landed since plans were written
 
-- **For 4.1 (G10):** No partial implementation found. The seam exists (`assertCapabilities()` in `orchestrator.js`, host `capabilities.json` files, `ROLE_FRONTMATTER` in `adapter.js`) but no `tools:` block in role frontmatter, no MCP server declarations, no tool-budget enforcement. The implementation surface identified in the roadmap (`hosts/claude-code/adapter.js:34-119`, `capabilities.json`, `tests/adapter-contract.test.js`) is intact and unchanged.
+- **For 4.1 (G10):** No partial implementation found. The contract exists (`assertCapabilities()` in `orchestrator.js`, host `capabilities.json` files, `ROLE_FRONTMATTER` in `adapter.js`) but no `tools:` block in role frontmatter, no MCP server declarations, no tool-budget enforcement. The implementation surface identified in the roadmap (`hosts/claude-code/adapter.js:34-119`, `capabilities.json`, `tests/adapter-contract.test.js`) is intact and unchanged.
 - **For 4.3 (G3):** No partial implementation. No `pipeline/production-feedback.md` template, no `production_feedback_reviewed` field in stage-09 gate schema, no `devteam next` mention in pipeline-complete output.
 - **Phase 3 items that landed (Phase 3 completion PRs #79–#89):** test coverage for a11y-fixer and preflight (PR #88–#89), and `bf048a9` / `3d0b16f` landed as capability work. CHANGELOG fragments (C8) landed in Phase 2.4. The POSIX-only decision (A6) was formalized in Phase 3.5.
 
