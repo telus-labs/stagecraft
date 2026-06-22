@@ -59,7 +59,8 @@ const { parse: parseGherkin, allScenarios, acIdsFor } = require("./gherkin");
 //   AC-4 — Something else.             (bare, no bullet)
 //   1. **AC-5** — Numbered list.       (numbered list + bold)
 //   1. AC-6: Numbered list bare.       (numbered list + bare)
-const AC_LINE_RE = /^\s*(?:\d+\.\s+|[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}\s*[.:\-—]\s*(.+?)\s*$/;
+//   **AC-7** `[deploy-deferred]` — ... (inline backtick annotation before separator)
+const AC_LINE_RE = /^\s*(?:\d+\.\s+|[-*+]\s+)?\*{0,2}(AC-\d+)\b\*{0,2}(?:\s+`[^`]+`)?\s*[.:\-—]\s*(.+?)\s*$/;
 
 // When a brief uses a dedicated "Acceptance Criteria" section header,
 // extraction is scoped to that section. This prevents AC references in
