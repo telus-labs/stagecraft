@@ -61,7 +61,7 @@ Goal: decision-ready in 30 minutes.
 | Step | Doc | Purpose |
 |---|---|---|
 | 1 | [EXAMPLE.md](EXAMPLE.md) | One feature traced through all 18 stages — the fastest reality check |
-| 2 | [docs/comparative-analysis.md](docs/comparative-analysis.md) | Stagecraft vs BMAD, GitHub Spec Kit, Agent OS, Kiro — four-school taxonomy and three defensible claims |
+| 2 | [docs/comparative-analysis.md](docs/comparative-analysis.md) | Stagecraft's Claude/Codex lineage and its position among delivery, specification, methodology, context, and agent-runtime systems |
 | 3 | [docs/adoption-guide.md](docs/adoption-guide.md) | Pilot script, common objections, and success criteria for the 2-week trial |
 
 Evaluating further (long-form): [docs/presentation-notes.md](docs/presentation-notes.md) · [docs/walkthroughs/soc2-evidence-collector.md](docs/walkthroughs/soc2-evidence-collector.md) · [docs/walkthroughs/stage-04-split-host.md](docs/walkthroughs/stage-04-split-host.md)

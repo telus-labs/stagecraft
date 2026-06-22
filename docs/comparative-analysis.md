@@ -1,10 +1,12 @@
-# Stagecraft vs adjacent AI-assisted engineering control planes — 2026
+# Stagecraft vs adjacent AI-assisted engineering systems — 2026
 
-**Refreshed:** 2026-06-18
+**Refreshed:** 2026-06-22
 **Comparators:** BMAD-METHOD, GitHub Spec Kit, Agent OS, OpenSpec, AWS Kiro,
-AI-DLC.
-**Focus:** process orchestration, spec-driven development, context systems, and
-automated evidence.
+AI-DLC, and Omnigent.
+**Lineage:** `claude-dev-team` and `codex-dev-team` are Stagecraft's predecessors,
+not external competitors.
+**Focus:** process orchestration, spec-driven development, context systems, agent
+runtimes, and automated evidence.
 
 This is a documentary comparison, not a benchmark. Stagecraft claims are verified
 against this repository; comparator claims use first-party repositories or vendor
@@ -13,7 +15,7 @@ deliberately secondary because they age faster than architecture.
 
 ## 1. Market map
 
-The tools still cluster into four overlapping schools:
+The tools cluster into five overlapping schools:
 
 | School | Primary question | Examples |
 |---|---|---|
@@ -21,6 +23,7 @@ The tools still cluster into four overlapping schools:
 | Spec-driven blueprints | What agreed specification should implementation derive from? | Spec Kit, OpenSpec, Kiro specs |
 | Persona/workflow cooperation | Which specialist perspective should shape the work? | BMAD |
 | Context and convention systems | What project knowledge must every agent carry? | Agent OS, Kiro steering |
+| Agent runtimes and meta-harnesses | Where and under which policies do agents execute and collaborate? | Omnigent |
 
 The categories are not product boxes. Spec Kit now has workflows/extensions; AI-DLC
 ships executable steering rules and evaluators; Kiro spans IDE, CLI, and web. The
@@ -30,21 +33,42 @@ useful distinction is the **source of operational truth**:
 - Spec Kit/OpenSpec: specifications, plans/tasks, and approved change deltas.
 - BMAD/AI-DLC: explicit methodology and role/workflow artifacts.
 - Agent OS/Kiro: standards/steering context applied to agent work.
+- Omnigent: agent definitions plus live session, host, policy, and sandbox state.
 
 ## 2. Current comparison matrix
 
-| Dimension | Stagecraft | BMAD | Spec Kit | Agent OS | OpenSpec | Kiro | AI-DLC |
-|---|---|---|---|---|---|---|---|
-| Primary primitive | Stage + gate | Agent/workflow | Spec → plan → tasks → implement | Standard + shaped spec | Proposal + spec delta | Spec/steering/hook/agent | Adaptive three-phase workflow |
-| Source of truth | Gate/artifact files | Workflow artifacts | Markdown spec chain | Injected standards | Current specs + change folders | Workspace steering/specs | Generated AI-DLC docs/rules |
-| Host posture | Per-stage/per-role routing across 4 first-party adapters plus plugins | Installs into multiple tools | 30 integrations + generic | Works alongside major coding agents | Broad slash-command/AGENTS integrations | Native Kiro surfaces | Rules for Kiro, Q, Cursor, Cline, Claude, Copilot |
-| Mechanical gating | Strong: schemas, validator overrides, direct lint/test/SCA, chain | Mostly workflow-guided | Analyze/checklists; extensions add governance | Not its center | Format validation and archive flow | Hooks and agent workflow | Evaluator + human approval tenet |
-| Post-build depth | Review, red-team, QA, a11y, observability, verification, performance, sign-off, deploy, retro | Method-dependent implementation/testing | Core flow ends at implement | Outside scope | Apply/archive after implementation | Agent/hook dependent | Construction + Operations |
-| Isolation | Bounded change roots optional | Project workflow context | Feature directories/presets | Standards workspace | First-class change folders | Workspace/task context | Generated project docs |
-| Auditability | Executable gate chain, replay, run log | Artifact/workflow history | Artifact chain | Standards/spec history | Explicit proposed/current/archive states | Task and workspace history | Human approvals + generated workflow docs |
-| Best fit | Multi-host, high-assurance delivery control | Guided role-rich product development | Spec-centered greenfield/structured change | Lightweight brownfield alignment | Brownfield spec deltas | Teams choosing an integrated agent environment | Enterprise methodology with explicit human oversight |
+| Dimension | Stagecraft | BMAD | Spec Kit | Agent OS | OpenSpec | Kiro | AI-DLC | Omnigent |
+|---|---|---|---|---|---|---|---|---|
+| Primary primitive | Stage + gate | Agent/workflow | Spec → plan → tasks → implement | Standard + shaped spec | Proposal + spec delta | Spec/steering/hook/agent | Adaptive three-phase workflow | Session + agent/harness + policy |
+| Source of truth | Gate/artifact files | Workflow artifacts | Markdown spec chain | Injected standards | Current specs + change folders | Workspace steering/specs | Generated AI-DLC docs/rules | Agent YAML + server/session state |
+| Host posture | Per-stage/per-role routing across 4 first-party adapters plus plugins | Installs into multiple tools | 30 integrations + generic | Works alongside major coding agents | Broad slash-command/AGENTS integrations | Native Kiro surfaces | Rules for Kiro, Q, Cursor, Cline, Claude, Copilot | Common orchestration over Claude Code, Codex, Cursor, Pi, and custom agents |
+| Mechanical gating | Strong: schemas, validator overrides, direct lint/test/SCA, chain | Mostly workflow-guided | Analyze/checklists; extensions add governance | Not its center | Format validation and archive flow | Hooks and agent workflow | Evaluator + human approval tenet | Action policies can allow, block, or pause; spend/tool caps and OS sandboxing |
+| Post-build depth | Review, red-team, QA, a11y, observability, verification, performance, sign-off, deploy, retro | Method-dependent implementation/testing | Core flow ends at implement | Outside scope | Apply/archive after implementation | Agent/hook dependent | Construction + Operations | Defined by the selected agent; no prescribed software-delivery lifecycle |
+| Isolation | Bounded change roots optional | Project workflow context | Feature directories/presets | Standards workspace | First-class change folders | Workspace/task context | Generated project docs | Local OS sandboxes and disposable managed cloud sandboxes |
+| Auditability | Executable gate chain, replay, run log | Artifact/workflow history | Artifact chain | Standards/spec history | Explicit proposed/current/archive states | Task and workspace history | Human approvals + generated workflow docs | Synchronized session, message, sub-agent, terminal, and file state |
+| Best fit | Multi-host, high-assurance delivery control | Guided role-rich product development | Spec-centered greenfield/structured change | Lightweight brownfield alignment | Brownfield spec deltas | Teams choosing an integrated agent environment | Enterprise methodology with explicit human oversight | Cross-device, collaborative, policy-governed agent execution |
 
-## 3. Stagecraft in June 2026
+## 3. Lineage: two host-native proofs to one neutral core
+
+Stagecraft is the third iteration of one delivery method, not a third host wrapper.
+The predecessors are useful historical evidence because they show which parts survived a
+host change:
+
+- [`claude-dev-team`](https://github.com/mumit/claude-dev-team) proved the complete
+  role-based team inside Claude Code: specialist roles, peer review, human checkpoints,
+  deterministic gates, multiple delivery tracks, deploy adapters, audit, and retrospective.
+- [`codex-dev-team`](https://github.com/mumit/codex-dev-team) rebuilt those ideas using
+  Codex-native primitives: `AGENTS.md`, reusable skills, repository scripts, JSON gates,
+  worktrees, and local/cloud execution profiles.
+- **Stagecraft** extracted the shared contract—stages, roles, artifacts, gates, routing,
+  authority, and evidence—into a host-neutral core with thin adapters.
+
+The comparison that matters is therefore architectural rather than competitive.
+The predecessor repositories bind the method to one host's native surfaces; Stagecraft
+preserves those native experiences while owning the common pipeline once. This removes
+parity drift and enables one run to route different workstreams through different hosts.
+
+## 4. Stagecraft in June 2026
 
 Stagecraft is v0.8.0: 18 ordered stages, 6 tracks, 4 first-party host adapters, 34 CLI
 command modules, 50,898 JavaScript lines, 91 test files, and 1,941 passing runtime
@@ -76,7 +100,7 @@ The current differentiator is therefore not “more stages.” It is the combina
 4. **Downstream delivery depth.** Stagecraft treats review, safety, quality,
    operations, deployment, and retrospective as first-class gates.
 
-## 4. Comparator updates
+## 5. Comparator updates
 
 ### BMAD-METHOD
 
@@ -126,7 +150,27 @@ critical decisions. This makes it Stagecraft's closest methodological comparator
 Stagecraft is more executable as a local control plane; AI-DLC is broader as an
 adaptive, organization-oriented methodology and evaluation system.
 
-## 5. Where Stagecraft wins, and where it does not
+### Omnigent
+
+Omnigent is an open-source agent framework and meta-harness over Claude Code, Codex,
+Cursor, Pi, and custom agents. It owns the execution environment around an agent:
+live and cross-device sessions, multi-agent supervision, harness and model selection,
+team collaboration, local or managed-cloud sandboxes, and policies that can allow,
+block, or pause actions and cap spend.
+
+That overlaps with Stagecraft at multi-host orchestration and bounded execution, but the
+systems center different contracts. Omnigent answers **where and how an agent runs**.
+Stagecraft answers **which delivery stage may run next, what it may change, and what
+evidence must exist before the pipeline advances**. Omnigent does not prescribe
+Stagecraft's requirements-to-retrospective lifecycle; Stagecraft does not provide
+Omnigent's session server, shared UI, remote collaboration, or sandbox fleet.
+
+The strongest relationship is compositional. A future Omnigent host adapter could let
+Stagecraft dispatch a stage into an Omnigent-governed session while Stagecraft retains
+the pipeline artifacts and gate chain. No such adapter is shipped today, so this is an
+integration direction rather than a current capability claim.
+
+## 6. Where Stagecraft wins, and where it does not
 
 ### Defensible strengths
 
@@ -145,8 +189,10 @@ adaptive, organization-oriented methodology and evaluation system.
 - **One integrated agent workspace and cloud ecosystem:** Kiro is the natural center.
 - **Organization-wide methodology and evaluation adoption:** AI-DLC may be easier to
   standardize without adopting a new executable control plane.
+- **Cross-device agent sessions, live collaboration, and managed sandboxes:** Omnigent
+  provides the stronger execution surface; Stagecraft can supply the delivery method.
 
-## 6. Strategic implications
+## 7. Strategic implications
 
 ### Do next
 
@@ -171,19 +217,24 @@ adaptive, organization-oriented methodology and evaluation system.
   Validate whether Stagecraft users experience convention drift before adding hooks.
 - **Evaluation harnesses:** AI-DLC's golden/semantic/NFR evaluator is strategically
   relevant, but Stagecraft first needs a real-run corpus and privacy model.
+- **An Omnigent adapter:** validate a thin adapter that maps Stagecraft dispatch and gate
+  completion onto Omnigent sessions. Keep pipeline authority in Stagecraft and runtime
+  policy in Omnigent; do not create a second orchestration core.
 
 ### Continue to avoid
 
 - Becoming an IDE or model provider.
+- Rebuilding remote session UI, collaboration, or a sandbox fleet already supplied by
+  execution runtimes such as Omnigent.
 - Maintaining first-party adapters for every coding agent; use the plugin seam.
 - Self-modifying pipeline rules before multi-project evidence exists.
 - Learning-based routing or recipes without sufficient comparative observations.
 
 The detailed sequence is in [the current audit roadmap](audit/10-roadmap.md).
 
-## 7. Method and sources
+## 8. Method and sources
 
-First-party sources checked on 2026-06-18:
+First-party sources checked on 2026-06-22:
 
 - Stagecraft: this repository's `package.json`, `core/`, tests, docs, and current
   [audit](audit/00-project-context.md).
@@ -194,6 +245,9 @@ First-party sources checked on 2026-06-18:
 - [Kiro documentation](https://kiro.dev/docs/).
 - [AI-DLC workflow repository](https://github.com/awslabs/aidlc-workflows) and
   [AWS methodology article](https://aws.amazon.com/blogs/devops/ai-driven-development-life-cycle/).
+- [Omnigent repository](https://github.com/omnigent-ai/omnigent).
+- Stagecraft lineage: [claude-dev-team](https://github.com/mumit/claude-dev-team) and
+  [codex-dev-team](https://github.com/mumit/codex-dev-team).
 
 No framework was installed or benchmarked. Comparative claims describe documented
 architecture and workflow, not independently measured productivity or quality.

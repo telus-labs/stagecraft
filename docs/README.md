@@ -4,7 +4,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 
 ## Evaluator — should we adopt?
 
-- [comparative-analysis.md](comparative-analysis.md) — Stagecraft vs BMAD, GitHub Spec Kit, Agent OS, Kiro: four-school taxonomy and three defensible claims
+- [comparative-analysis.md](comparative-analysis.md) — Stagecraft's Claude/Codex lineage and its position across delivery control, spec systems, methodologies, context systems, and agent runtimes including Omnigent
 - [adoption-guide.md](adoption-guide.md) — pilot script, common objections, success criteria for the 2-week trial
 - [presentation-notes.md](presentation-notes.md) — slide deck + speaker notes for pitching to a team or stakeholder
 - [walkthroughs/soc2-evidence-collector.md](walkthroughs/soc2-evidence-collector.md) — end-to-end showcase: building a SOC 2 evidence collector through the full 18-stage pipeline
