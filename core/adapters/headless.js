@@ -95,6 +95,27 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   }
 
   const prompt = preRenderedPrompt || adapter.renderStagePrompt(descriptor, ctx);
+
+  // C2: Claude Code's headless mode rejects prompts longer than 4000 chars with
+  // "Goal condition is limited to 4000 characters" and exits 0 — no gate written,
+  // structural-input halt. When patchItems are the culprit, fall back to a prompt
+  // without them. The auto-fix mechanism already wrote blockers to context.md
+  // before dispatch, so the agent still has full guidance; it just won't be in
+  // strict patch-only mode.
+  const HEADLESS_PROMPT_LIMIT = 4000;
+  let finalPrompt = prompt;
+  if (
+    !preRenderedPrompt &&
+    prompt.length > HEADLESS_PROMPT_LIMIT &&
+    ctx.patchItems && ctx.patchItems.length > 0
+  ) {
+    finalPrompt = adapter.renderStagePrompt(descriptor, { ...ctx, patchItems: null });
+    process.stderr.write(
+      `[devteam] warn: prompt ${prompt.length} chars exceeds ${HEADLESS_PROMPT_LIMIT}-char headless limit; ` +
+      `patchItems dropped — agent will read context.md for blocker guidance\n`,
+    );
+  }
+
   const gatePath = path.join(gatesDir(ctx.cwd, ctx.changeId), `${descriptor.workstreamId}.json`);
   let bin, args;
   try {
@@ -202,7 +223,7 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
       ));
     });
     child.stdin.on("error", () => { /* swallow EPIPE when child exits early */ });
-    child.stdin.write(prompt);
+    child.stdin.write(finalPrompt);
     child.stdin.end();
     child.on("close", (exitCode) => {
       if (timer) clearTimeout(timer);
