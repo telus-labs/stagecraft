@@ -142,7 +142,7 @@ function executeBash(command, cwd, timeoutMs) {
     cwd,
     timeout,
     encoding: "utf8",
-    maxBuffer: MAX_OUTPUT_BYTES * 4,
+    maxBuffer: 4 * 1024 * 1024, // 4 MB collection buffer; output is truncated to MAX_OUTPUT_BYTES before returning
   });
 
   if (result.error) {
