@@ -405,6 +405,48 @@ describe("driver: autonomous fix-and-retry (PR-B)", () => {
     ));
   });
 
+  it("does not halt on targeted fix when gate passes but blocker files are absent locally (remote runner)", async () => {
+    // Regression: cloud-runner adapters modify files in the remote environment;
+    // local files are never touched. The file-hash check would see no change and
+    // halt convergence-exhausted even though the gate reported PASS. Fix: skip the
+    // halt when the targeted workstream's gate passes.
+    const cwd = track(makeTargetProject());
+    const victim = path.join(cwd, "pipeline", "gates", "stage-04.backend.json");
+    fs.writeFileSync(victim, "{}");
+    // NOTE: src/remote-file.js intentionally NOT created locally — it only exists
+    // in the remote runner's environment.
+    const passGatePath = victim;
+    const events = [];
+    const nextSeq = [
+      {
+        action: "fix-and-retry", stage: "stage-04", name: "build", failure_class: "code-defect",
+        blockers: [{ text: "missing route handler", file: "src/remote-file.js" }],
+        clear_gates: ["pipeline/gates/stage-04.backend.json", "pipeline/gates/stage-04.json"],
+      },
+      { action: "run-stage", stage: "stage-04", name: "build" },
+      { action: "pipeline-complete", reason: "done" },
+    ];
+    let n = 0;
+    const s = await run({
+      cwd,
+      next: () => nextSeq[n++],
+      onEvent: (ev) => events.push(ev),
+      runStageHeadless: async () => {
+        // Simulate remote runner: writes PASS gate but never modifies local files.
+        fs.writeFileSync(passGatePath, JSON.stringify({
+          stage: "stage-04", workstream: "backend", status: "PASS", blockers: [], warnings: [],
+        }));
+        return [{ role: "backend", gatePath: passGatePath, exitCode: 0, durationMs: 1 }];
+      },
+      stallProbe: () => () => {},
+    });
+
+    assert.equal(s.completed, true, "pipeline should complete when targeted gate passes");
+    assert.ok(!events.some((ev) =>
+      ev.type === "halt" && ev.failure_class === "convergence-exhausted",
+    ), "should not emit convergence-exhausted halt when gate passes");
+  });
+
   it("detects source change when blocker file path includes :line suffix", async () => {
     // Regression: blockerFiles() used to push the raw "file:line" string, so
     // fs.readFileSync("Dockerfile:16") always threw ENOENT.  Both before- and
