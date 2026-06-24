@@ -62,6 +62,6 @@ Gate file: `pipeline/gates/stage-09.json`.
   Stage 5 review files during synthesis, before selection for promotion.
 - `contributions_written` — typically includes all dev roles; the security-engineer
   contributes when Stage 4b fired.
-- `production_feedback_reviewed` — G3 seam: `true` when `pipeline/production-feedback.md`
+- `production_feedback_reviewed` — G3 integration: `true` when `pipeline/production-feedback.md`
   was read and a "Production Deltas" section written; `false` if present but skipped;
   `"absent"` (or null) when the file was not present. Optional field.
