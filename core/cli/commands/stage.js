@@ -185,6 +185,21 @@ function run(positional, _flags) {
     }
   }
 
+  // HTTP-native hosts (e.g. openai-compat) have no CLI to paste a prompt into;
+  // headless invoke is the only meaningful mode for them. Auto-enable it so the
+  // user doesn't need to remember to pass --headless every time.
+  if (!_flags.headless) {
+    try {
+      const hostName = loadConfig(cwd).routing.default_host;
+      const capPath = path.join(__dirname, "..", "..", "..", "hosts", hostName, "capabilities.json");
+      const caps = JSON.parse(fs.readFileSync(capPath, "utf8"));
+      if (caps.httpNative === true) {
+        process.stderr.write(`[devteam] ${hostName} is HTTP-native — running headlessly\n`);
+        _flags.headless = true;
+      }
+    } catch { /* adapter absent or capabilities unreadable — keep current mode */ }
+  }
+
   if (_flags.headless) {
     runStageHeadless(stageName, _flags)
       .then((result) => {

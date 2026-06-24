@@ -158,12 +158,20 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     const toolResults = [];
     for (const tc of toolCalls) {
       const result = executeTool(tc, ctx.cwd, descriptor.allowedWrites || []);
-      const isWrite = tc.function?.name === "write_file";
-      process.stderr.write(
-        `[devteam] openai-compat: tool ${tc.function?.name}(${
-          isWrite ? JSON.parse(tc.function.arguments || "{}").path : "..."
-        }) → ${result.slice(0, 80)}\n`,
-      );
+      const tcName = tc.function?.name ?? "unknown";
+      let argSummary;
+      try {
+        const a = JSON.parse(tc.function?.arguments || "{}");
+        if (tcName === "write_file" || tcName === "read_file") argSummary = a.path;
+        else if (tcName === "list_files") argSummary = a.dir ?? ".";
+        else if (tcName === "bash") argSummary = (a.command ?? "").slice(0, 60);
+        else argSummary = "...";
+      } catch { argSummary = "?"; }
+      // Show full message for errors (short, important); first 100 chars for success.
+      const resultSummary = result.startsWith("error:")
+        ? result
+        : result.slice(0, 100) + (result.length > 100 ? "…" : "");
+      process.stderr.write(`[devteam] openai-compat: tool ${tcName}(${argSummary}) → ${resultSummary}\n`);
       toolResults.push({
         role: "tool",
         tool_call_id: tc.id,
