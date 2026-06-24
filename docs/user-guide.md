@@ -98,7 +98,7 @@ npm link
 
 # 3. In your target project
 cd ~/projects/my-app
-devteam init --host claude-code        # or codex / gemini-cli / claude-code,codex
+devteam init --host claude-code        # or codex / gemini-cli / openai-compat
 ```
 
 `devteam init` lays down:
@@ -444,11 +444,11 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 ### What "host" means
 
-A *host* is the AI coding CLI that Stagecraft hands work to: Claude Code (`claude`), Codex CLI (`codex`), or Gemini CLI (`gemini`). Stagecraft never calls a model API directly. It renders a stage prompt and pipes it to the host, which manages the model invocation, tool permissions, and output capture itself.
+A *host* controls how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), and Gemini CLI (`gemini`) — Stagecraft renders a stage prompt and pipes it to the host CLI, which manages model invocation, tool permissions, and output capture. The fourth built-in host, `openai-compat`, is HTTP-native: it calls the OpenAI chat-completions API directly, no CLI required.
 
-**Host and model are two different things.** Which host you route to determines which CLI runs. Which model that CLI uses is configured inside the host, not in Stagecraft. For Claude Code, the `model:` field in each agent file (`.claude/agents/<role>.md`) controls this. For Codex and Gemini, use their own settings.
+**Host and model are two different things.** For CLI-based hosts, which model runs is configured inside the host (e.g., Claude Code's `.claude/agents/<role>.md` has a `model:` field; Codex and Gemini use their own settings). For `openai-compat`, the model is set per-role in `.devteam/config.yml` under `hosts.openai-compat.models`.
 
-When optimizing cost or comparing model quality, you can run Opus for some roles and Sonnet for others by editing the agent frontmatter, with no host changes required. Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
+When optimizing cost or comparing model quality, you can route different roles to different models. For CLI-based hosts, edit the agent frontmatter. For openai-compat, edit the config — see [Using openai-compat](#using-openai-compat-openrouter-deepseek-moonshot-etc). Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
 
 ### Why use multiple hosts?
 
@@ -525,7 +525,7 @@ model: sonnet        # claude-sonnet — implementation
 
 To change a model for a specific role, edit that agent file directly. Re-running `devteam init --host claude-code --force` regenerates all agent files from the framework defaults, so keep custom model overrides in mind if you re-init.
 
-For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft.
+For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft. For openai-compat, model selection is per-role in `.devteam/config.yml` under `hosts.openai-compat.models` — see [Using openai-compat](#using-openai-compat-openrouter-deepseek-moonshot-etc).
 
 ### Common configurations
 
@@ -565,6 +565,114 @@ routing:
 ```
 
 With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model peer review](#multi-model-peer-review) for the full picture.
+
+### Using openai-compat (OpenRouter, DeepSeek, Moonshot, etc.)
+
+`openai-compat` is Stagecraft's HTTP-native host adapter. Instead of spawning a CLI subprocess, it calls any OpenAI-compatible chat-completions endpoint directly — OpenRouter, DeepSeek, Moonshot AI, Xiaomi MiMo, Qwen, or any hosted model that speaks the OpenAI API protocol. No CLI to install.
+
+#### Setup
+
+```bash
+devteam init --host openai-compat
+```
+
+What this installs:
+- `.openai-compat/prompts/roles/` — role prompts in markdown format
+
+No `.claude/` agents, no hooks, no slash commands are installed.
+
+#### Configuration
+
+Add a `hosts` block to `.devteam/config.yml`:
+
+```yaml
+routing:
+  default_host: openai-compat
+
+hosts:
+  openai-compat:
+    base_url: https://openrouter.ai/api/v1   # required (or OPENAI_COMPAT_BASE_URL env var)
+    api_key_env: OPENROUTER_API_KEY           # names the env var that holds the key
+    models:
+      default:    moonshotai/kimi-k2.7-code  # fallback for unmapped roles
+      principal:  deepseek/deepseek-v4-pro
+      security:   deepseek/deepseek-v4-pro
+      red-team:   deepseek/deepseek-v4-pro
+      migrations: deepseek/deepseek-v4-pro
+      pm:         deepseek/deepseek-v4-pro
+      backend:    moonshotai/kimi-k2.7-code
+      frontend:   moonshotai/kimi-k2.7-code
+      platform:   moonshotai/kimi-k2.7-code
+      reviewer:   moonshotai/kimi-k2.7-code
+      qa:         qwen/qwen3.6-27b
+      verifier:   xiaomimimo/mimo-v2.5-pro
+```
+
+The `api_key_env` field names the *env var that holds the key*, not the key itself — so the config file is safe to commit:
+
+```bash
+# .env (not committed)
+OPENROUTER_API_KEY=sk-or-...
+```
+
+#### Environment variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `OPENAI_COMPAT_BASE_URL` | Base URL when `base_url` is not in config | `https://openrouter.ai/api/v1` |
+| `OPENAI_COMPAT_API_KEY` | API key when `api_key_env` is not in config | *(required)* |
+| `OPENAI_COMPAT_MODEL` | Model when no per-role mapping and no `models.default` | *(required if no per-role mapping)* |
+
+Resolution order: `.devteam/config.yml` → environment variables. When `api_key_env` is set in config, only that env var is read for the key; `OPENAI_COMPAT_API_KEY` is the fallback when `api_key_env` is absent from config.
+
+#### Headless and auto-detection
+
+`openai-compat` is HTTP-native — it has no CLI to spawn. When the configured `default_host` declares `httpNative: true` (which openai-compat does), `devteam stage <name>` **auto-enables headless mode without needing `--headless`**:
+
+```
+[devteam] openai-compat is HTTP-native — running headlessly
+```
+
+Passing `--headless` explicitly is also accepted and has the same effect. This auto-detection applies only when `default_host` is an httpNative adapter; routing a single role to openai-compat via `roles:` while keeping a CLI adapter as `default_host` still requires `--headless`.
+
+#### Limitations
+
+| Capability | Status |
+|---|---|
+| Headless invocation | ✓ auto-enabled (no CLI needed) |
+| Shell (`bash` tool) | ✓ for roles that include `Bash` in their `toolBudget` |
+| File I/O (`write_file`, `read_file`, `list_files`) | ✓ |
+| Allowed-writes enforcement | Post-hoc git-diff audit (same as codex/gemini-cli) |
+| Tool budget enforcement | Prompt-only — model is instructed via prompt; no API-level blocking |
+| Hooks (`PreToolUse`, `PostToolUse`, `Stop`) | ✗ |
+| Subagents | ✗ |
+| Slash commands | ✗ |
+| Worktrees | ✗ — stage-04 parallel workstreams run without git-worktree isolation |
+| Goal loop | ✗ — replaced by a 40-iteration tool-call loop per dispatch |
+| Per-role model selection | ✓ via `hosts.openai-compat.models.<role>` in config |
+
+**Security posture.** The `bash` tool gives the model the ability to run arbitrary shell commands — equivalent to `--dangerously-skip-permissions`. All commands are logged to stderr before execution. This matches the posture of headless Claude Code and Codex.
+
+**max_tokens cap.** The default is 32 768 tokens per API call. If the model hits this limit mid-tool-call, its arguments may be truncated (malformed JSON). The adapter emits a `warn: max_tokens hit` warning and the tool-call loop attempts recovery. Very long artifact writes are the most common trigger; if you see the warning repeatedly, raise `DEFAULT_MAX_TOKENS` in `hosts/openai-compat/invoke.js`.
+
+#### Model recommendations by role tier
+
+| Role tier | Recommended model | OpenRouter ID |
+|---|---|---|
+| Reasoning (principal, security, red-team, migrations, pm) | DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` |
+| Implementation (backend, frontend, platform, reviewer) | Kimi K2.7-Code | `moonshotai/kimi-k2.7-code` |
+| Test authoring (qa) | Qwen3.6 27B | `qwen/qwen3.6-27b` |
+| Verification (verifier) | MiMo-V2.5-Pro | `xiaomimimo/mimo-v2.5-pro` |
+
+Any model that supports OpenAI function-calling and has sufficient context window (≥ 100 k tokens recommended for build stages) works.
+
+#### Resuming after an escalation
+
+The command to clear a gate and restart a stage is `devteam restart <stage>`, not `devteam run --restart`:
+
+```bash
+devteam restart build && devteam run
+```
 
 ### Multi-host in headless mode
 

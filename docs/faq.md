@@ -32,13 +32,18 @@ Three distinct concepts that appear together everywhere:
 
 - **Role** — a job function performed by an AI agent: PM, Principal, Backend, Security, Red-team, etc. Each role has a brief in `roles/<name>.md` that defines its responsibilities and constraints.
 - **Stage** — a pipeline step with a defined objective, artifact, and gate: requirements, design, build, peer-review, etc. Each stage dispatches one or more roles to do the work.
-- **Host** — the CLI that delivers the prompt to the model: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). Stagecraft never calls a model directly; it hands the prompt to a host CLI.
+- **Host** — how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). The fourth, `openai-compat`, is HTTP-native — it calls any OpenAI-compatible endpoint directly without a CLI.
 
 A stage assigns roles; routing assigns those roles to hosts; the hosts invoke models. The gate JSON is what all three produce in common.
 
 ### Do I need Claude Code or Codex CLI installed to use this?
 
-No, not strictly. The **generic** adapter (`hosts/generic/`) has zero in-host integration — it renders prompts to stdout and you consume them however you like (paste into any LLM, copy to a wiki, hand to a human). What you give up: no slash commands, no hooks, no headless invocation. Most people will want at least one real host installed.
+No, not strictly. Two adapters work without a dedicated CLI:
+
+- **`openai-compat`** routes directly to any OpenAI-compatible API endpoint (OpenRouter, DeepSeek, Moonshot, etc.) via HTTP — no CLI, full headless support, bash tool included. This is the recommended no-install option when you have an API key for a hosted model. See [Using openai-compat](user-guide.md#using-openai-compat-openrouter-deepseek-moonshot-etc) in the user guide for setup.
+- **`generic`** renders prompts to stdout for manual paste into any LLM or workflow. What you give up: no slash commands, no hooks, no headless invocation.
+
+Most people will want at least one real host installed.
 
 ### Where does the framework live vs the target project?
 
@@ -253,7 +258,33 @@ Yes. Gemini CLI is already shipped (`hosts/gemini-cli/`). For others, implement 
 
 ### Does the routing config support different model versions of the same host?
 
-Not directly. The routing key is the host name (`claude-code`, `codex`). To use different models per role within the same host, configure that in the host itself (e.g., Claude Code's `.claude/agents/<name>.md` has a `model:` field; Codex prompts can be wrapped with model selection). The framework's routing layer routes to *hosts*, not *models within a host* — see [`docs/BACKLOG.md`](BACKLOG.md) G2 / D5 for the planned "adaptive routing" work.
+Not directly for CLI-based hosts. The routing key is the host name (`claude-code`, `codex`). To use different models per role within those hosts, configure that in the host itself (e.g., Claude Code's `.claude/agents/<name>.md` has a `model:` field; Codex prompts can be wrapped with model selection). The framework's routing layer routes to *hosts*, not *models within a host* — see [`docs/BACKLOG.md`](BACKLOG.md) G2 / D5 for the planned "adaptive routing" work.
+
+For `openai-compat`, per-role model selection is a first-class config feature — see below.
+
+### Can I use open-weight models like DeepSeek, Kimi, or Qwen with Stagecraft?
+
+Yes — via the `openai-compat` host adapter. It routes roles to any OpenAI-compatible endpoint, including OpenRouter (which aggregates hundreds of open-weight and proprietary models under a single key). Unlike CLI-based hosts, per-role model selection is configured directly in `.devteam/config.yml`:
+
+```yaml
+routing:
+  default_host: openai-compat
+
+hosts:
+  openai-compat:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    models:
+      default:   moonshotai/kimi-k2.7-code
+      principal: deepseek/deepseek-v4-pro   # reasoning-heavy roles
+      security:  deepseek/deepseek-v4-pro
+      red-team:  deepseek/deepseek-v4-pro
+      backend:   moonshotai/kimi-k2.7-code  # implementation roles
+      qa:        qwen/qwen3.6-27b           # test authoring
+      verifier:  xiaomimimo/mimo-v2.5-pro   # verification
+```
+
+See [Using openai-compat](user-guide.md#using-openai-compat-openrouter-deepseek-moonshot-etc) for the full config schema, env vars, limitations, and model recommendations.
 
 ### Which roles should get expensive models (Opus) vs. cheaper ones?
 
@@ -683,7 +714,7 @@ Add `devteam init --host <name>` to your project bootstrap script and use `--hea
 - run: devteam next --json | jq .action
 ```
 
-Set the host CLI's auth via the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) in your CI secrets. The orchestrator never handles tokens — it just shells out to `claude` / `codex` / `gemini`.
+Set the host CLI's auth via the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) in your CI secrets. For openai-compat, set the env var named by `api_key_env` in your config (e.g. `OPENROUTER_API_KEY`). The orchestrator never handles tokens — it just shells out to `claude` / `codex` / `gemini`, or calls the API directly for openai-compat.
 
 `scripts/pr-publish.js` (run via `npm run pr-publish`) posts gate status as GitHub check runs on the PR head commit. PASS → success, WARN → neutral, FAIL/ESCALATE → failure.
 
@@ -854,6 +885,30 @@ Run `devteam validate` for the exact error. Common causes:
 - The `status` value is outside the allowed set (`PASS`, `WARN`, `FAIL`, `ESCALATE`).
 - The gate has a `retry_number >= 1` but no `this_attempt_differs_by` field — the retry-integrity check.
 - An older gate in `pipeline/gates/` has `status: ESCALATE` that's unresolved — bypassed-escalation halts the pipeline regardless of which gate you just wrote.
+
+### openai-compat shows ENOENT errors for `AGENTS.md` or `templates/` — is something broken?
+
+No. These are harmless read attempts. `openai-compat` role prompts live under `.openai-compat/prompts/roles/` rather than `.claude/agents/`. On startup, the adapter may attempt to read `AGENTS.md` or files under `templates/` for context seeding; if those files are absent (e.g. you used `devteam init --host openai-compat` without also installing claude-code), the reads fail with `ENOENT`. The adapter continues without them — the pipeline artifacts in `pipeline/` are the actual context the model needs.
+
+### The model in an openai-compat stage used `sed -i 'expr' file` and it failed on macOS — why?
+
+macOS ships BSD `sed`, which requires an explicit empty-string backup extension: `sed -i '' 'expr' file`. GNU `sed` (Linux) accepts `sed -i 'expr' file` without the suffix — which is what most models write by default. To prevent the issue, add a note to your `pipeline/context.md` binding-constraints section before running the pipeline:
+
+```markdown
+## Binding implementation constraints
+
+macOS environment: use BSD `sed` syntax — `sed -i '' 'expr' file`, not `sed -i 'expr' file`.
+```
+
+### Does openai-compat need `--headless` on every `devteam stage` invocation?
+
+No. When the configured `default_host` is `openai-compat` (which declares `httpNative: true`), `devteam stage <name>` auto-enables headless mode and prints:
+
+```
+[devteam] openai-compat is HTTP-native — running headlessly
+```
+
+Passing `--headless` explicitly is also accepted. This auto-detection fires only when `default_host` is httpNative; if you're routing a single role to openai-compat via `routing.roles` while keeping a CLI adapter as `default_host`, `--headless` is still required for the CLI-based stages.
 
 ### Can I set per-role timeouts?
 

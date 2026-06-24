@@ -44,6 +44,7 @@ After install:
    - `STAGECRAFT_REPO`: where to fetch Stagecraft from (e.g. `your-org/stagecraft`)
    - `STAGECRAFT_REF`: which Stagecraft version/tag/sha to pin
 2. Optional authenticated enforcement: add a repository Actions secret named `DEVTEAM_SIGNING_SECRET`, use the same protected secret while running/stamping Stagecraft, and set `pipeline.require_signed_gates: true` in `.devteam/config.yml`. Pull requests from forks do not receive repository secrets and therefore fail strict verification by design.
+3. If using `openai-compat` as your host: add the API-key env var named by `api_key_env` in your config (e.g. `OPENROUTER_API_KEY`) as a repository Actions secret. `openai-compat` has no CLI and no `headlessCommand` — it calls the API directly via HTTP, so CI only needs the key in the environment.
 3. Commit + push the workflow file.
 4. Open a PR that touches `pipeline/gates/` and watch the checks fire.
 
