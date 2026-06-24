@@ -1,0 +1,70 @@
+# OpenRouter multi-model routing example for stagecraft.
+#
+# All open-weight models are accessed through a single OpenRouter API key
+# (https://openrouter.ai/api/v1). Per-role model selection is handled by
+# the hosts.openai-compat.models table below.
+#
+# Tier mapping:
+#   Opus tier  (deep reasoning / veto roles) → DeepSeek V4 Pro
+#   Sonnet tier (implementation roles)       → Kimi K2.7-Code
+#   QA / spec roles                          → Qwen3.6 27B
+#   Verifier (formal verification, full track only) → MiMo-V2.5-Pro
+#
+# To activate: copy this file to .devteam/config.yml in your project root
+# and set the OPENROUTER_API_KEY environment variable.
+
+routing:
+  default_host: claude-code      # keep pm + principal on Claude by default
+  roles:
+    # Opus-tier: deep reasoning, architecture decisions, veto power
+    principal:  openai-compat    # design spec, ADRs, retrospective
+    security:   openai-compat    # security review (stage-04b)
+    red-team:   openai-compat    # adversarial review (stage-04c)
+    migrations: openai-compat    # migration-safety review (stage-04d)
+    # Sonnet-tier: implementation and code review
+    backend:    openai-compat    # backend implementation (stage-04)
+    frontend:   openai-compat    # frontend implementation (stage-04)
+    reviewer:   openai-compat    # peer review (stage-05)
+    # QA and verification
+    qa:         openai-compat    # test authoring + AC verification (stage-06)
+    verifier:   openai-compat    # formal/mutation verification (stage-06d, full only)
+  # Peer-review fanout: run stage-05 on both hosts for independent perspectives.
+  # review_fanout: [claude-code, openai-compat]
+
+pipeline:
+  default_track: full
+  isolation: in-place
+
+# Host-specific config for the openai-compat adapter.
+# All models are served via OpenRouter's single OpenAI-compatible endpoint.
+hosts:
+  openai-compat:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY   # name of the env var holding your key
+
+    models:
+      # Fallback for any role not listed below.
+      default: moonshotai/kimi-k2.7-code
+
+      # Opus-tier roles: DeepSeek V4 Pro (strong reasoning, 1M context).
+      principal:  deepseek/deepseek-v4-pro
+      security:   deepseek/deepseek-v4-pro
+      red-team:   deepseek/deepseek-v4-pro
+      migrations: deepseek/deepseek-v4-pro
+
+      # Sonnet-tier roles: Kimi K2.7-Code (top SWE-bench Pro, agentic).
+      backend:    moonshotai/kimi-k2.7-code
+      frontend:   moonshotai/kimi-k2.7-code
+      reviewer:   moonshotai/kimi-k2.7-code
+
+      # QA: Qwen3.6 27B (best dense coding model, Apache 2.0).
+      qa:         qwen/qwen3.6-27b
+
+      # Verifier: MiMo-V2.5-Pro (highest TerminalBench score, MIT).
+      verifier:   xiaomimimo/mimo-v2.5-pro
+
+# Note: platform role is intentionally left on claude-code (the default).
+# Platform stages (04a pre-review, 08 deploy) require shell access to run
+# lint, tests, and deploy scripts — capabilities not available to the
+# openai-compat HTTP adapter. Route platform to codex or gemini-cli if
+# you need an alternative to claude-code for those stages.
