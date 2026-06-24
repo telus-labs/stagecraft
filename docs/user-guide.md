@@ -655,16 +655,27 @@ Passing `--headless` explicitly is also accepted and has the same effect. This a
 
 **max_tokens cap.** The default is 32 768 tokens per API call. If the model hits this limit mid-tool-call, its arguments may be truncated (malformed JSON). The adapter emits a `warn: max_tokens hit` warning and the tool-call loop attempts recovery. Very long artifact writes are the most common trigger; if you see the warning repeatedly, raise `DEFAULT_MAX_TOKENS` in `hosts/openai-compat/invoke.js`.
 
+**Function-calling reliability and context length.** Some models route function calls through their chat template (an internal token-based format) rather than the OpenAI `tool_calls` JSON structure. These models work well at short context but can regress at long context — emitting raw internal markup (e.g. `<|tool_call_argument_begin|>` or `functions.func_name:idx` ID prefixes) in the response `content` field instead of populating `tool_calls`. When this happens, the adapter receives an empty `tool_calls` array, no tool is executed, no gate is written, and the orchestrator halts with `structural-input`.
+
+Signs of this failure mode in the run log:
+- Tool call markup visible in the model's text output rather than in `[devteam] openai-compat: tool` lines
+- `structural-input` halt with a "no gate" message immediately after a stage that read many files
+- Subsequent retry succeeds (because context resets between dispatches)
+
+Mitigation: keep `pipeline/context.md` concise; route long-context stages (build, verification) to a model with verified native `tool_calls` support such as DeepSeek V3/V4 or Qwen2.5-Coder. The auto-fix retry cycle normally recovers after one or two attempts.
+
 #### Model recommendations by role tier
 
-| Role tier | Recommended model | OpenRouter ID |
-|---|---|---|
-| Reasoning (principal, security, red-team, migrations, pm) | DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` |
-| Implementation (backend, frontend, platform, reviewer) | Kimi K2.7-Code | `moonshotai/kimi-k2.7-code` |
-| Test authoring (qa) | Qwen3.6 27B | `qwen/qwen3.6-27b` |
-| Verification (verifier) | MiMo-V2.5-Pro | `xiaomimimo/mimo-v2.5-pro` |
+| Role tier | Recommended model | OpenRouter ID | Notes |
+|---|---|---|---|
+| Reasoning (principal, security, red-team, migrations, pm) | DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` | Reliable native tool_calls |
+| Implementation (backend, frontend, platform, reviewer) | Kimi K2.7-Code | `moonshotai/kimi-k2.7-code` | ⚠ see note below |
+| Test authoring (qa) | Qwen3.6 27B | `qwen/qwen3.6-27b` | |
+| Verification (verifier) | MiMo-V2.5-Pro | `xiaomimimo/mimo-v2.5-pro` | |
 
 Any model that supports OpenAI function-calling and has sufficient context window (≥ 100 k tokens recommended for build stages) works.
+
+**⚠ Kimi K2.7-Code note.** Kimi K2 models use an internal `functions.func_name:idx` tool-call ID format. Moonshot's own API normalizes these before inference; third-party providers including OpenRouter do not. At long context — typically after a stage with many `read_file` calls — the model can revert to its internal chat-template format, emitting tool calls as text content rather than via `tool_calls`. The effect is `finish_reason: stop` with no tool execution and no gate, followed by an orchestrator `structural-input` halt. The auto-fix retry usually recovers since context resets on each dispatch. For stages known to be context-heavy (`backend`, `verifier`), consider substituting DeepSeek V3 or Qwen2.5-Coder-32B. This is a [documented upstream issue](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) tracked by the vLLM and Moonshot teams.
 
 #### Resuming after an escalation
 

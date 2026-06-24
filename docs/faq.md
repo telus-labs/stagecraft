@@ -900,6 +900,18 @@ macOS ships BSD `sed`, which requires an explicit empty-string backup extension:
 macOS environment: use BSD `sed` syntax — `sed -i '' 'expr' file`, not `sed -i 'expr' file`.
 ```
 
+### A stage halted with `structural-input` but the model seemed to be working — what happened?
+
+The most likely cause is a function-calling regression at long context. Some models (notably Kimi K2.7-Code via OpenRouter) use an internal chat-template format for tool calls. At short context they produce correct `tool_calls` JSON; at long context — after a stage has read many files and accumulated a large conversation — they revert to their internal format and emit the tool call as plain text content instead. The adapter receives an empty `tool_calls` array, executes nothing, writes no gate, and the orchestrator correctly halts.
+
+**How to confirm:** look for lines like `` `functions.write_file:17 <|tool_call_argument_begin|> {"path": ...}` `` in the model's text output (visible in the [devteam] log). That prefix (`functions.name:idx`) is the internal Kimi tool-call ID format leaking into content.
+
+**Recovery:** the auto-fix retry cycle normally recovers on its own — context resets between dispatches, so the next attempt starts short. If retries keep failing:
+1. Check whether `pipeline/context.md` has grown very large; trim any long verbatim sections.
+2. For `backend` or `verifier` roles, swap the configured model to DeepSeek V3 or Qwen2.5-Coder-32B, both of which use native `tool_calls` and are more stable at long context.
+
+This is [a documented upstream issue](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) with Kimi K2 on third-party infrastructure; Moonshot's own API applies a normalization guardrail that OpenRouter does not.
+
 ### Does openai-compat need `--headless` on every `devteam stage` invocation?
 
 No. When the configured `default_host` is `openai-compat` (which declares `httpNative: true`), `devteam stage <name>` auto-enables headless mode and prints:
