@@ -23,6 +23,7 @@ const { pricingFor } = require("./pricing");
 const { getRecipe } = require("./pipeline/fix-recipes");
 const { detectNoProgress, countArchivedAttempts, noProgressEvidence } = require("./gates/convergence");
 const { archiveGateIfFail, pruneArchives } = require("./gates/archive");
+const { isAllowed } = require("./guards/write-audit");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -460,10 +461,26 @@ async function runStageHeadless(stageName, opts = {}) {
         });
         return out;
       });
-      // C1: if write violations were detected, patch the gate to FAIL.
+      // C1: if write violations were detected, filter out parallel-stage
+      // false positives then patch the gate to FAIL.
+      //
+      // When multiple workstreams run in parallel (Promise.all above), the
+      // post-hoc snapshot window for workstream A overlaps with workstream B's
+      // writes. Any file B legitimately writes appears as a "new path" in A's
+      // after-snapshot and gets flagged as a violation even though A never
+      // touched it. Suppress those by treating any path covered by a sibling
+      // workstream's allowedWrites as permitted for audit purposes.
       if (r.writeViolations && r.writeViolations.length > 0) {
-        const wsGatePath = r.gatePath || wsGatePathExpected;
-        patchGateForWriteViolations(wsGatePath, r.writeViolations);
+        const siblingAllowedWrites = plan.workstreams
+          .filter((s) => s !== ws)
+          .flatMap((s) => s.descriptor?.allowedWrites || []);
+        const realViolations = siblingAllowedWrites.length > 0
+          ? r.writeViolations.filter((v) => !isAllowed(v, siblingAllowedWrites))
+          : r.writeViolations;
+        if (realViolations.length > 0) {
+          const wsGatePath = r.gatePath || wsGatePathExpected;
+          patchGateForWriteViolations(wsGatePath, realViolations);
+        }
       }
       // G10: stamp dispatched_tool_budget only when the headless command
       // actually wrote (or rewrote) the gate — detected by mtime advancing
