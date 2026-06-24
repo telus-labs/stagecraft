@@ -20,7 +20,7 @@ function formatLogEvent(event, cwd) {
   if (event.kind === "gate") {
     const s = summarizeGate(event.gate);
     const extras = s.extras ? `  ${s.extras}` : "";
-    return `${time}  ${s.icon}  ${s.label.padEnd(20)}  ${s.status.padEnd(8)}${extras}`;
+    return `${time}  ${s.icon}  ${(s.label ?? "?").padEnd(20)}  ${(s.status ?? "?").padEnd(8)}${extras}`;
   }
   if (event.kind === "artifact") {
     const a = summarizeArtifact(event, cwd);
