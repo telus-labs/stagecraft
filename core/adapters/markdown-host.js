@@ -118,6 +118,10 @@ function makeMarkdownHostAdapter(capabilities) {
     lines.push("");
     lines.push(allowedWritesCaption(capabilities.enforces.allowed_writes, capabilities.displayName || hostName));
     for (const f of descriptor.allowedWrites) lines.push(`- ${f}`);
+    if (descriptor.allowedWrites.some((f) => f.includes("<"))) {
+      lines.push("(Note: `<name>` tokens above are placeholders — substitute your actual value.");
+      lines.push(" For example, write to `pipeline/code-review/by-qa.md`, NOT `pipeline/code-review/by-<reviewer>.md`.)");
+    }
     lines.push("");
     const budgetSection = toolBudgetSection(descriptor.toolBudget, capabilities.enforces.tool_budget);
     if (budgetSection) { lines.push(budgetSection); lines.push(""); }

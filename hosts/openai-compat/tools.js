@@ -182,8 +182,14 @@ function executeTool(toolCall, cwd, allowedWrites) {
     if (error) return `error: ${error}`;
     const rel = path.relative(cwd, resolved).replace(/\\/g, "/");
     if (!isAllowed(rel, allowedWrites)) {
-      return `error: write denied — "${args.path}" is not in allowedWrites. ` +
-             `Permitted paths: ${(allowedWrites || []).join(", ")}`;
+      const patterns = (allowedWrites || []).join(", ");
+      return (
+        `error: write denied — "${args.path}" does not match any allowed-write pattern for this workstream.\n` +
+        `Allowed patterns: ${patterns}\n` +
+        `Note: patterns use * as a wildcard and <name> as a placeholder — ` +
+        `do NOT write to a file literally named with angle brackets. ` +
+        `For example, write to "pipeline/code-review/by-qa.md", not "pipeline/code-review/by-<reviewer>.md".`
+      );
     }
     try {
       fs.mkdirSync(path.dirname(resolved), { recursive: true });
