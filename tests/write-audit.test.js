@@ -71,6 +71,52 @@ describe("isAllowed — exact and directory matching", () => {
   });
 });
 
+describe("isAllowed — glob and placeholder matching", () => {
+  test("* wildcard matches within a single segment", () => {
+    assert.ok(isAllowed("pipeline/gates/stage-05.qa.json", ["pipeline/gates/stage-05.*.json"]));
+  });
+
+  test("* wildcard does not match across path separators", () => {
+    assert.ok(!isAllowed("pipeline/gates/deep/stage-05.qa.json", ["pipeline/gates/stage-05.*.json"]));
+  });
+
+  test("<placeholder> matches any segment value", () => {
+    assert.ok(isAllowed("pipeline/code-review/by-qa.md", ["pipeline/code-review/by-<reviewer>.md"]));
+    assert.ok(isAllowed("pipeline/code-review/by-backend.md", ["pipeline/code-review/by-<reviewer>.md"]));
+    assert.ok(isAllowed("pipeline/code-review/by-frontend.md", ["pipeline/code-review/by-<reviewer>.md"]));
+  });
+
+  test("<placeholder> does not match path that crosses a separator", () => {
+    assert.ok(!isAllowed("pipeline/code-review/sub/by-qa.md", ["pipeline/code-review/by-<reviewer>.md"]));
+  });
+
+  test("exact match still wins when no wildcards present", () => {
+    assert.ok(isAllowed("pipeline/gates/stage-05.json", ["pipeline/gates/stage-05.json"]));
+    assert.ok(!isAllowed("pipeline/gates/stage-05.qa.json", ["pipeline/gates/stage-05.json"]));
+  });
+
+  test("auditWrites passes with <placeholder> pattern in allowedWrites", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/code-review/by-qa.md", "pipeline/code-review/by-backend.md"]);
+    const { violations } = auditWrites(before, after, ["pipeline/code-review/by-<reviewer>.md"]);
+    assert.equal(violations.length, 0, `unexpected violations: ${violations.join(", ")}`);
+  });
+
+  test("auditWrites flags unauthorized file despite <placeholder> pattern", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/code-review/by-qa.md", "src/hack.js"]);
+    const { violations } = auditWrites(before, after, ["pipeline/code-review/by-<reviewer>.md"]);
+    assert.deepEqual(violations, ["src/hack.js"]);
+  });
+
+  test("auditWrites passes with *.json glob pattern", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/gates/stage-05.qa.json", "pipeline/gates/stage-05.backend.json"]);
+    const { violations } = auditWrites(before, after, ["pipeline/gates/stage-05.*.json", "pipeline/gates/stage-05.json"]);
+    assert.equal(violations.length, 0, `unexpected violations: ${violations.join(", ")}`);
+  });
+});
+
 // ─── 2. auditWrites ───────────────────────────────────────────────────────────
 
 function makeSnap(paths) {

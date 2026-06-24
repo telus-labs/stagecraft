@@ -105,10 +105,24 @@ function isAllowed(filePath, allowedWrites) {
   const normalized = filePath.replace(/\\/g, "/");
   return allowedWrites.some((entry) => {
     const e = (entry || "").replace(/\\/g, "/");
+    // Trailing-slash directory prefix match.
     if (e.endsWith("/")) {
       return normalized.startsWith(e) || normalized === e.slice(0, -1);
     }
-    return normalized === e;
+    // Fast path: no wildcards or placeholders → exact match only.
+    if (!e.includes("*") && !e.includes("<")) {
+      return normalized === e;
+    }
+    // Glob/placeholder match. <anything> normalizes to *; * matches within one
+    // path segment; ** matches across segments (same semantics as .gitignore).
+    const pattern = e.replace(/<[^>]*>/g, "*");
+    const regexStr = "^" + pattern
+      .replace(/[.+^${}()|[\]\\]/g, "\\$&") // escape regex specials except *
+      .replace(/\*\*/g, "\x00")              // stash ** before single-* replace
+      .replace(/\*/g, "[^/]*")               // * = one segment (no slashes)
+      .replace(/\x00/g, ".*")               // ** = any depth
+      + "$";
+    return new RegExp(regexStr).test(normalized);
   });
 }
 
