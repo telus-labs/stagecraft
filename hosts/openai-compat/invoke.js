@@ -28,7 +28,7 @@ const { buildTools, executeTool } = require("./tools");
 
 const MAX_TOOL_ITERATIONS = 40;
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const DEFAULT_MAX_TOKENS = 16384;
+const DEFAULT_MAX_TOKENS = 32768; // generous cap; models with lower hard limits self-cap via the API
 
 // Resolve the three required config values for a given role.
 function resolveConfig(ctx, role) {
@@ -152,6 +152,16 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     if (!toolCalls || toolCalls.length === 0 || finishReason === "stop") {
       // Model is done.
       break;
+    }
+
+    // If max_tokens was hit the model's tool-call arguments may be truncated
+    // (invalid JSON). Warn loudly — executeTool will return an error string,
+    // but the model likely can't recover from half-written arguments.
+    if (finishReason === "length") {
+      process.stderr.write(
+        `[devteam] openai-compat: warn: max_tokens hit at iteration ${iterations} — ` +
+        `tool-call arguments may be truncated. Consider raising max_tokens in invoke.js or shortening the prompt.\n`,
+      );
     }
 
     // Execute each tool call and collect results.
