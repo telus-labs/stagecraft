@@ -70,7 +70,7 @@ function assertCapabilities(stageDef, role, hostName, adapter) {
         `stage "${stageDef.stage}" (role "${role}") requires the "${cap}" capability ` +
         `but host "${hostName}" does not provide it (enforces.${cap} !== true). ` +
         `Update routing in .devteam/config.yml to use a host with ${cap} support ` +
-        `(claude-code, codex, or gemini-cli).`,
+        `(claude-code, codex, gemini-cli, or openai-compat).`,
       );
     }
   }

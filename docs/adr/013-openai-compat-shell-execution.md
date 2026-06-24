@@ -1,0 +1,48 @@
+# ADR 013 — openai-compat shell execution: native bash tool
+
+**Status:** Accepted  
+**Date:** 2026-06-24  
+**Authors:** Mumit Khan
+
+## Context
+
+The `hosts/openai-compat/` adapter (introduced alongside this ADR) routes stagecraft roles to any OpenAI chat-completions endpoint — OpenRouter, DeepSeek, Moonshot, etc. — without requiring a dedicated CLI. Invocation is HTTP-native: `invoke()` drives the model through an agentic tool-call loop rather than spawning a subprocess.
+
+Five pipeline stages declare `requiredCapabilities: { shell: true }`:
+
+| Stage | ID | Role | Shell use |
+|-------|-----|------|-----------|
+| pre-review | stage-04a | platform | lint, tests, `npm audit`, license check |
+| qa | stage-06 | qa | acceptance test suite |
+| verification-beyond-tests | stage-06d | verifier | property-based, mutation, formal verification |
+| performance-budget | stage-06e | qa | Lighthouse, bundle diff, k6 load test |
+| deploy | stage-08 | platform | execute `pipeline/runbook.md` |
+
+With `enforces.shell: false` in the adapter's `capabilities.json`, the orchestrator throws a hard capability error before dispatching any of these stages. This prevents openai-compat from being used as the sole host on any pipeline track that includes pre-review or deploy.
+
+The question is how to give openai-compat shell execution without introducing a CLI dependency or a separate subprocess wrapper.
+
+## Decision
+
+Add a `bash(command)` function tool to `hosts/openai-compat/tools.js` and set `enforces.shell: true` in `capabilities.json`.
+
+The model calls `bash` the same way it calls `write_file` — as a function call in the chat-completions tool-call protocol. Execution uses Node.js `child_process.spawnSync("sh", ["-c", command], { cwd })`, captures stdout and stderr, and returns a structured result string (exit code + stdout + stderr, truncated to 8 KB each). The 40-iteration tool-call loop in `invoke.js` already provides the re-try / convergence behaviour that claude-code's goal-loop provides externally.
+
+`bash` is included in the tool set when the role's `toolBudget` contains `"Bash"` (from `core/roles.js::ROLE_TOOLS`). Roles without `Bash` in their budget (pm, reviewer) do not receive the tool.
+
+## Consequences
+
+- All 18 pipeline stages can now route to openai-compat; no fallback to claude-code, codex, or gemini-cli is required.
+- The security posture is identical to `claude --dangerously-skip-permissions`: the model executes commands in the project working directory with the same OS permissions as the invoking process. Operators who require stronger sandboxing should wrap the Node.js process in a container or revisit an allow-list model in a future ADR.
+- Commands log to stderr before execution (`[devteam] openai-compat: bash(...)`) for audit visibility.
+- Timeouts: each `bash` call accepts an optional `timeout_ms` argument; the default is 60 s. The outer `ctx.timeoutMs` caps the full dispatch, so run-away loops are bounded at two levels.
+
+## Alternatives considered
+
+**Per-stage host overrides via `routing.stages`** — route shell-dependent stages to claude-code while everything else uses openai-compat. Works today with zero code changes, but requires claude-code to be installed and defeats the "no external CLI" goal.
+
+**Thin `stagecraft-shell` CLI wrapper** — a small Node.js script that accepts a prompt on stdin, calls the OpenAI API, runs the tool-call loop (including bash), and exits. Stagecraft treats it as a `headlessCommand`. This is architecturally equivalent to running `invoke.js` as a subprocess; it duplicates the logic and adds a binary to install.
+
+**Allow-list model** — declare a `hosts.openai-compat.allowed_commands` list in `.devteam/config.yml` and reject any command not on the list. Provides a tighter security surface but is fragile (projects use `yarn`, `pnpm`, `make`, custom scripts) and adds maintenance burden for marginal gain given the existing write-audit tripwire.
+
+**OpenHands / external agent runtime** — route shell stages to a sandboxed Docker-backed agent (OpenHands). Appropriate for security-critical production environments but introduces a running-service dependency and requires a different API client; the overhead far exceeds what five stages need.

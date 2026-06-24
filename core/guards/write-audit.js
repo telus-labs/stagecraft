@@ -1,10 +1,10 @@
 // Write-audit guard (C1 — filesystem-level allowedWrites enforcement).
 //
 // Provides post-hoc enforcement for adapters that have no hook mechanism
-// (codex, gemini-cli). The orchestrator snapshots the working-tree dirty
-// state before invoking the host process, then diffs after; any newly
-// appearing path that isn't covered by the stage's allowedWrites list is
-// a violation.
+// (codex, gemini-cli, openai-compat). The orchestrator snapshots the
+// working-tree dirty state before invoking the host process, then diffs
+// after; any newly appearing path that isn't covered by the stage's
+// allowedWrites list is a violation.
 //
 // "Covered" means:
 //   - exact file match:     allowedWrites contains "pipeline/brief.md" and
@@ -17,8 +17,39 @@
 //
 // If git is unavailable or the directory is not a repo, ok: false is
 // returned and the audit is skipped rather than false-positiving.
+//
+// Directory expansion: git --porcelain reports an entirely-new untracked
+// directory as a single "dir/" entry rather than listing its contents
+// individually (e.g. "pipeline/" instead of "pipeline/brief.md",
+// "pipeline/context.md", …). snapshotWritables expands these directory
+// entries via readdirSync so the paths set always contains exact file paths,
+// which allowedWrites matching relies on.
 
+const fs = require("node:fs");
+const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+
+// Recursively expand an untracked directory into its individual file paths.
+// git --porcelain reports wholly-new directories as a single "dir/" entry;
+// this helper resolves those to exact file paths so allowedWrites matching works.
+// Falls back to adding the original "dir/" entry unchanged on any fs error.
+function expandDirIntoSet(absDir, relPrefix, pathSet) {
+  let entries;
+  try {
+    entries = fs.readdirSync(absDir, { withFileTypes: true });
+  } catch {
+    pathSet.add(relPrefix); // fs error — revert to old behaviour
+    return;
+  }
+  for (const entry of entries) {
+    const rel = relPrefix + entry.name;
+    if (entry.isDirectory()) {
+      expandDirIntoSet(path.join(absDir, entry.name), rel + "/", pathSet);
+    } else {
+      pathSet.add(rel);
+    }
+  }
+}
 
 /**
  * Capture the current set of modified/untracked paths visible to git.
@@ -50,7 +81,14 @@ function snapshotWritables(cwd) {
       if (xy[0] === "R" || xy[0] === "C" || xy[1] === "R" || xy[1] === "C") {
         skipNext = true;
       }
-      paths.add(filePath);
+      if (filePath.endsWith("/")) {
+        // git aggregated an entirely-new untracked directory into a single
+        // "dir/" entry — expand it so the audit can compare against exact
+        // allowedWrites entries such as "pipeline/brief.md".
+        expandDirIntoSet(path.join(cwd, filePath), filePath, paths);
+      } else {
+        paths.add(filePath);
+      }
     }
     return { paths, ok: true };
   } catch {

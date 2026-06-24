@@ -1,19 +1,20 @@
 // Tool definitions and executor for the openai-compat host adapter.
 //
 // The adapter drives the model through an agentic tool-call loop rather than
-// spawning a CLI subprocess. Three tools are available to the model:
+// spawning a CLI subprocess. Four tools are available to the model:
 //
 //   write_file   — write a file; enforces descriptor.allowedWrites at call time
 //   read_file    — read a file; enforces project-root boundary
 //   list_files   — list a directory; enforces project-root boundary
-//
-// Shell (Bash) is intentionally absent: openai-compat capabilities declare
-// shell: false. Stages that require lint/test execution (platform pre-review,
-// deploy) should route to claude-code, codex, or gemini-cli instead.
+//   bash         — execute a shell command; included when role toolBudget has "Bash"
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const { isAllowed } = require("../../core/guards/write-audit");
+
+const DEFAULT_BASH_TIMEOUT_MS = 60_000;
+const MAX_OUTPUT_BYTES = 8 * 1024; // 8 KB per stream — keeps tool messages from bloating context
 
 // --- Tool definitions (OpenAI function-calling schema) -------------------
 
@@ -68,20 +69,47 @@ const LIST_FILES = {
   },
 };
 
+const BASH = {
+  type: "function",
+  function: {
+    name: "bash",
+    description:
+      "Execute a shell command in the project root and return stdout, stderr, and exit code. " +
+      "Use for running tests, linters, build scripts, and deploy commands. " +
+      "Working directory is always the project root.",
+    parameters: {
+      type: "object",
+      properties: {
+        command: {
+          type: "string",
+          description: "Shell command to run. Executed via `sh -c` at the project root.",
+        },
+        timeout_ms: {
+          type: "number",
+          description: "Optional timeout in milliseconds. Defaults to 60000 (60 s).",
+        },
+      },
+      required: ["command"],
+    },
+  },
+};
+
 // Build the tool list for a given descriptor. The set respects the role's
-// toolBudget: Read → read_file + list_files; Write → write_file.
+// toolBudget: Read → read_file + list_files; Write → write_file; Bash → bash.
 // Glob is treated as an alias for list_files (already included via Read).
 function buildTools(descriptor) {
   const budget = descriptor.toolBudget;
   if (!budget || budget.length === 0) {
     // No declared budget → offer the full set (advisory host, prompt-only enforcement).
-    return [WRITE_FILE, READ_FILE, LIST_FILES];
+    return [WRITE_FILE, READ_FILE, LIST_FILES, BASH];
   }
   const tools = [];
   const hasRead = budget.includes("Read") || budget.includes("Glob");
   const hasWrite = budget.includes("Write");
+  const hasBash = budget.includes("Bash");
   if (hasRead) { tools.push(READ_FILE); tools.push(LIST_FILES); }
   if (hasWrite) tools.push(WRITE_FILE);
+  if (hasBash) tools.push(BASH);
   // Always offer write_file for artifact + gate production, even for read-mostly
   // roles such as reviewer/security/red-team, so they can at least write their
   // gate JSON. Without this, the pipeline can never advance.
@@ -89,7 +117,7 @@ function buildTools(descriptor) {
   return tools;
 }
 
-// --- Tool executor -------------------------------------------------------
+// --- Tool executors -------------------------------------------------------
 
 // Resolve a model-supplied relative path safely inside cwd.
 // Returns null (and an error string) if the path would escape the project root.
@@ -99,6 +127,40 @@ function resolveSafe(cwd, relPath) {
     return { resolved: null, error: `path escapes project root: ${relPath}` };
   }
   return { resolved, error: null };
+}
+
+// Execute a shell command in the project root. Returns a structured string
+// (exit_code / stdout / stderr) to send back as the tool message content.
+function executeBash(command, cwd, timeoutMs) {
+  const timeout = (typeof timeoutMs === "number" && timeoutMs > 0)
+    ? timeoutMs
+    : DEFAULT_BASH_TIMEOUT_MS;
+
+  process.stderr.write(`[devteam] openai-compat: bash(${JSON.stringify(command)})\n`);
+
+  const result = spawnSync("sh", ["-c", command], {
+    cwd,
+    timeout,
+    encoding: "utf8",
+    maxBuffer: MAX_OUTPUT_BYTES * 4,
+  });
+
+  if (result.error) {
+    if (result.error.code === "ETIMEDOUT") {
+      return `error: command timed out after ${timeout}ms`;
+    }
+    return `error: failed to spawn shell: ${result.error.message}`;
+  }
+
+  const stdout = (result.stdout || "").slice(0, MAX_OUTPUT_BYTES);
+  const stderr = (result.stderr || "").slice(0, MAX_OUTPUT_BYTES);
+  const exitCode = result.status ?? 1;
+
+  return [
+    `exit_code: ${exitCode}`,
+    stdout ? `stdout:\n${stdout}` : "stdout: (empty)",
+    stderr ? `stderr:\n${stderr}` : "stderr: (empty)",
+  ].join("\n");
 }
 
 // Execute a single tool call from the model. Returns a string result to send
@@ -155,7 +217,14 @@ function executeTool(toolCall, cwd, allowedWrites) {
     }
   }
 
+  if (name === "bash") {
+    if (!args.command || typeof args.command !== "string") {
+      return "error: bash tool requires a non-empty 'command' string";
+    }
+    return executeBash(args.command, cwd, args.timeout_ms);
+  }
+
   return `error: unknown tool "${name}"`;
 }
 
-module.exports = { buildTools, executeTool, WRITE_FILE, READ_FILE, LIST_FILES };
+module.exports = { buildTools, executeTool, executeBash, WRITE_FILE, READ_FILE, LIST_FILES, BASH };

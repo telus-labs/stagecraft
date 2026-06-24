@@ -14,7 +14,7 @@
 # and set the OPENROUTER_API_KEY environment variable.
 
 routing:
-  default_host: claude-code      # keep pm + principal on Claude by default
+  default_host: openai-compat   # all roles and stages via OpenRouter
   roles:
     # Opus-tier: deep reasoning, architecture decisions, veto power
     principal:  openai-compat    # design spec, ADRs, retrospective
@@ -24,12 +24,11 @@ routing:
     # Sonnet-tier: implementation and code review
     backend:    openai-compat    # backend implementation (stage-04)
     frontend:   openai-compat    # frontend implementation (stage-04)
+    platform:   openai-compat    # pre-review, deploy (stage-04a, 08)
     reviewer:   openai-compat    # peer review (stage-05)
     # QA and verification
     qa:         openai-compat    # test authoring + AC verification (stage-06)
     verifier:   openai-compat    # formal/mutation verification (stage-06d, full only)
-  # Peer-review fanout: run stage-05 on both hosts for independent perspectives.
-  # review_fanout: [claude-code, openai-compat]
 
 pipeline:
   default_track: full
@@ -55,6 +54,7 @@ hosts:
       # Sonnet-tier roles: Kimi K2.7-Code (top SWE-bench Pro, agentic).
       backend:    moonshotai/kimi-k2.7-code
       frontend:   moonshotai/kimi-k2.7-code
+      platform:   moonshotai/kimi-k2.7-code
       reviewer:   moonshotai/kimi-k2.7-code
 
       # QA: Qwen3.6 27B (best dense coding model, Apache 2.0).
@@ -62,9 +62,3 @@ hosts:
 
       # Verifier: MiMo-V2.5-Pro (highest TerminalBench score, MIT).
       verifier:   xiaomimimo/mimo-v2.5-pro
-
-# Note: platform role is intentionally left on claude-code (the default).
-# Platform stages (04a pre-review, 08 deploy) require shell access to run
-# lint, tests, and deploy scripts — capabilities not available to the
-# openai-compat HTTP adapter. Route platform to codex or gemini-cli if
-# you need an alternative to claude-code for those stages.

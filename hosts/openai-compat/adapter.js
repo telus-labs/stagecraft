@@ -8,9 +8,9 @@
 // Capability deltas vs claude-code:
 //   - no hooks          → gate polling is orchestrator-driven (no SubagentStop)
 //   - no subagents      → each workstream dispatches sequentially in its HTTP loop
-//   - no shell          → Bash-dependent stages (platform pre-review, deploy)
-//                         should use claude-code, codex, or gemini-cli instead
 //   - no headlessCommand → invoke() bypasses runHeadless entirely
+//   - shell via bash()  → roles with "Bash" in toolBudget receive the bash tool;
+//                         security posture matches claude-code --dangerously-skip-permissions
 //
 // Configuration (.devteam/config.yml):
 //   hosts:

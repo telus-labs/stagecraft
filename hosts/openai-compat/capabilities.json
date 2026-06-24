@@ -15,7 +15,7 @@
   "enforces": {
     "allowed_writes": "post-hoc-audit",
     "stoplist": "prompt-only",
-    "shell": false,
+    "shell": true,
     "network": true,
     "tool_budget": "prompt-only"
   }

@@ -26,7 +26,7 @@ How each host enforces the framework's core rules:
 | codex         | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | gemini-cli    | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | generic       | prompt-only    | prompt-only    | not enforced | not enforced | prompt-only |
-| openai-compat | post-hoc-audit | prompt-only    | not enforced | enforced     | prompt-only |
+| openai-compat | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 
 ### Headless commands
 

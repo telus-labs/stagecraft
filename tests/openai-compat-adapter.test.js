@@ -1,10 +1,11 @@
 // Unit tests for hosts/openai-compat/
 //
 // Coverage:
-//   1. tools.js — buildTools, executeTool (write_file, read_file, list_files)
-//   2. invoke.js — resolveConfig (env vars + config.yml merge)
-//   3. invoke.js — invoke() agentic loop (fetch mocked to avoid real API calls)
-//   4. adapter.js — install/status/uninstall/renderStagePrompt via contract
+//   1. tools.js — buildTools, executeTool (write_file, read_file, list_files, bash)
+//   2. tools.js — executeBash (success, failure, timeout)
+//   3. invoke.js — resolveConfig (env vars + config.yml merge)
+//   4. invoke.js — invoke() agentic loop (fetch mocked to avoid real API calls)
+//   5. adapter.js — install/status/uninstall/renderStagePrompt via contract
 
 const { describe, it, before, after, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -76,15 +77,16 @@ function fixtureContext(cwd, overrides = {}) {
 // ── 1. tools.js ─────────────────────────────────────────────────────────────
 
 describe("openai-compat tools", () => {
-  const { buildTools, executeTool, WRITE_FILE, READ_FILE, LIST_FILES } = require(toolsPath);
+  const { buildTools, executeTool, executeBash, WRITE_FILE, READ_FILE, LIST_FILES, BASH } = require(toolsPath);
 
   describe("buildTools", () => {
-    it("returns all three tools when no toolBudget declared", () => {
+    it("returns all four tools when no toolBudget declared", () => {
       const tools = buildTools({ toolBudget: null });
       const names = tools.map((t) => t.function.name);
       assert.ok(names.includes("write_file"));
       assert.ok(names.includes("read_file"));
       assert.ok(names.includes("list_files"));
+      assert.ok(names.includes("bash"));
     });
 
     it("read-only budget still includes write_file for gate production", () => {
@@ -106,6 +108,18 @@ describe("openai-compat tools", () => {
       const tools = buildTools({ toolBudget: ["Glob"] });
       const names = tools.map((t) => t.function.name);
       assert.ok(names.includes("list_files"));
+    });
+
+    it("Bash budget includes bash tool", () => {
+      const tools = buildTools({ toolBudget: ["Read", "Write", "Bash"] });
+      const names = tools.map((t) => t.function.name);
+      assert.ok(names.includes("bash"), "bash must be included when Bash is in toolBudget");
+    });
+
+    it("pm role budget (Read, Write, Glob) excludes bash", () => {
+      const tools = buildTools({ toolBudget: ["Read", "Write", "Glob"] });
+      const names = tools.map((t) => t.function.name);
+      assert.ok(!names.includes("bash"), "pm/reviewer roles must not receive bash");
     });
   });
 
@@ -202,6 +216,50 @@ describe("openai-compat tools", () => {
     });
   });
 
+  describe("executeTool — bash", () => {
+    it("dispatches bash tool call to executeBash and returns output", () => {
+      const cwd = tmpdir();
+      const result = executeTool(
+        {
+          id: "tc_bash1",
+          function: {
+            name: "bash",
+            arguments: JSON.stringify({ command: "echo hello-from-bash" }),
+          },
+        },
+        cwd,
+        [],
+      );
+      assert.ok(result.includes("exit_code: 0"), `expected exit_code: 0; got: ${result}`);
+      assert.ok(result.includes("hello-from-bash"), `expected echo output; got: ${result}`);
+    });
+
+    it("returns non-zero exit code for failing commands", () => {
+      const cwd = tmpdir();
+      const result = executeTool(
+        {
+          id: "tc_bash2",
+          function: {
+            name: "bash",
+            arguments: JSON.stringify({ command: "exit 42" }),
+          },
+        },
+        cwd,
+        [],
+      );
+      assert.ok(result.includes("exit_code: 42"), `expected exit_code: 42; got: ${result}`);
+    });
+
+    it("returns error when command argument is missing", () => {
+      const result = executeTool(
+        { id: "tc_bash3", function: { name: "bash", arguments: JSON.stringify({}) } },
+        tmpdir(),
+        [],
+      );
+      assert.ok(result.startsWith("error:"));
+    });
+  });
+
   describe("executeTool — unknown tool", () => {
     it("returns an error string", () => {
       const result = executeTool(
@@ -210,6 +268,29 @@ describe("openai-compat tools", () => {
         [],
       );
       assert.ok(result.startsWith("error: unknown tool"));
+    });
+  });
+
+  describe("executeBash", () => {
+    it("returns exit_code 0 and stdout for successful command", () => {
+      const cwd = tmpdir();
+      const result = executeBash("echo stagecraft", cwd, null);
+      assert.ok(result.includes("exit_code: 0"), `got: ${result}`);
+      assert.ok(result.includes("stagecraft"), `expected echo output; got: ${result}`);
+    });
+
+    it("returns non-zero exit_code and stderr for failing command", () => {
+      const cwd = tmpdir();
+      const result = executeBash("sh -c 'echo error-msg >&2; exit 1'", cwd, null);
+      assert.ok(result.includes("exit_code: 1"), `got: ${result}`);
+      assert.ok(result.includes("error-msg"), `expected stderr content; got: ${result}`);
+    });
+
+    it("returns error string when command times out", () => {
+      const cwd = tmpdir();
+      const result = executeBash("sleep 10", cwd, 50); // 50 ms timeout
+      assert.ok(result.startsWith("error:"), `expected error string; got: ${result}`);
+      assert.ok(result.includes("timed out"), `expected 'timed out' in message; got: ${result}`);
     });
   });
 });
@@ -532,5 +613,103 @@ describe("openai-compat adapter contract", () => {
     const d = tmpdir();
     const prompt = adapter.renderStagePrompt(fixtureDescriptor(), fixtureContext(d));
     assert.ok(!prompt.includes("PATCH MODE"));
+  });
+});
+
+// ── 5. invoke.js — bash tool in agentic loop ─────────────────────────────────
+//
+// Separate describe so the fetch stub doesn't interfere with suite 3's queue.
+
+describe("openai-compat invoke() — bash tool", () => {
+  let origFetch;
+
+  before(() => { origFetch = global.fetch; });
+  after(() => { global.fetch = origFetch; });
+
+  function makeApiResponse(content, toolCalls) {
+    const message = { role: "assistant", content: content || null };
+    if (toolCalls) message.tool_calls = toolCalls;
+    return {
+      choices: [{
+        finish_reason: toolCalls ? "tool_calls" : "stop",
+        message,
+      }],
+    };
+  }
+
+  it("executes a bash tool call in the agentic loop", async () => {
+    const cwd = makeProject(`
+routing:
+  default_host: openai-compat
+pipeline:
+  default_track: full
+hosts:
+  openai-compat:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENAI_COMPAT_BASH_TEST_KEY
+    models:
+      default: test/model
+`);
+    process.env.OPENAI_COMPAT_BASH_TEST_KEY = "sk-bash-stub";
+
+    const gateContent = JSON.stringify({
+      stage: "stage-04a",
+      status: "PASS",
+      blockers: [],
+      warnings: [],
+      timestamp: "2026-01-01T00:00:00Z",
+    });
+
+    let callCount = 0;
+    global.fetch = async () => {
+      callCount++;
+      if (callCount === 1) {
+        // Model runs a bash command to create a sentinel file
+        return {
+          ok: true,
+          json: async () => makeApiResponse(null, [{
+            id: "tc_bash_loop",
+            function: {
+              name: "bash",
+              arguments: JSON.stringify({ command: "echo bash-ran > bash-sentinel.txt" }),
+            },
+          }]),
+        };
+      }
+      if (callCount === 2) {
+        // Model writes the gate
+        return {
+          ok: true,
+          json: async () => makeApiResponse(null, [{
+            id: "tc_gate",
+            function: {
+              name: "write_file",
+              arguments: JSON.stringify({ path: "pipeline/gates/stage-04a.json", content: gateContent }),
+            },
+          }]),
+        };
+      }
+      // Model stops
+      return { ok: true, json: async () => makeApiResponse("Done.", null) };
+    };
+
+    const { invoke } = require(invokePath);
+    const desc = fixtureDescriptor({
+      stage: "stage-04a",
+      workstreamId: "stage-04a",
+      toolBudget: ["Read", "Write", "Bash"],
+      allowedWrites: ["pipeline/gates/stage-04a.json"],
+    });
+
+    const result = await invoke(desc, fixtureContext(cwd), "test prompt");
+
+    assert.ok(
+      fs.existsSync(path.join(cwd, "bash-sentinel.txt")),
+      "bash command must have executed and created the sentinel file",
+    );
+    assert.ok(result.gatePath, "gate must be written after bash call");
+    assert.equal(result.exitCode, 0);
+
+    delete process.env.OPENAI_COMPAT_BASH_TEST_KEY;
   });
 });
