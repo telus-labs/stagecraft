@@ -1456,15 +1456,30 @@ async function run(opts = {}) {
             && targetedFixSnapshot
             && targetedFixChanged(cwd, targetedFixSnapshot) === false
           ) {
-            const evidence = targetedFixNoSourceChangeEvidence(targetedFixSnapshot);
-            applyTransition(targetedFixNoChangeTransition({
-              action: r,
-              base,
-              evidence,
-              workstream: targetedFix.workstream,
-            }));
-            _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
-            break;
+            // Skip the halt when the targeted workstream's gate passed. The
+            // local file-hash check cannot detect changes made by a remote
+            // adapter (cloud runner) — files are written in the remote
+            // environment and never appear changed on the local filesystem.
+            // A PASS/WARN gate is authoritative evidence that the fix worked.
+            const gatePassEvidence = results.some((res) => {
+              if (!res.gatePath) return false;
+              try {
+                return ["PASS", "WARN"].includes(
+                  JSON.parse(fs.readFileSync(res.gatePath, "utf8")).status,
+                );
+              } catch { return false; }
+            });
+            if (!gatePassEvidence) {
+              const evidence = targetedFixNoSourceChangeEvidence(targetedFixSnapshot);
+              applyTransition(targetedFixNoChangeTransition({
+                action: r,
+                base,
+                evidence,
+                workstream: targetedFix.workstream,
+              }));
+              _writeConvergenceEscalate(r.stage, r.name, summary.halt_reason);
+              break;
+            }
           }
 
           // ADR-009 §Decision.3: structural scope gate. FAILs a build that
