@@ -2,7 +2,7 @@
 
 **Stagecraft is an orchestrator that runs your AI coding tool through a structured 18-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage cannot start until the gate passes. The full run is on disk: auditable, resumable, not buried in a chat log.
 
-Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the seam.
+Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the contract.
 
 ```bash
 devteam init --host claude-code        # one-time install in your project
@@ -107,7 +107,7 @@ A coordinated team of role-specific subagents running a structured software-deve
 - **18-stage gated pipeline** — requirements (PM) → design (Principal) → build (specialist workstreams) → peer-review (Reviewer × 4) → QA → deploy → retrospective. Each stage writes a machine-readable gate; the next stage cannot start until the gate passes.
 - **6 tracks** — `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Pick by change size; `devteam assess` infers the right track from description keywords and file heuristics.
 - **Per-workstream gate JSON** — every stage writes a gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
-- **Multi-host routing** — `.devteam/config.yml` picks which host runs which role. Claude for design, Codex for backend, Gemini for QA — the gate JSON is the stable seam.
+- **Multi-host routing** — `.devteam/config.yml` picks which host runs which role. Claude for design, Codex for backend, Gemini for QA — the gate JSON is the stable contract.
 - **Bounded autonomous driver** — `devteam run` loops `next → dispatch → merge` until `pipeline-complete`; `devteam stage <name> --headless` drives a single stage non-interactively.
 
 Full feature catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**.
@@ -347,9 +347,9 @@ stagecraft/
 12 locked decisions are documented in [ARCHITECTURE.md](ARCHITECTURE.md). The big ones:
 
 1. **The core never spawns a model.** It emits prompts and validates JSON.
-2. **Gate JSON is the stable seam.** Identity fields: `stage`, `workstream`, `orchestrator`, `host`, `status`. Anything host-specific stays in the adapter.
+2. **Gate JSON is the stable contract.** Identity fields: `stage`, `workstream`, `orchestrator`, `host`, `status`. Anything host-specific stays in the adapter.
 3. **Role briefs have one source.** `roles/*.md`. Adapters render into host-expected paths at install time.
-4. **Per-workstream host selection.** A single pipeline can route different roles to different hosts; the orchestrator merges across them via the gate seam.
+4. **Per-workstream host selection.** A single pipeline can route different roles to different hosts; the orchestrator merges across them via the gate contract.
 5. **Multi-host install is the default code path.** Single-host is just a list of length 1.
 6. **Capability negotiation.** Each adapter declares hooks, subagents, slashCommands, worktrees, headless, and where it enforces each core rule.
 

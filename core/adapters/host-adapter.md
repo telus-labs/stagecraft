@@ -177,7 +177,7 @@ devteam stage build               (user types in terminal OR slash-command wrapp
   └─► advance, escalate, or halt
 ```
 
-Because routing happens per workstream, a single stage can dispatch to multiple hosts: in the example, `backend` might go to `codex` while `frontend`/`platform`/`qa` go to `claude-code`. The gate JSON seam is what makes that handoff safe — the next stage reads the same artifacts regardless of who produced them.
+Because routing happens per workstream, a single stage can dispatch to multiple hosts: in the example, `backend` might go to `codex` while `frontend`/`platform`/`qa` go to `claude-code`. The gate JSON contract is what makes that handoff safe — the next stage reads the same artifacts regardless of who produced them.
 
 ### Multi-role stages — orchestrator responsibilities
 
