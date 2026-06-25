@@ -242,9 +242,9 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
         const afterSnapshot = snapshotWritables(ctx.cwd);
         const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
         writeViolations = violations.filter((v) => !ORCHESTRATOR_WRITES.has(v));
-        for (const v of writeViolations) {
-          try { process.stderr.write(`[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${descriptor.workstreamId})\n`); } catch { /* */ }
-        }
+        // Logging deferred to orchestrator so sibling-workstream false positives
+        // (parallel stage writes captured in this snapshot window) can be filtered
+        // before any ⛔ line is emitted.
       }
 
       // Detect pre-seeded stub gates. A stub has `_stub: true` written by the

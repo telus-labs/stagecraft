@@ -233,11 +233,9 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     descriptor.allowedWrites || [],
   );
   const violations = rawViolations.filter((v) => !ORCHESTRATOR_WRITES.has(v));
-  for (const v of violations) {
-    process.stderr.write(
-      `[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${descriptor.workstreamId})\n`,
-    );
-  }
+  // Logging deferred to orchestrator so sibling-workstream false positives
+  // (parallel stage writes captured in this snapshot window) can be filtered
+  // before any ⛔ line is emitted.
 
   const gatePath = path.join(
     gatesDir(ctx.cwd, ctx.changeId),

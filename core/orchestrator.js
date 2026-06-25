@@ -478,6 +478,9 @@ async function runStageHeadless(stageName, opts = {}) {
           ? r.writeViolations.filter((v) => !isAllowed(v, siblingAllowedWrites))
           : r.writeViolations;
         if (realViolations.length > 0) {
+          for (const v of realViolations) {
+            process.stderr.write(`[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${ws.descriptor.workstreamId})\n`);
+          }
           const wsGatePath = r.gatePath || wsGatePathExpected;
           patchGateForWriteViolations(wsGatePath, realViolations);
         }
