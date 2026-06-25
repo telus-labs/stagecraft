@@ -230,12 +230,19 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
       endLog(timedOut ? "TIMED OUT" : String(exitCode));
 
       // C1: diff the dirty-file snapshot; log violations immediately.
+      // Orchestrator-internal files written between snapshots (heartbeats,
+      // state transitions, advisory lock) are never model-written — exempt them.
+      const ORCHESTRATOR_WRITES = new Set([
+        "pipeline/run-log.jsonl",
+        "pipeline/run-state.json",
+        "pipeline/run.lock",
+      ]);
       let writeViolations = [];
       if (shouldAudit && beforeSnapshot) {
         const afterSnapshot = snapshotWritables(ctx.cwd);
         const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
-        writeViolations = violations;
-        for (const v of violations) {
+        writeViolations = violations.filter((v) => !ORCHESTRATOR_WRITES.has(v));
+        for (const v of writeViolations) {
           try { process.stderr.write(`[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${descriptor.workstreamId})\n`); } catch { /* */ }
         }
       }
