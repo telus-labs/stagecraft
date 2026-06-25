@@ -197,13 +197,21 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     );
   }
 
-  // Post-hoc write audit.
+  // Post-hoc write audit. Orchestrator-internal files (heartbeats, state
+  // transitions, advisory lock) are written between snapshots but are never
+  // model-written — exempt them so they don't flip the gate to FAIL.
+  const ORCHESTRATOR_WRITES = new Set([
+    "pipeline/run-log.jsonl",
+    "pipeline/run-state.json",
+    "pipeline/run.lock",
+  ]);
   const afterSnapshot = snapshotWritables(ctx.cwd);
-  const { violations } = auditWrites(
+  const { violations: rawViolations } = auditWrites(
     beforeSnapshot,
     afterSnapshot,
     descriptor.allowedWrites || [],
   );
+  const violations = rawViolations.filter((v) => !ORCHESTRATOR_WRITES.has(v));
   for (const v of violations) {
     process.stderr.write(
       `[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${descriptor.workstreamId})\n`,
