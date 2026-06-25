@@ -78,6 +78,53 @@ describe("devteam init --adapter", () => {
       assert.ok(KNOWN_DEPLOY_ADAPTERS.includes(name), `KNOWN_DEPLOY_ADAPTERS must include ${name}`);
     }
   });
+
+  it("--adapter docker-compose installs .devteam/adapters/docker-compose.md", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "docker-compose"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+    const spec = path.join(cwd, ".devteam", "adapters", "docker-compose.md");
+    assert.ok(fs.existsSync(spec), ".devteam/adapters/docker-compose.md must be installed");
+    const content = fs.readFileSync(spec, "utf8");
+    assert.ok(content.includes("docker compose"), "adapter spec must contain docker compose instructions");
+  });
+
+  it("--adapter docker-compose scaffolds Dockerfile and docker-compose.yml stubs", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "docker-compose"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+    assert.ok(fs.existsSync(path.join(cwd, "Dockerfile")), "Dockerfile must be scaffolded");
+    assert.ok(fs.existsSync(path.join(cwd, "docker-compose.yml")), "docker-compose.yml must be scaffolded");
+    const composeContent = fs.readFileSync(path.join(cwd, "docker-compose.yml"), "utf8");
+    assert.ok(composeContent.includes("services:"), "docker-compose.yml must contain a services block");
+    assert.ok(composeContent.includes("healthcheck:"), "docker-compose.yml must include a healthcheck");
+  });
+
+  it("--adapter docker-compose --force overwrites existing Dockerfile", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM scratch\n");
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "docker-compose", "--force"]);
+    assert.equal(r.status, 0, `init --force failed: ${r.stderr}`);
+    const content = fs.readFileSync(path.join(cwd, "Dockerfile"), "utf8");
+    assert.ok(!content.startsWith("FROM scratch"), "--force must overwrite the existing Dockerfile");
+  });
+
+  it("--adapter docker-compose without --force skips existing Dockerfile", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    fs.writeFileSync(path.join(cwd, "Dockerfile"), "FROM scratch\n");
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "docker-compose"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+    const content = fs.readFileSync(path.join(cwd, "Dockerfile"), "utf8");
+    assert.ok(content.startsWith("FROM scratch"), "existing Dockerfile must not be overwritten without --force");
+  });
+
+  it("--adapter gizmos installs .devteam/adapters/gizmos.md but no Dockerfile", () => {
+    const cwd = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const r = runCLI(["init", "--host", "generic", "--cwd", cwd, "--adapter", "gizmos"]);
+    assert.equal(r.status, 0, `init failed: ${r.stderr}`);
+    assert.ok(fs.existsSync(path.join(cwd, ".devteam", "adapters", "gizmos.md")), ".devteam/adapters/gizmos.md must be installed");
+    assert.ok(!fs.existsSync(path.join(cwd, "Dockerfile")), "gizmos adapter should not scaffold a Dockerfile");
+  });
 });
 
 describe("devteam init --profile dogfood", () => {

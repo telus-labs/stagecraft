@@ -56,6 +56,12 @@ function seedAll(cwd, _untilSignOff = true) {
     path.join(cwd, "pipeline", "test-report.md"),
     "# Test Report\n\n## AC Coverage\n| AC | Test |\n|---|---|\n| AC-1 | t1 |\n| AC-2 | t2 |\n",
   );
+  // runbook.md — auto-fold now requires this before it can fire (prevents
+  // platform dispatch being silently skipped when sign-off auto-folds)
+  fs.writeFileSync(
+    path.join(cwd, "pipeline", "runbook.md"),
+    "# Runbook\n\n## Rollback\n\nRevert as needed.\n\n## Health signals\n\nCheck `/health`.\n",
+  );
 }
 
 describe("auto-fold: stage-07 auto-authored when stage-06 satisfies contract", () => {
@@ -108,16 +114,16 @@ describe("auto-fold: stage-07 auto-authored when stage-06 satisfies contract", (
     assert.deepEqual(stage07.warnings, []);
   });
 
-  it("warns when runbook is missing (but still folds)", () => {
+  it("does NOT fold when runbook is missing — falls through to normal sign-off for platform to author it", () => {
     const cwd = track(makeTargetProject());
     seedAll(cwd);
-    // No runbook.md
+    // Remove the runbook that seedAll wrote — auto-fold must refuse without it
+    // so the platform role is always dispatched to sign-off and writes the runbook.
+    fs.unlinkSync(path.join(cwd, "pipeline", "runbook.md"));
     const r = next({ cwd });
-    assert.equal(r.action, "fold-sign-off");
-    fs.writeFileSync(r.gate_path, JSON.stringify(r.gate_content, null, 2) + "\n", "utf8");
-    const stage07 = JSON.parse(fs.readFileSync(r.gate_path, "utf8"));
-    assert.equal(stage07.runbook_referenced, false);
-    assert.ok(stage07.warnings.some((w) => /runbook/i.test(w)));
+    assert.equal(r.action, "run-stage");
+    assert.equal(r.name, "sign-off", "platform must be dispatched to author the runbook");
+    assert.ok(!fs.existsSync(path.join(cwd, "pipeline", "gates", "stage-07.json")));
   });
 
   it("does NOT fold when a user-visible source file changed without docs evidence", () => {

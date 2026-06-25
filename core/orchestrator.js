@@ -932,7 +932,12 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
   }
 
   const runbookPath = path.join(root, "runbook.md");
-  const runbookExists = fs.existsSync(runbookPath);
+  if (!fs.existsSync(runbookPath)) {
+    return {
+      ok: false,
+      reason: "pipeline/runbook.md missing — platform must author it during Stage 7 sign-off before auto-fold can proceed",
+    };
+  }
   const docsGate = classifyDocumentationGate(cwd);
   if (docsGate.docs_surface_affected && docsGate.docs_updated !== true) {
     return {
@@ -948,10 +953,10 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
     track,
     timestamp: new Date().toISOString(),
     blockers: [],
-    warnings: runbookExists ? [] : ["pipeline/runbook.md not yet authored — Stage 8 will require it"],
+    warnings: [],
     pm_signoff: true,
     deploy_requested: true,
-    runbook_referenced: runbookExists,
+    runbook_referenced: true,
     docs_surface_affected: docsGate.docs_surface_affected,
     docs_updated: docsGate.docs_updated,
     docs_skipped_reason: docsGate.docs_skipped_reason,
