@@ -69,35 +69,47 @@ const LIST_FILES = {
   },
 };
 
-const BASH = {
-  type: "function",
-  function: {
-    name: "bash",
-    description:
-      "Execute a shell command in the project root and return stdout, stderr, and exit code. " +
-      "Use for running tests, linters, build scripts, and deploy commands. " +
-      "Working directory is always the project root.",
-    parameters: {
-      type: "object",
-      properties: {
-        command: {
-          type: "string",
-          description: "Shell command to run. Executed via `sh -c` at the project root.",
+// Build the bash tool definition with a platform-specific description so the
+// model uses the correct coreutils variant (BSD on macOS, GNU on Linux).
+function buildBashTool() {
+  const isDarwin = process.platform === "darwin";
+  const platformNote = isDarwin
+    ? " macOS (BSD coreutils): use `stat -f%z <file>` for byte size (not `du -b`); " +
+      "`stat -f '<fmt>'` not `stat --format`; `grep -E` not `grep -P`; " +
+      "`sed -i ''` not `sed -i`."
+    : "";
+  return {
+    type: "function",
+    function: {
+      name: "bash",
+      description:
+        "Execute a shell command in the project root and return stdout, stderr, and exit code. " +
+        "Use for running tests, linters, build scripts, and deploy commands. " +
+        "Working directory is always the project root." +
+        platformNote,
+      parameters: {
+        type: "object",
+        properties: {
+          command: {
+            type: "string",
+            description: "Shell command to run. Executed via `sh -c` at the project root.",
+          },
+          timeout_ms: {
+            type: "number",
+            description: "Optional timeout in milliseconds. Defaults to 60000 (60 s).",
+          },
         },
-        timeout_ms: {
-          type: "number",
-          description: "Optional timeout in milliseconds. Defaults to 60000 (60 s).",
-        },
+        required: ["command"],
       },
-      required: ["command"],
     },
-  },
-};
+  };
+}
 
 // Build the tool list for a given descriptor. The set respects the role's
 // toolBudget: Read → read_file + list_files; Write → write_file; Bash → bash.
 // Glob is treated as an alias for list_files (already included via Read).
 function buildTools(descriptor) {
+  const BASH = buildBashTool();
   const budget = descriptor.toolBudget;
   if (!budget || budget.length === 0) {
     // No declared budget → offer the full set (advisory host, prompt-only enforcement).
@@ -233,4 +245,4 @@ function executeTool(toolCall, cwd, allowedWrites) {
   return `error: unknown tool "${name}"`;
 }
 
-module.exports = { buildTools, executeTool, executeBash, WRITE_FILE, READ_FILE, LIST_FILES, BASH };
+module.exports = { buildTools, executeTool, executeBash, WRITE_FILE, READ_FILE, LIST_FILES };
