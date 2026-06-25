@@ -6,6 +6,7 @@ const { getOrchestrator } = require(path.join(__dirname, "..", "get-orchestrator
 const _escalation = require(path.join(__dirname, "..", "..", "escalation"));
 const renderEscalationApplicatorPrompt = _escalation.renderEscalationApplicatorPrompt;
 const loadPrincipalRulings = _escalation.loadPrincipalRulingLines;
+const isHttpNativePrincipal = _escalation.isHttpNativePrincipal;
 
 const name = "fix-escalation";
 
@@ -40,7 +41,8 @@ async function run(positional, _flags) {
 
   const prompt = renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate);
 
-  if (!_flags.headless) {
+  if (!_flags.headless && !isHttpNativePrincipal(cwd)) {
+    // httpNative hosts have no interactive fallback; they always auto-dispatch.
     const onboarding = [
       "════════════════════════════════════════════════════════════════════",
       "  Escalation-applicator prompt",

@@ -416,6 +416,22 @@ function runFixEscalation(cwd, { escalatingGate = null } = {}) {
   return dispatchToPrincipal(cwd, prompt, { label: "escalation-applicator" });
 }
 
+// Returns true when the principal-routed host is httpNative (e.g. openai-compat).
+// Used by CLI commands to skip the "print prompt for manual paste" path — there
+// is no interactive fallback for httpNative hosts; they always auto-dispatch.
+function isHttpNativePrincipal(cwd) {
+  try {
+    const { loadConfig } = require("./config");
+    const { loadAdapter } = require("./router");
+    const config = loadConfig(cwd);
+    const host = (config.routing.roles && config.routing.roles.principal) || config.routing.default_host;
+    const adapter = loadAdapter(host);
+    return !!(adapter.capabilities && adapter.capabilities.httpNative);
+  } catch {
+    return false;
+  }
+}
+
 module.exports = {
   RULING_PREFIX,
   CANNOT_DECIDE_PREFIX,
@@ -430,6 +446,7 @@ module.exports = {
   renderPrincipalRulingPrompt,
   renderEscalationApplicatorPrompt,
   dispatchToPrincipal,
+  isHttpNativePrincipal,
   runRuling,
   runFixEscalation,
 };
