@@ -52,7 +52,11 @@ function resolveConfig(ctx, role) {
     models.default ||
     process.env.OPENAI_COMPAT_MODEL;
 
-  return { baseUrl, apiKey, model };
+  // Verbose: set hosts.openai-compat.verbose: true in config.yml or DEVTEAM_VERBOSE=1.
+  // Quiet (default): only writes, bash failures, and errors are logged.
+  const verbose = cfg.verbose === true || process.env.DEVTEAM_VERBOSE === "1";
+
+  return { baseUrl, apiKey, model, verbose };
 }
 
 // Single HTTP call to the chat-completions endpoint.
@@ -89,7 +93,7 @@ async function callAPI(url, apiKey, model, messages, tools, timeoutMs) {
 
 async function invoke(descriptor, ctx, preRenderedPrompt) {
   const role = descriptor.role;
-  const { baseUrl, apiKey, model } = resolveConfig(ctx, role);
+  const { baseUrl, apiKey, model, verbose } = resolveConfig(ctx, role);
 
   if (!apiKey) {
     throw new Error(
@@ -116,7 +120,9 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
   const messages = [{ role: "user", content: prompt }];
 
   process.stderr.write(
-    `[devteam] openai-compat: ${role} → ${model} at ${baseUrl}\n`,
+    verbose
+      ? `[devteam] openai-compat: ${role} → ${model} at ${baseUrl}\n`
+      : `[devteam] openai-compat: ${role} → ${model}\n`,
   );
 
   const beforeSnapshot = snapshotWritables(ctx.cwd);
@@ -139,11 +145,13 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     const assistantMsg = choice.message;
     messages.push(assistantMsg);
 
-    // Stream assistant text to stdout so the user sees progress.
+    // Stream assistant text to stdout in verbose mode only.
     if (assistantMsg.content) {
       lastContent = assistantMsg.content;
-      process.stdout.write(assistantMsg.content);
-      if (!assistantMsg.content.endsWith("\n")) process.stdout.write("\n");
+      if (verbose) {
+        process.stdout.write(assistantMsg.content);
+        if (!assistantMsg.content.endsWith("\n")) process.stdout.write("\n");
+      }
     }
 
     const finishReason = choice.finish_reason;
@@ -169,19 +177,32 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     for (const tc of toolCalls) {
       const result = executeTool(tc, ctx.cwd, descriptor.allowedWrites || []);
       const tcName = tc.function?.name ?? "unknown";
-      let argSummary;
-      try {
-        const a = JSON.parse(tc.function?.arguments || "{}");
-        if (tcName === "write_file" || tcName === "read_file") argSummary = a.path;
-        else if (tcName === "list_files") argSummary = a.dir ?? ".";
-        else if (tcName === "bash") argSummary = (a.command ?? "").slice(0, 60);
+      let parsedArgs;
+      try { parsedArgs = JSON.parse(tc.function?.arguments || "{}"); } catch { parsedArgs = {}; }
+
+      if (verbose) {
+        // Verbose: log every tool call with a result summary.
+        let argSummary;
+        if (tcName === "write_file" || tcName === "read_file") argSummary = parsedArgs.path;
+        else if (tcName === "list_files") argSummary = parsedArgs.dir ?? ".";
+        else if (tcName === "bash") argSummary = (parsedArgs.command ?? "").slice(0, 80);
         else argSummary = "...";
-      } catch { argSummary = "?"; }
-      // Show full message for errors (short, important); first 100 chars for success.
-      const resultSummary = result.startsWith("error:")
-        ? result
-        : result.slice(0, 100) + (result.length > 100 ? "…" : "");
-      process.stderr.write(`[devteam] openai-compat: tool ${tcName}(${argSummary}) → ${resultSummary}\n`);
+        const resultSummary = result.startsWith("error:")
+          ? result
+          : result.slice(0, 100) + (result.length > 100 ? "…" : "");
+        process.stderr.write(`[devteam] openai-compat: tool ${tcName}(${argSummary}) → ${resultSummary}\n`);
+      } else {
+        // Quiet: writes always; bash non-zero exits; any error result.
+        if (tcName === "write_file") {
+          process.stderr.write(`[devteam] openai-compat: ✎ ${parsedArgs.path ?? "?"}\n`);
+        } else if (result.startsWith("error:")) {
+          process.stderr.write(`[devteam] openai-compat: ⚠ ${tcName}(${parsedArgs.path ?? parsedArgs.dir ?? (parsedArgs.command ?? "").slice(0, 60) ?? "?"}) → ${result}\n`);
+        } else if (tcName === "bash" && !result.startsWith("exit_code: 0\n")) {
+          const resultSummary = result.slice(0, 300) + (result.length > 300 ? "…" : "");
+          process.stderr.write(`[devteam] openai-compat: ✗ bash(${(parsedArgs.command ?? "").slice(0, 60)}) → ${resultSummary}\n`);
+        }
+        // read_file, list_files, bash exit 0 → silent in quiet mode
+      }
       toolResults.push({
         role: "tool",
         tool_call_id: tc.id,

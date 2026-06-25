@@ -148,8 +148,6 @@ function executeBash(command, cwd, timeoutMs) {
     ? timeoutMs
     : DEFAULT_BASH_TIMEOUT_MS;
 
-  process.stderr.write(`[devteam] openai-compat: bash(${JSON.stringify(command)})\n`);
-
   const result = spawnSync("sh", ["-c", command], {
     cwd,
     timeout,
