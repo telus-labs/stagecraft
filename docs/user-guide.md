@@ -625,6 +625,8 @@ OPENROUTER_API_KEY=sk-or-...
 
 Resolution order: `.devteam/config.yml` → environment variables. When `api_key_env` is set in config, only that env var is read for the key; `OPENAI_COMPAT_API_KEY` is the fallback when `api_key_env` is absent from config.
 
+See [`docs/reference/environment-variables.md`](reference/environment-variables.md) for the full list of env vars Stagecraft reads, including `DEVTEAM_VERBOSE` and OTel tracing vars.
+
 #### Headless and auto-detection
 
 `openai-compat` is HTTP-native — it has no CLI to spawn. When the configured `default_host` declares `httpNative: true` (which openai-compat does), `devteam stage <name>` **auto-enables headless mode without needing `--headless`**:

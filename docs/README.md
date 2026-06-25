@@ -20,6 +20,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [faq.md](faq.md) — operational questions and common gotchas
 - [git-workflow.md](git-workflow.md) — branch setup and PR timing for a Stagecraft pipeline run
 - [ci.md](ci.md) — GitHub Actions workflow template and environment variables
+- [reference/environment-variables.md](reference/environment-variables.md) — all environment variables Stagecraft reads, grouped by subsystem
 - [memory.md](memory.md) — persistent project memory: embedder options and shared store
 - [observability.md](observability.md) — OpenTelemetry span schema and collector setup
 - [evidence.md](evidence.md) — offline readiness, explicit resolution acceptance, and privacy-safe export
