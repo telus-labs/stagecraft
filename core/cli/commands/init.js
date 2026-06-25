@@ -51,7 +51,7 @@ function run(positional, _flags) {
     ? `  ✓ wrote ${path.relative(cwd, cfg.path)}`
     : `  - skipped ${path.relative(cwd, cfg.path)} (${cfg.reason}; use --force to overwrite)`);
 
-  for (const dir of ["pipeline", "pipeline/gates"]) {
+  for (const dir of ["pipeline", "pipeline/gates", "templates"]) {
     const p = path.join(cwd, dir);
     if (!fs.existsSync(p)) {
       fs.mkdirSync(p, { recursive: true });
@@ -59,6 +59,21 @@ function run(positional, _flags) {
     } else {
       console.log(`  - exists  ${dir}/`);
     }
+  }
+
+  const agentsPath = path.join(cwd, "AGENTS.md");
+  if (!fs.existsSync(agentsPath) || _flags.force) {
+    const stub = [
+      "# Project context",
+      "",
+      "<!-- Fill in: project name, language/stack, key constraints, team conventions.",
+      "     This file is read by every pipeline agent before each stage. -->",
+      "",
+    ].join("\n");
+    fs.writeFileSync(agentsPath, stub, "utf8");
+    console.log(`  ✓ wrote AGENTS.md (stub — edit with project context)`);
+  } else {
+    console.log(`  - exists  AGENTS.md`);
   }
 
   for (const hostName of hosts) {

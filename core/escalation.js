@@ -260,7 +260,49 @@ function renderPrincipalRulingPrompt(topic, contextPaths, targetGate) {
 
 // Render the escalation-applicator prompt — instructs an agent to implement
 // the Principal's ruling so `devteam next` advances past the ESCALATE.
+// Read stage-01 gate and return the active build workstreams for this project.
+// Mirrors the inferActiveRoles logic in orchestrator.js but is self-contained
+// here to avoid a circular dependency.
+const BUILD_WORKSTREAMS = ["backend", "frontend", "platform", "qa"];
+const BUILD_OOS_KEYWORDS = {
+  frontend: ["frontend", "web ui", "web app", "browser", "ui layer"],
+  backend:  ["backend", "api server", "rest api", "server-side"],
+  platform: ["platform", "infrastructure", "infra"],
+  qa:       ["qa workstream", "test workstream"],
+};
+
+function activeWorkstreamsFromStage01(cwd) {
+  const s1Path = path.join(cwd, "pipeline", "gates", "stage-01.json");
+  if (!fs.existsSync(s1Path)) return BUILD_WORKSTREAMS;
+  try {
+    const gate = JSON.parse(fs.readFileSync(s1Path, "utf8"));
+    if (Array.isArray(gate.active_roles) && gate.active_roles.length > 0) {
+      const filtered = gate.active_roles.filter(r => BUILD_WORKSTREAMS.includes(r));
+      if (filtered.length > 0) return filtered;
+    }
+    if (Array.isArray(gate.out_of_scope_items) && gate.out_of_scope_items.length > 0) {
+      const suppressed = new Set();
+      for (const item of gate.out_of_scope_items) {
+        const lower = item.toLowerCase();
+        for (const [role, kw] of Object.entries(BUILD_OOS_KEYWORDS)) {
+          if (kw.some(k => lower.includes(k))) suppressed.add(role);
+        }
+      }
+      if (suppressed.size > 0) return BUILD_WORKSTREAMS.filter(r => !suppressed.has(r));
+    }
+  } catch { /* fall through */ }
+  return BUILD_WORKSTREAMS;
+}
+
 function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
+  const activeWorkstreams = activeWorkstreamsFromStage01(cwd);
+  const wsLabels = {
+    backend:  ["dispatch backend build workstream", "devteam stage build --workstream backend --headless            "],
+    frontend: ["dispatch frontend build workstream", "devteam stage build --workstream frontend --headless           "],
+    platform: ["dispatch platform build workstream", "devteam stage build --workstream platform --headless           "],
+    qa:       ["dispatch QA build workstream / qa build", "devteam stage build --workstream qa --headless                 "],
+  };
+
   const lines = [
     "# Escalation Applicator",
     "",
@@ -288,10 +330,12 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   lines.push("");
   lines.push("| Ruling says                              | Command to run                                                  |");
   lines.push("|------------------------------------------|-----------------------------------------------------------------|");
-  lines.push("| dispatch backend build workstream        | devteam stage build --workstream backend --headless             |");
-  lines.push("| dispatch frontend build workstream       | devteam stage build --workstream frontend --headless            |");
-  lines.push("| dispatch platform build workstream       | devteam stage build --workstream platform --headless            |");
-  lines.push("| dispatch QA build workstream / qa build  | devteam stage build --workstream qa --headless                  |");
+  for (const ws of activeWorkstreams) {
+    if (wsLabels[ws]) {
+      const [label, cmd] = wsLabels[ws];
+      lines.push(`| ${label.padEnd(40)} | ${cmd}|`);
+    }
+  }
   lines.push("| re-run peer-review for [role]            | devteam stage peer-review --workstream [role] --headless        |");
   lines.push("| fix gate shape / correct gate            | Edit gate JSON, then devteam derive-approvals && devteam merge  |");
   lines.push("");
@@ -372,7 +416,15 @@ function dispatchToPrincipal(cwd, prompt, { label = "principal" } = {}) {
     };
     const ctx = { cwd };
     process.stderr.write(`[devteam] dispatching ${label} → ${host} (http-native)\n`);
-    return adapter.invoke(descriptor, ctx, prompt).then((result) => ({ exitCode: result.exitCode, host }));
+    return adapter.invoke(descriptor, ctx, prompt).then((result) => {
+      if (Array.isArray(result.writeViolations) && result.writeViolations.length > 0) {
+        for (const v of result.writeViolations) {
+          process.stderr.write(`[devteam] ⚠ ${label}: unauthorized write "${v}" (outside allowedWrites) — removing\n`);
+          try { fs.unlinkSync(path.join(cwd, v)); } catch { /* ignore */ }
+        }
+      }
+      return { exitCode: result.exitCode, host };
+    });
   }
 
   const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND || adapter.capabilities.headlessCommand;
