@@ -153,6 +153,12 @@ const FILESYSTEM_ROOT_FIND_RE = /\bfind\s+(\/(?:\s|$)|~(?:\/?\s|$)|\$\{?HOME\}?(
 // Used to detect absolute-path searches outside the project directory.
 const ABS_PATH_FIND_RE = /\bfind\s+(\/\S*)/;
 
+// Block recursive devteam escalation/ruling commands. Running
+// `devteam fix-escalation` or `devteam ruling` from inside an AI-driven bash
+// loop would either invoke the escalation applicator recursively (causing an
+// infinite loop) or attempt an interactive command that has no terminal.
+const RECURSIVE_DEVTEAM_RE = /\bdevteam\s+(fix-escalation|ruling)\b/;
+
 function executeBash(command, cwd, timeoutMs) {
   if (FILESYSTEM_ROOT_FIND_RE.test(command)) {
     return "error: filesystem root search blocked — search within the project directory instead (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
@@ -166,6 +172,9 @@ function executeBash(command, cwd, timeoutMs) {
     if (!searchPath.startsWith(projectRoot)) {
       return "error: search outside the project directory blocked — use a project-relative path (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
     }
+  }
+  if (RECURSIVE_DEVTEAM_RE.test(command)) {
+    return "error: recursive escalation blocked — do not call 'devteam fix-escalation' or 'devteam ruling' from inside a pipeline agent; you are already the escalation applicator";
   }
 
   const timeout = (typeof timeoutMs === "number" && timeoutMs > 0)
