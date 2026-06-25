@@ -320,6 +320,16 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   }
   lines.push("- `pipeline/code-review/by-*.md` (if this is a peer-review escalation)");
   lines.push("");
+  lines.push("## Allowed writes (write_file tool)");
+  lines.push("");
+  lines.push("You may write directly to:");
+  lines.push("- `pipeline/gates/*.json` — correct a malformed gate (status, shape, fields)");
+  lines.push("- `pipeline/code-review/by-*.md` — fix a peer-review document");
+  lines.push("Do NOT write to `pipeline/context.md` — that file is reserved for");
+  lines.push("PRINCIPAL-RULING lines written by the ruling agent, not status reports.");
+  lines.push("Use bash commands (devteam stage, devteam merge, devteam derive-approvals)");
+  lines.push("to produce all other pipeline artifacts — they write their own files.");
+  lines.push("");
   lines.push("## Principal ruling(s) to implement");
   lines.push("");
   for (const r of rulings) lines.push(r);
@@ -402,7 +412,13 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
 // Pipe `prompt` to the principal-routed host headlessly. Returns a Promise of
 // { exitCode, host }. Throws (with a CLI-compatible message) if the host can't
 // be loaded or doesn't support headless — callers convert to their own exit.
-function dispatchToPrincipal(cwd, prompt, { label = "principal" } = {}) {
+//
+// `allowedWrites` controls which file paths the write_file tool may target
+// (for httpNative hosts only — non-httpNative hosts shell out and don't use
+// this). Callers should pass the tightest set that their agent actually needs:
+//   - Principal ruling writer: ["pipeline/context.md"]
+//   - Escalation applicator: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md"]
+function dispatchToPrincipal(cwd, prompt, { label = "principal", allowedWrites = ["pipeline/context.md"] } = {}) {
   const { loadConfig } = require("./config");
   const { loadAdapter } = require("./router");
   const config = loadConfig(cwd);
@@ -422,7 +438,7 @@ function dispatchToPrincipal(cwd, prompt, { label = "principal" } = {}) {
     const descriptor = {
       workstreamId: label,
       role: "principal",
-      allowedWrites: ["pipeline/context.md"],
+      allowedWrites,
     };
     const ctx = { cwd };
     process.stderr.write(`[devteam] dispatching ${label} → ${host} (http-native)\n`);
@@ -475,7 +491,10 @@ function runFixEscalation(cwd, { escalatingGate = null } = {}) {
   const rulings = loadPrincipalRulingLines(cwd);
   if (rulings.length === 0) return Promise.resolve({ exitCode: 2, reason: "no rulings" });
   const prompt = renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate);
-  return dispatchToPrincipal(cwd, prompt, { label: "escalation-applicator" });
+  return dispatchToPrincipal(cwd, prompt, {
+    label: "escalation-applicator",
+    allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md"],
+  });
 }
 
 // Returns true when the principal-routed host is httpNative (e.g. openai-compat).

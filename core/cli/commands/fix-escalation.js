@@ -58,7 +58,10 @@ async function run(positional, _flags) {
   // Dispatch via the shared in-process helper in core.
   let exitCode;
   try {
-    ({ exitCode } = await _escalation.dispatchToPrincipal(cwd, prompt, { label: "escalation-applicator" }));
+    ({ exitCode } = await _escalation.dispatchToPrincipal(cwd, prompt, {
+      label: "escalation-applicator",
+      allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md"],
+    }));
   } catch (err) {
     console.error(err.message);
     process.exit(1);
