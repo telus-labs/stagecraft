@@ -15,6 +15,7 @@ const { isAllowed } = require("../../core/guards/write-audit");
 
 const DEFAULT_BASH_TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_BYTES = 8 * 1024; // 8 KB per stream — keeps tool messages from bloating context
+const MAX_FILE_READ_BYTES = 16 * 1024; // 16 KB — truncate large files (e.g. accumulated context.md) to prevent context bloat
 
 // --- Tool definitions (OpenAI function-calling schema) -------------------
 
@@ -296,7 +297,16 @@ async function executeTool(toolCall, cwd, allowedWrites) {
     const { resolved, error } = resolveSafe(cwd, args.path);
     if (error) return `error: ${error}`;
     try {
-      return fs.readFileSync(resolved, "utf8");
+      const content = fs.readFileSync(resolved, "utf8");
+      if (content.length <= MAX_FILE_READ_BYTES) return content;
+      const head = content.slice(0, 12 * 1024);
+      const tail = content.slice(-(4 * 1024));
+      const omitted = content.length - head.length - tail.length;
+      return (
+        `${head}\n\n` +
+        `[... ${omitted} bytes omitted — file exceeds ${MAX_FILE_READ_BYTES / 1024} KB; showing first 12 KB and last 4 KB ...]\n\n` +
+        tail
+      );
     } catch (err) {
       return `error: read failed: ${err.message}`;
     }
