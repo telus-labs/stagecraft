@@ -10,7 +10,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const { isAllowed } = require("../../core/guards/write-audit");
 
 const DEFAULT_BASH_TIMEOUT_MS = 60_000;
@@ -159,9 +159,23 @@ const ABS_PATH_FIND_RE = /\bfind\s+(\/\S*)/;
 // infinite loop) or attempt an interactive command that has no terminal.
 const RECURSIVE_DEVTEAM_RE = /\bdevteam\s+(fix-escalation|ruling)\b/;
 
+// Execute a shell command asynchronously using a detached process group.
+//
+// Why async spawn instead of spawnSync: spawnSync holds stdout/stderr pipes
+// open until every process that inherited those file descriptors closes them.
+// When the model runs `node server.js &` (background) the server inherits the
+// shell's pipe handles. Even though the shell exits quickly, spawnSync waits
+// indefinitely for the server to exit — causing the observed 60 s / 30 s / 20 s
+// timeouts in the red-team stage.
+//
+// With detached: true the shell and all its children (including background
+// processes started with &) share a process group. When the shell exits we
+// immediately send SIGKILL to the whole group (-child.pid), which terminates
+// any lingering children and closes their pipe write-ends, allowing the
+// `close` event to fire and the result to be returned promptly.
 function executeBash(command, cwd, timeoutMs) {
   if (FILESYSTEM_ROOT_FIND_RE.test(command)) {
-    return "error: filesystem root search blocked — search within the project directory instead (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
+    return Promise.resolve("error: filesystem root search blocked — search within the project directory instead (e.g. 'find . -name ...' or 'find pipeline/ -name ...')");
   }
   // Block `find /abs/path` when the path is outside the project directory.
   // This prevents the model from searching unrelated projects on the same machine.
@@ -170,45 +184,80 @@ function executeBash(command, cwd, timeoutMs) {
     const searchPath = path.resolve(absMatch[1]);
     const projectRoot = path.resolve(cwd);
     if (!searchPath.startsWith(projectRoot)) {
-      return "error: search outside the project directory blocked — use a project-relative path (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
+      return Promise.resolve("error: search outside the project directory blocked — use a project-relative path (e.g. 'find . -name ...' or 'find pipeline/ -name ...')");
     }
   }
   if (RECURSIVE_DEVTEAM_RE.test(command)) {
-    return "error: recursive escalation blocked — do not call 'devteam fix-escalation' or 'devteam ruling' from inside a pipeline agent; you are already the escalation applicator";
+    return Promise.resolve("error: recursive escalation blocked — do not call 'devteam fix-escalation' or 'devteam ruling' from inside a pipeline agent; you are already the escalation applicator");
   }
 
   const timeout = (typeof timeoutMs === "number" && timeoutMs > 0)
     ? timeoutMs
     : DEFAULT_BASH_TIMEOUT_MS;
 
-  const result = spawnSync("sh", ["-c", command], {
-    cwd,
-    timeout,
-    encoding: "utf8",
-    maxBuffer: 4 * 1024 * 1024, // 4 MB collection buffer; output is truncated to MAX_OUTPUT_BYTES before returning
-  });
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", command], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: true, // shell becomes process group leader; children share the group
+    });
 
-  if (result.error) {
-    if (result.error.code === "ETIMEDOUT") {
-      return `error: command timed out after ${timeout}ms`;
+    const stdoutBufs = [];
+    const stderrBufs = [];
+    let exitCode = null;
+    let settled = false;
+
+    // Kill all processes in the shell's process group. Used both on shell exit
+    // (to reap background children) and on timeout (to reap everything).
+    function killGroup() {
+      try { process.kill(-child.pid, "SIGKILL"); } catch { /* ESRCH: already gone */ }
     }
-    return `error: failed to spawn shell: ${result.error.message}`;
-  }
 
-  const stdout = (result.stdout || "").slice(0, MAX_OUTPUT_BYTES);
-  const stderr = (result.stderr || "").slice(0, MAX_OUTPUT_BYTES);
-  const exitCode = result.status ?? 1;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      killGroup();
+      resolve(`error: command timed out after ${timeout}ms`);
+    }, timeout);
 
-  return [
-    `exit_code: ${exitCode}`,
-    stdout ? `stdout:\n${stdout}` : "stdout: (empty)",
-    stderr ? `stderr:\n${stderr}` : "stderr: (empty)",
-  ].join("\n");
+    child.stdout.on("data", (d) => { stdoutBufs.push(d); });
+    child.stderr.on("data", (d) => { stderrBufs.push(d); });
+
+    // When the shell exits (including after it forks background children),
+    // kill the whole process group so the background children release their
+    // inherited pipe write-ends and the `close` event can fire.
+    child.on("exit", (code) => {
+      exitCode = code;
+      killGroup();
+    });
+
+    child.on("close", () => {
+      clearTimeout(timer);
+      if (settled) return;
+      settled = true;
+      const stdout = Buffer.concat(stdoutBufs).toString("utf8").slice(0, MAX_OUTPUT_BYTES);
+      const stderr = Buffer.concat(stderrBufs).toString("utf8").slice(0, MAX_OUTPUT_BYTES);
+      resolve([
+        `exit_code: ${exitCode ?? 1}`,
+        stdout ? `stdout:\n${stdout}` : "stdout: (empty)",
+        stderr ? `stderr:\n${stderr}` : "stderr: (empty)",
+      ].join("\n"));
+    });
+
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      if (!settled) {
+        settled = true;
+        resolve(`error: failed to spawn shell: ${err.message}`);
+      }
+    });
+  });
 }
 
-// Execute a single tool call from the model. Returns a string result to send
-// back as the tool message content.
-function executeTool(toolCall, cwd, allowedWrites) {
+// Execute a single tool call from the model. Returns a Promise<string> result
+// to send back as the tool message content (bash is async; all others resolve
+// synchronously but are wrapped in a Promise for a uniform call signature).
+async function executeTool(toolCall, cwd, allowedWrites) {
   let args;
   try {
     args = typeof toolCall.function.arguments === "string"
@@ -270,7 +319,7 @@ function executeTool(toolCall, cwd, allowedWrites) {
     if (!args.command || typeof args.command !== "string") {
       return "error: bash tool requires a non-empty 'command' string";
     }
-    return executeBash(args.command, cwd, args.timeout_ms);
+    return await executeBash(args.command, cwd, args.timeout_ms);
   }
 
   return `error: unknown tool "${name}"`;

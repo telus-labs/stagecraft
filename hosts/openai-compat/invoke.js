@@ -175,7 +175,7 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     // Execute each tool call and collect results.
     const toolResults = [];
     for (const tc of toolCalls) {
-      const result = executeTool(tc, ctx.cwd, descriptor.allowedWrites || []);
+      const result = await executeTool(tc, ctx.cwd, descriptor.allowedWrites || []);
       const tcName = tc.function?.name ?? "unknown";
       let parsedArgs;
       try { parsedArgs = JSON.parse(tc.function?.arguments || "{}"); } catch { parsedArgs = {}; }

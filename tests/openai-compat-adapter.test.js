@@ -124,9 +124,9 @@ describe("openai-compat tools", () => {
   });
 
   describe("executeTool — write_file", () => {
-    it("writes an allowed file and returns ok", () => {
+    it("writes an allowed file and returns ok", async () => {
       const cwd = tmpdir();
-      const result = executeTool(
+      const result = await executeTool(
         {
           id: "tc1",
           function: {
@@ -144,9 +144,9 @@ describe("openai-compat tools", () => {
       );
     });
 
-    it("rejects a path not in allowedWrites", () => {
+    it("rejects a path not in allowedWrites", async () => {
       const cwd = tmpdir();
-      const result = executeTool(
+      const result = await executeTool(
         {
           id: "tc2",
           function: {
@@ -161,9 +161,9 @@ describe("openai-compat tools", () => {
       assert.ok(!fs.existsSync(path.join(cwd, "src", "evil.js")));
     });
 
-    it("rejects directory traversal", () => {
+    it("rejects directory traversal", async () => {
       const cwd = tmpdir();
-      const result = executeTool(
+      const result = await executeTool(
         {
           id: "tc3",
           function: {
@@ -179,10 +179,10 @@ describe("openai-compat tools", () => {
   });
 
   describe("executeTool — read_file", () => {
-    it("reads an existing file", () => {
+    it("reads an existing file", async () => {
       const cwd = tmpdir();
       fs.writeFileSync(path.join(cwd, "hello.txt"), "world");
-      const result = executeTool(
+      const result = await executeTool(
         { id: "tc4", function: { name: "read_file", arguments: JSON.stringify({ path: "hello.txt" }) } },
         cwd,
         [],
@@ -190,9 +190,9 @@ describe("openai-compat tools", () => {
       assert.equal(result, "world");
     });
 
-    it("returns error for missing file", () => {
+    it("returns error for missing file", async () => {
       const cwd = tmpdir();
-      const result = executeTool(
+      const result = await executeTool(
         { id: "tc5", function: { name: "read_file", arguments: JSON.stringify({ path: "missing.md" }) } },
         cwd,
         [],
@@ -202,11 +202,11 @@ describe("openai-compat tools", () => {
   });
 
   describe("executeTool — list_files", () => {
-    it("lists directory contents", () => {
+    it("lists directory contents", async () => {
       const cwd = tmpdir();
       fs.writeFileSync(path.join(cwd, "a.txt"), "");
       fs.mkdirSync(path.join(cwd, "sub"));
-      const result = executeTool(
+      const result = await executeTool(
         { id: "tc6", function: { name: "list_files", arguments: JSON.stringify({ dir: "." }) } },
         cwd,
         [],
@@ -217,9 +217,9 @@ describe("openai-compat tools", () => {
   });
 
   describe("executeTool — bash", () => {
-    it("dispatches bash tool call to executeBash and returns output", () => {
+    it("dispatches bash tool call to executeBash and returns output", async () => {
       const cwd = tmpdir();
-      const result = executeTool(
+      const result = await executeTool(
         {
           id: "tc_bash1",
           function: {
@@ -234,9 +234,9 @@ describe("openai-compat tools", () => {
       assert.ok(result.includes("hello-from-bash"), `expected echo output; got: ${result}`);
     });
 
-    it("returns non-zero exit code for failing commands", () => {
+    it("returns non-zero exit code for failing commands", async () => {
       const cwd = tmpdir();
-      const result = executeTool(
+      const result = await executeTool(
         {
           id: "tc_bash2",
           function: {
@@ -250,8 +250,8 @@ describe("openai-compat tools", () => {
       assert.ok(result.includes("exit_code: 42"), `expected exit_code: 42; got: ${result}`);
     });
 
-    it("returns error when command argument is missing", () => {
-      const result = executeTool(
+    it("returns error when command argument is missing", async () => {
+      const result = await executeTool(
         { id: "tc_bash3", function: { name: "bash", arguments: JSON.stringify({}) } },
         tmpdir(),
         [],
@@ -261,8 +261,8 @@ describe("openai-compat tools", () => {
   });
 
   describe("executeTool — unknown tool", () => {
-    it("returns an error string", () => {
-      const result = executeTool(
+    it("returns an error string", async () => {
+      const result = await executeTool(
         { id: "tc7", function: { name: "run_command", arguments: JSON.stringify({ command: "ls" }) } },
         tmpdir(),
         [],
@@ -272,25 +272,37 @@ describe("openai-compat tools", () => {
   });
 
   describe("executeBash", () => {
-    it("returns exit_code 0 and stdout for successful command", () => {
+    it("returns exit_code 0 and stdout for successful command", async () => {
       const cwd = tmpdir();
-      const result = executeBash("echo stagecraft", cwd, null);
+      const result = await executeBash("echo stagecraft", cwd, null);
       assert.ok(result.includes("exit_code: 0"), `got: ${result}`);
       assert.ok(result.includes("stagecraft"), `expected echo output; got: ${result}`);
     });
 
-    it("returns non-zero exit_code and stderr for failing command", () => {
+    it("returns non-zero exit_code and stderr for failing command", async () => {
       const cwd = tmpdir();
-      const result = executeBash("sh -c 'echo error-msg >&2; exit 1'", cwd, null);
+      const result = await executeBash("sh -c 'echo error-msg >&2; exit 1'", cwd, null);
       assert.ok(result.includes("exit_code: 1"), `got: ${result}`);
       assert.ok(result.includes("error-msg"), `expected stderr content; got: ${result}`);
     });
 
-    it("returns error string when command times out", () => {
+    it("returns error string when command times out", async () => {
       const cwd = tmpdir();
-      const result = executeBash("sleep 10", cwd, 50); // 50 ms timeout
+      const result = await executeBash("sleep 10", cwd, 50); // 50 ms timeout
       assert.ok(result.startsWith("error:"), `expected error string; got: ${result}`);
       assert.ok(result.includes("timed out"), `expected 'timed out' in message; got: ${result}`);
+    });
+
+    it("terminates background processes and returns promptly", async () => {
+      const cwd = tmpdir();
+      const t0 = Date.now();
+      // Start a long-running background process — should be killed when the
+      // shell exits and not block the bash tool for its full duration.
+      const result = await executeBash("sleep 60 &\necho done", cwd, 5000);
+      const elapsed = Date.now() - t0;
+      assert.ok(result.includes("exit_code: 0"), `got: ${result}`);
+      assert.ok(result.includes("done"), `expected echo output; got: ${result}`);
+      assert.ok(elapsed < 4000, `expected prompt return (<4 s); took ${elapsed} ms`);
     });
   });
 });
