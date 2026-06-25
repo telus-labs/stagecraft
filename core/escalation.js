@@ -362,6 +362,19 @@ function dispatchToPrincipal(cwd, prompt, { label = "principal" } = {}) {
   if (!adapter.capabilities || !adapter.capabilities.headless) {
     throw new Error(`Principal host "${host}" does not support --headless (capabilities.headless is false).`);
   }
+
+  // httpNative hosts (e.g. openai-compat) call invoke() directly; no subprocess.
+  if (adapter.capabilities.httpNative && typeof adapter.invoke === "function") {
+    const descriptor = {
+      workstreamId: label,
+      role: "principal",
+      allowedWrites: ["pipeline/context.md"],
+    };
+    const ctx = { cwd };
+    process.stderr.write(`[devteam] dispatching ${label} → ${host} (http-native)\n`);
+    return adapter.invoke(descriptor, ctx, prompt).then((result) => ({ exitCode: result.exitCode, host }));
+  }
+
   const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND || adapter.capabilities.headlessCommand;
   if (!cmdString) throw new Error(`Host "${host}" declares no headlessCommand.`);
 
