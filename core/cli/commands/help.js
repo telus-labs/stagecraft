@@ -9,7 +9,10 @@ function run() {
 Usage: devteam <command> [args]
 
 Commands:
-  init --host <list> [--force]     Install host adapter(s) into the current
+  install <host> [--force]         Install a single host adapter into the project.
+                                   Writes the adapter's config stub to .devteam/.
+                                   Safe to re-run; use --force to overwrite.
+  init --host <list> [--force]     Full project initializer: installs host(s) into the current
        [--adapter <name>]           project. <list> is comma-separated, e.g.
        [--profile dogfood]          "claude-code" or "claude-code,codex".
                                    Writes .devteam/config.yml and creates
@@ -146,12 +149,15 @@ Commands:
                                    pipeline/context.md (format: AC-11=A,AC-12=B
                                    or AC-11=A:TICKET-123). Runs automatically at
                                    pipeline-complete when items are present.
-  status [--json]                  Liveness report (ADR-007 Tier 1): reads
-                                   run-state.json + run-log.jsonl tail and
-                                   reports status / current_stage /
+  status [host] [--json]           Without a host arg: liveness report (ADR-007
+                                   Tier 1) — reads run-state.json + tail of
+                                   run-log.jsonl; reports status / current_stage /
                                    last_action / iterations / cost_usd /
                                    last_heartbeat_age_ms / last_event_age_ms /
                                    stall_detected. Read-only; no --watch.
+                                   With a host name (e.g. "devteam status
+                                   cloud-runner-github"): show whether the
+                                   adapter is installed and configured.
   evidence status [--json]         Read-only evidence readiness for #142-#145.
        [--feature <name>]          Aggregates bounded run logs, current gates,
                                    and gate archives; reports local threshold

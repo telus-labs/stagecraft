@@ -111,6 +111,17 @@ devteam ruling \
 
 Routes via `routing.roles.principal` (or `routing.default_host` if not set), dispatches the Principal subagent against the cited context, and waits for the ruling to land in `pipeline/context.md`. Refuses cleanly if the routed host doesn't support `--headless`.
 
+> **Using the GitHub cloud runner?** `devteam ruling --headless` and `devteam fix-escalation --headless` require local filesystem access — they cannot run on `cloud-runner-github`. If `cloud-runner-github` is your `default_host`, add this to `.devteam/config.yml`:
+>
+> ```yaml
+> routing:
+>   default_host: cloud-runner-github
+>   roles:
+>     principal: claude-code  # ruling + fix-escalation always run locally
+> ```
+>
+> See `hosts/cloud-runner-github/worker/README.md` § "Local-only operations".
+
 The ruling format that the rest of the pipeline knows how to read:
 
 ```markdown

@@ -363,7 +363,15 @@ function dispatchToPrincipal(cwd, prompt, { label = "principal" } = {}) {
     throw new Error(`Principal host "${host}" does not support --headless (capabilities.headless is false).`);
   }
   const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND || adapter.capabilities.headlessCommand;
-  if (!cmdString) throw new Error(`Host "${host}" declares no headlessCommand.`);
+  if (!cmdString) {
+    throw new Error(
+      `Host "${host}" declares no headlessCommand. ` +
+      `Principal rulings require local filesystem access (to read and append to pipeline/context.md) ` +
+      `and cannot run on a remote cloud-runner host. ` +
+      `Add \`routing.roles.principal: claude-code\` (or another local host) to .devteam/config.yml, ` +
+      `or run \`devteam ruling\` without --headless to print the prompt for interactive use.`,
+    );
+  }
 
   const { spawn } = require("node:child_process");
   let bin, args;

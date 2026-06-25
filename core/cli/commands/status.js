@@ -52,8 +52,30 @@ function computeStatus(runState, lastEvent) {
 }
 
 function run(positional, _flags) {
-  if (_flags.help) { console.log(generateHelp("devteam status [options]", flags)); process.exit(0); }
+  if (_flags.help) { console.log(generateHelp("devteam status [host] [options]", flags)); process.exit(0); }
   const cwd = _flags.cwd || process.cwd();
+
+  // If first positional is a known host name, show adapter status instead of run status.
+  if (positional.length > 0) {
+    const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "..", "router"));
+    const hostName = positional[0];
+    if (!listHosts().includes(hostName)) {
+      console.error(`Unknown host: ${hostName}`);
+      console.error(`Available: ${listHosts().join(", ")}`);
+      process.exit(2);
+    }
+    const adapter = loadAdapter(hostName);
+    const s = adapter.status(cwd);
+    console.log(`${hostName}: ${s.ok ? "ready" : "needs configuration"}`);
+    if (s.missing && s.missing.length > 0) {
+      for (const m of s.missing) console.log(`  missing: ${m}`);
+    }
+    if (s.notes && s.notes.length > 0) {
+      for (const n of s.notes) console.log(`  ${n}`);
+    }
+    if (!s.ok) process.exit(1);
+    return;
+  }
 
   const { loadConfig } = require(path.join(__dirname, "..", "..", "config"));
   const { runStatePath, runLogPath } = require(path.join(__dirname, "..", "..", "driver"));

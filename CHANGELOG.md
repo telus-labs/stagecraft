@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub Actions cloud runner adapter — Phase 21 (A3). First cloud target.** Stagecraft can now route workstream execution to GitHub Actions, keeping gate-chain authority, sign-off, and deploy strictly local (ADR-013). Four new modules ship: `core/adapters/remote-bundle.js` (`buildManifest`, `validateResult`, `applyResult` — input bundle, result validation, and staged file application with SHA-256 digest re-verification); `hosts/cloud-runner-github/adapter.js` (full host-adapter contract — install, status, uninstall, renderStagePrompt, invoke with dispatch→correlate→poll→download→validate→apply flow); `hosts/cloud-runner-github/github-client.js` (GitHub Actions API client — workflow_dispatch, run correlation by `run-name`, poll-to-completion, artifact download with redirect following); `hosts/cloud-runner-github/zip.js` (self-contained zip reader/writer with CRC-32 lookup table, no third-party deps). Worker files for the companion `stagecraft-runner` repo ship in `hosts/cloud-runner-github/worker/`: `stagecraft-runner.yml` (workflow YAML) and `worker.js` (self-contained Node.js runner that calls the AI provider via the `write_file` tool, supporting both `anthropic-messages` and `openai-chat` drivers — covers direct Anthropic and OpenAI-compatible proxies such as Fuelix). All provider credentials are stored exclusively as GitHub Secrets; no sensitive values appear in YAML, logs, or committed code. Consequence-stage boundary: `stage-07` (sign-off) and `stage-08` (deploy) are blocked from routing to the cloud runner. OTel spans for `cloud-runner.dispatch`, `.correlate`, `.poll`, and `.download` sub-steps. 99 new tests (71 remote-bundle, 28 cloud-runner-github offline via fake HTTP server).
+
 ---
 
 ## [0.8.0] — 2026-06-19

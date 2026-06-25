@@ -92,9 +92,11 @@ describe("adapter contract", () => {
         if (adapter.capabilities.headless) {
           assert.equal(typeof adapter.invoke, "function",
             `${host} declares headless but no invoke()`);
-          assert.ok(typeof adapter.capabilities.headlessCommand === "string"
-                    && adapter.capabilities.headlessCommand.length > 0,
-            `${host} declares headless but no headlessCommand string`);
+          const cmd = adapter.capabilities.headlessCommand;
+          assert.ok(
+            cmd === null || cmd === undefined || (typeof cmd === "string" && cmd.length > 0),
+            `${host}: headlessCommand must be non-empty string or null/absent; got ${JSON.stringify(cmd)}`,
+          );
         }
       });
 

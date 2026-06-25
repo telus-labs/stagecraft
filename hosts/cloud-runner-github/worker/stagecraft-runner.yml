@@ -1,0 +1,74 @@
+# Stagecraft cloud runner workflow.
+# Copy this file (and worker.js) to your stagecraft-runner repo at:
+#   .github/workflows/stagecraft-runner.yml
+#
+# All provider credentials live in GitHub Secrets — nothing sensitive
+# appears in this YAML. See hosts/cloud-runner-github/worker/README.md
+# for setup instructions.
+
+name: Stagecraft Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      idempotency_key:
+        description: Unique run key (used to correlate and name this run)
+        required: true
+      stage:
+        description: Stage identifier (e.g. stage-01)
+        required: true
+      workstream_id:
+        description: Workstream identifier
+        required: true
+      prompt:
+        description: Base64-encoded UTF-8 prompt (rendered by the adapter)
+        required: true
+      allowed_writes:
+        description: JSON array of relative paths the model may write
+        required: true
+      gate_path:
+        description: Gate file path the model must write (e.g. pipeline/gates/stage-01.json)
+        required: true
+
+# run-name is the correlation key — the adapter polls runs by this name.
+run-name: ${{ inputs.idempotency_key }}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out runner repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Run stage
+        run: node worker.js
+        env:
+          STAGECRAFT_IDEMPOTENCY_KEY: ${{ inputs.idempotency_key }}
+          STAGECRAFT_STAGE:           ${{ inputs.stage }}
+          STAGECRAFT_WORKSTREAM_ID:   ${{ inputs.workstream_id }}
+          STAGECRAFT_PROMPT:          ${{ inputs.prompt }}
+          STAGECRAFT_ALLOWED_WRITES:  ${{ inputs.allowed_writes }}
+          STAGECRAFT_GATE_PATH:       ${{ inputs.gate_path }}
+          # Provider config — edit these values to match your setup.
+          # Only AUTH_TOKEN is a secret; the rest are plain env vars in the YAML.
+          STAGECRAFT_PROVIDER_ENDPOINT:   https://api.fuelix.ai   # base URL of your provider
+          STAGECRAFT_PROVIDER_MODEL:      claude-sonnet-4-6        # model ID
+          STAGECRAFT_PROVIDER_DRIVER:     openai-chat              # openai-chat | anthropic-messages
+          STAGECRAFT_MAX_TOKENS:          "8192"                   # max response tokens (optional)
+          STAGECRAFT_PROVIDER_AUTH_TOKEN: ${{ secrets.STAGECRAFT_PROVIDER_AUTH_TOKEN }}
+
+      - name: Upload result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stagecraft-result-${{ inputs.idempotency_key }}
+          path: result.json
+          if-no-files-found: warn
+          retention-days: 7

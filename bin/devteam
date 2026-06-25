@@ -10,6 +10,8 @@
 //   stages                            List known stage names.
 //   merge <stage>                     Read pipeline/gates/<stage>.<role>.json
 //                                     files and write the merged stage gate.
+//   install <host>                    Install a host adapter into the project.
+//   status [host]                     Run status (no arg), or adapter status (host name).
 //   help                              Show this usage.
 
 const path = require("node:path");
@@ -41,6 +43,7 @@ const COMMAND_MODULES = Object.freeze({
   ruling: "ruling",
   "fix-escalation": "fix-escalation",
   init: "init",
+  install: "install",
   ui: "ui",
   memory: "memory",
   architecture: "architecture",

@@ -91,7 +91,7 @@ process interruption, the adapter calls `POST /repos/{owner}/{repo}/actions/runs
 and waits a short bounded period for acknowledgement. A late successful result arriving after
 the local invocation settles is never applied.
 
-### 4. Provider configuration — all values in GitHub Secrets
+### 4. Provider configuration — non-sensitive values in YAML, auth token as secret
 
 The reference worker running inside the GitHub Actions job supports two provider drivers:
 
@@ -101,43 +101,29 @@ The reference worker running inside the GitHub Actions job supports two provider
 | `openai-chat` | OpenAI Chat Completions API (`POST /v1/chat/completions`) | `https://api.openai.com` |
 
 The `openai-chat` driver covers OpenAI, compatible proxies (including private endpoints),
-Azure OpenAI, Codex, and Ollama. Auth is `Authorization: Bearer <token>` by default;
-`x-api-key` header is supported for Anthropic's alternate auth scheme.
+Azure OpenAI, Codex, and Ollama. Auth is always `Authorization: Bearer <token>`; the
+`x-api-key` header is never used (even with Anthropic-compatible proxies that accept bearer
+auth).
 
-All worker configuration is supplied via GitHub Secrets. **No provider values appear in the
-workflow YAML.** The YAML references secrets by name; the values are never exposed:
+Non-sensitive provider configuration is hardcoded directly in the workflow YAML. Only the
+auth token is stored as a secret:
 
 ```yaml
 env:
-  STAGECRAFT_PROVIDER:          ${{ secrets.STAGECRAFT_PROVIDER }}
-  STAGECRAFT_MODEL:             ${{ secrets.STAGECRAFT_MODEL }}
-  STAGECRAFT_PROVIDER_ENDPOINT: ${{ secrets.STAGECRAFT_PROVIDER_ENDPOINT }}  # optional
-  STAGECRAFT_API_CRED:          ${{ secrets.STAGECRAFT_API_CRED }}
+  STAGECRAFT_PROVIDER_ENDPOINT:   https://api.fuelix.ai     # plain value in YAML
+  STAGECRAFT_PROVIDER_MODEL:      claude-sonnet-4-6          # plain value in YAML
+  STAGECRAFT_PROVIDER_DRIVER:     openai-chat                # plain value in YAML
+  STAGECRAFT_MAX_TOKENS:          "8192"                     # plain value in YAML
+  STAGECRAFT_PROVIDER_AUTH_TOKEN: ${{ secrets.STAGECRAFT_PROVIDER_AUTH_TOKEN }}
 ```
 
-`STAGECRAFT_PROVIDER_ENDPOINT` is stored as a secret even when it is not a credential — this
-keeps private proxy URLs (e.g., `https://api.fuelix.ai`) out of the workflow YAML, which may
-be in a public repository.
+This is the simpler operational model: one secret to manage, YAML values are visible for
+debugging, and changing providers or models is a YAML edit and push — no secret rotation
+required. The auth token is the only value that must be kept out of the repository.
 
-`STAGECRAFT_PROVIDER_CRED_ENV` names the environment variable that holds the credential
-(`STAGECRAFT_API_CRED` in the example). The worker resolves `process.env[STAGECRAFT_PROVIDER_CRED_ENV]`
-at call time; the credential itself never enters the worker config object.
-
-For operators who want to publish a workflow YAML that reveals no configuration structure at
-all, a single `STAGECRAFT_WORKER_CONFIG` secret may hold a JSON blob:
-
-```json
-{
-  "provider": "openai-chat",
-  "model": "claude-sonnet-4-6",
-  "endpoint": "https://api.fuelix.ai",
-  "credEnv": "STAGECRAFT_API_CRED",
-  "authScheme": "bearer"
-}
-```
-
-The worker parses this at startup; the YAML then exposes only two secret names. Both forms
-(individual vars and JSON blob) are supported; the JSON blob takes precedence if present.
+Operators who need to keep their provider endpoint private (e.g., an internal proxy whose URL
+is itself sensitive) may move `STAGECRAFT_PROVIDER_ENDPOINT` to a GitHub Secret — the worker
+reads it from the environment either way.
 
 ### 5. Local orchestration invariant
 
@@ -207,8 +193,9 @@ The token never enters the rendered prompt, the result bundle, or gate files.
 
 - Works with existing GitHub organization — no new cloud account, no hosted server, no
   billing setup beyond GitHub plan limits.
-- Provider credentials and private endpoint URLs are fully hidden behind GitHub Secrets;
-  the workflow YAML (even if public) exposes no values.
+- Auth token is hidden behind a GitHub Secret; non-sensitive values (endpoint URL, model,
+  driver) are visible in the YAML for easy debugging and rotation without touching secrets.
+  Only one secret to manage.
 - Two provider drivers cover the full current range: Anthropic native, OpenAI, and any
   compatible proxy.
 - The local orchestration invariant (decision 5) preserves all existing gate-chain,
@@ -234,6 +221,12 @@ The token never enters the rendered prompt, the result bundle, or gate files.
 - **Run correlation delay.** Dispatching and correlating a run via name-matching adds a
   bounded polling window (typically 5–30 seconds for GitHub to register the new run). This
   is dead time from the orchestrator's perspective and counts against the dispatch timeout.
+- **Several roles must run locally.** The cloud runner has no `shell` capability. Four roles
+  are affected: `principal` (ruling and fix-escalation need direct filesystem access),
+  `platform` (pre-review stage-04a and deploy stage-08 run test suites and deploy scripts),
+  `qa` (stage-06 and stage-06e run tests and performance benchmarks), and `verifier`
+  (stage-06d runs verification scripts). Operators must add all four to `routing.roles` in
+  `.devteam/config.yml`. The `install()` stub includes all four lines by default.
 
 **What now needs to be true:**
 
@@ -266,14 +259,17 @@ The token never enters the rendered prompt, the result bundle, or gate files.
    need to track library commits. Separate repo also allows different visibility and access
    control settings.
 
-3. **Store provider endpoint in workflow YAML.** Rejected: workflow YAML may be in a public
-   repository. Even if the repo is private today, publishing it or granting read access to a
-   collaborator would expose private proxy URLs. Secrets are the correct boundary.
+3. **All provider configuration in GitHub Secrets (no plain YAML values).** Initially
+   considered to keep the workflow YAML completely opaque in public repos. Rejected in favor
+   of putting non-sensitive values (endpoint URL, model, driver, max tokens) directly in the
+   YAML. Reason: one secret (the auth token) is sufficient for security; storing non-credential
+   values as secrets adds rotation burden and makes debugging harder (secret values are masked
+   in logs). Operators who genuinely need to hide their endpoint URL may still move it to a
+   secret — the worker reads it either way.
 
-4. **Single JSON blob secret for all worker config.** Supported as an option but not the
-   default. Individual secrets are easier to rotate independently, easier to debug (secret
-   names appear in the YAML without values), and easier to document. The JSON blob is for
-   operators who want maximum opacity in a public workflow file.
+4. **Single JSON blob secret for all worker config.** Rejected in the same decision as above.
+   A JSON blob secret makes all values opaque and hard to change without also rotating the
+   secret. The plain YAML approach is easier to read and maintain.
 
 5. **GitHub App instead of Personal Access Token.** A GitHub App allows finer permission
    scopes and installation-level tokens. Rejected for MVP: adds OAuth token exchange and
