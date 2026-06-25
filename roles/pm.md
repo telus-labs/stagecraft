@@ -50,9 +50,11 @@ remaining six are required on the **full** track and hotfix, and optional
 
 1. **Problem statement** — what user need does this address?
 2. **User stories** — "As a [user], I want [action] so that [outcome]"
-3. **Acceptance criteria** — numbered, unambiguous, testable. Each criterion
-   must be observable (a behaviour, a state, a response shape) — not
-   "works correctly".
+3. **Acceptance criteria** — labeled `AC-N:` (e.g. `- AC-1: text`, `- AC-2: text`),
+   unambiguous, testable. Each criterion must be observable (a behaviour, a
+   state, a response shape) — not "works correctly". **The `AC-N:` label is
+   required**: the spec verifier matches scenarios to brief entries by this
+   label; plain numbered items will not be recognised.
 4. **Out of scope** — list explicitly to prevent scope creep
 5. **Open questions** — anything engineers will need answered
 
