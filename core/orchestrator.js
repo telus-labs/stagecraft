@@ -933,12 +933,6 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
 
   const runbookPath = path.join(root, "runbook.md");
   const runbookExists = fs.existsSync(runbookPath);
-  // Runbook can only be authored during stage-07. If it is missing and the
-  // track includes deploy, folding here means it can never be written — so
-  // refuse the fold and let stage-07 run so the platform role can create it.
-  if (!runbookExists && isStageInTrack("deploy", track)) {
-    return { ok: false, reason: "pipeline/runbook.md is missing and deploy is in this track — stage-07 must run so the platform role can author it" };
-  }
   const docsGate = classifyDocumentationGate(cwd);
   if (docsGate.docs_surface_affected && docsGate.docs_updated !== true) {
     return {
