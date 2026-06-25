@@ -143,7 +143,17 @@ function resolveSafe(cwd, relPath) {
 
 // Execute a shell command in the project root. Returns a structured string
 // (exit_code / stdout / stderr) to send back as the tool message content.
+// Matches `find` invocations that search from the filesystem root or bare home
+// directory — these scan the entire disk and reliably time out.
+// Catches: `find /`, `find / -name`, `find ~`, `find ~ -name`,
+//          `find $HOME`, `find ${HOME}`, etc.
+const FILESYSTEM_ROOT_FIND_RE = /\bfind\s+(\/(?:\s|$)|~(?:\/?\s|$)|\$\{?HOME\}?(?:\/?\s|$))/;
+
 function executeBash(command, cwd, timeoutMs) {
+  if (FILESYSTEM_ROOT_FIND_RE.test(command)) {
+    return "error: filesystem root search blocked — search within the project directory instead (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
+  }
+
   const timeout = (typeof timeoutMs === "number" && timeoutMs > 0)
     ? timeoutMs
     : DEFAULT_BASH_TIMEOUT_MS;
