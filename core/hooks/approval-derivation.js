@@ -79,7 +79,7 @@ const KNOWN_AREAS = new Set(["backend", "frontend", "platform", "qa", "deps"]);
 // review files written by that host will fall back to the area-only gate
 // path and collide across hosts. Keep this list in sync with the dirs
 // under hosts/.
-const KNOWN_HOSTS = new Set(["claude-code", "codex", "gemini-cli", "generic"]);
+const KNOWN_HOSTS = new Set(["claude-code", "codex", "gemini-cli", "generic", "openai-compat"]);
 
 const SECTION_HEADER_RE = /^##\s+Review\s+of\s+(\w[\w-]*)\s*$/i;
 const REVIEW_MARKER_RE = /^\s*REVIEW:\s*(APPROVED|CHANGES\s+REQUESTED)\s*$/i;
@@ -211,14 +211,16 @@ function hostFromPath(filePath) {
 // Gate upsert (locked, atomic write)
 // ---------------------------------------------------------------------------
 
-function applyVerdict({ area, verdict, blockers, reviewer, host }) {
-  if (!fs.existsSync(GATES_DIR)) fs.mkdirSync(GATES_DIR, { recursive: true });
+function applyVerdict({ area, verdict, blockers, reviewer, host, gatesDir: customGatesDir, projectCwd: customProjectCwd }) {
+  const effectiveGatesDir = customGatesDir || GATES_DIR;
+  const effectiveCwd = customProjectCwd || CWD;
+  if (!fs.existsSync(effectiveGatesDir)) fs.mkdirSync(effectiveGatesDir, { recursive: true });
 
   // Fanout mode: host-suffixed gate name (stage-05.<area>.<host>.json).
   // Non-fanout: canonical per-area gate (stage-05.<area>.json).
   const baseName = host ? `stage-05.${area}.${host}` : `stage-05.${area}`;
-  const gatePath = path.join(GATES_DIR, `${baseName}.json`);
-  const lockPath = path.join(GATES_DIR, `.${baseName}.lock`);
+  const gatePath = path.join(effectiveGatesDir, `${baseName}.json`);
+  const lockPath = path.join(effectiveGatesDir, `.${baseName}.lock`);
 
   if (!acquireLock(lockPath)) {
     console.log(`[approval-derivation] ⚠️  could not acquire lock for ${baseName} after ${LOCK_RETRIES} retries; skipping`);
@@ -244,7 +246,7 @@ function applyVerdict({ area, verdict, blockers, reviewer, host }) {
       // PEER_REVIEW_SIZING table. Nano-track changes need 1 approval
       // (single-reviewer scoped review); full/quick/hotfix/etc need 2.
       let track = "full";
-      try { track = loadConfig(CWD).pipeline.default_track || "full"; } catch { /* defaults */ }
+      try { track = loadConfig(effectiveCwd).pipeline.default_track || "full"; } catch { /* defaults */ }
       const required = requiredApprovalsFor(STAGES["peer-review"], track) ?? 2;
       gate = {
         stage: "stage-05",
@@ -343,6 +345,32 @@ function applyVerdict({ area, verdict, blockers, reviewer, host }) {
 }
 
 // ---------------------------------------------------------------------------
+// Programmatic entry point for hooks: false hosts (openai-compat, codex via
+// headless.js). Called after the tool-call loop completes; derives gates for
+// any by-*.md files written during the session without spawning a subprocess.
+// ---------------------------------------------------------------------------
+
+function deriveForProject(filePath, projectCwd) {
+  const gatesDir = path.join(projectCwd, "pipeline", "gates");
+  let track = "full";
+  try { track = loadConfig(projectCwd).pipeline.default_track || "full"; } catch { /* defaults */ }
+  const isSingleReviewer = track === "nano";
+
+  const reviewer = reviewerNameFromPath(filePath);
+  if (!reviewer) return;
+  const host = hostFromPath(filePath);
+  const role = reviewerRoleFromPath(filePath);
+  const verdicts = parseReviewFile(filePath);
+  for (const v of verdicts) {
+    if (!host && role && v.area === role && !isSingleReviewer) {
+      console.error(`[approval-derivation] WARN: self-review skipped — ${path.basename(filePath)} contains "## Review of ${v.area}" but that is the reviewer's own workstream`);
+      continue;
+    }
+    applyVerdict({ area: v.area, verdict: v.verdict, blockers: v.blockers, reviewer, host, gatesDir, projectCwd });
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -392,4 +420,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { main, parseReviewFile, applyVerdict, reviewerNameFromPath, hostFromPath, KNOWN_HOSTS };
+module.exports = { main, parseReviewFile, applyVerdict, deriveForProject, reviewerNameFromPath, hostFromPath, KNOWN_HOSTS };

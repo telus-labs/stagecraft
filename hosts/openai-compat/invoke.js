@@ -218,6 +218,22 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
     );
   }
 
+  // Derive peer-review gates from any by-*.md files written during this
+  // session. The PostToolUse hook that normally does this never fires for
+  // httpNative hosts (hooks: false). Idempotent when no review files exist.
+  const codeReviewDir = path.join(ctx.cwd, "pipeline", "code-review");
+  if (fs.existsSync(codeReviewDir)) {
+    const { deriveForProject } = require("../../core/hooks/approval-derivation");
+    for (const f of fs.readdirSync(codeReviewDir)) {
+      if (/^by-[\w-]+\.md$/.test(f)) {
+        const abs = path.join(codeReviewDir, f);
+        if (fs.statSync(abs).mtimeMs >= start) {
+          deriveForProject(abs, ctx.cwd);
+        }
+      }
+    }
+  }
+
   // Post-hoc write audit. Orchestrator-internal files (heartbeats, state
   // transitions, advisory lock) are written between snapshots but are never
   // model-written — exempt them so they don't flip the gate to FAIL.

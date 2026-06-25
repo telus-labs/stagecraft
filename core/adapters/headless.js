@@ -247,6 +247,24 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
         // before any ⛔ line is emitted.
       }
 
+      // Derive peer-review gates from any by-*.md files written during this
+      // session. The PostToolUse hook that normally does this never fires for
+      // hooks: false hosts (codex, any future CLI host). Idempotent.
+      if (!timedOut) {
+        const codeReviewDir = path.join(ctx.cwd, "pipeline", "code-review");
+        if (fs.existsSync(codeReviewDir)) {
+          const { deriveForProject } = require("../hooks/approval-derivation");
+          for (const f of fs.readdirSync(codeReviewDir)) {
+            if (/^by-[\w-]+\.md$/.test(f)) {
+              const abs = path.join(codeReviewDir, f);
+              if (fs.statSync(abs).mtimeMs >= start) {
+                deriveForProject(abs, ctx.cwd);
+              }
+            }
+          }
+        }
+      }
+
       // Detect pre-seeded stub gates. A stub has `_stub: true` written by the
       // driver before dispatch. If the LLM exhausted context before overwriting
       // it, the stub is still present — return stubGate: true so the driver
