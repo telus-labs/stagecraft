@@ -126,7 +126,11 @@ function makeMarkdownHostAdapter(capabilities) {
     const budgetSection = toolBudgetSection(descriptor.toolBudget, capabilities.enforces.tool_budget);
     if (budgetSection) { lines.push(budgetSection); lines.push(""); }
     lines.push(`## Artifact`);
-    lines.push(`Produce \`${descriptor.artifact}\` using \`templates/${descriptor.template}\`.`);
+    const templateRel = `templates/${descriptor.template}`;
+    const templateExists = ctx.cwd && fs.existsSync(path.join(ctx.cwd, templateRel));
+    lines.push(templateExists
+      ? `Produce \`${descriptor.artifact}\` using \`${templateRel}\`.`
+      : `Produce \`${descriptor.artifact}\`.`);
     lines.push("");
     appendGateFooter(lines, descriptor, ctx, hostName);
     return lines.join("\n");

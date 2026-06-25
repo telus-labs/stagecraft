@@ -149,9 +149,23 @@ function resolveSafe(cwd, relPath) {
 //          `find $HOME`, `find ${HOME}`, etc.
 const FILESYSTEM_ROOT_FIND_RE = /\bfind\s+(\/(?:\s|$)|~(?:\/?\s|$)|\$\{?HOME\}?(?:\/?\s|$))/;
 
+// Match `find <absolute-path>` where the path starts with `/`.
+// Used to detect absolute-path searches outside the project directory.
+const ABS_PATH_FIND_RE = /\bfind\s+(\/\S*)/;
+
 function executeBash(command, cwd, timeoutMs) {
   if (FILESYSTEM_ROOT_FIND_RE.test(command)) {
     return "error: filesystem root search blocked — search within the project directory instead (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
+  }
+  // Block `find /abs/path` when the path is outside the project directory.
+  // This prevents the model from searching unrelated projects on the same machine.
+  const absMatch = ABS_PATH_FIND_RE.exec(command);
+  if (absMatch) {
+    const searchPath = path.resolve(absMatch[1]);
+    const projectRoot = path.resolve(cwd);
+    if (!searchPath.startsWith(projectRoot)) {
+      return "error: search outside the project directory blocked — use a project-relative path (e.g. 'find . -name ...' or 'find pipeline/ -name ...')";
+    }
   }
 
   const timeout = (typeof timeoutMs === "number" && timeoutMs > 0)
