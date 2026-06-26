@@ -32,7 +32,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { gatesDir, logsDir } = require("../paths");
+const { pipelineRoot, gatesDir, logsDir } = require("../paths");
 const { snapshotWritables, auditWrites } = require("../guards/write-audit");
 const { splitCommand } = require("../command-line");
 const { terminateChild } = require("../process-kill");
@@ -232,16 +232,22 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
       // C1: diff the dirty-file snapshot; log violations immediately.
       // Orchestrator-internal files written between snapshots (heartbeats,
       // state transitions, advisory lock) are never model-written — exempt them.
-      const ORCHESTRATOR_WRITES = new Set([
-        "pipeline/run-log.jsonl",
-        "pipeline/run-state.json",
-        "pipeline/run.lock",
+      const relPipelineRoot = path.relative(ctx.cwd, pipelineRoot(ctx.cwd, ctx.changeId)).replace(/\\/g, "/");
+      const relLogsDir = path.relative(ctx.cwd, logsDir(ctx.cwd, ctx.changeId)).replace(/\\/g, "/");
+      const orchestratorWrites = new Set([
+        path.posix.join(relPipelineRoot, "run-log.jsonl"),
+        path.posix.join(relPipelineRoot, "run-state.json"),
+        path.posix.join(relPipelineRoot, "run.lock"),
       ]);
+      function isOrchestratorWrite(relPath) {
+        const normalized = relPath.replace(/\\/g, "/");
+        return orchestratorWrites.has(normalized) || normalized.startsWith(`${relLogsDir}/`);
+      }
       let writeViolations = [];
       if (shouldAudit && beforeSnapshot) {
         const afterSnapshot = snapshotWritables(ctx.cwd);
         const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
-        writeViolations = violations.filter((v) => !ORCHESTRATOR_WRITES.has(v));
+        writeViolations = violations.filter((v) => !isOrchestratorWrite(v));
         // Logging deferred to orchestrator so sibling-workstream false positives
         // (parallel stage writes captured in this snapshot window) can be filtered
         // before any ⛔ line is emitted.

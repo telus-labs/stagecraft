@@ -459,12 +459,16 @@ describe("runHeadless — writeViolations field in result", { concurrency: false
           objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md", "pipeline/gates/stage-01.json"],
           artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
         };
-        const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
-        // cat doesn't write any files, so no violations expected
+        const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null };
+        // cat doesn't write model-authored files. The headless transcript under
+        // pipeline/logs/ is orchestrator-owned and must not trip write-audit.
         const r = await runHeadless(adapter, descriptor, ctx);
         assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
-        // No files written by cat → no violations
         assert.equal(r.writeViolations.length, 0, `unexpected violations: ${r.writeViolations.join(", ")}`);
+        assert.ok(
+          fs.existsSync(path.join(dir, "pipeline", "logs", "stage-01.log")),
+          "test should exercise default transcript logging",
+        );
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }
