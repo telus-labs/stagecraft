@@ -16,8 +16,8 @@
 //                         prompt-only; the post-hoc gate validator catches
 //                         violations after the fact
 //   - no slash commands → users invoke `devteam` from the terminal directly
-//   - headless: true    → `codex exec` can drive this non-interactively
-//                         (invoke() not yet implemented; user-driven only)
+//   - headless: true    → `codex exec --sandbox workspace-write`
+//                         can drive this non-interactively
 
 const capabilities = require("./capabilities.json");
 const { runHeadless } = require("../../core/adapters/headless");

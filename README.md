@@ -138,7 +138,7 @@ Then drive the pipeline. There are two ways to run a stage:
 
 ### Path A — `--headless` (single terminal, start here)
 
-The orchestrator drives the host CLI for you (`claude --print`, `codex exec`, `gemini`). One command per stage; model output streams to your terminal. Best for first runs, CI, and scripted use.
+The orchestrator drives the host CLI for you (`claude --print`, `codex exec --sandbox workspace-write`, `gemini`). One command per stage; model output streams to your terminal. Best for first runs, CI, and scripted use.
 
 ```bash
 devteam stage requirements --feature "Add SMS notification opt-in" --headless

@@ -224,5 +224,5 @@ The legacy `agent` field is removed. Adapters MUST write `host` and `orchestrato
 ## Reference adapters
 
 - `hosts/claude-code/` — full capabilities (hooks, subagents, slash commands, worktrees, headless via `claude --print`).
-- `hosts/codex/` — skills + prompts, no hooks, headless via `codex exec`.
+- `hosts/codex/` — skills + prompts, no hooks, headless via `codex exec --sandbox workspace-write`.
 - `hosts/generic/` — none of the above; only `renderStagePrompt` and a noop `install`. Proves the contract is genuinely host-agnostic.

@@ -720,7 +720,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec` for codex, `gemini` for gemini-cli), pipes the rendered prompt to stdin, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli), pipes the rendered prompt to stdin, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)

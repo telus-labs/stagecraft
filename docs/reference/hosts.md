@@ -35,7 +35,7 @@ Command the orchestrator spawns in `--headless` mode:
 | Host          | headlessCommand                               |
 | ------------- | --------------------------------------------- |
 | claude-code   | claude --dangerously-skip-permissions --print |
-| codex         | codex exec                                    |
+| codex         | codex exec --sandbox workspace-write          |
 | gemini-cli    | gemini                                        |
 | openai-compat | —                                             |
 

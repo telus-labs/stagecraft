@@ -94,7 +94,7 @@ Node 18 was dropped in v0.2.0 — it reached EOL in April 2025 and `@huggingface
 ## What's NOT tested (deliberately out of scope)
 
 - **LLM outputs.** Anything that depends on calling Anthropic / OpenAI / Google APIs. CI must run with zero external dependencies.
-- **Real `claude --print` / `codex exec` / `gemini`.** Hosts may not be installed on the CI runner; the tests stub via `DEVTEAM_HEADLESS_COMMAND`.
+- **Real `claude --print` / `codex exec --sandbox workspace-write` / `gemini`.** Hosts may not be installed on the CI runner; the tests stub via `DEVTEAM_HEADLESS_COMMAND`.
 - **Subagent quality.** Whether the `implement` skill produces good code is an eval question, not a unit-test question.
 - **Doc prose.** No tests grep prose for wording; brittle.
 

@@ -28,8 +28,8 @@ Commands:
                                    from a UTF-8 text file.
         [--headless]                 With --headless, drives each workstream's
         [--timeout-ms N]             host CLI non-interactively (claude --print,
-        [--patch [--from <stage>]]   codex exec) and reports exit codes +
-        [--skip-completed]           gate paths. --timeout-ms caps each
+        [--patch [--from <stage>]]   codex workspace-write mode) and reports
+        [--skip-completed]           exit codes + gate paths. --timeout-ms caps each
         [--workstream <role>]        workstream's wall-clock (default 600000,
                                    i.e. 10 min); pass 0 to disable.
                                    --patch scopes build agents to the patch

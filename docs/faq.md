@@ -696,7 +696,7 @@ There's no automatic file-restriction enforcement at the framework level — the
 
 ### Can I run Stagecraft fully offline?
 
-Mostly yes. The framework itself is offline (Node, no network calls). The model invocation is whatever the host CLI does — `claude --print` and `codex exec` need network; `generic` host doesn't run a model at all.
+Mostly yes. The framework itself is offline (Node, no network calls). The model invocation is whatever the host CLI does — `claude --print` and `codex exec --sandbox workspace-write` need network; `generic` host doesn't run a model at all.
 
 The memory system's default embedder (`Xenova/bge-small-en-v1.5`) downloads ~33MB on first use, then runs offline. If your CI doesn't have network access, set `DEVTEAM_EMBEDDING_PROVIDER=stub` to skip embedding entirely.
 
@@ -928,7 +928,7 @@ Not natively in the framework today (BACKLOG E-series). The framework shells out
 
 Workarounds:
 - **Claude Code**: no built-in timeout flag; the `max_turns` subagent frontmatter field limits the number of agent turns, which indirectly limits wall-clock time on bounded tasks.
-- **Codex**: `codex exec --timeout <seconds>` caps execution time directly.
+- **Codex**: Stagecraft's `--timeout-ms <milliseconds>` caps each workstream's wall-clock time around `codex exec --sandbox workspace-write`.
 - **Generic host**: wrap the host invocation in `timeout <seconds> <command>` in your shell script.
 
 For CI, you likely want pipeline-level timeouts (fail the job if a stage hasn't produced a gate in N minutes) rather than per-role timeouts. A simple wrapper:
@@ -1021,4 +1021,4 @@ They compose: for `build` (stage-04) and `qa` (stage-06), hosts that declare `ca
 
 Codex's autonomous mode is one model running until a task is done. Stagecraft is a structured pipeline across roles, with artifacts and gates between them. If your task fits in one model's context and you trust it to converge, use Codex's autonomous mode. If your task needs structure across stages, multiple roles, or auditability, use Stagecraft.
 
-You can also run Stagecraft with Codex as the host. The `codex` adapter dispatches each workstream as a separate `codex exec` invocation. Codex still operates autonomously per workstream; Stagecraft provides the cross-workstream structure.
+You can also run Stagecraft with Codex as the host. The `codex` adapter dispatches each workstream as a separate `codex exec --sandbox workspace-write` invocation. Codex still operates autonomously per workstream; Stagecraft provides the cross-workstream structure.
