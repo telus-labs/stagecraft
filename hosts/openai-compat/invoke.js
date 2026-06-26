@@ -128,7 +128,6 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
   const beforeSnapshot = snapshotWritables(ctx.cwd);
   const start = Date.now();
   let iterations = 0;
-  let lastContent = "";
 
   while (iterations < MAX_TOOL_ITERATIONS) {
     iterations++;
@@ -147,7 +146,6 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
 
     // Stream assistant text to stdout in verbose mode only.
     if (assistantMsg.content) {
-      lastContent = assistantMsg.content;
       if (verbose) {
         process.stdout.write(assistantMsg.content);
         if (!assistantMsg.content.endsWith("\n")) process.stdout.write("\n");

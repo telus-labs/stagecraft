@@ -6,6 +6,7 @@
 // IDENTICAL ones so they live in one place:
 //
 //   - installRules: copy framework rules/*.md → target/.devteam/rules/
+//   - installTemplates: copy framework templates/** → target/.devteam/templates/
 //   - installSkills: copy framework skills/<name>/ → target/<capabilities.skillsDir>/<name>/
 //
 // Per-host helpers (claude-code's installCommands + installSettings,
@@ -19,6 +20,7 @@ const path = require("node:path");
 const REPO_ROOT = path.resolve(__dirname, "..", "..");
 const RULES_DIR = path.join(REPO_ROOT, "rules");
 const SKILLS_DIR = path.join(REPO_ROOT, "skills");
+const TEMPLATES_DIR = path.join(REPO_ROOT, "templates");
 
 // Returns { written, skipped, warnings } — same shape as adapter install
 // helpers, so the per-adapter install() can spread the arrays directly.
@@ -41,6 +43,34 @@ function installRules(targetDir, opts = {}) {
     fs.copyFileSync(src, dest);
     written.push(dest);
   }
+  return { written, skipped, warnings: [] };
+}
+
+function copyTree(srcDir, destDir, opts, written, skipped) {
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const f of fs.readdirSync(srcDir)) {
+    const src = path.join(srcDir, f);
+    const dest = path.join(destDir, f);
+    if (fs.statSync(src).isDirectory()) {
+      copyTree(src, dest, opts, written, skipped);
+      continue;
+    }
+    if (fs.existsSync(dest) && !opts.force) {
+      skipped.push(dest);
+      continue;
+    }
+    fs.copyFileSync(src, dest);
+    written.push(dest);
+  }
+}
+
+function installTemplates(targetDir, opts = {}) {
+  const written = [];
+  const skipped = [];
+  if (!fs.existsSync(TEMPLATES_DIR)) {
+    return { written, skipped, warnings: [`no templates source at ${TEMPLATES_DIR}`] };
+  }
+  copyTree(TEMPLATES_DIR, path.join(targetDir, ".devteam", "templates"), opts, written, skipped);
   return { written, skipped, warnings: [] };
 }
 
@@ -86,6 +116,24 @@ function uninstallRules(targetDir) {
   }
 }
 
+function removeTreeFiles(srcDir, destDir) {
+  if (!fs.existsSync(srcDir) || !fs.existsSync(destDir)) return;
+  for (const f of fs.readdirSync(srcDir)) {
+    const src = path.join(srcDir, f);
+    const dest = path.join(destDir, f);
+    if (fs.statSync(src).isDirectory()) {
+      removeTreeFiles(src, dest);
+      try { fs.rmdirSync(dest); } catch { /* not empty — leave it */ }
+      continue;
+    }
+    if (fs.existsSync(dest)) fs.unlinkSync(dest);
+  }
+}
+
+function uninstallTemplates(targetDir) {
+  removeTreeFiles(TEMPLATES_DIR, path.join(targetDir, ".devteam", "templates"));
+}
+
 function uninstallSkills(targetDir, capabilitiesSkillsDir) {
   const skillsBase = path.join(targetDir, capabilitiesSkillsDir);
   if (!fs.existsSync(skillsBase) || !fs.existsSync(SKILLS_DIR)) return;
@@ -101,9 +149,12 @@ function uninstallSkills(targetDir, capabilitiesSkillsDir) {
 
 module.exports = {
   installRules,
+  installTemplates,
   installSkills,
   uninstallRules,
+  uninstallTemplates,
   uninstallSkills,
   RULES_DIR,
+  TEMPLATES_DIR,
   SKILLS_DIR,
 };

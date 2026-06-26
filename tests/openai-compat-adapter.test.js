@@ -83,7 +83,7 @@ function fixtureContext(cwd, overrides = {}) {
 // ── 1. tools.js ─────────────────────────────────────────────────────────────
 
 describe("openai-compat tools", () => {
-  const { buildTools, executeTool, executeBash, WRITE_FILE, READ_FILE, LIST_FILES, BASH } = require(toolsPath);
+  const { buildTools, executeTool, executeBash } = require(toolsPath);
 
   describe("buildTools", () => {
     it("returns all four tools when no toolBudget declared", () => {
@@ -479,7 +479,7 @@ describe("openai-compat invoke() agentic loop", () => {
 
   before(() => {
     origFetch = global.fetch;
-    global.fetch = async (_url, opts) => {
+    global.fetch = async (_url, _opts) => {
       if (fetchQueue.length === 0) throw new Error("fetch stub: no more queued responses");
       const next = fetchQueue.shift();
       if (next instanceof Error) throw next;

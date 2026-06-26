@@ -116,11 +116,12 @@ function isAllowed(filePath, allowedWrites) {
     // Glob/placeholder match. <anything> normalizes to *; * matches within one
     // path segment; ** matches across segments (same semantics as .gitignore).
     const pattern = e.replace(/<[^>]*>/g, "*");
+    const doubleStarToken = "__STAGECRAFT_DOUBLE_STAR__";
     const regexStr = "^" + pattern
       .replace(/[.+^${}()|[\]\\]/g, "\\$&") // escape regex specials except *
-      .replace(/\*\*/g, "\x00")              // stash ** before single-* replace
+      .replace(/\*\*/g, doubleStarToken)     // stash ** before single-* replace
       .replace(/\*/g, "[^/]*")               // * = one segment (no slashes)
-      .replace(/\x00/g, ".*")               // ** = any depth
+      .replace(new RegExp(doubleStarToken, "g"), ".*") // ** = any depth
       + "$";
     return new RegExp(regexStr).test(normalized);
   });

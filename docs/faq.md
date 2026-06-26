@@ -886,9 +886,9 @@ Run `devteam validate` for the exact error. Common causes:
 - The gate has a `retry_number >= 1` but no `this_attempt_differs_by` field — the retry-integrity check.
 - An older gate in `pipeline/gates/` has `status: ESCALATE` that's unresolved — bypassed-escalation halts the pipeline regardless of which gate you just wrote.
 
-### openai-compat shows ENOENT errors for `AGENTS.md` or `templates/` — is something broken?
+### A markdown host shows ENOENT errors for `.devteam/templates/` — is something broken?
 
-No. These are harmless read attempts. `openai-compat` role prompts live under `.openai-compat/prompts/roles/` rather than `.claude/agents/`. On startup, the adapter may attempt to read `AGENTS.md` or files under `templates/` for context seeding; if those files are absent (e.g. you used `devteam init --host openai-compat` without also installing claude-code), the reads fail with `ENOENT`. The adapter continues without them — the pipeline artifacts in `pipeline/` are the actual context the model needs.
+It usually means the target project was initialized with an older Stagecraft install. Re-run `devteam init --host <host> --force` with the same host (`codex`, `gemini-cli`, or `openai-compat`) so `.devteam/templates/` is populated alongside `.devteam/rules/`, role prompts, and skills. `devteam doctor` will report missing installed templates.
 
 ### The model in an openai-compat stage used `sed -i 'expr' file` and it failed on macOS — why?
 

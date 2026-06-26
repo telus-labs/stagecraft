@@ -15,10 +15,22 @@ const { renderPatchBlock, allowedWritesCaption, appendGateFooter, toolBudgetSect
 
 const RULES_DIR = baseInstall.RULES_DIR;
 const SKILLS_DIR = baseInstall.SKILLS_DIR;
+const TEMPLATES_DIR = baseInstall.TEMPLATES_DIR;
 
 function makeMarkdownHostAdapter(capabilities) {
   const ROLES = listRoles();
   const hostName = capabilities.name;
+
+  function collectTemplateFiles(srcDir, relDir = "") {
+    const files = [];
+    for (const f of fs.readdirSync(srcDir)) {
+      const src = path.join(srcDir, f);
+      const rel = relDir ? path.join(relDir, f) : f;
+      if (fs.statSync(src).isDirectory()) files.push(...collectTemplateFiles(src, rel));
+      else files.push(rel);
+    }
+    return files;
+  }
 
   function installRoles(targetDir, opts) {
     const dir = path.join(targetDir, capabilities.rolePromptsDir);
@@ -49,11 +61,12 @@ function makeMarkdownHostAdapter(capabilities) {
     const o = { force: false, roles: [], isolation: "in-place", ...opts };
     const roles = installRoles(targetDir, o);
     const rules = baseInstall.installRules(targetDir, o);
+    const templates = baseInstall.installTemplates(targetDir, o);
     const skills = baseInstall.installSkills(targetDir, capabilities.skillsDir, o);
     return {
-      written: [...roles.written, ...rules.written, ...skills.written],
-      skipped: [...roles.skipped, ...rules.skipped, ...skills.skipped],
-      warnings: [...roles.warnings, ...rules.warnings, ...skills.warnings],
+      written: [...roles.written, ...rules.written, ...templates.written, ...skills.written],
+      skipped: [...roles.skipped, ...rules.skipped, ...templates.skipped, ...skills.skipped],
+      warnings: [...roles.warnings, ...rules.warnings, ...templates.warnings, ...skills.warnings],
     };
   }
 
@@ -66,6 +79,7 @@ function makeMarkdownHostAdapter(capabilities) {
       }
     }
     baseInstall.uninstallRules(targetDir);
+    baseInstall.uninstallTemplates(targetDir);
     baseInstall.uninstallSkills(targetDir, capabilities.skillsDir);
   }
 
@@ -87,6 +101,12 @@ function makeMarkdownHostAdapter(capabilities) {
     if (fs.existsSync(SKILLS_DIR)) {
       for (const skill of fs.readdirSync(SKILLS_DIR)) {
         const p = path.join(targetDir, capabilities.skillsDir, skill, "SKILL.md");
+        if (!fs.existsSync(p)) missing.push(p);
+      }
+    }
+    if (fs.existsSync(TEMPLATES_DIR)) {
+      for (const f of collectTemplateFiles(TEMPLATES_DIR)) {
+        const p = path.join(targetDir, ".devteam", "templates", f);
         if (!fs.existsSync(p)) missing.push(p);
       }
     }

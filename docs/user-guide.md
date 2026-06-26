@@ -580,6 +580,7 @@ What this installs:
 - `.openai-compat/prompts/roles/` — role prompts in markdown format
 - `.openai-compat/skills/` — Stagecraft skills in markdown format
 - `.devteam/rules/` — shared pipeline and gate rules
+- `.devteam/templates/` — shared artifact templates
 
 No `.claude/` agents, no hooks, no slash commands are installed.
 
