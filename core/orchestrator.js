@@ -151,12 +151,19 @@ const OOS_KEYWORDS = {
 };
 
 function inferActiveRoles(stage01Gate, allRoles) {
+  // active_roles lists only workstream slots (backend, frontend, qa, platform).
+  // Non-workstream roles like "pm" and "principal" never appear in active_roles
+  // and must always be passed through — never filter them out.
+  const WORKSTREAM_SLOTS = new Set(Object.keys(OOS_KEYWORDS));
+
   // Explicit active_roles takes precedence — PM's deliberate decision.
   if (Array.isArray(stage01Gate.active_roles) && stage01Gate.active_roles.length > 0) {
-    const filtered = stage01Gate.active_roles.filter(r => allRoles.includes(r));
-    // Empty intersection means active_roles doesn't cover this stage's roles at all
-    // (e.g. design uses "principal", not build workstream roles) — apply no filter.
-    return filtered.length > 0 ? filtered : null;
+    const activeSet = new Set(stage01Gate.active_roles);
+    // Keep a role if it is not a workstream slot (always active) or if it
+    // appears in active_roles (explicitly active workstream).
+    const filtered = allRoles.filter(r => !WORKSTREAM_SLOTS.has(r) || activeSet.has(r));
+    // If nothing was removed, return null so callers treat it as "no filter".
+    return filtered.length < allRoles.length ? filtered : null;
   }
   // Inference fallback: keyword-match out_of_scope_items.
   if (!Array.isArray(stage01Gate.out_of_scope_items) || stage01Gate.out_of_scope_items.length === 0) {

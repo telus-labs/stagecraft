@@ -97,6 +97,22 @@ describe("computeDispatchPlan: explicit active_roles in stage-01 gate", () => {
     assert.ok(roles.includes("principal"), `design should still dispatch principal; got: ${roles}`);
     assert.equal(roles.length, 1);
   });
+
+  it("does not filter 'pm' from sign-off when active_roles lists workstream roles only", () => {
+    // Regression: sign-off has roles ["pm", "platform"]. active_roles =
+    // ["backend", "platform", "qa"] has a non-empty intersection with sign-off
+    // (platform), so the old code returned ["platform"] — dropping "pm".
+    // next() then saw only the platform workstream gate as required, found it
+    // complete, and returned action:"merge". mergeWorkstreamGates computed a
+    // 1-workstream plan and refused with "single-workstream stage; no merge
+    // needed" — deadlock. pm must never be treated as a suppressible workstream.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "platform", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "sign-off");
+    assert.ok(roles.includes("pm"), `pm must always be dispatched for sign-off; got: ${roles}`);
+    assert.ok(roles.includes("platform"), `platform must be dispatched for sign-off; got: ${roles}`);
+    assert.equal(roles.length, 2);
+  });
 });
 
 // ---------------------------------------------------------------------------
