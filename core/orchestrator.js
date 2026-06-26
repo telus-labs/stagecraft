@@ -150,18 +150,23 @@ const OOS_KEYWORDS = {
   qa:       ["qa workstream", "test workstream"],
 };
 
-function inferActiveRoles(stage01Gate, allRoles) {
+function inferActiveRoles(stage01Gate, allRoles, alwaysDispatch) {
   // active_roles lists only workstream slots (backend, frontend, qa, platform).
   // Non-workstream roles like "pm" and "principal" never appear in active_roles
   // and must always be passed through — never filter them out.
   const WORKSTREAM_SLOTS = new Set(Object.keys(OOS_KEYWORDS));
+  // Roles in alwaysDispatch (set per stage in stages.js) are structural: they
+  // write pipeline/ artifacts that every deploy needs regardless of which code
+  // workstreams were active. Treat them like non-workstream roles — never filter.
+  const pinned = new Set(Array.isArray(alwaysDispatch) ? alwaysDispatch : []);
 
   // Explicit active_roles takes precedence — PM's deliberate decision.
   if (Array.isArray(stage01Gate.active_roles) && stage01Gate.active_roles.length > 0) {
     const activeSet = new Set(stage01Gate.active_roles);
-    // Keep a role if it is not a workstream slot (always active) or if it
-    // appears in active_roles (explicitly active workstream).
-    const filtered = allRoles.filter(r => !WORKSTREAM_SLOTS.has(r) || activeSet.has(r));
+    // Keep a role if it is not a workstream slot (always active), if it
+    // appears in active_roles (explicitly active workstream), or if it is
+    // pinned via alwaysDispatch (structural role whose artifact is always needed).
+    const filtered = allRoles.filter(r => !WORKSTREAM_SLOTS.has(r) || activeSet.has(r) || pinned.has(r));
     // Return the filtered list only when something was removed AND at least one
     // role remains. An empty result (all workstream roles absent from active_roles)
     // would produce a zero-workstream plan that completes in 0ms and loops. A
@@ -202,7 +207,7 @@ function computeDispatchPlan(stageDef, config, track, opts = {}) {
     if (fs.existsSync(s1Path)) {
       const { gate } = loadGateSafe(s1Path);
       if (gate) {
-        const filtered = inferActiveRoles(gate, roles);
+        const filtered = inferActiveRoles(gate, roles, stageDef.alwaysDispatch);
         if (filtered) roles = filtered;
       }
     }

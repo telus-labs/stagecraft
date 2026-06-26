@@ -114,6 +114,23 @@ describe("computeDispatchPlan: explicit active_roles in stage-01 gate", () => {
     assert.equal(roles.length, 2);
   });
 
+  it("dispatches both pm and platform for sign-off even when active_roles is backend+qa only", () => {
+    // Regression: active_roles = ["backend", "qa"] (no platform). sign-off has
+    // roles ["pm", "platform"]. inferActiveRoles kept pm (non-workstream-slot)
+    // but filtered platform (in WORKSTREAM_SLOTS, not in activeSet) → plan had
+    // only pm. next() returned action:"merge"; mergeWorkstreamGates refused with
+    // "single-workstream stage; no merge needed" — deadlock.
+    // Fix: sign-off carries alwaysDispatch:["pm","platform"]; pinned roles are
+    // never filtered regardless of active_roles. The runbook is always required
+    // for deploy whether or not platform did code work in earlier stages.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "sign-off");
+    assert.ok(roles.includes("pm"), `pm must always be dispatched for sign-off; got: ${roles}`);
+    assert.ok(roles.includes("platform"), `platform must always be dispatched for sign-off (alwaysDispatch); got: ${roles}`);
+    assert.equal(roles.length, 2);
+  });
+
   it("does not produce an empty plan for pre-review when platform is absent from active_roles", () => {
     // Regression: active_roles = ["backend", "qa"] (no platform). pre-review
     // has roles: ["platform"]. The full workstream-slot filter excluded platform

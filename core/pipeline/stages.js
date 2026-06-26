@@ -419,6 +419,10 @@ const STAGES = {
   "sign-off": {
     stage: "stage-07",
     roles: ["pm", "platform"],
+    // Both roles are structural (they write pipeline/ artifacts, not src/ code).
+    // Neither should be suppressed by active_roles — the runbook is always
+    // required for deploy regardless of which code workstreams were active.
+    alwaysDispatch: ["pm", "platform"],
     objective: "PM sign-off on QA results; platform prepares deploy runbook.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/test-report.md"],
     allowedWrites: ["pipeline/runbook.md", "pipeline/gates/stage-07.*.json", "pipeline/gates/stage-07.json", "pipeline/context.md"],
