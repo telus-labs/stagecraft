@@ -1315,7 +1315,7 @@ function rolesPath() {
 }
 
 function templatesPath() {
-  return path.join(PROJECT_ROOT, "templates");
+  return path.join(PROJECT_ROOT, ".devteam", "templates");
 }
 
 module.exports = {

@@ -138,7 +138,7 @@ function run(positional, _flags) {
     const { pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
     const feedbackFile = require("node:path").join(pipelineRoot(cwd, changeId), "production-feedback.md");
     if (!fs.existsSync(feedbackFile)) {
-      console.log(`   Tip: copy templates/production-feedback-template.md → pipeline/production-feedback.md after deploy to close the brief→production SLO loop (optional).`);
+      console.log(`   Tip: copy .devteam/templates/production-feedback-template.md → pipeline/production-feedback.md after deploy to close the brief→production SLO loop (optional).`);
     }
   }
   if (result.action === "resolve-escalation") {

@@ -97,6 +97,13 @@ test('round-trip: decode(encode(x)) == x for arbitrary unicode strings', () => {
 Capture: properties asserted, cases tried, counterexamples found. If
 fast-check shrinks a counterexample, paste the shrunk form verbatim.
 
+### Mutation — output location
+
+Write the runner script and results to **`pipeline/reports/`**, not a
+top-level `reports/` directory. Use `pipeline/reports/mutation-runner.js`
+and `pipeline/reports/mutation-results.json`. The runner must reference its
+output path relative to its own `__dirname` so it works from any cwd.
+
 ### Mutation example (Stryker)
 
 ```
@@ -148,7 +155,7 @@ turns out to be a real bug is an incident.
 
 ## Phase 5 — Write the report + gate
 
-Report follows `templates/verification-report-template.md`:
+Report follows `.devteam/templates/verification-report-template.md`:
 1. **Summary** — one paragraph: what was verified, what was found.
 2. **Candidate inventory** — the Phase 1 table.
 3. **Property-based** — properties asserted, cases tried, results,

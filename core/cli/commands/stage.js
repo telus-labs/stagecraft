@@ -103,7 +103,7 @@ function run(positional, _flags) {
   const cwd = _flags.cwd || process.cwd();
   // If the target directory isn't initialized, the prompt we're about to
   // print will reference files (`.claude/agents/<role>.md`, `.devteam/
-  // rules/*.md`, `templates/*-template.md`) that don't exist. Warn loudly
+  // rules/*.md`, `.devteam/templates/*-template.md`) that don't exist. Warn loudly
   // before printing — this is the #1 first-run footgun.
   if (!_flags.headless && !_flags.json && !fs.existsSync(path.join(cwd, ".devteam", "config.yml"))) {
     process.stderr.write(

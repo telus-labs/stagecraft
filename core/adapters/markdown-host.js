@@ -126,7 +126,7 @@ function makeMarkdownHostAdapter(capabilities) {
     const budgetSection = toolBudgetSection(descriptor.toolBudget, capabilities.enforces.tool_budget);
     if (budgetSection) { lines.push(budgetSection); lines.push(""); }
     lines.push(`## Artifact`);
-    const templateRel = `templates/${descriptor.template}`;
+    const templateRel = `.devteam/templates/${descriptor.template}`;
     const templateExists = ctx.cwd && fs.existsSync(path.join(ctx.cwd, templateRel));
     lines.push(templateExists
       ? `Produce \`${descriptor.artifact}\` using \`${templateRel}\`.`

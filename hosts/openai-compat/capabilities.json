@@ -11,7 +11,7 @@
   "goalLoop": false,
   "skillFormat": "markdown",
   "rolePromptsDir": ".openai-compat/prompts/roles",
-  "skillsDir": "skills",
+  "skillsDir": ".openai-compat/skills",
   "enforces": {
     "allowed_writes": "post-hoc-audit",
     "stoplist": "prompt-only",
