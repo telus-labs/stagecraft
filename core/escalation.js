@@ -493,7 +493,7 @@ function runFixEscalation(cwd, { escalatingGate = null } = {}) {
   const prompt = renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate);
   return dispatchToPrincipal(cwd, prompt, {
     label: "escalation-applicator",
-    allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md"],
+    allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md", "pipeline/runbook.md"],
   });
 }
 

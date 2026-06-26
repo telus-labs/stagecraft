@@ -60,7 +60,7 @@ async function run(positional, _flags) {
   try {
     ({ exitCode } = await _escalation.dispatchToPrincipal(cwd, prompt, {
       label: "escalation-applicator",
-      allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md"],
+      allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md", "pipeline/runbook.md"],
     }));
   } catch (err) {
     console.error(err.message);
