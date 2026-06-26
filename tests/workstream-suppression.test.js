@@ -113,6 +113,21 @@ describe("computeDispatchPlan: explicit active_roles in stage-01 gate", () => {
     assert.ok(roles.includes("platform"), `platform must be dispatched for sign-off; got: ${roles}`);
     assert.equal(roles.length, 2);
   });
+
+  it("does not produce an empty plan for pre-review when platform is absent from active_roles", () => {
+    // Regression: active_roles = ["backend", "qa"] (no platform). pre-review
+    // has roles: ["platform"]. The full workstream-slot filter excluded platform
+    // (not in active_roles), returning [] — an empty plan. runStageHeadless
+    // completed in 0ms with no gate written, dispatchOutcomeTransition saw
+    // wroteGate=false, retried immediately, and looped until max-iterations.
+    // Rule: when all allRoles would be filtered out, return null (no filter)
+    // rather than [] so the stage can still run.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "pre-review");
+    assert.ok(roles.includes("platform"), `platform must still be dispatched for pre-review even when absent from active_roles; got: ${roles}`);
+    assert.equal(roles.length, 1);
+  });
 });
 
 // ---------------------------------------------------------------------------

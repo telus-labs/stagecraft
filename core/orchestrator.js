@@ -162,8 +162,11 @@ function inferActiveRoles(stage01Gate, allRoles) {
     // Keep a role if it is not a workstream slot (always active) or if it
     // appears in active_roles (explicitly active workstream).
     const filtered = allRoles.filter(r => !WORKSTREAM_SLOTS.has(r) || activeSet.has(r));
-    // If nothing was removed, return null so callers treat it as "no filter".
-    return filtered.length < allRoles.length ? filtered : null;
+    // Return the filtered list only when something was removed AND at least one
+    // role remains. An empty result (all workstream roles absent from active_roles)
+    // would produce a zero-workstream plan that completes in 0ms and loops. A
+    // result identical to allRoles (nothing removed) is a no-op. Both → null.
+    return (filtered.length < allRoles.length && filtered.length > 0) ? filtered : null;
   }
   // Inference fallback: keyword-match out_of_scope_items.
   if (!Array.isArray(stage01Gate.out_of_scope_items) || stage01Gate.out_of_scope_items.length === 0) {
