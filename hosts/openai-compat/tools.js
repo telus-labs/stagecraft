@@ -134,9 +134,14 @@ function buildTools(descriptor) {
 
 // Resolve a model-supplied relative path safely inside cwd.
 // Returns null (and an error string) if the path would escape the project root.
+function isInsideRoot(root, candidate) {
+  const rel = path.relative(path.resolve(root), path.resolve(candidate));
+  return rel === "" || (rel && !rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
 function resolveSafe(cwd, relPath) {
   const resolved = path.resolve(cwd, relPath);
-  if (!resolved.startsWith(path.resolve(cwd))) {
+  if (!isInsideRoot(cwd, resolved)) {
     return { resolved: null, error: `path escapes project root: ${relPath}` };
   }
   return { resolved, error: null };
@@ -150,9 +155,10 @@ function resolveSafe(cwd, relPath) {
 //          `find $HOME`, `find ${HOME}`, etc.
 const FILESYSTEM_ROOT_FIND_RE = /\bfind\s+(\/(?:\s|$)|~(?:\/?\s|$)|\$\{?HOME\}?(?:\/?\s|$))/;
 
-// Match `find <absolute-path>` where the path starts with `/`.
+// Match `find <absolute-path>` where the path starts with `/`, including
+// simple quoted absolute paths.
 // Used to detect absolute-path searches outside the project directory.
-const ABS_PATH_FIND_RE = /\bfind\s+(\/\S*)/;
+const ABS_PATH_FIND_RE = /\bfind\s+(?:"(\/[^"]*)"|'(\/[^']*)'|(\/\S*))/;
 
 // Block recursive devteam escalation/ruling commands. Running
 // `devteam fix-escalation` or `devteam ruling` from inside an AI-driven bash
@@ -182,9 +188,8 @@ function executeBash(command, cwd, timeoutMs) {
   // This prevents the model from searching unrelated projects on the same machine.
   const absMatch = ABS_PATH_FIND_RE.exec(command);
   if (absMatch) {
-    const searchPath = path.resolve(absMatch[1]);
-    const projectRoot = path.resolve(cwd);
-    if (!searchPath.startsWith(projectRoot)) {
+    const searchPath = path.resolve(absMatch[1] || absMatch[2] || absMatch[3]);
+    if (!isInsideRoot(cwd, searchPath)) {
       return Promise.resolve("error: search outside the project directory blocked — use a project-relative path (e.g. 'find . -name ...' or 'find pipeline/ -name ...')");
     }
   }

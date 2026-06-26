@@ -27,6 +27,12 @@ function tmpdir() {
   _tmpdirs.push(d);
   return d;
 }
+function siblingOf(cwd) {
+  const d = `${cwd}-sibling`;
+  fs.mkdirSync(d, { recursive: true });
+  _tmpdirs.push(d);
+  return d;
+}
 afterEach(() => {
   for (const d of _tmpdirs) {
     try { fs.rmSync(d, { recursive: true, force: true }); } catch { /* cleanup */ }
@@ -176,6 +182,25 @@ describe("openai-compat tools", () => {
       );
       assert.ok(result.startsWith("error:"), `expected error for traversal; got: ${result}`);
     });
+
+    it("rejects sibling-prefix paths outside the project root", async () => {
+      const cwd = tmpdir();
+      const sibling = siblingOf(cwd);
+      const rel = path.relative(cwd, path.join(sibling, "escape.md"));
+      const result = await executeTool(
+        {
+          id: "tc3b",
+          function: {
+            name: "write_file",
+            arguments: JSON.stringify({ path: rel, content: "bad" }),
+          },
+        },
+        cwd,
+        [rel],
+      );
+      assert.ok(result.startsWith("error:"), `expected sibling escape error; got: ${result}`);
+      assert.ok(!fs.existsSync(path.join(sibling, "escape.md")));
+    });
   });
 
   describe("executeTool — read_file", () => {
@@ -199,6 +224,26 @@ describe("openai-compat tools", () => {
       );
       assert.ok(result.startsWith("error:"));
     });
+
+    it("rejects sibling-prefix reads outside the project root", async () => {
+      const cwd = tmpdir();
+      const sibling = siblingOf(cwd);
+      const secret = path.join(sibling, "secret.txt");
+      fs.writeFileSync(secret, "do-not-read", "utf8");
+      const result = await executeTool(
+        {
+          id: "tc5b",
+          function: {
+            name: "read_file",
+            arguments: JSON.stringify({ path: path.relative(cwd, secret) }),
+          },
+        },
+        cwd,
+        [],
+      );
+      assert.ok(result.startsWith("error:"), `expected sibling read denial; got: ${result}`);
+      assert.ok(!result.includes("do-not-read"), "must not return sibling file content");
+    });
   });
 
   describe("executeTool — list_files", () => {
@@ -213,6 +258,25 @@ describe("openai-compat tools", () => {
       );
       assert.ok(result.includes("a.txt"));
       assert.ok(result.includes("sub/"));
+    });
+
+    it("rejects sibling-prefix directory listings outside the project root", async () => {
+      const cwd = tmpdir();
+      const sibling = siblingOf(cwd);
+      fs.writeFileSync(path.join(sibling, "secret.txt"), "x", "utf8");
+      const result = await executeTool(
+        {
+          id: "tc6b",
+          function: {
+            name: "list_files",
+            arguments: JSON.stringify({ dir: path.relative(cwd, sibling) }),
+          },
+        },
+        cwd,
+        [],
+      );
+      assert.ok(result.startsWith("error:"), `expected sibling list denial; got: ${result}`);
+      assert.ok(!result.includes("secret.txt"), "must not list sibling directory contents");
     });
   });
 
@@ -303,6 +367,24 @@ describe("openai-compat tools", () => {
       assert.ok(result.includes("exit_code: 0"), `got: ${result}`);
       assert.ok(result.includes("done"), `expected echo output; got: ${result}`);
       assert.ok(elapsed < 4000, `expected prompt return (<4 s); took ${elapsed} ms`);
+    });
+
+    it("blocks find against an absolute sibling-prefix path", async () => {
+      const cwd = tmpdir();
+      const sibling = siblingOf(cwd);
+      fs.writeFileSync(path.join(sibling, "secret.txt"), "x", "utf8");
+      const result = await executeBash(`find ${sibling} -maxdepth 1 -type f`, cwd, 1000);
+      assert.ok(result.startsWith("error:"), `expected find outside root to be blocked; got: ${result}`);
+      assert.ok(result.includes("outside the project directory"));
+    });
+
+    it("blocks find against a quoted absolute sibling-prefix path", async () => {
+      const cwd = tmpdir();
+      const sibling = siblingOf(cwd);
+      fs.writeFileSync(path.join(sibling, "secret.txt"), "x", "utf8");
+      const result = await executeBash(`find "${sibling}" -maxdepth 1 -type f`, cwd, 1000);
+      assert.ok(result.startsWith("error:"), `expected quoted find outside root to be blocked; got: ${result}`);
+      assert.ok(result.includes("outside the project directory"));
     });
   });
 });
