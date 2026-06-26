@@ -9,9 +9,9 @@ Variables marked **required** have no fallback and will cause an error or no-op 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_COMPAT_BASE_URL` | `https://openrouter.ai/api/v1` | Base URL for the OpenAI-compatible endpoint. Overridden by `hosts.openai-compat.base_url` in `.devteam/config.yml`. |
+| `OPENAI_COMPAT_BASE_URL` | `https://openrouter.ai/api/v1` | Base URL for the OpenAI-compatible Chat Completions endpoint. This fallback is kept for compatibility; committed project configs should prefer an explicit `hosts.openai-compat.base_url` such as `https://api.openai.com/v1`, a Fireworks/Fuel iX endpoint, or an internal gateway. |
 | `OPENAI_COMPAT_API_KEY` | *(required)* | API key. Overridden by whatever env var `api_key_env` names in config. |
-| `OPENAI_COMPAT_MODEL` | *(required if no per-role mapping)* | Default model ID (e.g. `deepseek/deepseek-v4-pro`). Overridden by `hosts.openai-compat.models.*` in config. |
+| `OPENAI_COMPAT_MODEL` | *(required if no per-role mapping)* | Default model ID in the provider's namespace (e.g. `gpt-4.1`, `accounts/fireworks/models/...`, `deepseek/deepseek-v4-pro`). Overridden by `hosts.openai-compat.models.*` in config. |
 
 Resolution order: `.devteam/config.yml` → environment variables. When `api_key_env` is set in config, only that named var is read for the key; `OPENAI_COMPAT_API_KEY` is the fallback when `api_key_env` is absent from config.
 

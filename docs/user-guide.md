@@ -444,11 +444,11 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 ### What "host" means
 
-A *host* controls how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), and Gemini CLI (`gemini`) — Stagecraft renders a stage prompt and pipes it to the host CLI, which manages model invocation, tool permissions, and output capture. The fourth built-in host, `openai-compat`, is HTTP-native: it calls the OpenAI chat-completions API directly, no CLI required.
+A *host* controls how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), and Gemini CLI (`gemini`) — Stagecraft renders a stage prompt and pipes it to the host CLI, which manages model invocation, tool permissions, and output capture. The fourth built-in host, `openai-compat`, is HTTP-native: it calls any OpenAI-compatible Chat Completions API directly, no CLI required.
 
 **Host and model are two different things.** For CLI-based hosts, which model runs is configured inside the host (e.g., Claude Code's `.claude/agents/<role>.md` has a `model:` field; Codex and Gemini use their own settings). For `openai-compat`, the model is set per-role in `.devteam/config.yml` under `hosts.openai-compat.models`.
 
-When optimizing cost or comparing model quality, you can route different roles to different models. For CLI-based hosts, edit the agent frontmatter. For openai-compat, edit the config — see [Using openai-compat](#using-openai-compat-openrouter-deepseek-moonshot-etc). Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
+When optimizing cost or comparing model quality, you can route different roles to different models. For CLI-based hosts, edit the agent frontmatter. For openai-compat, edit the config — see [Using openai-compat](#using-openai-compat-openai-compatible-apis). Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
 
 ### Why use multiple hosts?
 
@@ -525,7 +525,7 @@ model: sonnet        # claude-sonnet — implementation
 
 To change a model for a specific role, edit that agent file directly. Re-running `devteam init --host claude-code --force` regenerates all agent files from the framework defaults, so keep custom model overrides in mind if you re-init.
 
-For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft. For openai-compat, model selection is per-role in `.devteam/config.yml` under `hosts.openai-compat.models` — see [Using openai-compat](#using-openai-compat-openrouter-deepseek-moonshot-etc).
+For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft. For openai-compat, model selection is per-role in `.devteam/config.yml` under `hosts.openai-compat.models` — see [Using openai-compat](#using-openai-compat-openai-compatible-apis).
 
 ### Common configurations
 
@@ -566,9 +566,9 @@ routing:
 
 With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model peer review](#multi-model-peer-review) for the full picture.
 
-### Using openai-compat (OpenRouter, DeepSeek, Moonshot, etc.)
+### Using openai-compat (OpenAI-compatible APIs)
 
-`openai-compat` is Stagecraft's HTTP-native host adapter. Instead of spawning a CLI subprocess, it calls any OpenAI-compatible chat-completions endpoint directly — OpenRouter, DeepSeek, Moonshot AI, Xiaomi MiMo, Qwen, or any hosted model that speaks the OpenAI API protocol. No CLI to install.
+`openai-compat` is Stagecraft's HTTP-native host adapter. Instead of spawning a CLI subprocess, it calls any provider that exposes an OpenAI-compatible Chat Completions API. That includes OpenAI, OpenRouter, Fireworks AI, Fuel iX, DeepSeek-compatible endpoints, Moonshot-compatible endpoints, and internal API gateways that expose `/v1/chat/completions`. No CLI to install.
 
 #### Setup
 
@@ -578,6 +578,8 @@ devteam init --host openai-compat
 
 What this installs:
 - `.openai-compat/prompts/roles/` — role prompts in markdown format
+- `.openai-compat/skills/` — Stagecraft skills in markdown format
+- `.devteam/rules/` — shared pipeline and gate rules
 
 No `.claude/` agents, no hooks, no slash commands are installed.
 
@@ -591,35 +593,46 @@ routing:
 
 hosts:
   openai-compat:
-    base_url: https://openrouter.ai/api/v1   # required (or OPENAI_COMPAT_BASE_URL env var)
-    api_key_env: OPENROUTER_API_KEY           # names the env var that holds the key
+    base_url: https://api.openai.com/v1       # or any compatible provider base URL
+    api_key_env: OPENAI_API_KEY               # names the env var that holds the key
     models:
-      default:    moonshotai/kimi-k2.7-code  # fallback for unmapped roles
-      principal:  deepseek/deepseek-v4-pro
-      security:   deepseek/deepseek-v4-pro
-      red-team:   deepseek/deepseek-v4-pro
-      migrations: deepseek/deepseek-v4-pro
-      pm:         deepseek/deepseek-v4-pro
-      backend:    moonshotai/kimi-k2.7-code
-      frontend:   moonshotai/kimi-k2.7-code
-      platform:   moonshotai/kimi-k2.7-code
-      reviewer:   moonshotai/kimi-k2.7-code
-      qa:         qwen/qwen3.6-27b
-      verifier:   xiaomimimo/mimo-v2.5-pro
+      default:    gpt-4.1                     # fallback for unmapped roles
+      principal:  gpt-4.1
+      security:   gpt-4.1
+      red-team:   gpt-4.1
+      migrations: gpt-4.1
+      pm:         gpt-4.1
+      backend:    gpt-4.1-mini
+      frontend:   gpt-4.1-mini
+      platform:   gpt-4.1-mini
+      reviewer:   gpt-4.1-mini
+      qa:         gpt-4.1-mini
+      verifier:   gpt-4.1
 ```
 
 The `api_key_env` field names the *env var that holds the key*, not the key itself — so the config file is safe to commit:
 
 ```bash
 # .env (not committed)
-OPENROUTER_API_KEY=sk-or-...
+OPENAI_API_KEY=sk-...
+```
+
+Provider-specific example:
+
+```yaml
+hosts:
+  openai-compat:
+    base_url: https://api.fireworks.ai/inference/v1
+    api_key_env: FIREWORKS_API_KEY
+    models:
+      default: accounts/fireworks/models/qwen3-coder-480b-a35b-instruct
 ```
 
 #### Environment variables
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `OPENAI_COMPAT_BASE_URL` | Base URL when `base_url` is not in config | `https://openrouter.ai/api/v1` |
+| `OPENAI_COMPAT_BASE_URL` | Base URL when `base_url` is not in config | `https://openrouter.ai/api/v1` (backward-compatible fallback; prefer explicit `base_url`) |
 | `OPENAI_COMPAT_API_KEY` | API key when `api_key_env` is not in config | *(required)* |
 | `OPENAI_COMPAT_MODEL` | Model when no per-role mapping and no `models.default` | *(required if no per-role mapping)* |
 
@@ -668,16 +681,16 @@ Mitigation: keep `pipeline/context.md` concise; route long-context stages (build
 
 #### Model recommendations by role tier
 
-| Role tier | Recommended model | OpenRouter ID | Notes |
+| Role tier | Example model ID | Example provider | Notes |
 |---|---|---|---|
-| Reasoning (principal, security, red-team, migrations, pm) | DeepSeek V4 Pro | `deepseek/deepseek-v4-pro` | Reliable native tool_calls |
-| Implementation (backend, frontend, platform, reviewer) | Kimi K2.7-Code | `moonshotai/kimi-k2.7-code` | ⚠ see note below |
-| Test authoring (qa) | Qwen3.6 27B | `qwen/qwen3.6-27b` | |
-| Verification (verifier) | MiMo-V2.5-Pro | `xiaomimimo/mimo-v2.5-pro` | |
+| Reasoning (principal, security, red-team, migrations, pm) | `gpt-4.1`, `deepseek/deepseek-v4-pro` | OpenAI, OpenRouter, DeepSeek-compatible gateway | Prefer reliable native `tool_calls` |
+| Implementation (backend, frontend, platform, reviewer) | `gpt-4.1-mini`, `moonshotai/kimi-k2.7-code` | OpenAI, OpenRouter, Moonshot-compatible gateway | ⚠ see note below for Kimi |
+| Test authoring (qa) | `gpt-4.1-mini`, `qwen/qwen3.6-27b` | OpenAI, OpenRouter, Fireworks AI | |
+| Verification (verifier) | `gpt-4.1`, `xiaomimimo/mimo-v2.5-pro` | OpenAI, OpenRouter, Fuel iX/internal gateway | |
 
 Any model that supports OpenAI function-calling and has sufficient context window (≥ 100 k tokens recommended for build stages) works.
 
-**⚠ Kimi K2.7-Code note.** Kimi K2 models use an internal `functions.func_name:idx` tool-call ID format. Moonshot's own API normalizes these before inference; third-party providers including OpenRouter do not. At long context — typically after a stage with many `read_file` calls — the model can revert to its internal chat-template format, emitting tool calls as text content rather than via `tool_calls`. The effect is `finish_reason: stop` with no tool execution and no gate, followed by an orchestrator `structural-input` halt. The auto-fix retry usually recovers since context resets on each dispatch. For stages known to be context-heavy (`backend`, `verifier`), consider substituting DeepSeek V3 or Qwen2.5-Coder-32B. This is a [documented upstream issue](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) tracked by the vLLM and Moonshot teams.
+**⚠ Kimi K2.7-Code note.** Kimi K2 models use an internal `functions.func_name:idx` tool-call ID format. Some providers normalize this before inference; others expose the raw chat-template behavior. At long context — typically after a stage with many `read_file` calls — the model can revert to its internal format, emitting tool calls as text content rather than via `tool_calls`. The effect is `finish_reason: stop` with no tool execution and no gate, followed by an orchestrator `structural-input` halt. The auto-fix retry usually recovers since context resets on each dispatch. For stages known to be context-heavy (`backend`, `verifier`), consider substituting a provider/model combination with verified native `tool_calls`, such as OpenAI GPT models, DeepSeek V3/V4, or Qwen Coder variants. This is a [documented upstream issue](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) tracked by the vLLM and Moonshot teams.
 
 #### Resuming after an escalation
 

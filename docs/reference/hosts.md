@@ -8,13 +8,13 @@ Run `npm run docs:generate` to regenerate after editing capabilities files.
 
 ### Capabilities
 
-| Host          | Display name                                                 | headless | hooks | subagents | slashCommands | worktrees | goalLoop |
-| ------------- | ------------------------------------------------------------ | -------- | ----- | --------- | ------------- | --------- | -------- |
-| claude-code   | Claude Code                                                  | yes      | yes   | yes       | yes           | yes       | yes      |
-| codex         | Codex CLI                                                    | yes      | no    | no        | no            | yes       | yes      |
-| gemini-cli    | Gemini CLI                                                   | yes      | no    | no        | no            | yes       | no       |
-| generic       | Generic CLI (no host integration)                            | no       | no    | no        | no            | no        | no       |
-| openai-compat | OpenAI-compatible API (OpenRouter, DeepSeek, Moonshot, etc.) | yes      | no    | no        | no            | no        | no       |
+| Host          | Display name                           | headless | hooks | subagents | slashCommands | worktrees | goalLoop |
+| ------------- | -------------------------------------- | -------- | ----- | --------- | ------------- | --------- | -------- |
+| claude-code   | Claude Code                            | yes      | yes   | yes       | yes           | yes       | yes      |
+| codex         | Codex CLI                              | yes      | no    | no        | no            | yes       | yes      |
+| gemini-cli    | Gemini CLI                             | yes      | no    | no        | no            | yes       | no       |
+| generic       | Generic CLI (no host integration)      | no       | no    | no        | no            | no        | no       |
+| openai-compat | OpenAI-compatible Chat Completions API | yes      | no    | no        | no            | no        | no       |
 
 ### Enforcement levels
 

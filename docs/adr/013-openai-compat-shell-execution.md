@@ -6,7 +6,7 @@
 
 ## Context
 
-The `hosts/openai-compat/` adapter (introduced alongside this ADR) routes stagecraft roles to any OpenAI chat-completions endpoint — OpenRouter, DeepSeek, Moonshot, etc. — without requiring a dedicated CLI. Invocation is HTTP-native: `invoke()` drives the model through an agentic tool-call loop rather than spawning a subprocess.
+The `hosts/openai-compat/` adapter (introduced alongside this ADR) routes Stagecraft roles to any provider that exposes an OpenAI-compatible Chat Completions endpoint — OpenAI, OpenRouter, Fireworks AI, Fuel iX, hosted open-weight providers, or internal gateways — without requiring a dedicated CLI. Invocation is HTTP-native: `invoke()` drives the model through an agentic tool-call loop rather than spawning a subprocess.
 
 Five pipeline stages declare `requiredCapabilities: { shell: true }`:
 
@@ -26,7 +26,7 @@ The question is how to give openai-compat shell execution without introducing a 
 
 Add a `bash(command)` function tool to `hosts/openai-compat/tools.js` and set `enforces.shell: true` in `capabilities.json`.
 
-The model calls `bash` the same way it calls `write_file` — as a function call in the chat-completions tool-call protocol. Execution uses Node.js `child_process.spawnSync("sh", ["-c", command], { cwd })`, captures stdout and stderr, and returns a structured result string (exit code + stdout + stderr, truncated to 8 KB each). The 40-iteration tool-call loop in `invoke.js` already provides the re-try / convergence behaviour that claude-code's goal-loop provides externally.
+The model calls `bash` the same way it calls `write_file` — as a function call in the chat-completions tool-call protocol. Execution uses Node.js `child_process.spawn("sh", ["-c", command], { cwd, detached: true })`, captures stdout and stderr, kills the command's process group when the shell exits or times out, and returns a structured result string (exit code + stdout + stderr, truncated to 8 KB each). The 40-iteration tool-call loop in `invoke.js` already provides the re-try / convergence behaviour that claude-code's goal-loop provides externally.
 
 `bash` is included in the tool set when the role's `toolBudget` contains `"Bash"` (from `core/roles.js::ROLE_TOOLS`). Roles without `Bash` in their budget (pm, reviewer) do not receive the tool.
 
@@ -34,14 +34,14 @@ The model calls `bash` the same way it calls `write_file` — as a function call
 
 - All 18 pipeline stages can now route to openai-compat; no fallback to claude-code, codex, or gemini-cli is required.
 - The security posture is identical to `claude --dangerously-skip-permissions`: the model executes commands in the project working directory with the same OS permissions as the invoking process. Operators who require stronger sandboxing should wrap the Node.js process in a container or revisit an allow-list model in a future ADR.
-- Commands log to stderr before execution (`[devteam] openai-compat: bash(...)`) for audit visibility.
+- Bash failures and tool errors log to stderr in quiet mode; verbose mode logs every tool call and result summary.
 - Timeouts: each `bash` call accepts an optional `timeout_ms` argument; the default is 60 s. The outer `ctx.timeoutMs` caps the full dispatch, so run-away loops are bounded at two levels.
 
 ## Alternatives considered
 
 **Per-stage host overrides via `routing.stages`** — route shell-dependent stages to claude-code while everything else uses openai-compat. Works today with zero code changes, but requires claude-code to be installed and defeats the "no external CLI" goal.
 
-**Thin `stagecraft-shell` CLI wrapper** — a small Node.js script that accepts a prompt on stdin, calls the OpenAI API, runs the tool-call loop (including bash), and exits. Stagecraft treats it as a `headlessCommand`. This is architecturally equivalent to running `invoke.js` as a subprocess; it duplicates the logic and adds a binary to install.
+**Thin `stagecraft-shell` CLI wrapper** — a small Node.js script that accepts a prompt on stdin, calls an OpenAI-compatible API, runs the tool-call loop (including bash), and exits. Stagecraft treats it as a `headlessCommand`. This is architecturally equivalent to running `invoke.js` as a subprocess; it duplicates the logic and adds a binary to install.
 
 **Allow-list model** — declare a `hosts.openai-compat.allowed_commands` list in `.devteam/config.yml` and reject any command not on the list. Provides a tighter security surface but is fragile (projects use `yarn`, `pnpm`, `make`, custom scripts) and adds maintenance burden for marginal gain given the existing write-audit tripwire.
 

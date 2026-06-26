@@ -1,8 +1,9 @@
 // OpenAI-compatible host adapter.
 //
-// Routes stagecraft roles to any OpenAI chat-completions API endpoint —
-// OpenRouter, DeepSeek, Moonshot AI, Xiaomi MiMo, etc. — without requiring
-// a dedicated CLI tool. Invocation is HTTP-native (httpNative: true in
+// Routes Stagecraft roles to any provider that exposes an OpenAI-compatible
+// Chat Completions endpoint — OpenAI, OpenRouter, Fireworks AI, Fuel iX,
+// hosted open-weight providers, or internal gateways — without requiring a
+// dedicated CLI tool. Invocation is HTTP-native (httpNative: true in
 // capabilities); the agentic tool-call loop lives in invoke.js.
 //
 // Capability deltas vs claude-code:
@@ -15,16 +16,16 @@
 // Configuration (.devteam/config.yml):
 //   hosts:
 //     openai-compat:
-//       base_url: https://openrouter.ai/api/v1
-//       api_key_env: OPENROUTER_API_KEY
+//       base_url: https://api.openai.com/v1
+//       api_key_env: OPENAI_API_KEY
 //       models:
-//         default: moonshotai/kimi-k2.7-code
-//         principal: deepseek/deepseek-v4-pro
-//         security: deepseek/deepseek-v4-pro
-//         red-team: deepseek/deepseek-v4-pro
-//         migrations: deepseek/deepseek-v4-pro
-//         qa: qwen/qwen3.6-27b
-//         verifier: xiaomimimo/mimo-v2.5-pro
+//         default: gpt-4.1-mini
+//         principal: gpt-4.1
+//         security: gpt-4.1
+//         red-team: gpt-4.1
+//         migrations: gpt-4.1
+//         qa: gpt-4.1-mini
+//         verifier: gpt-4.1
 
 const capabilities = require("./capabilities.json");
 const { makeMarkdownHostAdapter } = require("../../core/adapters/markdown-host");

@@ -32,7 +32,7 @@ The capability check is in `core/orchestrator.js::assertCapabilities`. It compar
 
 ### Option A — Add a `bash` tool to the openai-compat adapter *(chosen)*
 
-Extend `hosts/openai-compat/tools.js` with a `bash(command)` function tool. The model calls it the same way it calls `write_file`. Execution uses Node.js `child_process.spawnSync`, returns combined stdout + stderr + exit code as the tool result, and the loop continues.
+Extend `hosts/openai-compat/tools.js` with a `bash(command)` function tool. The model calls it the same way it calls `write_file`. Execution uses Node.js `child_process.spawn` with a detached process group, returns stdout + stderr + exit code as the tool result, and the loop continues.
 
 **What changes:** `tools.js` (BASH definition + executeBash), `capabilities.json` (shell: true), `buildTools()` (include bash when toolBudget has Bash), `executeTool()` (dispatch).
 
@@ -74,7 +74,7 @@ routing:
 
 ### Option C — Build a thin `stagecraft-shell` CLI wrapper
 
-A Node.js script (`bin/stagecraft-shell`) that accepts a prompt on stdin, calls an OpenAI-compatible API, runs the 40-iter tool-call loop with bash included, and exits. The adapter uses it as its `headlessCommand`.
+A Node.js script (`bin/stagecraft-shell`) that accepts a prompt on stdin, calls an OpenAI-compatible Chat Completions API, runs the 40-iter tool-call loop with bash included, and exits. The adapter uses it as its `headlessCommand`.
 
 **Pros:** Could be published as a standalone open-source tool. Explicit separation of concerns.
 
@@ -92,7 +92,7 @@ Add a `hosts.openai-compat.allowed_commands` section to `.devteam/config.yml` an
 
 **Cons:** Fragile — projects use `yarn`, `pnpm`, `make`, `nx`, custom scripts. Stage prompts already enumerate what commands to run; duplicating that list in config is a maintenance burden. Model still has `write_file` with no command-level restriction; the security gain is marginal.
 
-**Verdict:** Worth revisiting in a future hardening ADR. Not warranted for first-class operation. The `bash` tool is always logged to stderr before execution, giving the same audit trail.
+**Verdict:** Worth revisiting in a future hardening ADR. Not warranted for first-class operation. The `bash` tool reports failures and can emit full tool traces in verbose mode.
 
 ---
 
@@ -141,10 +141,11 @@ const BASH = {
 
 ### Execution model
 
-- `spawnSync("sh", ["-c", command], { cwd, timeout, encoding: "utf8" })`
+- `spawn("sh", ["-c", command], { cwd, detached: true })`
+- Kills the command's process group when the shell exits or the timeout fires so background children do not keep inherited stdout/stderr pipes open
 - Captures stdout and stderr separately
 - Returns a structured result string: `exit_code`, `stdout`, `stderr` (each truncated to 8 KB to prevent message bloat in long tool-call loops)
-- Logs `[devteam] openai-compat: bash(...)` to stderr before execution for audit visibility
+- Quiet mode logs writes, bash failures, and tool errors; verbose mode logs every tool call and result summary
 - On timeout: returns `"error: command timed out after Nms"`
 - Per-call `timeout_ms` argument; outer `ctx.timeoutMs` caps the full dispatch
 
@@ -177,7 +178,7 @@ The key difference is **context accumulation**: claude-code's goal loop starts f
 
 - Build stage: brief + design spec + code reads + bash output per attempt
 - 40 iterations × ~2 KB per tool result ≈ 80 KB additional context
-- Models like DeepSeek V4 Pro (1M token context) and Kimi K2.7-Code handle this comfortably
+- Long-context models with reliable native `tool_calls` handle this best
 
 The existing 40-iteration loop is sufficient for first-class operation. No separate goal-loop implementation is needed. The driver's re-dispatch mechanism (classifying no-gate as `transient`) remains available as a fallback.
 
@@ -197,7 +198,7 @@ The existing 40-iteration loop is sufficient for first-class operation. No separ
 
 ## 7. What first-class operation looks like
 
-A complete all-openai-compat config — no claude-code, no codex, no other CLI:
+A complete all-openai-compat config — no claude-code, no codex, no other CLI. The example below uses OpenAI model IDs; swap `base_url`, `api_key_env`, and model IDs for OpenRouter, Fireworks AI, Fuel iX, DeepSeek-compatible endpoints, Moonshot-compatible endpoints, or an internal gateway.
 
 ```yaml
 routing:
@@ -205,24 +206,24 @@ routing:
 
 hosts:
   openai-compat:
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
     models:
-      default:    moonshotai/kimi-k2.7-code
-      principal:  deepseek/deepseek-v4-pro
-      security:   deepseek/deepseek-v4-pro
-      red-team:   deepseek/deepseek-v4-pro
-      migrations: deepseek/deepseek-v4-pro
-      platform:   moonshotai/kimi-k2.7-code
-      backend:    moonshotai/kimi-k2.7-code
-      frontend:   moonshotai/kimi-k2.7-code
-      reviewer:   moonshotai/kimi-k2.7-code
-      qa:         qwen/qwen3.6-27b
-      verifier:   xiaomimimo/mimo-v2.5-pro
-      pm:         deepseek/deepseek-v4-pro
+      default:    gpt-4.1-mini
+      principal:  gpt-4.1
+      security:   gpt-4.1
+      red-team:   gpt-4.1
+      migrations: gpt-4.1
+      platform:   gpt-4.1-mini
+      backend:    gpt-4.1-mini
+      frontend:   gpt-4.1-mini
+      reviewer:   gpt-4.1-mini
+      qa:         gpt-4.1-mini
+      verifier:   gpt-4.1
+      pm:         gpt-4.1
 ```
 
-Every stage runs. One API key. No CLI installation.
+Every stage runs. One API key for the configured provider. No CLI installation.
 
 ---
 

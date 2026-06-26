@@ -32,7 +32,7 @@ Three distinct concepts that appear together everywhere:
 
 - **Role** — a job function performed by an AI agent: PM, Principal, Backend, Security, Red-team, etc. Each role has a brief in `roles/<name>.md` that defines its responsibilities and constraints.
 - **Stage** — a pipeline step with a defined objective, artifact, and gate: requirements, design, build, peer-review, etc. Each stage dispatches one or more roles to do the work.
-- **Host** — how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). The fourth, `openai-compat`, is HTTP-native — it calls any OpenAI-compatible endpoint directly without a CLI.
+- **Host** — how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). The fourth, `openai-compat`, is HTTP-native — it calls any OpenAI-compatible Chat Completions endpoint directly without a CLI.
 
 A stage assigns roles; routing assigns those roles to hosts; the hosts invoke models. The gate JSON is what all three produce in common.
 
@@ -40,7 +40,7 @@ A stage assigns roles; routing assigns those roles to hosts; the hosts invoke mo
 
 No, not strictly. Two adapters work without a dedicated CLI:
 
-- **`openai-compat`** routes directly to any OpenAI-compatible API endpoint (OpenRouter, DeepSeek, Moonshot, etc.) via HTTP — no CLI, full headless support, bash tool included. This is the recommended no-install option when you have an API key for a hosted model. See [Using openai-compat](user-guide.md#using-openai-compat-openrouter-deepseek-moonshot-etc) in the user guide for setup.
+- **`openai-compat`** routes directly to any OpenAI-compatible Chat Completions API endpoint (OpenAI, OpenRouter, Fireworks AI, Fuel iX, provider-hosted open-weight models, or internal gateways) via HTTP — no CLI, full headless support, bash tool included. This is the recommended no-install option when you have an API key for a hosted model. See [Using openai-compat](user-guide.md#using-openai-compat-openai-compatible-apis) in the user guide for setup.
 - **`generic`** renders prompts to stdout for manual paste into any LLM or workflow. What you give up: no slash commands, no hooks, no headless invocation.
 
 Most people will want at least one real host installed.
@@ -264,7 +264,7 @@ For `openai-compat`, per-role model selection is a first-class config feature �
 
 ### Can I use open-weight models like DeepSeek, Kimi, or Qwen with Stagecraft?
 
-Yes — via the `openai-compat` host adapter. It routes roles to any OpenAI-compatible endpoint, including OpenRouter (which aggregates hundreds of open-weight and proprietary models under a single key). Unlike CLI-based hosts, per-role model selection is configured directly in `.devteam/config.yml`:
+Yes — via the `openai-compat` host adapter. It routes roles to any provider that exposes an OpenAI-compatible Chat Completions endpoint, including OpenAI, OpenRouter, Fireworks AI, Fuel iX, hosted open-weight providers, and internal gateways. Unlike CLI-based hosts, per-role model selection is configured directly in `.devteam/config.yml`:
 
 ```yaml
 routing:
@@ -272,19 +272,19 @@ routing:
 
 hosts:
   openai-compat:
-    base_url: https://openrouter.ai/api/v1
-    api_key_env: OPENROUTER_API_KEY
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
     models:
-      default:   moonshotai/kimi-k2.7-code
-      principal: deepseek/deepseek-v4-pro   # reasoning-heavy roles
-      security:  deepseek/deepseek-v4-pro
-      red-team:  deepseek/deepseek-v4-pro
-      backend:   moonshotai/kimi-k2.7-code  # implementation roles
-      qa:        qwen/qwen3.6-27b           # test authoring
-      verifier:  xiaomimimo/mimo-v2.5-pro   # verification
+      default:   gpt-4.1-mini
+      principal: gpt-4.1        # reasoning-heavy roles
+      security:  gpt-4.1
+      red-team:  gpt-4.1
+      backend:   gpt-4.1-mini   # implementation roles
+      qa:        gpt-4.1-mini   # test authoring
+      verifier:  gpt-4.1        # verification
 ```
 
-See [Using openai-compat](user-guide.md#using-openai-compat-openrouter-deepseek-moonshot-etc) for the full config schema, env vars, limitations, and model recommendations.
+Swap `base_url`, `api_key_env`, and model IDs for your provider. See [Using openai-compat](user-guide.md#using-openai-compat-openai-compatible-apis) for the full config schema, env vars, limitations, and model recommendations.
 
 ### Which roles should get expensive models (Opus) vs. cheaper ones?
 
@@ -714,7 +714,7 @@ Add `devteam init --host <name>` to your project bootstrap script and use `--hea
 - run: devteam next --json | jq .action
 ```
 
-Set the host CLI's auth via the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) in your CI secrets. For openai-compat, set the env var named by `api_key_env` in your config (e.g. `OPENROUTER_API_KEY`). The orchestrator never handles tokens — it just shells out to `claude` / `codex` / `gemini`, or calls the API directly for openai-compat.
+Set the host CLI's auth via the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) in your CI secrets. For openai-compat, set the env var named by `api_key_env` in your config (for example `OPENAI_API_KEY`, `FIREWORKS_API_KEY`, `FUELIX_API_KEY`, or `OPENROUTER_API_KEY`). The orchestrator never handles tokens — it just shells out to `claude` / `codex` / `gemini`, or calls the configured OpenAI-compatible API directly for openai-compat.
 
 `scripts/pr-publish.js` (run via `npm run pr-publish`) posts gate status as GitHub check runs on the PR head commit. PASS → success, WARN → neutral, FAIL/ESCALATE → failure.
 
@@ -902,15 +902,15 @@ macOS environment: use BSD `sed` syntax — `sed -i '' 'expr' file`, not `sed -i
 
 ### A stage halted with `structural-input` but the model seemed to be working — what happened?
 
-The most likely cause is a function-calling regression at long context. Some models (notably Kimi K2.7-Code via OpenRouter) use an internal chat-template format for tool calls. At short context they produce correct `tool_calls` JSON; at long context — after a stage has read many files and accumulated a large conversation — they revert to their internal format and emit the tool call as plain text content instead. The adapter receives an empty `tool_calls` array, executes nothing, writes no gate, and the orchestrator correctly halts.
+The most likely cause is a function-calling regression at long context. Some model/provider combinations use an internal chat-template format for tool calls instead of returning native OpenAI `tool_calls` JSON. At short context they may produce correct `tool_calls`; at long context — after a stage has read many files and accumulated a large conversation — they can revert to their internal format and emit the tool call as plain text content instead. The adapter receives an empty `tool_calls` array, executes nothing, writes no gate, and the orchestrator correctly halts.
 
 **How to confirm:** look for lines like `` `functions.write_file:17 <|tool_call_argument_begin|> {"path": ...}` `` in the model's text output (visible in the [devteam] log). That prefix (`functions.name:idx`) is the internal Kimi tool-call ID format leaking into content.
 
 **Recovery:** the auto-fix retry cycle normally recovers on its own — context resets between dispatches, so the next attempt starts short. If retries keep failing:
 1. Check whether `pipeline/context.md` has grown very large; trim any long verbatim sections.
-2. For `backend` or `verifier` roles, swap the configured model to DeepSeek V3 or Qwen2.5-Coder-32B, both of which use native `tool_calls` and are more stable at long context.
+2. For `backend` or `verifier` roles, swap the configured model/provider pair to one you have verified emits native `tool_calls` at long context, such as OpenAI GPT models, DeepSeek V3/V4, or Qwen Coder variants on a compatible provider.
 
-This is [a documented upstream issue](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) with Kimi K2 on third-party infrastructure; Moonshot's own API applies a normalization guardrail that OpenRouter does not.
+This class of issue is provider- and model-template-specific. Kimi K2 has [a documented upstream example](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) where third-party serving infrastructure may expose raw tool-call template behavior.
 
 ### Does openai-compat need `--headless` on every `devteam stage` invocation?
 

@@ -2,7 +2,7 @@
 //
 // Unlike the claude-code / codex / gemini-cli adapters, this adapter has no
 // CLI to spawn. Instead it drives the model directly via the OpenAI
-// chat-completions HTTP API, using function-calling to give the model
+// Chat Completions HTTP API, using function-calling to give the model
 // file I/O capability (write_file, read_file, list_files).
 //
 // Configuration is resolved in priority order:
@@ -12,12 +12,12 @@
 // Per-role model selection (config.yml):
 //   hosts:
 //     openai-compat:
-//       base_url: https://openrouter.ai/api/v1
-//       api_key_env: OPENROUTER_API_KEY     # env var holding the key
+//       base_url: https://api.openai.com/v1
+//       api_key_env: OPENAI_API_KEY         # env var holding the key
 //       models:
-//         default: moonshotai/kimi-k2.7-code
-//         principal: deepseek/deepseek-v4-pro
-//         security: deepseek/deepseek-v4-pro
+//         default: gpt-4.1-mini
+//         principal: gpt-4.1
+//         security: gpt-4.1
 
 const fs = require("node:fs");
 const path = require("node:path");

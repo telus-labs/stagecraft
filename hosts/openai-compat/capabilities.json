@@ -1,6 +1,6 @@
 {
   "name": "openai-compat",
-  "displayName": "OpenAI-compatible API (OpenRouter, DeepSeek, Moonshot, etc.)",
+  "displayName": "OpenAI-compatible Chat Completions API",
   "version": "1",
   "hooks": false,
   "subagents": false,

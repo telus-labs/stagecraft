@@ -1,8 +1,12 @@
-# OpenRouter multi-model routing example for stagecraft.
+# OpenRouter provider example for the openai-compat host adapter.
 #
-# All open-weight models are accessed through a single OpenRouter API key
+# openai-compat can target any provider that exposes an OpenAI-compatible
+# Chat Completions API. This file shows one OpenRouter configuration, where
+# all models are accessed through the provider API key
 # (https://openrouter.ai/api/v1). Per-role model selection is handled by
-# the hosts.openai-compat.models table below.
+# the hosts.openai-compat.models table below. For OpenAI, Fireworks AI,
+# Fuel iX, or an internal gateway, keep routing.default_host as
+# openai-compat and swap base_url, api_key_env, and model IDs below.
 #
 # Tier mapping:
 #   Opus tier  (deep reasoning / veto roles) → DeepSeek V4 Pro
@@ -14,7 +18,7 @@
 # and set the OPENROUTER_API_KEY environment variable.
 
 routing:
-  default_host: openai-compat   # all roles and stages via OpenRouter
+  default_host: openai-compat   # all roles and stages via the configured API provider
   roles:
     # Opus-tier: deep reasoning, architecture decisions, veto power
     principal:  openai-compat    # design spec, ADRs, retrospective
@@ -35,7 +39,7 @@ pipeline:
   isolation: in-place
 
 # Host-specific config for the openai-compat adapter.
-# All models are served via OpenRouter's single OpenAI-compatible endpoint.
+# This example uses OpenRouter's OpenAI-compatible endpoint.
 hosts:
   openai-compat:
     base_url: https://openrouter.ai/api/v1
