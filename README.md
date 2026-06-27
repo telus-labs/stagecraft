@@ -138,12 +138,12 @@ Then drive the pipeline. There are two ways to run a stage:
 
 ### Path A — `--headless` (single terminal, start here)
 
-The orchestrator drives the host CLI for you (`claude --print`, `codex exec --sandbox workspace-write`, `gemini`). One command per stage; model output streams to your terminal. Best for first runs, CI, and scripted use.
+The orchestrator drives the host CLI for you (`claude --print`, `codex exec --sandbox workspace-write`, `gemini`). One command per stage; model output is captured in `pipeline/logs/<workstreamId>.log` by default. Best for first runs, CI, and scripted use.
 
 ```bash
 devteam stage requirements --feature "Add SMS notification opt-in" --headless
 # [devteam] dispatching pm → claude-code (headless)
-# (model output streams to your terminal as it works)
+# (model output is captured in pipeline/logs/stage-01.log)
 #   ✓ pm (claude-code): exit 0, 23000ms → pipeline/gates/stage-01.json
 
 cat pipeline/brief.md                    # the artifact the model wrote

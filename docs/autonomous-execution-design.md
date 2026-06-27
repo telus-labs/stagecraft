@@ -122,7 +122,7 @@ never assembled into a class:
 | Class | Real detection signal | Where it surfaces |
 |---|---|---|
 | transient | Promise *rejects* (spawn error, `headless.js:164`); or `exitCode≠0 && gatePath===null`; or `timedOut===true` (`headless.js:189`) | `runHeadless` return |
-| structural-input | same raw signal as transient, disambiguated by log content (overflow) or by *repetition* | `runHeadless` + teed log |
+| structural-input | same raw signal as transient, disambiguated by log content (overflow) or by *repetition* | `runHeadless` + transcript log |
 | code-defect | gate written, `status:"FAIL"`, `blockers[]` populated, `computeFixSteps`≠null | gate file |
 | judgment-gate | gate written, `status:"ESCALATE"` | gate file |
 | external-blocked | `status:"FAIL"` + a `computeFixSteps` step with empty `commands[]` + human-action description (e.g. `orchestrator.js:631–636`) | gate + `computeFixSteps` |
@@ -240,7 +240,7 @@ exit with no gate. Three options, in order of robustness:
    (backoff + retry); if the *identical* dispatch fails the same way twice,
    reclassify as structural and halt. No host cooperation; caps the cost leak at one
    wasted retry.
-2. **Log-signature matching**: grep the teed log (`pipeline/logs/<ws>.log`) for
+2. **Log-signature matching**: grep the transcript log (`pipeline/logs/<ws>.log`) for
    host-specific overflow/auth/rate-limit strings. Works, but brittle across CLI
    version bumps.
 3. **Host-adapter typed exit** (mature): extend the capability contract so each host

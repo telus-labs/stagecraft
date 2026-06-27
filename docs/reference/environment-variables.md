@@ -21,9 +21,10 @@ Resolution order: `.devteam/config.yml` → environment variables. When `api_key
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `DEVTEAM_VERBOSE` | `0` | Set to `1` to enable verbose output for the openai-compat host: full tool traces, assistant content streaming, and the endpoint URL in the startup line. Equivalent to `hosts.openai-compat.verbose: true` in `.devteam/config.yml`. Quiet mode (default) logs writes (`✎`), bash failures (`✗`), and errors (`⚠`) only. |
+| `DEVTEAM_VERBOSE` | `0` | Set to `1` to enable verbose output. For openai-compat, this streams full tool traces, assistant content, and the endpoint URL. For CLI hosts, this also mirrors the host subprocess transcript to the terminal while still writing `pipeline/logs/<workstreamId>.log`. |
 | `LOG_FORMAT` | *(text)* | Set to `json` to switch the approval-derivation hook and gate validator to structured JSON log output (audit mode B-23). |
 | `DEVTEAM_NO_LOG` | `0` | Set to `1` to disable transcript logging for headless runs. Reverts stdio to inherit mode (terminal colours preserved). Does not apply to openai-compat (no subprocess). |
+| `DEVTEAM_HEADLESS_TEE` | `0` | Set to `1` to mirror CLI-host stdout/stderr to the terminal during headless runs. By default, CLI-host output is written only to `pipeline/logs/<workstreamId>.log` so prompts and diffs do not flood `devteam run` output. |
 | `DEVTEAM_LOG_HISTORY` | `3` | Number of rotated log slots to keep per workstream. Set to `0` to disable rotation and overwrite on each run. Applies to `pipeline/logs/<workstreamId>.log`. |
 
 ---

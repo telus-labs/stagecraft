@@ -70,6 +70,12 @@ directly to `spawn()`; Stagecraft does not invoke a shell. Quote arguments or
 absolute executable paths that contain spaces, for example
 `"C:\Program Files\Vendor\agent.exe" --print`.
 
+Headless subprocess stdout/stderr is written to
+`pipeline/logs/<workstreamId>.log` by default. It is not mirrored to the
+terminal unless `DEVTEAM_HEADLESS_TEE=1`, `DEVTEAM_VERBOSE=1`, or `ctx.tee`
+is enabled, so autonomous runs do not dump prompts or large diffs into the
+operator console.
+
 ## adapter.js methods
 
 ```ts
