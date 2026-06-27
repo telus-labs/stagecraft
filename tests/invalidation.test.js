@@ -382,6 +382,34 @@ describe("invalidation: registry meta-test", () => {
         `recipe "${stageDef.stage}" (${name}) must return clear_gates array`);
     }
   });
+
+  it("stage-04 recipe clears failing workstream gates from merged workstream field", () => {
+    const { getRecipe } = require("../core/pipeline/fix-recipes");
+    const { getStage } = require("../core/pipeline/stages");
+    const gate = {
+      stage: "stage-04",
+      status: "FAIL",
+      blockers: ["frontend saw package.json missing before backend created it"],
+      workstreams: [
+        { workstream: "backend", status: "PASS" },
+        { workstream: "frontend", status: "FAIL" },
+        { workstream: "platform", status: "FAIL" },
+        { workstream: "qa", status: "FAIL" },
+      ],
+    };
+
+    const { clear_gates } = getRecipe("stage-04").diagnose(
+      gate,
+      { gatesDir: null, stageDef: getStage("build") },
+    );
+
+    assert.deepEqual(clear_gates, [
+      "pipeline/gates/stage-04.frontend.json",
+      "pipeline/gates/stage-04.platform.json",
+      "pipeline/gates/stage-04.qa.json",
+      "pipeline/gates/stage-04.json",
+    ]);
+  });
 });
 
 // ── Recipe-hygiene: no examples-only filenames in recipe source (Phase 6.4) ───

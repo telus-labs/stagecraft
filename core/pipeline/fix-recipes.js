@@ -28,7 +28,8 @@ function _wsFromWorkstreams(gate) {
   if (!Array.isArray(gate.workstreams)) return [];
   return gate.workstreams
     .filter(w => w.status === "FAIL" || w.status === "ESCALATE")
-    .map(w => w.role);
+    .map(w => w.workstream || w.role)
+    .filter(Boolean);
 }
 
 function _wsFromBlockers(gate) {
