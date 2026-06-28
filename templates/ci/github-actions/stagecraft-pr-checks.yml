@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # CUSTOMIZE — point at your Stagecraft fork / release.
-      STAGECRAFT_REPO: anthropics/stagecraft
+      STAGECRAFT_REPO: telus-labs/stagecraft
       STAGECRAFT_REF:  v0.9.0
       # Optional. Add this repository secret and set
       # pipeline.require_signed_gates: true for authenticated enforcement.
