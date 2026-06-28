@@ -10,6 +10,61 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versioning: [S
 
 ---
 
+## [0.9.0] — 2026-06-28
+
+### Added
+
+- Authenticate stage-gate chains with optional HMAC-SHA256 signatures from `DEVTEAM_SIGNING_SECRET`, with `--require-signed` and `pipeline.require_signed_gates` anti-downgrade enforcement.
+
+### Added
+
+- **`devteam report` — post-run HTML pipeline report.** New command that collects all pipeline data and renders a self-contained `pipeline/report.html`, opened automatically in the default browser. The report is a three-tab SPA (no external dependencies, works offline): **Summary** (status badge, progress bar, header stats, brief problem statement, clickable AC and scenario count chips), **Pipeline** (per-stage timing, dispatch counts, stage document links, workstream breakdown, blocker log), and **Documents** (all pipeline artifacts embedded inline — brief, spec, design-spec, build-plan, code reviews, ADRs, test report, accessibility/observability reports — with a sidebar navigator). Status classification reads terminal events correctly: `COMPLETED` (complete event), `HALTED` with halt-type subtitle (ceiling-halt, convergence-halt), or `INCOMPLETE` (no terminal event, waiting for manual advance). Heartbeats written after a halt no longer mask the real state. Header shows wall-clock time, total model compute time (sum of all `dispatch-observation` durations from `run-log.jsonl`), retry and stall counts, and cost. Per-stage rows show compute time and a "(N dispatches)" annotation for retried stages. Clicking a stage pill in the progress bar jumps to that row in the Pipeline tab. Stage document links (small blue pills per row) and clickable stat chips navigate directly to the relevant embedded document. `--json` emits raw `ReportData` for scripting. Documented in `help.js`, `docs/reference/cli.md`, `README.md`, and `docs/user-guide.md`.
+
+- **OpenAI-compatible host adapter.** Adds a first-class `openai-compat` host for OpenAI-compatible Chat Completions providers, including HTTP-native tool calls, per-role model configuration, installed host prompts and skills, write-audit integration, and direct command execution for stages that require command-line verification. The command executor now parses model-provided commands into argv, rejects shell syntax and non-allowlisted executables, and keeps CI prompt-echo smoke tests explicit with `DEVTEAM_HEADLESS_TEE=1`. *Honest scope note:* command execution is not an OS sandbox; allowlisted commands still run with the invoking process's project permissions.
+
+- **Three `active_roles` filtering bugs fixed — infinite dispatch loops on non-build and multi-role stages.** When a stage-01 gate carries `active_roles: ["backend", "platform", "qa"]` (no frontend), three interacting defects caused dispatch loops:
+  1. **`inferActiveRoles` zeroed out non-build stages** (`computeDispatchPlan`): for stages like design (`roles: ["principal"]`) the intersection with build-workstream `active_roles` was empty — an empty array is truthy, so `roles` was set to `[]`, the stage dispatched zero workstreams, wrote no gate, and looped until `max-iterations`. Fix: return `null` (no filter) when the intersection is empty.
+  2. **`_nextImpl` used `stageDef.roles` (unfiltered) for multi-role completion check**: after all active workstream gates were written, `stage-04.frontend.json` was absent (frontend was suppressed), so `remaining=[frontend]` was always non-empty and `next()` always returned `continue-stage` — all three active workstreams were skipped every iteration. Fix: compute `effectiveRoles` via `inferActiveRoles` before the gate-existence loop.
+  3. **`summary()` showed suppressed workstreams as pending**: same root cause as (2) in the display path — `devteam plan` showed `frontend: pending` for projects with no frontend workstream. Fixed alongside (2).
+  Four regression tests added to `tests/workstream-suppression.test.js` (three for `next()`, one for non-build stage dispatch).
+
+### Fixed
+
+- **Targeted-fix false-positive halt when blocker `file` includes a line-number suffix** (`src/backend/server.ts:5`): `blockerFiles()` now strips the `:\d+` suffix before hashing, so a genuine source-file change is correctly detected and the pipeline continues instead of escalating with `convergence-exhausted`. Closes #269.
+
+### Fixed
+
+- **Structural-input halt when patchItems push headless prompt over Claude Code's 4000-char goal-condition limit**: `runHeadless()` now detects prompts that exceed the limit and re-renders without `patchItems` before spawning the agent. A warning is emitted to stderr. The agent reads `pipeline/context.md` for blocker guidance instead of the inline patch block — the auto-fix mechanism already writes blockers there before dispatch, so no information is lost. Closes #277.
+
+### Fixed
+
+- **Spec drift false positive when AC line carries an inline backtick annotation** (e.g. `` **AC-10** `[deploy-deferred]` — … ``): `AC_LINE_RE` in `core/spec/verify.js` now optionally consumes a `` `[tag]` `` token between the AC identifier and the separator, so the drift checker extracts the correct AC count and stage-03b no longer halts with `orphan_scenarios=1`. Closes #274.
+
+- **`spec drift: orphan_scenarios=N` false positive when brief uses numbered-list AC format fixed.** `AC_LINE_RE` in `core/spec/verify.js` accepted dash/star/plus bullet markers but not numbered-list markers (`1. **AC-N**`). When the PM agent writes ACs as a numbered list (e.g. `1. **AC-1 — HTTP endpoint exists**: ...`), no ACs were extracted from the brief; every scenario's `@AC-N` tag then referenced an ID absent from the empty brief, orphaning all scenarios and halting stage-03b with `spec drift: orphan_criteria=[none], orphan_scenarios=N`. Fix: extend the optional bullet-prefix alternation to also match `\d+\.\s+`.
+
+### Fixed
+
+- **Targeted-fix ghost-workstream cycle**: when a post-build stage (accessibility-audit, peer-review, QA) triggers a `fix-and-retry` for a file whose `file_ownership` points to a workstream that stage-04 never dispatched (e.g. `frontend` in a backend-only project), the driver now rejects the inferred workstream and falls back to a regular build dispatch instead of silently cycling until fix-retry budgets are exhausted. Closes #271.
+
+- **Durable dispatch evidence (Phase 17).** Autonomous runs now retain one privacy-bounded `dispatch-observation` per non-skipped workstream, allowing `devteam evidence status` and consented bundles to measure D5 routing history without treating current or archived gate snapshots as durable evidence. Legacy projects remain readable and explicitly unready for the durable-history condition.
+
+### Added
+
+- Add explicit, privacy-bounded `devteam evidence accept-resolution --yes` records and
+  cross-project H3 readiness for human-accepted derivable retry resolutions.
+
+### Added
+
+- Discover and aggregate Node, pytest, and Go test suites during orchestrator-stamped
+  pre-review, QA, and repair verification while preserving explicit command overrides.
+
+- **Rolling autonomous-run watch mode.** `devteam run --watch` renders current stage,
+  dispatch elapsed time, log growth, heartbeat age, and observed stall status on an
+  interactive terminal, with cursor cleanup and ANSI-free redirected-output fallback.
+  This is display-only; ADR-007 Tier 2 process termination remains evidence-gated.
+
+---
+
 ## [0.8.0] — 2026-06-19
 
 ### Added
