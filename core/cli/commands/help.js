@@ -69,6 +69,13 @@ Commands:
                                    --auto-commit commits pipeline artifacts on
                                    a clean halt (ceiling, --until, budget).
                                    Writes run.lock, run-state.json, run-log.
+  prototype <start|note|promote>   Pre-SDLC fast-learning workflow. start
+       [id-or-title] [--feature]    creates pipeline/prototypes/<id>/ with
+       [--feedback] [--track]       intent, build prompt, feedback, promotion
+                                   handoff, and metadata. note appends demo
+                                   feedback. promote writes the hardening
+                                   command for a normal Stagecraft track.
+                                   Prototype packets are not gate evidence.
   commit [--all]                   Commit pipeline artifacts after a clean
          [--dry-run]                pipeline stage. Stages only gate-bearing
          [--message "..."]          files for completed stages (cursor-aware);

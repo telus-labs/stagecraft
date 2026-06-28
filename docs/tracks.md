@@ -9,6 +9,7 @@ A **track** is a named subset of pipeline stages. It tells Stagecraft how much r
 - [Conditional dispatch within a track](#conditional-dispatch-within-a-track)
 - [When you've picked the wrong track](#when-youve-picked-the-wrong-track)
 - [Choosing a track](#choosing-a-track)
+- [Prototype mode is not a track](#prototype-mode-is-not-a-track)
 - [Track record (`pipeline/track.json`)](#track-record-pipelinetrackjson)
 - [Customizing tracks](#customizing-tracks)
 
@@ -145,6 +146,24 @@ Decision tree:
 7. **Otherwise** → `quick`. This covers most bounded features and fixes: a new endpoint, a new UI component, added business logic, a non-trivial bug fix. Requirements must be clear and design self-contained. When in doubt between `quick` and `full`, start with `quick`; if Stage 2 design review surfaces cross-cutting concerns, restart on `full`.
 
 > **Note on the config.yml default.** The factory default is `pipeline.default_track: full`, which is conservative and always safe. However, `full` runs red-team adversarial review and formal design on every change, which is wasteful when most attack surfaces don't apply. Evaluate the appropriate track for each brief rather than relying on the config default.
+
+## Prototype mode is not a track
+
+Use `devteam prototype` when you are still learning what to build. It creates a
+lightweight packet under `pipeline/prototypes/<id>/` with intent, build prompt,
+feedback, and promotion handoff files. It does not write gates, advance
+`devteam next`, or satisfy sign-off/deploy evidence.
+
+```bash
+devteam prototype start "settings flow" --feature "Try a faster account-settings flow"
+devteam prototype note settings-flow --feedback "Users missed the save state"
+devteam prototype promote settings-flow --track full
+```
+
+Promotion is the boundary: once the idea is worth hardening, run the generated
+`devteam run --feature-file pipeline/prototypes/<id>/promotion.md --track <t>`
+command. Use a normal track for auth, payments, migrations, secrets, customer
+data, infrastructure, or anything headed toward production.
 
 ## Track record (`pipeline/track.json`)
 
