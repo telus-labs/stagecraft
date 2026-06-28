@@ -1,7 +1,7 @@
 # ADR 013 — openai-compat shell execution: native bash tool
 
-**Status:** Accepted  
-**Date:** 2026-06-24  
+**Status:** Accepted
+**Date:** 2026-06-24
 **Authors:** Mumit Khan
 
 ## Context
