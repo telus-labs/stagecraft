@@ -2,8 +2,8 @@
 
 Phase plans produced from the 2026-06-10 full-framework review and subsequent audits. Each phase is a set of
 PR-sized work items with file/line anchors, acceptance criteria, and verification commands,
-written to be executed one item at a time. **Phases 1–19 are complete; Phase 20 is in
-progress. Phase 21 is proposed for review and is not authorized for implementation.
+written to be executed one item at a time. **Phases 1–20 are complete. Phase 21 is
+proposed for review and is not authorized for implementation.
 Real-project evidence collection remains the active capability priority.**
 
 | Phase | Plan | Prompts | Theme | Status |
@@ -28,7 +28,7 @@ Real-project evidence collection remains the active capability priority.**
 | 17 | [phase-17-durable-evidence-instrumentation.md](phase-17-durable-evidence-instrumentation.md) | — | Durable privacy-bounded dispatch evidence and real-project collection | ✅ 17.1 complete (PR #254); collection in progress |
 | 18 | [phase-18-accepted-resolution-evidence.md](phase-18-accepted-resolution-evidence.md) | — | Explicit hash-bound human acceptance evidence for H3 | ✅ 18.1 complete (PR #262); collection in progress |
 | 19 | [phase-19-polyglot-verification.md](phase-19-polyglot-verification.md) | — | B7 deterministic Node, pytest, and Go suite aggregation | ✅ complete (PR #264) |
-| 20 | [phase-20-run-watch.md](phase-20-run-watch.md) | — | ADR-007 foreground terminal liveness UX | 🚧 20.1 implemented; pending merge |
+| 20 | [phase-20-run-watch.md](phase-20-run-watch.md) | — | ADR-007 foreground terminal liveness UX | ✅ complete (PR #268) |
 | 21 | [phase-21-cloud-runner-adapter.md](phase-21-cloud-runner-adapter.md) | — | A3 remote workstream execution through a transport-backed host adapter | 📝 proposed for review |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
