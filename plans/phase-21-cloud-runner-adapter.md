@@ -45,8 +45,8 @@ never decides what stage runs next.
 
 Cloud execution resolves `ARCHITECTURE.md`'s open question about where the orchestrator
 runs and adds an externally implementable job protocol. It also makes trust and artifact
-transport part of the host-adapter boundary. Phase 21 therefore begins with proposed
-ADR-013; implementation must not begin until that ADR is accepted.
+transport part of the host-adapter boundary. Phase 21 therefore begins with a proposed
+cloud-execution ADR; implementation must not begin until that ADR is accepted.
 
 The ADR must lock these decisions:
 

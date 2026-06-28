@@ -14,11 +14,11 @@ Stagecraft is an orchestrator that runs your AI coding tool through a structured
 
 ## Supported hosts
 
-Stagecraft is model-agnostic. It runs on whichever AI CLI you already have — Claude Code, Codex, Gemini CLI, or any other tool that can accept a prompt and write files.
+Stagecraft is model-agnostic. It runs on whichever AI CLI you already have — Claude Code, Codex, Gemini CLI, any other tool that can accept a prompt and write files — or an OpenAI-compatible Chat Completions endpoint through the HTTP-native host.
 
-Four adapters ship: `claude-code` (primary, with hooks and slash commands), `codex`, `gemini-cli`, and `generic`. Each declares its capabilities — headless support, hooks, subagents, enforcement levels — in `hosts/<host>/capabilities.json`.
+Five adapters ship: `claude-code` (primary, with hooks and slash commands), `codex`, `gemini-cli`, `generic`, and `openai-compat`. Each declares its capabilities — headless support, hooks, subagents, enforcement levels — in `hosts/<host>/capabilities.json`.
 
-See **[`docs/reference/hosts.md`](reference/hosts.md)** for the full capability and enforcement matrix across all four hosts.
+See **[`docs/reference/hosts.md`](reference/hosts.md)** for the full capability and enforcement matrix across all five hosts.
 
 ---
 
