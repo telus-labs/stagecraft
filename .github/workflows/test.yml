@@ -143,7 +143,7 @@ jobs:
           STAGE_OUT=$(mktemp)
           ./bin/devteam init --host claude-code --cwd "$TARGET"
           ./bin/devteam doctor --cwd "$TARGET"
-          DEVTEAM_HEADLESS_COMMAND=cat ./bin/devteam stage requirements \
+          DEVTEAM_HEADLESS_COMMAND=cat DEVTEAM_HEADLESS_TEE=1 ./bin/devteam stage requirements \
             --feature "smoke test feature" --headless --cwd "$TARGET" \
             > "$STAGE_OUT" 2>&1 || true
           cat "$STAGE_OUT"

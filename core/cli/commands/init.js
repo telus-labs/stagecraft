@@ -4,8 +4,46 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { listHosts, loadAdapter } = require(path.join(__dirname, "..", "..", "router"));
-const { writeConfigIfAbsent, configPath, KNOWN_DEPLOY_ADAPTERS } = require(path.join(__dirname, "..", "..", "config"));
+const { writeConfigIfAbsent, configPath, KNOWN_DEPLOY_ADAPTERS, DEPLOY_ADAPTER_ARTIFACTS } = require(path.join(__dirname, "..", "..", "config"));
 const { writeGitignoreBlock } = require(path.join(__dirname, "..", "..", "gitignore"));
+
+const DEPLOY_SRC_DIR = path.join(__dirname, "..", "..", "deploy");
+
+// Install the built-in adapter spec and any adapter-specific project artifacts.
+// Safe to re-run: files are only written when absent (or --force).
+function installDeployAdapter(cwd, adapterName, opts = {}) {
+  const results = { written: [], skipped: [] };
+
+  // Copy the built-in adapter procedure into .devteam/adapters/<name>.md so
+  // the platform-deploy skill can find it regardless of host (claude-code can
+  // reach the framework source; openai-compat can only read project files).
+  const specSrc = path.join(DEPLOY_SRC_DIR, `${adapterName}.md`);
+  if (fs.existsSync(specSrc)) {
+    const destDir = path.join(cwd, ".devteam", "adapters");
+    const destPath = path.join(destDir, `${adapterName}.md`);
+    if (!fs.existsSync(destPath) || opts.force) {
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.copyFileSync(specSrc, destPath);
+      results.written.push(path.relative(cwd, destPath));
+    } else {
+      results.skipped.push(path.relative(cwd, destPath));
+    }
+  }
+
+  // Scaffold adapter-specific project artifacts (Dockerfile, compose file…).
+  for (const { rel, content } of (DEPLOY_ADAPTER_ARTIFACTS[adapterName] || [])) {
+    const dest = path.join(cwd, rel);
+    if (!fs.existsSync(dest) || opts.force) {
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, content, "utf8");
+      results.written.push(rel);
+    } else {
+      results.skipped.push(rel);
+    }
+  }
+
+  return results;
+}
 
 const name = "init";
 
@@ -51,7 +89,7 @@ function run(positional, _flags) {
     ? `  ✓ wrote ${path.relative(cwd, cfg.path)}`
     : `  - skipped ${path.relative(cwd, cfg.path)} (${cfg.reason}; use --force to overwrite)`);
 
-  for (const dir of ["pipeline", "pipeline/gates"]) {
+  for (const dir of ["pipeline", "pipeline/gates", ".devteam/templates"]) {
     const p = path.join(cwd, dir);
     if (!fs.existsSync(p)) {
       fs.mkdirSync(p, { recursive: true });
@@ -61,12 +99,34 @@ function run(positional, _flags) {
     }
   }
 
+  const agentsPath = path.join(cwd, "AGENTS.md");
+  if (!fs.existsSync(agentsPath) || _flags.force) {
+    const stub = [
+      "# Project context",
+      "",
+      "<!-- Fill in: project name, language/stack, key constraints, team conventions.",
+      "     This file is read by every pipeline agent before each stage. -->",
+      "",
+    ].join("\n");
+    fs.writeFileSync(agentsPath, stub, "utf8");
+    console.log(`  ✓ wrote AGENTS.md (stub — edit with project context)`);
+  } else {
+    console.log(`  - exists  AGENTS.md`);
+  }
+
   for (const hostName of hosts) {
     console.log(`\nInstalling host adapter: ${hostName}`);
     const adapter = loadAdapter(hostName);
     const r = adapter.install(cwd, { force: !!_flags.force });
     console.log(`  written: ${r.written.length}, skipped: ${r.skipped.length}`);
     for (const f of r.warnings) console.log(`  ⚠️  ${f}`);
+  }
+
+  if (adapter) {
+    console.log(`\nInstalling deploy adapter: ${adapter}`);
+    const dr = installDeployAdapter(cwd, adapter, { force: !!_flags.force });
+    for (const f of dr.written)  console.log(`  ✓ wrote   ${f}`);
+    for (const f of dr.skipped)  console.log(`  - exists  ${f}`);
   }
 
   const giResult = writeGitignoreBlock(cwd);

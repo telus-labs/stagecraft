@@ -23,6 +23,7 @@ const { pricingFor } = require("./pricing");
 const { getRecipe } = require("./pipeline/fix-recipes");
 const { detectNoProgress, countArchivedAttempts, noProgressEvidence } = require("./gates/convergence");
 const { archiveGateIfFail, pruneArchives } = require("./gates/archive");
+const { isAllowed } = require("./guards/write-audit");
 
 // C1: patch a gate file to record write-audit violations and flip status to FAIL.
 // Called after headless invoke when the adapter reported unauthorized writes.
@@ -70,7 +71,7 @@ function assertCapabilities(stageDef, role, hostName, adapter) {
         `stage "${stageDef.stage}" (role "${role}") requires the "${cap}" capability ` +
         `but host "${hostName}" does not provide it (enforces.${cap} !== true). ` +
         `Update routing in .devteam/config.yml to use a host with ${cap} support ` +
-        `(claude-code, codex, or gemini-cli).`,
+        `(claude-code, codex, gemini-cli, or openai-compat).`,
       );
     }
   }
@@ -149,13 +150,28 @@ const OOS_KEYWORDS = {
   qa:       ["qa workstream", "test workstream"],
 };
 
-function inferActiveRoles(stage01Gate, allRoles) {
+function inferActiveRoles(stage01Gate, allRoles, alwaysDispatch) {
+  // active_roles lists only workstream slots (backend, frontend, qa, platform).
+  // Non-workstream roles like "pm" and "principal" never appear in active_roles
+  // and must always be passed through — never filter them out.
+  const WORKSTREAM_SLOTS = new Set(Object.keys(OOS_KEYWORDS));
+  // Roles in alwaysDispatch (set per stage in stages.js) are structural: they
+  // write pipeline/ artifacts that every deploy needs regardless of which code
+  // workstreams were active. Treat them like non-workstream roles — never filter.
+  const pinned = new Set(Array.isArray(alwaysDispatch) ? alwaysDispatch : []);
+
   // Explicit active_roles takes precedence — PM's deliberate decision.
   if (Array.isArray(stage01Gate.active_roles) && stage01Gate.active_roles.length > 0) {
-    const filtered = stage01Gate.active_roles.filter(r => allRoles.includes(r));
-    // Empty intersection means active_roles doesn't cover this stage's roles at all
-    // (e.g. design uses "principal", not build workstream roles) — apply no filter.
-    return filtered.length > 0 ? filtered : null;
+    const activeSet = new Set(stage01Gate.active_roles);
+    // Keep a role if it is not a workstream slot (always active), if it
+    // appears in active_roles (explicitly active workstream), or if it is
+    // pinned via alwaysDispatch (structural role whose artifact is always needed).
+    const filtered = allRoles.filter(r => !WORKSTREAM_SLOTS.has(r) || activeSet.has(r) || pinned.has(r));
+    // Return the filtered list only when something was removed AND at least one
+    // role remains. An empty result (all workstream roles absent from active_roles)
+    // would produce a zero-workstream plan that completes in 0ms and loops. A
+    // result identical to allRoles (nothing removed) is a no-op. Both → null.
+    return (filtered.length < allRoles.length && filtered.length > 0) ? filtered : null;
   }
   // Inference fallback: keyword-match out_of_scope_items.
   if (!Array.isArray(stage01Gate.out_of_scope_items) || stage01Gate.out_of_scope_items.length === 0) {
@@ -191,7 +207,7 @@ function computeDispatchPlan(stageDef, config, track, opts = {}) {
     if (fs.existsSync(s1Path)) {
       const { gate } = loadGateSafe(s1Path);
       if (gate) {
-        const filtered = inferActiveRoles(gate, roles);
+        const filtered = inferActiveRoles(gate, roles, stageDef.alwaysDispatch);
         if (filtered) roles = filtered;
       }
     }
@@ -460,10 +476,29 @@ async function runStageHeadless(stageName, opts = {}) {
         });
         return out;
       });
-      // C1: if write violations were detected, patch the gate to FAIL.
+      // C1: if write violations were detected, filter out parallel-stage
+      // false positives then patch the gate to FAIL.
+      //
+      // When multiple workstreams run in parallel (Promise.all above), the
+      // post-hoc snapshot window for workstream A overlaps with workstream B's
+      // writes. Any file B legitimately writes appears as a "new path" in A's
+      // after-snapshot and gets flagged as a violation even though A never
+      // touched it. Suppress those by treating any path covered by a sibling
+      // workstream's allowedWrites as permitted for audit purposes.
       if (r.writeViolations && r.writeViolations.length > 0) {
-        const wsGatePath = r.gatePath || wsGatePathExpected;
-        patchGateForWriteViolations(wsGatePath, r.writeViolations);
+        const siblingAllowedWrites = plan.workstreams
+          .filter((s) => s !== ws)
+          .flatMap((s) => s.descriptor?.allowedWrites || []);
+        const realViolations = siblingAllowedWrites.length > 0
+          ? r.writeViolations.filter((v) => !isAllowed(v, siblingAllowedWrites))
+          : r.writeViolations;
+        if (realViolations.length > 0) {
+          for (const v of realViolations) {
+            process.stderr.write(`[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${ws.descriptor.workstreamId})\n`);
+          }
+          const wsGatePath = r.gatePath || wsGatePathExpected;
+          patchGateForWriteViolations(wsGatePath, realViolations);
+        }
       }
       // G10: stamp dispatched_tool_budget only when the headless command
       // actually wrote (or rewrote) the gate — detected by mtime advancing
@@ -912,7 +947,12 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
   }
 
   const runbookPath = path.join(root, "runbook.md");
-  const runbookExists = fs.existsSync(runbookPath);
+  if (!fs.existsSync(runbookPath)) {
+    return {
+      ok: false,
+      reason: "pipeline/runbook.md missing — platform must author it during Stage 7 sign-off before auto-fold can proceed",
+    };
+  }
   const docsGate = classifyDocumentationGate(cwd);
   if (docsGate.docs_surface_affected && docsGate.docs_updated !== true) {
     return {
@@ -928,10 +968,10 @@ function tryAutoFoldSignOff(cwd, gatesDir, track, changeId) {
     track,
     timestamp: new Date().toISOString(),
     blockers: [],
-    warnings: runbookExists ? [] : ["pipeline/runbook.md not yet authored — Stage 8 will require it"],
+    warnings: [],
     pm_signoff: true,
     deploy_requested: true,
-    runbook_referenced: runbookExists,
+    runbook_referenced: true,
     docs_surface_affected: docsGate.docs_surface_affected,
     docs_updated: docsGate.docs_updated,
     docs_skipped_reason: docsGate.docs_skipped_reason,
@@ -1275,7 +1315,7 @@ function rolesPath() {
 }
 
 function templatesPath() {
-  return path.join(PROJECT_ROOT, "templates");
+  return path.join(PROJECT_ROOT, ".devteam", "templates");
 }
 
 module.exports = {

@@ -15,10 +15,22 @@ const { renderPatchBlock, allowedWritesCaption, appendGateFooter, toolBudgetSect
 
 const RULES_DIR = baseInstall.RULES_DIR;
 const SKILLS_DIR = baseInstall.SKILLS_DIR;
+const TEMPLATES_DIR = baseInstall.TEMPLATES_DIR;
 
 function makeMarkdownHostAdapter(capabilities) {
   const ROLES = listRoles();
   const hostName = capabilities.name;
+
+  function collectTemplateFiles(srcDir, relDir = "") {
+    const files = [];
+    for (const f of fs.readdirSync(srcDir)) {
+      const src = path.join(srcDir, f);
+      const rel = relDir ? path.join(relDir, f) : f;
+      if (fs.statSync(src).isDirectory()) files.push(...collectTemplateFiles(src, rel));
+      else files.push(rel);
+    }
+    return files;
+  }
 
   function installRoles(targetDir, opts) {
     const dir = path.join(targetDir, capabilities.rolePromptsDir);
@@ -49,11 +61,12 @@ function makeMarkdownHostAdapter(capabilities) {
     const o = { force: false, roles: [], isolation: "in-place", ...opts };
     const roles = installRoles(targetDir, o);
     const rules = baseInstall.installRules(targetDir, o);
+    const templates = baseInstall.installTemplates(targetDir, o);
     const skills = baseInstall.installSkills(targetDir, capabilities.skillsDir, o);
     return {
-      written: [...roles.written, ...rules.written, ...skills.written],
-      skipped: [...roles.skipped, ...rules.skipped, ...skills.skipped],
-      warnings: [...roles.warnings, ...rules.warnings, ...skills.warnings],
+      written: [...roles.written, ...rules.written, ...templates.written, ...skills.written],
+      skipped: [...roles.skipped, ...rules.skipped, ...templates.skipped, ...skills.skipped],
+      warnings: [...roles.warnings, ...rules.warnings, ...templates.warnings, ...skills.warnings],
     };
   }
 
@@ -66,6 +79,7 @@ function makeMarkdownHostAdapter(capabilities) {
       }
     }
     baseInstall.uninstallRules(targetDir);
+    baseInstall.uninstallTemplates(targetDir);
     baseInstall.uninstallSkills(targetDir, capabilities.skillsDir);
   }
 
@@ -87,6 +101,12 @@ function makeMarkdownHostAdapter(capabilities) {
     if (fs.existsSync(SKILLS_DIR)) {
       for (const skill of fs.readdirSync(SKILLS_DIR)) {
         const p = path.join(targetDir, capabilities.skillsDir, skill, "SKILL.md");
+        if (!fs.existsSync(p)) missing.push(p);
+      }
+    }
+    if (fs.existsSync(TEMPLATES_DIR)) {
+      for (const f of collectTemplateFiles(TEMPLATES_DIR)) {
+        const p = path.join(targetDir, ".devteam", "templates", f);
         if (!fs.existsSync(p)) missing.push(p);
       }
     }
@@ -118,11 +138,19 @@ function makeMarkdownHostAdapter(capabilities) {
     lines.push("");
     lines.push(allowedWritesCaption(capabilities.enforces.allowed_writes, capabilities.displayName || hostName));
     for (const f of descriptor.allowedWrites) lines.push(`- ${f}`);
+    if (descriptor.allowedWrites.some((f) => f.includes("<"))) {
+      lines.push("(Note: `<name>` tokens above are placeholders — substitute your actual value.");
+      lines.push(" For example, write to `pipeline/code-review/by-qa.md`, NOT `pipeline/code-review/by-<reviewer>.md`.)");
+    }
     lines.push("");
     const budgetSection = toolBudgetSection(descriptor.toolBudget, capabilities.enforces.tool_budget);
     if (budgetSection) { lines.push(budgetSection); lines.push(""); }
     lines.push(`## Artifact`);
-    lines.push(`Produce \`${descriptor.artifact}\` using \`templates/${descriptor.template}\`.`);
+    const templateRel = `.devteam/templates/${descriptor.template}`;
+    const templateExists = ctx.cwd && fs.existsSync(path.join(ctx.cwd, templateRel));
+    lines.push(templateExists
+      ? `Produce \`${descriptor.artifact}\` using \`${templateRel}\`.`
+      : `Produce \`${descriptor.artifact}\`.`);
     lines.push("");
     appendGateFooter(lines, descriptor, ctx, hostName);
     return lines.join("\n");

@@ -32,13 +32,18 @@ Three distinct concepts that appear together everywhere:
 
 - **Role** — a job function performed by an AI agent: PM, Principal, Backend, Security, Red-team, etc. Each role has a brief in `roles/<name>.md` that defines its responsibilities and constraints.
 - **Stage** — a pipeline step with a defined objective, artifact, and gate: requirements, design, build, peer-review, etc. Each stage dispatches one or more roles to do the work.
-- **Host** — the CLI that delivers the prompt to the model: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). Stagecraft never calls a model directly; it hands the prompt to a host CLI.
+- **Host** — how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). The fourth, `openai-compat`, is HTTP-native — it calls any OpenAI-compatible Chat Completions endpoint directly without a CLI.
 
 A stage assigns roles; routing assigns those roles to hosts; the hosts invoke models. The gate JSON is what all three produce in common.
 
 ### Do I need Claude Code or Codex CLI installed to use this?
 
-No, not strictly. The **generic** adapter (`hosts/generic/`) has zero in-host integration — it renders prompts to stdout and you consume them however you like (paste into any LLM, copy to a wiki, hand to a human). What you give up: no slash commands, no hooks, no headless invocation. Most people will want at least one real host installed.
+No, not strictly. Two adapters work without a dedicated CLI:
+
+- **`openai-compat`** routes directly to any OpenAI-compatible Chat Completions API endpoint (OpenAI, OpenRouter, Fireworks AI, Fuel iX, provider-hosted open-weight models, or internal gateways) via HTTP — no CLI, full headless support, bash tool included. This is the recommended no-install option when you have an API key for a hosted model. See [Using openai-compat](user-guide.md#using-openai-compat-openai-compatible-apis) in the user guide for setup.
+- **`generic`** renders prompts to stdout for manual paste into any LLM or workflow. What you give up: no slash commands, no hooks, no headless invocation.
+
+Most people will want at least one real host installed.
 
 ### Where does the framework live vs the target project?
 
@@ -253,7 +258,33 @@ Yes. Gemini CLI is already shipped (`hosts/gemini-cli/`). For others, implement 
 
 ### Does the routing config support different model versions of the same host?
 
-Not directly. The routing key is the host name (`claude-code`, `codex`). To use different models per role within the same host, configure that in the host itself (e.g., Claude Code's `.claude/agents/<name>.md` has a `model:` field; Codex prompts can be wrapped with model selection). The framework's routing layer routes to *hosts*, not *models within a host* — see [`docs/BACKLOG.md`](BACKLOG.md) G2 / D5 for the planned "adaptive routing" work.
+Not directly for CLI-based hosts. The routing key is the host name (`claude-code`, `codex`). To use different models per role within those hosts, configure that in the host itself (e.g., Claude Code's `.claude/agents/<name>.md` has a `model:` field; Codex prompts can be wrapped with model selection). The framework's routing layer routes to *hosts*, not *models within a host* — see [`docs/BACKLOG.md`](BACKLOG.md) G2 / D5 for the planned "adaptive routing" work.
+
+For `openai-compat`, per-role model selection is a first-class config feature — see below.
+
+### Can I use open-weight models like DeepSeek, Kimi, or Qwen with Stagecraft?
+
+Yes — via the `openai-compat` host adapter. It routes roles to any provider that exposes an OpenAI-compatible Chat Completions endpoint, including OpenAI, OpenRouter, Fireworks AI, Fuel iX, hosted open-weight providers, and internal gateways. Unlike CLI-based hosts, per-role model selection is configured directly in `.devteam/config.yml`:
+
+```yaml
+routing:
+  default_host: openai-compat
+
+hosts:
+  openai-compat:
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    models:
+      default:   gpt-4.1-mini
+      principal: gpt-4.1        # reasoning-heavy roles
+      security:  gpt-4.1
+      red-team:  gpt-4.1
+      backend:   gpt-4.1-mini   # implementation roles
+      qa:        gpt-4.1-mini   # test authoring
+      verifier:  gpt-4.1        # verification
+```
+
+Swap `base_url`, `api_key_env`, and model IDs for your provider. See [Using openai-compat](user-guide.md#using-openai-compat-openai-compatible-apis) for the full config schema, env vars, limitations, and model recommendations.
 
 ### Which roles should get expensive models (Opus) vs. cheaper ones?
 
@@ -665,7 +696,7 @@ There's no automatic file-restriction enforcement at the framework level — the
 
 ### Can I run Stagecraft fully offline?
 
-Mostly yes. The framework itself is offline (Node, no network calls). The model invocation is whatever the host CLI does — `claude --print` and `codex exec` need network; `generic` host doesn't run a model at all.
+Mostly yes. The framework itself is offline (Node, no network calls). The model invocation is whatever the host CLI does — `claude --print` and `codex exec --sandbox workspace-write` need network; `generic` host doesn't run a model at all.
 
 The memory system's default embedder (`Xenova/bge-small-en-v1.5`) downloads ~33MB on first use, then runs offline. If your CI doesn't have network access, set `DEVTEAM_EMBEDDING_PROVIDER=stub` to skip embedding entirely.
 
@@ -683,7 +714,7 @@ Add `devteam init --host <name>` to your project bootstrap script and use `--hea
 - run: devteam next --json | jq .action
 ```
 
-Set the host CLI's auth via the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) in your CI secrets. The orchestrator never handles tokens — it just shells out to `claude` / `codex` / `gemini`.
+Set the host CLI's auth via the standard env (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) in your CI secrets. For openai-compat, set the env var named by `api_key_env` in your config (for example `OPENAI_API_KEY`, `FIREWORKS_API_KEY`, `FUELIX_API_KEY`, or `OPENROUTER_API_KEY`). The orchestrator never handles tokens — it just shells out to `claude` / `codex` / `gemini`, or calls the configured OpenAI-compatible API directly for openai-compat.
 
 `scripts/pr-publish.js` (run via `npm run pr-publish`) posts gate status as GitHub check runs on the PR head commit. PASS → success, WARN → neutral, FAIL/ESCALATE → failure.
 
@@ -855,13 +886,49 @@ Run `devteam validate` for the exact error. Common causes:
 - The gate has a `retry_number >= 1` but no `this_attempt_differs_by` field — the retry-integrity check.
 - An older gate in `pipeline/gates/` has `status: ESCALATE` that's unresolved — bypassed-escalation halts the pipeline regardless of which gate you just wrote.
 
+### A markdown host shows ENOENT errors for `.devteam/templates/` — is something broken?
+
+It usually means the target project was initialized with an older Stagecraft install. Re-run `devteam init --host <host> --force` with the same host (`codex`, `gemini-cli`, or `openai-compat`) so `.devteam/templates/` is populated alongside `.devteam/rules/`, role prompts, and skills. `devteam doctor` will report missing installed templates.
+
+### The model in an openai-compat stage used `sed -i 'expr' file` and it failed on macOS — why?
+
+macOS ships BSD `sed`, which requires an explicit empty-string backup extension: `sed -i '' 'expr' file`. GNU `sed` (Linux) accepts `sed -i 'expr' file` without the suffix — which is what most models write by default. To prevent the issue, add a note to your `pipeline/context.md` binding-constraints section before running the pipeline:
+
+```markdown
+## Binding implementation constraints
+
+macOS environment: use BSD `sed` syntax — `sed -i '' 'expr' file`, not `sed -i 'expr' file`.
+```
+
+### A stage halted with `structural-input` but the model seemed to be working — what happened?
+
+The most likely cause is a function-calling regression at long context. Some model/provider combinations use an internal chat-template format for tool calls instead of returning native OpenAI `tool_calls` JSON. At short context they may produce correct `tool_calls`; at long context — after a stage has read many files and accumulated a large conversation — they can revert to their internal format and emit the tool call as plain text content instead. The adapter receives an empty `tool_calls` array, executes nothing, writes no gate, and the orchestrator correctly halts.
+
+**How to confirm:** look for lines like `` `functions.write_file:17 <|tool_call_argument_begin|> {"path": ...}` `` in the model's text output (visible in the [devteam] log). That prefix (`functions.name:idx`) is the internal Kimi tool-call ID format leaking into content.
+
+**Recovery:** the auto-fix retry cycle normally recovers on its own — context resets between dispatches, so the next attempt starts short. If retries keep failing:
+1. Check whether `pipeline/context.md` has grown very large; trim any long verbatim sections.
+2. For `backend` or `verifier` roles, swap the configured model/provider pair to one you have verified emits native `tool_calls` at long context, such as OpenAI GPT models, DeepSeek V3/V4, or Qwen Coder variants on a compatible provider.
+
+This class of issue is provider- and model-template-specific. Kimi K2 has [a documented upstream example](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) where third-party serving infrastructure may expose raw tool-call template behavior.
+
+### Does openai-compat need `--headless` on every `devteam stage` invocation?
+
+No. When the configured `default_host` is `openai-compat` (which declares `httpNative: true`), `devteam stage <name>` auto-enables headless mode and prints:
+
+```
+[devteam] openai-compat is HTTP-native — running headlessly
+```
+
+Passing `--headless` explicitly is also accepted. This auto-detection fires only when `default_host` is httpNative; if you're routing a single role to openai-compat via `routing.roles` while keeping a CLI adapter as `default_host`, `--headless` is still required for the CLI-based stages.
+
 ### Can I set per-role timeouts?
 
 Not natively in the framework today (BACKLOG E-series). The framework shells out to the host CLI and waits for it to exit — it inherits whatever timeout the host CLI imposes.
 
 Workarounds:
 - **Claude Code**: no built-in timeout flag; the `max_turns` subagent frontmatter field limits the number of agent turns, which indirectly limits wall-clock time on bounded tasks.
-- **Codex**: `codex exec --timeout <seconds>` caps execution time directly.
+- **Codex**: Stagecraft's `--timeout-ms <milliseconds>` caps each workstream's wall-clock time around `codex exec --sandbox workspace-write`.
 - **Generic host**: wrap the host invocation in `timeout <seconds> <command>` in your shell script.
 
 For CI, you likely want pipeline-level timeouts (fail the job if a stage hasn't produced a gate in N minutes) rather than per-role timeouts. A simple wrapper:
@@ -954,4 +1021,4 @@ They compose: for `build` (stage-04) and `qa` (stage-06), hosts that declare `ca
 
 Codex's autonomous mode is one model running until a task is done. Stagecraft is a structured pipeline across roles, with artifacts and gates between them. If your task fits in one model's context and you trust it to converge, use Codex's autonomous mode. If your task needs structure across stages, multiple roles, or auditability, use Stagecraft.
 
-You can also run Stagecraft with Codex as the host. The `codex` adapter dispatches each workstream as a separate `codex exec` invocation. Codex still operates autonomously per workstream; Stagecraft provides the cross-workstream structure.
+You can also run Stagecraft with Codex as the host. The `codex` adapter dispatches each workstream as a separate `codex exec --sandbox workspace-write` invocation. Codex still operates autonomously per workstream; Stagecraft provides the cross-workstream structure.

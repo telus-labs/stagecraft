@@ -61,7 +61,7 @@ Capability semantics:
 | `worktrees`      | Honor `isolation: isolated` mode                                      | All work in-place               |
 | `headless`       | Adapter can drive the host non-interactively (`cli-driven` mode)      | `user-driven` only              |
 | `enforces.<rule>`| Where the host enforces a core rule. Values: `tool-call-time` (blocked at write — hooks), `post-hoc-audit` (orchestrator write-audit diffs git state before/after invoke; unauthorized writes flip the gate to FAIL), `prompt-only` (advisory only; no automated enforcement). | See `core/guards/write-audit.js`. |
-| `enforces.shell` | `true` if the agent can execute shell commands (bash tool). Required by pre-review, qa, verification-beyond-tests, deploy. | Orchestrator refuses dispatch with a named error. |
+| `enforces.shell` | `true` if the agent can execute command-line tools (for example through a bash tool or direct-command executor). Required by pre-review, qa, verification-beyond-tests, deploy. | Orchestrator refuses dispatch with a named error. |
 | `enforces.network` | `true` if the agent can make outbound network requests. | Orchestrator refuses dispatch with a named error. |
 | `goalLoop`       | Host supports a session-level convergence directive (`/goal "condition"`). When `true`, the orchestrator prepends `/goal "…"` to the prompt for stages that declare `goalCondition`. | Prompt is sent as-is; no goal loop. |
 
@@ -69,6 +69,12 @@ Capability semantics:
 directly to `spawn()`; Stagecraft does not invoke a shell. Quote arguments or
 absolute executable paths that contain spaces, for example
 `"C:\Program Files\Vendor\agent.exe" --print`.
+
+Headless subprocess stdout/stderr is written to
+`pipeline/logs/<workstreamId>.log` by default. It is not mirrored to the
+terminal unless `DEVTEAM_HEADLESS_TEE=1`, `DEVTEAM_VERBOSE=1`, or `ctx.tee`
+is enabled, so autonomous runs do not dump prompts or large diffs into the
+operator console.
 
 ## adapter.js methods
 
@@ -224,5 +230,5 @@ The legacy `agent` field is removed. Adapters MUST write `host` and `orchestrato
 ## Reference adapters
 
 - `hosts/claude-code/` — full capabilities (hooks, subagents, slash commands, worktrees, headless via `claude --print`).
-- `hosts/codex/` — skills + prompts, no hooks, headless via `codex exec`.
+- `hosts/codex/` — skills + prompts, no hooks, headless via `codex exec --sandbox workspace-write`.
 - `hosts/generic/` — none of the above; only `renderStagePrompt` and a noop `install`. Proves the contract is genuinely host-agnostic.

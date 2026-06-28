@@ -41,7 +41,7 @@ routing:
 | Host | hooks | subagents | slash | worktrees | headless | `enforces.allowed_writes` |
 |---|---|---|---|---|---|---|
 | `claude-code` | ✅ | ✅ | ✅ | ✅ | `claude --dangerously-skip-permissions --print` | `tool-call-time` (hooks) |
-| `codex` | ❌ | ❌ | ❌ | ✅ | `codex exec` | `prompt-only` (advisory) |
+| `codex` | ❌ | ❌ | ❌ | ✅ | `codex exec --sandbox workspace-write` | `prompt-only` (advisory) |
 
 Source: `hosts/{claude-code,codex}/capabilities.json`. The orchestrator reads these at dispatch time and handles the asymmetry explicitly rather than hiding it.
 

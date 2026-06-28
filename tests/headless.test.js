@@ -62,6 +62,36 @@ function withEnv(key, value, fn) {
   });
 }
 
+async function captureStdoutStderr(fn) {
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  const origStdout = process.stdout.write.bind(process.stdout);
+  const origStderr = process.stderr.write.bind(process.stderr);
+  process.stdout.write = (chunk, ...rest) => {
+    stdoutChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+    const cb = rest.find((arg) => typeof arg === "function");
+    if (cb) cb();
+    return true;
+  };
+  process.stderr.write = (chunk, ...rest) => {
+    stderrChunks.push(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk));
+    const cb = rest.find((arg) => typeof arg === "function");
+    if (cb) cb();
+    return true;
+  };
+  try {
+    const result = await fn();
+    return {
+      result,
+      stdout: stdoutChunks.join(""),
+      stderr: stderrChunks.join(""),
+    };
+  } finally {
+    process.stdout.write = origStdout;
+    process.stderr.write = origStderr;
+  }
+}
+
 test("resolves capabilities.headlessCommand and exits with the child's code", async () => {
   const ctx = makeCtx();
   try {
@@ -267,10 +297,10 @@ test("ctx.timeoutMs: 0 disables the timeout", async () => {
   }
 });
 
-test("writes pipeline/logs/<workstreamId>.log by default (tee behavior)", async () => {
+test("writes pipeline/logs/<workstreamId>.log by default (transcript behavior)", async () => {
   const ctx = makeCtx();
   try {
-    // `cat` echoes our prompt back to stdout, which gets teed to the log.
+    // `cat` echoes our prompt back to stdout, which is captured in the log.
     const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "cat", () =>
       runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
     );
@@ -290,6 +320,58 @@ test("writes pipeline/logs/<workstreamId>.log by default (tee behavior)", async 
     // Trailer
     assert.match(content, /# Ended:/);
     assert.match(content, /# Exit: 0/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("default transcript logging does not mirror host stdout/stderr to the terminal", async () => {
+  const ctx = makeCtx();
+  const scriptPath = path.join(ctx.cwd, "noisy-host.js");
+  fs.writeFileSync(
+    scriptPath,
+    'process.stdout.write("FULL PROMPT ECHO\\n"); process.stderr.write("DIFF --git noisy\\n");\n',
+  );
+  try {
+    const { result, stdout, stderr } = await captureStdoutStderr(() =>
+      withEnv("DEVTEAM_HEADLESS_COMMAND", `"${process.execPath}" "${scriptPath}"`, () =>
+        runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+      ),
+    );
+    assert.equal(result.exitCode, 0);
+    assert.doesNotMatch(stdout, /FULL PROMPT ECHO/);
+    assert.doesNotMatch(stderr, /DIFF --git noisy/);
+
+    const content = fs.readFileSync(path.join(ctx.cwd, "pipeline", "logs", "stage-01.log"), "utf8");
+    assert.match(content, /FULL PROMPT ECHO/);
+    assert.match(content, /DIFF --git noisy/);
+  } finally {
+    fs.rmSync(ctx.cwd, { recursive: true, force: true });
+  }
+});
+
+test("DEVTEAM_HEADLESS_TEE=1 mirrors host output while preserving transcript logging", async () => {
+  const ctx = makeCtx();
+  const scriptPath = path.join(ctx.cwd, "verbose-host.js");
+  fs.writeFileSync(
+    scriptPath,
+    'process.stdout.write("live stdout\\n"); process.stderr.write("live stderr\\n");\n',
+  );
+  try {
+    const { result, stdout, stderr } = await captureStdoutStderr(() =>
+      withEnv("DEVTEAM_HEADLESS_COMMAND", `"${process.execPath}" "${scriptPath}"`, () =>
+        withEnv("DEVTEAM_HEADLESS_TEE", "1", () =>
+          runHeadless(makeAdapter(), makeDescriptor("stage-01"), ctx),
+        ),
+      ),
+    );
+    assert.equal(result.exitCode, 0);
+    assert.match(stdout, /live stdout/);
+    assert.match(stderr, /live stderr/);
+
+    const content = fs.readFileSync(path.join(ctx.cwd, "pipeline", "logs", "stage-01.log"), "utf8");
+    assert.match(content, /live stdout/);
+    assert.match(content, /live stderr/);
   } finally {
     fs.rmSync(ctx.cwd, { recursive: true, force: true });
   }
@@ -348,7 +430,7 @@ test("streams high-volume transcripts without retaining or truncating chunks", (
   }
 });
 
-test("DEVTEAM_NO_LOG=1 disables the tee; no log file is written", async () => {
+test("DEVTEAM_NO_LOG=1 disables transcript logging; no log file is written", async () => {
   const ctx = makeCtx();
   try {
     const r = await withEnv("DEVTEAM_HEADLESS_COMMAND", "true", async () => {

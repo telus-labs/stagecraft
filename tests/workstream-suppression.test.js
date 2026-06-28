@@ -97,6 +97,54 @@ describe("computeDispatchPlan: explicit active_roles in stage-01 gate", () => {
     assert.ok(roles.includes("principal"), `design should still dispatch principal; got: ${roles}`);
     assert.equal(roles.length, 1);
   });
+
+  it("does not filter 'pm' from sign-off when active_roles lists workstream roles only", () => {
+    // Regression: sign-off has roles ["pm", "platform"]. active_roles =
+    // ["backend", "platform", "qa"] has a non-empty intersection with sign-off
+    // (platform), so the old code returned ["platform"] — dropping "pm".
+    // next() then saw only the platform workstream gate as required, found it
+    // complete, and returned action:"merge". mergeWorkstreamGates computed a
+    // 1-workstream plan and refused with "single-workstream stage; no merge
+    // needed" — deadlock. pm must never be treated as a suppressible workstream.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "platform", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "sign-off");
+    assert.ok(roles.includes("pm"), `pm must always be dispatched for sign-off; got: ${roles}`);
+    assert.ok(roles.includes("platform"), `platform must be dispatched for sign-off; got: ${roles}`);
+    assert.equal(roles.length, 2);
+  });
+
+  it("dispatches both pm and platform for sign-off even when active_roles is backend+qa only", () => {
+    // Regression: active_roles = ["backend", "qa"] (no platform). sign-off has
+    // roles ["pm", "platform"]. inferActiveRoles kept pm (non-workstream-slot)
+    // but filtered platform (in WORKSTREAM_SLOTS, not in activeSet) → plan had
+    // only pm. next() returned action:"merge"; mergeWorkstreamGates refused with
+    // "single-workstream stage; no merge needed" — deadlock.
+    // Fix: sign-off carries alwaysDispatch:["pm","platform"]; pinned roles are
+    // never filtered regardless of active_roles. The runbook is always required
+    // for deploy whether or not platform did code work in earlier stages.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "sign-off");
+    assert.ok(roles.includes("pm"), `pm must always be dispatched for sign-off; got: ${roles}`);
+    assert.ok(roles.includes("platform"), `platform must always be dispatched for sign-off (alwaysDispatch); got: ${roles}`);
+    assert.equal(roles.length, 2);
+  });
+
+  it("does not produce an empty plan for pre-review when platform is absent from active_roles", () => {
+    // Regression: active_roles = ["backend", "qa"] (no platform). pre-review
+    // has roles: ["platform"]. The full workstream-slot filter excluded platform
+    // (not in active_roles), returning [] — an empty plan. runStageHeadless
+    // completed in 0ms with no gate written, dispatchOutcomeTransition saw
+    // wroteGate=false, retried immediately, and looped until max-iterations.
+    // Rule: when all allRoles would be filtered out, return null (no filter)
+    // rather than [] so the stage can still run.
+    const cwd = track(makeTargetProject());
+    writeStage01Gate(cwd, { active_roles: ["backend", "qa"] });
+    const roles = dispatchPlanRoles(cwd, "pre-review");
+    assert.ok(roles.includes("platform"), `platform must still be dispatched for pre-review even when absent from active_roles; got: ${roles}`);
+    assert.equal(roles.length, 1);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -5,8 +5,9 @@
 //   1. Resolves capabilities.headlessCommand (e.g. "claude --print")
 //   2. Renders the stage prompt via adapter.renderStagePrompt
 //   3. Spawns the headless command; pipes the prompt to stdin
-//   4. Streams stdout/stderr to the caller's terminal AND, by default,
-//      tees them to pipeline/logs/<workstreamId>.log for post-hoc reading
+//   4. Writes stdout/stderr to pipeline/logs/<workstreamId>.log for post-hoc
+//      reading. Host output is quiet on the terminal by default; set
+//      DEVTEAM_HEADLESS_TEE=1 or DEVTEAM_VERBOSE=1 to mirror it live.
 //   5. Awaits exit (with a timeout), then checks
 //      pipeline/gates/<workstreamId>.json
 //   6. Returns { exitCode, gatePath, logPath, durationMs, timedOut }
@@ -15,7 +16,7 @@
 // declared headlessCommand. Useful for stubbing in tests (set to
 // "cat" to just echo the prompt) and for users who alias the host CLI.
 //
-// The DEVTEAM_NO_LOG=1 env var (or ctx.log === false) disables the tee
+// The DEVTEAM_NO_LOG=1 env var (or ctx.log === false) disables transcript logs
 // and reverts to inherit-style stdio. Tests that don't want log files
 // scattered in tempdirs should set this.
 //
@@ -32,7 +33,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
-const { gatesDir, logsDir } = require("../paths");
+const { pipelineRoot, gatesDir, logsDir } = require("../paths");
 const { snapshotWritables, auditWrites } = require("../guards/write-audit");
 const { splitCommand } = require("../command-line");
 const { terminateChild } = require("../process-kill");
@@ -131,16 +132,20 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
   const start = Date.now();
   const timeoutMs = typeof ctx.timeoutMs === "number" ? ctx.timeoutMs : DEFAULT_TIMEOUT_MS;
 
-  // Logging: tee stdout/stderr to pipeline/logs/<workstreamId>.log.
+  // Logging: write stdout/stderr to pipeline/logs/<workstreamId>.log.
   // Disabled in tests + by env opt-out. When disabled we keep the
   // historical "inherit" stdio so terminal colors / TTY detection
   // in the host CLI continue to work; when enabled we pipe so we can
-  // duplicate the streams.
+  // capture the streams. Live terminal mirroring is opt-in because
+  // some CLIs echo the whole prompt and large diffs.
   // Logging: stream the host's stdout/stderr directly to a synchronous file
   // descriptor. This keeps memory constant for long-running agents, exposes
   // log growth to the liveness probe while the child is active, and lets the
   // close handler flush the descriptor before runHeadless settles.
   const logDisabled = process.env.DEVTEAM_NO_LOG === "1" || ctx.log === false;
+  const liveTee = ctx.tee === true ||
+    process.env.DEVTEAM_HEADLESS_TEE === "1" ||
+    process.env.DEVTEAM_VERBOSE === "1";
   let logPath = null;
   let logWriter = null;     // null when logging disabled or open failed
   let logEnded = false;
@@ -191,16 +196,20 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
       stdio: logWriter !== null ? ["pipe", "pipe", "pipe"] : ["pipe", "inherit", "inherit"],
     });
 
-    // Tee paths: write each chunk to both the caller's terminal and
-    // the transcript file. Errors on stdout (closed terminal)
+    // Transcript paths: always write chunks to the log. Live terminal
+    // mirroring is opt-in; errors on stdout/stderr (closed terminal)
     // are swallowed — a closed pipe shouldn't fail the stage.
     if (logWriter !== null) {
       child.stdout.on("data", (chunk) => {
-        try { process.stdout.write(chunk); } catch { /* */ }
+        if (liveTee) {
+          try { process.stdout.write(chunk); } catch { /* */ }
+        }
         appendLog(chunk);
       });
       child.stderr.on("data", (chunk) => {
-        try { process.stderr.write(chunk); } catch { /* */ }
+        if (liveTee) {
+          try { process.stderr.write(chunk); } catch { /* */ }
+        }
         appendLog(chunk);
       });
     }
@@ -230,13 +239,44 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
       endLog(timedOut ? "TIMED OUT" : String(exitCode));
 
       // C1: diff the dirty-file snapshot; log violations immediately.
+      // Orchestrator-internal files written between snapshots (heartbeats,
+      // state transitions, advisory lock) are never model-written — exempt them.
+      const relPipelineRoot = path.relative(ctx.cwd, pipelineRoot(ctx.cwd, ctx.changeId)).replace(/\\/g, "/");
+      const relLogsDir = path.relative(ctx.cwd, logsDir(ctx.cwd, ctx.changeId)).replace(/\\/g, "/");
+      const orchestratorWrites = new Set([
+        path.posix.join(relPipelineRoot, "run-log.jsonl"),
+        path.posix.join(relPipelineRoot, "run-state.json"),
+        path.posix.join(relPipelineRoot, "run.lock"),
+      ]);
+      function isOrchestratorWrite(relPath) {
+        const normalized = relPath.replace(/\\/g, "/");
+        return orchestratorWrites.has(normalized) || normalized.startsWith(`${relLogsDir}/`);
+      }
       let writeViolations = [];
       if (shouldAudit && beforeSnapshot) {
         const afterSnapshot = snapshotWritables(ctx.cwd);
         const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
-        writeViolations = violations;
-        for (const v of violations) {
-          try { process.stderr.write(`[devteam] ⛔ write-audit: unauthorized write "${v}" (not in allowedWrites for ${descriptor.workstreamId})\n`); } catch { /* */ }
+        writeViolations = violations.filter((v) => !isOrchestratorWrite(v));
+        // Logging deferred to orchestrator so sibling-workstream false positives
+        // (parallel stage writes captured in this snapshot window) can be filtered
+        // before any ⛔ line is emitted.
+      }
+
+      // Derive peer-review gates from any by-*.md files written during this
+      // session. The PostToolUse hook that normally does this never fires for
+      // hooks: false hosts (codex, any future CLI host). Idempotent.
+      if (!timedOut) {
+        const codeReviewDir = path.join(ctx.cwd, "pipeline", "code-review");
+        if (fs.existsSync(codeReviewDir)) {
+          const { deriveForProject } = require("../hooks/approval-derivation");
+          for (const f of fs.readdirSync(codeReviewDir)) {
+            if (/^by-[\w-]+\.md$/.test(f)) {
+              const abs = path.join(codeReviewDir, f);
+              if (fs.statSync(abs).mtimeMs >= start) {
+                deriveForProject(abs, ctx.cwd);
+              }
+            }
+          }
         }
       }
 

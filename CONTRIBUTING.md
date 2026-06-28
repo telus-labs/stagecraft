@@ -266,4 +266,4 @@ Anything superseded moves to `docs/historical/` rather than being half-updated i
 
 1. **Editing installed copies in a target project.** The single source of truth is `roles/`, `rules/`, and `skills/` in this repo. Target-project copies are rendered by adapters at install time. Edits to those rendered copies are lost on the next install.
 
-2. **Introducing host-specific logic in `core/`.** The core never invokes a model and has no knowledge of `claude --print` or `codex exec`. Host-specific behavior goes in `hosts/<host>/adapter.js`. Shared host-behavior helpers go under `core/adapters/`.
+2. **Introducing host-specific logic in `core/`.** The core never invokes a model and has no knowledge of host CLI flags. Host-specific behavior goes in `hosts/<host>/adapter.js`. Shared host-behavior helpers go under `core/adapters/`.

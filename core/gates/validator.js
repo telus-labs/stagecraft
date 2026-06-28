@@ -431,14 +431,33 @@ function documentationGateError(gate) {
 function findBypassedEscalations(gateFiles) {
   if (gateFiles.length < 2) return [];
 
-  // gateFiles is sorted most-recent-first. Skip index 0 (the newest gate —
-  // an ESCALATE there is a live halt, not a bypass). Any older gate with
-  // status=ESCALATE was bypassed because a newer gate exists after it.
+  // gateFiles is sorted most-recent-first by timestamp. Skip index 0 (the
+  // newest gate — an ESCALATE there is a live halt, not a bypass). For any
+  // older ESCALATE gate, only flag it as bypassed if at least one of the
+  // "newer" gates (indices 0..i-1) belongs to a LATER pipeline stage.
+  //
+  // Why the stage-order check: re-running an earlier stage (e.g. build/stage-04)
+  // after a later stage has escalated (e.g. deploy/stage-08) produces stage-04
+  // gates with timestamps newer than the stage-08 ESCALATE gate. Without the
+  // stage-order guard, the validator incorrectly treats the stage-08 ESCALATE
+  // as "bypassed" because a newer-timestamped gate exists — even though that
+  // gate is from an *earlier* pipeline stage, not a later one. A stage-08
+  // escalation is only a bypass if something from stage-09 or later was written
+  // after it.
   const bypassed = [];
   for (let i = 1; i < gateFiles.length; i++) {
     const { gate } = loadGate(gateFiles[i].full);
     if (!gate) continue; // malformed — will surface separately if it's the top entry
-    if (gate.status === "ESCALATE") {
+    if (gate.status !== "ESCALATE") continue;
+
+    const escalateStageOrder = stageKey(gateFiles[i].name);
+    // Only a gate from a later pipeline stage constitutes a "bypass" of this
+    // escalation. Same-stage or earlier-stage gates appearing newer by timestamp
+    // (e.g. due to a re-run) do not count.
+    const hasLaterStageGateAfter = gateFiles.slice(0, i).some(
+      (f) => stageKey(f.name) > escalateStageOrder
+    );
+    if (hasLaterStageGateAfter) {
       bypassed.push({ name: gateFiles[i].name, gate });
     }
   }

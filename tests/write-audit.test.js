@@ -71,6 +71,52 @@ describe("isAllowed — exact and directory matching", () => {
   });
 });
 
+describe("isAllowed — glob and placeholder matching", () => {
+  test("* wildcard matches within a single segment", () => {
+    assert.ok(isAllowed("pipeline/gates/stage-05.qa.json", ["pipeline/gates/stage-05.*.json"]));
+  });
+
+  test("* wildcard does not match across path separators", () => {
+    assert.ok(!isAllowed("pipeline/gates/deep/stage-05.qa.json", ["pipeline/gates/stage-05.*.json"]));
+  });
+
+  test("<placeholder> matches any segment value", () => {
+    assert.ok(isAllowed("pipeline/code-review/by-qa.md", ["pipeline/code-review/by-<reviewer>.md"]));
+    assert.ok(isAllowed("pipeline/code-review/by-backend.md", ["pipeline/code-review/by-<reviewer>.md"]));
+    assert.ok(isAllowed("pipeline/code-review/by-frontend.md", ["pipeline/code-review/by-<reviewer>.md"]));
+  });
+
+  test("<placeholder> does not match path that crosses a separator", () => {
+    assert.ok(!isAllowed("pipeline/code-review/sub/by-qa.md", ["pipeline/code-review/by-<reviewer>.md"]));
+  });
+
+  test("exact match still wins when no wildcards present", () => {
+    assert.ok(isAllowed("pipeline/gates/stage-05.json", ["pipeline/gates/stage-05.json"]));
+    assert.ok(!isAllowed("pipeline/gates/stage-05.qa.json", ["pipeline/gates/stage-05.json"]));
+  });
+
+  test("auditWrites passes with <placeholder> pattern in allowedWrites", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/code-review/by-qa.md", "pipeline/code-review/by-backend.md"]);
+    const { violations } = auditWrites(before, after, ["pipeline/code-review/by-<reviewer>.md"]);
+    assert.equal(violations.length, 0, `unexpected violations: ${violations.join(", ")}`);
+  });
+
+  test("auditWrites flags unauthorized file despite <placeholder> pattern", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/code-review/by-qa.md", "src/hack.js"]);
+    const { violations } = auditWrites(before, after, ["pipeline/code-review/by-<reviewer>.md"]);
+    assert.deepEqual(violations, ["src/hack.js"]);
+  });
+
+  test("auditWrites passes with *.json glob pattern", () => {
+    const before = makeSnap([]);
+    const after = makeSnap(["pipeline/gates/stage-05.qa.json", "pipeline/gates/stage-05.backend.json"]);
+    const { violations } = auditWrites(before, after, ["pipeline/gates/stage-05.*.json", "pipeline/gates/stage-05.json"]);
+    assert.equal(violations.length, 0, `unexpected violations: ${violations.join(", ")}`);
+  });
+});
+
 // ─── 2. auditWrites ───────────────────────────────────────────────────────────
 
 function makeSnap(paths) {
@@ -239,6 +285,75 @@ describe("snapshotWritables — real git repo", { concurrency: false }, () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("untracked subdirectory is expanded to individual file paths", () => {
+    // Reproduces the real-world case: devteam init creates pipeline/ but never
+    // commits it, so pipeline/ is invisible to git (empty dirs are ignored).
+    // Once the model writes files into it, git --porcelain reports "?? pipeline/"
+    // as a single entry. snapshotWritables must expand that to individual paths.
+    const dir = makeGitRepo();
+    try {
+      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "pipeline", "brief.md"), "# Brief", "utf8");
+      fs.writeFileSync(path.join(dir, "pipeline", "context.md"), "ctx", "utf8");
+      fs.writeFileSync(path.join(dir, "pipeline", "gates", "stage-01.json"), "{}", "utf8");
+      const snap = snapshotWritables(dir);
+      assert.ok(snap.ok);
+      assert.ok(
+        snap.paths.has("pipeline/brief.md"),
+        `expected pipeline/brief.md expanded from dir entry; got: ${[...snap.paths].join(", ")}`,
+      );
+      assert.ok(snap.paths.has("pipeline/context.md"), "expected pipeline/context.md");
+      assert.ok(snap.paths.has("pipeline/gates/stage-01.json"), "expected nested file");
+      assert.ok(!snap.paths.has("pipeline/"), 'aggregate "pipeline/" entry must not remain');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("no false-positive violation when all files in untracked dir are in allowedWrites", () => {
+    // End-to-end regression for the bug: stage-01 gate flipped to FAIL because
+    // auditWrites saw "pipeline/" and isAllowed("pipeline/", file-entries) = false.
+    const dir = makeGitRepo();
+    try {
+      const before = snapshotWritables(dir);
+      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "pipeline", "brief.md"), "# Brief", "utf8");
+      fs.writeFileSync(path.join(dir, "pipeline", "context.md"), "ctx", "utf8");
+      fs.writeFileSync(path.join(dir, "pipeline", "gates", "stage-01.json"), "{}", "utf8");
+      const after = snapshotWritables(dir);
+      const { violations, audited } = auditWrites(before, after, [
+        "pipeline/brief.md",
+        "pipeline/context.md",
+        "pipeline/gates/stage-01.json",
+      ]);
+      assert.ok(audited);
+      assert.equal(violations.length, 0, `unexpected violations: ${violations.join(", ")}`);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("unauthorized file inside untracked dir still produces a violation", () => {
+    // Security check: even when pipeline/ is reported as a dir entry, an
+    // unauthorized file inside it must not slip through the audit.
+    const dir = makeGitRepo();
+    try {
+      const before = snapshotWritables(dir);
+      fs.mkdirSync(path.join(dir, "pipeline", "gates"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "pipeline", "brief.md"), "# Brief", "utf8");
+      fs.writeFileSync(path.join(dir, "pipeline", "evil.md"), "bad", "utf8"); // NOT in allowedWrites
+      const after = snapshotWritables(dir);
+      const { violations, audited } = auditWrites(before, after, ["pipeline/brief.md"]);
+      assert.ok(audited);
+      assert.ok(
+        violations.some((v) => v.includes("evil.md")),
+        `expected evil.md in violations; got: ${violations.join(", ")}`,
+      );
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 // ─── 4. capabilities.json — codex and gemini-cli declare post-hoc-audit ───────
@@ -344,12 +459,16 @@ describe("runHeadless — writeViolations field in result", { concurrency: false
           objective: "test", readFirst: [], allowedWrites: ["pipeline/brief.md", "pipeline/gates/stage-01.json"],
           artifact: "pipeline/brief.md", template: null, goalCondition: null, expectedGate: {}, changeId: null,
         };
-        const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null, log: false };
-        // cat doesn't write any files, so no violations expected
+        const ctx = { cwd: dir, track: "full", orchestrator: "test", changeId: null };
+        // cat doesn't write model-authored files. The headless transcript under
+        // pipeline/logs/ is orchestrator-owned and must not trip write-audit.
         const r = await runHeadless(adapter, descriptor, ctx);
         assert.ok(Array.isArray(r.writeViolations), "expected writeViolations to be an array");
-        // No files written by cat → no violations
         assert.equal(r.writeViolations.length, 0, `unexpected violations: ${r.writeViolations.join(", ")}`);
+        assert.ok(
+          fs.existsSync(path.join(dir, "pipeline", "logs", "stage-01.log")),
+          "test should exercise default transcript logging",
+        );
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }

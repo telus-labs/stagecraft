@@ -66,7 +66,7 @@ const STAGES = {
     // verify the architecture didn't silently drift.
     objective: "Convert approved requirements into an implementable architecture and explicit decisions. Consult org-shared ADRs from prior projects before drafting; honor or explicitly supersede prior commitments.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md"],
-    allowedWrites: ["pipeline/design-spec.md", "pipeline/adr/", "pipeline/gates/stage-02.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/design-spec.md", "pipeline/adr/", "pipeline/design-review-notes.md", "pipeline/gates/stage-02.json", "pipeline/context.md"],
     artifact: "pipeline/design-spec.md",
     template: "design-spec-template.md",
     gate: {
@@ -149,12 +149,12 @@ const STAGES = {
     roles: ["backend", "frontend", "platform", "qa"],
     objective: "Implement the approved design in role-owned workstreams and record local verification.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md"],
-    allowedWrites: ["src/backend/", "src/frontend/", "src/infra/", "src/tests/", "pipeline/pr-*.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.*.json", "pipeline/gates/stage-04.json"],
+    allowedWrites: ["src/backend/", "src/frontend/", "src/infra/", "src/tests/", "pipeline/pr-*.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.*.json", "pipeline/gates/stage-04.json", "package.json", "package-lock.json", "Dockerfile", "docker-compose.yml", "docker-compose.yaml", "eslint.config.js", "eslint.config.mjs", ".eslintrc.cjs", ".eslintrc.js", ".eslintrc.mjs", ".eslintrc.json", "tsconfig.json", "tsconfig.test.json", "tsconfig.*.json"],
     roleWrites: {
-      backend:  ["src/backend/", "src/tests/", "pipeline/pr-backend.md",  "pipeline/build-plan.md", "pipeline/gates/stage-04.backend.json",  "pipeline/context.md"],
-      frontend: ["src/frontend/",               "pipeline/pr-frontend.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.frontend.json", "pipeline/context.md"],
-      platform: ["src/infra/",                  "pipeline/pr-platform.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.platform.json", "pipeline/context.md"],
-      qa:       ["src/tests/",                  "pipeline/pr-qa.md",                                  "pipeline/gates/stage-04.qa.json",       "pipeline/context.md"],
+      backend:  ["src/backend/", "src/tests/", "pipeline/pr-backend.md",  "pipeline/build-plan.md", "pipeline/gates/stage-04.backend.json", "package.json", "package-lock.json", "Dockerfile", "docker-compose.yml", "docker-compose.yaml", "eslint.config.js", "eslint.config.mjs", ".eslintrc.cjs", ".eslintrc.js", ".eslintrc.mjs", ".eslintrc.json", "tsconfig.json", "tsconfig.test.json", "tsconfig.*.json"],
+      frontend: ["src/frontend/",               "pipeline/pr-frontend.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.frontend.json"],
+      platform: ["src/infra/",                  "pipeline/pr-platform.md", "pipeline/build-plan.md", "pipeline/gates/stage-04.platform.json"],
+      qa:       ["src/tests/",                  "pipeline/pr-qa.md",                                  "pipeline/gates/stage-04.qa.json"],
     },
     artifact: "pipeline/build-plan.md",
     template: "build-template.md",
@@ -169,7 +169,7 @@ const STAGES = {
     roles: ["platform"],
     objective: "Run lint, tests, dependency/license review, and trigger checks for security review (stage-04b) + migration safety (stage-04d) before peer review.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/build-plan.md", "pipeline/pr-*.md"],
-    allowedWrites: ["pipeline/pre-review.md", "pipeline/gates/stage-04a.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/pre-review.md", "pipeline/lint-output.txt", "pipeline/pre-review-output.txt", "pipeline/gates/stage-04a.json"],
     artifact: "pipeline/pre-review.md",
     template: "pre-review-template.md",
     requiredCapabilities: { shell: true },
@@ -193,7 +193,7 @@ const STAGES = {
     conditionalOn: { stage: "stage-04a", field: "security_review_required", equals: true },
     objective: "Security review of changes flagged by the Stage 4a security-trigger heuristic. Has veto power; a FAIL here halts the pipeline regardless of peer-review outcomes.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/pre-review.md", "pipeline/build-plan.md", "pipeline/pr-*.md"],
-    allowedWrites: ["pipeline/security-review.md", "pipeline/gates/stage-04b.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/security-review.md", "pipeline/gates/stage-04b.json"],
     artifact: "pipeline/security-review.md",
     template: "review-template.md",
     gate: {
@@ -219,7 +219,7 @@ const STAGES = {
     // builders (`routing.roles.red-team` in .devteam/config.yml).
     objective: "Adversarial review of what was just built. Enumerate concrete attack scenarios, hostile inputs, race conditions, abuse cases, scale failures, downstream effects, and observability gaps the spec didn't cover. Produces must-fix items the implementer addresses before Stage 5 peer review begins.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/pr-*.md", "pipeline/pre-review.md", "pipeline/security-review.md"],
-    allowedWrites: ["pipeline/red-team-report.md", "pipeline/gates/stage-04c.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/red-team-report.md", "pipeline/gates/stage-04c.json"],
     artifact: "pipeline/red-team-report.md",
     template: "red-team-report-template.md",
     gate: {
@@ -246,7 +246,7 @@ const STAGES = {
     conditionalOn: { stage: "stage-04a", field: "migration_safety_required", equals: true },
     objective: "Review the migration-safety story for data-layer changes: schema diff, backfill plan, dual-write strategy, rollback plan, and breaking-change blast radius. Has veto power on unsafe migrations.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/pre-review.md", "pipeline/pr-*.md"],
-    allowedWrites: ["pipeline/migration-safety.md", "pipeline/gates/stage-04d.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/migration-safety.md", "pipeline/gates/stage-04d.json"],
     artifact: "pipeline/migration-safety.md",
     template: "migration-safety-template.md",
     gate: {
@@ -310,7 +310,7 @@ const STAGES = {
     roles: ["qa"],
     objective: "Verify every acceptance criterion with a one-to-one test mapping and report results. When stage-03b has run, every Scenario in pipeline/spec.feature must also map to at least one test — the AC→Scenario→test chain is the G2 contract.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/spec.feature"],
-    allowedWrites: ["src/tests/", "pipeline/test-report.md", "pipeline/gates/stage-06.json", "pipeline/context.md"],
+    allowedWrites: ["src/tests/", "pipeline/test-report.md", "pipeline/gates/stage-06.json"],
     artifact: "pipeline/test-report.md",
     template: "test-report-template.md",
     requiredCapabilities: { shell: true },
@@ -333,7 +333,7 @@ const STAGES = {
     roles: ["qa"],
     objective: "Audit UI changes for WCAG accessibility violations using axe-core / pa11y / lighthouse. PASS requires zero critical + zero serious findings.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/test-report.md"],
-    allowedWrites: ["pipeline/accessibility-report.md", "pipeline/gates/stage-06b.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/accessibility-report.md", "pipeline/axe-report.json", "pipeline/gates/stage-06b.json"],
     artifact: "pipeline/accessibility-report.md",
     template: "test-report-template.md",
     gate: {
@@ -350,7 +350,7 @@ const STAGES = {
     roles: ["platform"],
     objective: "Verify that every metric / log / trace the design-spec promised is actually emitted by the shipped code. Closes the gap where designs claim instrumentation that never lands.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/test-report.md"],
-    allowedWrites: ["pipeline/observability-report.md", "pipeline/gates/stage-06c.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/observability-report.md", "pipeline/gates/stage-06c.json"],
     artifact: "pipeline/observability-report.md",
     template: "test-report-template.md",
     gate: {
@@ -374,7 +374,7 @@ const STAGES = {
     roles: ["verifier"],
     objective: "Apply property-based testing, mutation testing, and/or formal verification to the changed code. Run AFTER stage-06 (qa) PASS — tests are the floor, this stage raises the ceiling. Surface counterexamples + surviving mutants + invariant violations as blocking findings.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/spec.feature", "pipeline/test-report.md", "pipeline/red-team-report.md"],
-    allowedWrites: ["pipeline/verification-report.md", "pipeline/gates/stage-06d.json", "pipeline/context.md", "src/tests/property/", "pipeline/formal/"],
+    allowedWrites: ["pipeline/verification-report.md", "pipeline/gates/stage-06d.json", "src/tests/property/", "pipeline/formal/", "pipeline/reports/"],
     artifact: "pipeline/verification-report.md",
     template: "verification-report-template.md",
     requiredCapabilities: { shell: true },
@@ -403,7 +403,7 @@ const STAGES = {
     roles: ["qa"],
     objective: "Measure Lighthouse performance scores, bundle size delta, and load-test throughput against project budgets. FAIL if any budget is exceeded. PASS (with skipped_reason) when the change has no performance-relevant surface.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/brief.md", "pipeline/design-spec.md", "pipeline/test-report.md"],
-    allowedWrites: ["pipeline/performance-report.md", "pipeline/gates/stage-06e.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/performance-report.md", "pipeline/lhci-result.json", "pipeline/gates/stage-06e.json"],
     artifact: "pipeline/performance-report.md",
     template: "performance-report-template.md",
     requiredCapabilities: { shell: true },
@@ -419,6 +419,10 @@ const STAGES = {
   "sign-off": {
     stage: "stage-07",
     roles: ["pm", "platform"],
+    // Both roles are structural (they write pipeline/ artifacts, not src/ code).
+    // Neither should be suppressed by active_roles — the runbook is always
+    // required for deploy regardless of which code workstreams were active.
+    alwaysDispatch: ["pm", "platform"],
     objective: "PM sign-off on QA results; platform prepares deploy runbook.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/test-report.md"],
     allowedWrites: ["pipeline/runbook.md", "pipeline/gates/stage-07.*.json", "pipeline/gates/stage-07.json", "pipeline/context.md"],
@@ -442,7 +446,7 @@ const STAGES = {
     roles: ["platform"],
     objective: "Execute the deploy runbook and record results.",
     readFirst: ["AGENTS.md", ".devteam/rules/pipeline.md", ".devteam/rules/gates-core.md", "pipeline/context.md", "pipeline/runbook.md"],
-    allowedWrites: ["pipeline/deploy-log.md", "pipeline/gates/stage-08.json", "pipeline/context.md"],
+    allowedWrites: ["pipeline/deploy-log.md", "pipeline/gates/stage-08.json"],
     artifact: "pipeline/deploy-log.md",
     template: "pr-summary-template.md",
     requiredCapabilities: { shell: true },

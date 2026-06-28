@@ -124,7 +124,11 @@ function run(positional, _flags) {
       for (const cmd of step.commands) console.log(`        $ ${cmd}`);
     });
     console.log();
-  } else if (result.command) {
+  } else if (result.command && result.action !== "resolve-escalation") {
+    // resolve-escalation always has a result.command ("devteam ruling ...") but
+    // the Escalation resolution block below gives the correct next step based on
+    // the actual current state (ruling written vs. not). Printing both produces
+    // contradictory instructions when a ruling already exists.
     console.log(`   → ${result.command}`);
   }
   // G3: if the pipeline just completed and the operator hasn't created the
@@ -134,7 +138,7 @@ function run(positional, _flags) {
     const { pipelineRoot } = require(path.join(__dirname, "..", "..", "paths"));
     const feedbackFile = require("node:path").join(pipelineRoot(cwd, changeId), "production-feedback.md");
     if (!fs.existsSync(feedbackFile)) {
-      console.log(`   Tip: copy templates/production-feedback-template.md → pipeline/production-feedback.md after deploy to close the brief→production SLO loop (optional).`);
+      console.log(`   Tip: copy .devteam/templates/production-feedback-template.md → pipeline/production-feedback.md after deploy to close the brief→production SLO loop (optional).`);
     }
   }
   if (result.action === "resolve-escalation") {

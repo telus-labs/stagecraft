@@ -6,7 +6,8 @@ const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers"
 const { runStage, mergeWorkstreamGates, buildDescriptor, summary, patchGateForUnpricedModel } =
   require(path.join(REPO_ROOT, "core", "orchestrator"));
 const { listArchives } = require(path.join(REPO_ROOT, "core", "gates", "archive"));
-const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+const { STAGES, getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"));
+const { isAllowed } = require(path.join(REPO_ROOT, "core", "guards", "write-audit"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -77,6 +78,31 @@ describe("orchestrator: buildDescriptor honors overrides", () => {
     const build = getStage("build");
     const d = buildDescriptor(build, "platform");
     assert.equal(d.workstreamId, "stage-04.platform");
+  });
+
+  it("all LLM-dispatched stages allow their workstream gate path", () => {
+    for (const [name, stageDef] of Object.entries(STAGES)) {
+      for (const role of stageDef.roles) {
+        const d = buildDescriptor(stageDef, role);
+        const gatePath = `pipeline/gates/${d.workstreamId}.json`;
+        assert.ok(
+          isAllowed(gatePath, d.allowedWrites),
+          `${name}/${role} must allow writing ${gatePath}`,
+        );
+      }
+    }
+  });
+
+  it("single-role artifact-writing stages allow their declared artifact path", () => {
+    for (const [name, stageDef] of Object.entries(STAGES)) {
+      if (stageDef.roles.length !== 1 || !stageDef.artifact) continue;
+      const [role] = stageDef.roles;
+      const d = buildDescriptor(stageDef, role);
+      assert.ok(
+        isAllowed(d.artifact, d.allowedWrites),
+        `${name}/${role} must allow writing artifact ${d.artifact}`,
+      );
+    }
   });
 });
 

@@ -20,6 +20,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [faq.md](faq.md) — operational questions and common gotchas
 - [git-workflow.md](git-workflow.md) — branch setup and PR timing for a Stagecraft pipeline run
 - [ci.md](ci.md) — GitHub Actions workflow template and environment variables
+- [reference/environment-variables.md](reference/environment-variables.md) — all environment variables Stagecraft reads, grouped by subsystem
 - [memory.md](memory.md) — persistent project memory: embedder options and shared store
 - [observability.md](observability.md) — OpenTelemetry span schema and collector setup
 - [evidence.md](evidence.md) — offline readiness, explicit resolution acceptance, and privacy-safe export
@@ -43,7 +44,9 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [adr/README.md](adr/README.md) — architecture decision records index
 - [adr/011-authenticated-gate-chain.md](adr/011-authenticated-gate-chain.md) — HMAC gate authentication, strict policy, and trust boundaries
 - [adr/012-explicit-resolution-acceptance.md](adr/012-explicit-resolution-acceptance.md) — hash-bound human acceptance evidence for H3
+- [adr/013-openai-compat-shell-execution.md](adr/013-openai-compat-shell-execution.md) — openai-compat shell execution: native bash tool, first-class host status
 - [autonomous-execution-design.md](autonomous-execution-design.md) — design notes for the bounded autonomous driver (companion to ADR-003)
+- [openai-compat-design.md](openai-compat-design.md) — options analysis and design notes for the openai-compat host adapter (companion to ADR-013)
 - [spec-authoring.md](spec-authoring.md) — writing AC-N criteria and scaffolding the spec file
 - [migration-safety.md](migration-safety.md) — veto criteria, gate fields, and the migration heuristic
 - [red-team.md](red-team.md) — 10 attack surfaces, gate fields, routing, and how it differs from security review

@@ -103,7 +103,7 @@ function run(positional, _flags) {
   const cwd = _flags.cwd || process.cwd();
   // If the target directory isn't initialized, the prompt we're about to
   // print will reference files (`.claude/agents/<role>.md`, `.devteam/
-  // rules/*.md`, `templates/*-template.md`) that don't exist. Warn loudly
+  // rules/*.md`, `.devteam/templates/*-template.md`) that don't exist. Warn loudly
   // before printing — this is the #1 first-run footgun.
   if (!_flags.headless && !_flags.json && !fs.existsSync(path.join(cwd, ".devteam", "config.yml"))) {
     process.stderr.write(
@@ -183,6 +183,21 @@ function run(positional, _flags) {
     } else {
       process.stderr.write(`[devteam] --patch: ${stageId}.json not found — running full build\n`);
     }
+  }
+
+  // HTTP-native hosts (e.g. openai-compat) have no CLI to paste a prompt into;
+  // headless invoke is the only meaningful mode for them. Auto-enable it so the
+  // user doesn't need to remember to pass --headless every time.
+  if (!_flags.headless) {
+    try {
+      const hostName = loadConfig(cwd).routing.default_host;
+      const capPath = path.join(__dirname, "..", "..", "..", "hosts", hostName, "capabilities.json");
+      const caps = JSON.parse(fs.readFileSync(capPath, "utf8"));
+      if (caps.httpNative === true) {
+        process.stderr.write(`[devteam] ${hostName} is HTTP-native — running headlessly\n`);
+        _flags.headless = true;
+      }
+    } catch { /* adapter absent or capabilities unreadable — keep current mode */ }
   }
 
   if (_flags.headless) {

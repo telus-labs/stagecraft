@@ -320,7 +320,7 @@ $ devteam stage build --feature "Add SMS opt-in"
 
 **Speaker notes.**
 
-> "The framework renders prompts. You feed them to your model. Three options: paste into Claude Code, use the `/devteam` slash command that init laid down, or add `--headless` and the framework pipes them to `claude --print` and `codex exec` for you."
+> "The framework renders prompts. You feed them to your model. Three options: paste into Claude Code, use the `/devteam` slash command that init laid down, or add `--headless` and the framework pipes them to `claude --print` and `codex exec --sandbox workspace-write` for you."
 
 > "Each workstream writes its own gate JSON when it finishes. The Claude Code hook validates each one as it's written. After all four land, `devteam merge build` aggregates. Then `devteam next` tells you what's next."
 

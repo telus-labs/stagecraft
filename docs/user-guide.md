@@ -98,7 +98,7 @@ npm link
 
 # 3. In your target project
 cd ~/projects/my-app
-devteam init --host claude-code        # or codex / gemini-cli / claude-code,codex
+devteam init --host claude-code        # or codex / gemini-cli / openai-compat
 ```
 
 `devteam init` lays down:
@@ -294,7 +294,7 @@ $ devteam log
 
 Add `--follow` to tail the directory at 1-second poll; new events stream in as gates land and artifacts get written. Add `--json` for one NDJSON event per line if you're piping to another tool. Works identically in headless and user-driven modes (it reads on-disk state, not the agent's transcript).
 
-**2. `pipeline/logs/*.log` — per-stage transcripts (headless only).** When you run `devteam stage X --headless`, the host CLI's stdout/stderr streams to your terminal and directly to `pipeline/logs/<workstreamId>.log` without accumulating the transcript in memory. You can `tail -f pipeline/logs/stage-04.backend.log` during a run; after completion the file contains everything the agent printed, with a header (start time, command) and trailer (end time, exit code) flushed before the command resolves. Disable with `DEVTEAM_NO_LOG=1`. Does not apply to user-driven mode because the transcript lives in your AI tool's session, not in devteam's process.
+**2. `pipeline/logs/*.log` — per-stage transcripts (headless only).** When you run `devteam stage X --headless`, the host CLI's stdout/stderr streams directly to `pipeline/logs/<workstreamId>.log` without accumulating the transcript in memory. By default the terminal stays quiet so prompts and diffs do not flood `devteam run`; set `DEVTEAM_HEADLESS_TEE=1` or `DEVTEAM_VERBOSE=1` to mirror the transcript live. You can `tail -f pipeline/logs/stage-04.backend.log` during a run; after completion the file contains everything the agent printed, with a header (start time, command) and trailer (end time, exit code) flushed before the command resolves. Disable with `DEVTEAM_NO_LOG=1`. Does not apply to user-driven mode because the transcript lives in your AI tool's session, not in devteam's process.
 
 **3. `devteam ui --open`.** The same data as `devteam log` rendered as a tree, updated via Server-Sent Events when gates change. Suited for two-monitor setups or when a browser view is preferred. See [the web UI](#the-web-ui).
 
@@ -444,11 +444,11 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 ### What "host" means
 
-A *host* is the AI coding CLI that Stagecraft hands work to: Claude Code (`claude`), Codex CLI (`codex`), or Gemini CLI (`gemini`). Stagecraft never calls a model API directly. It renders a stage prompt and pipes it to the host, which manages the model invocation, tool permissions, and output capture itself.
+A *host* controls how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), and Gemini CLI (`gemini`) — Stagecraft renders a stage prompt and pipes it to the host CLI, which manages model invocation, tool permissions, and output capture. The fourth built-in host, `openai-compat`, is HTTP-native: it calls any OpenAI-compatible Chat Completions API directly, no CLI required.
 
-**Host and model are two different things.** Which host you route to determines which CLI runs. Which model that CLI uses is configured inside the host, not in Stagecraft. For Claude Code, the `model:` field in each agent file (`.claude/agents/<role>.md`) controls this. For Codex and Gemini, use their own settings.
+**Host and model are two different things.** For CLI-based hosts, which model runs is configured inside the host (e.g., Claude Code's `.claude/agents/<role>.md` has a `model:` field; Codex and Gemini use their own settings). For `openai-compat`, the model is set per-role in `.devteam/config.yml` under `hosts.openai-compat.models`.
 
-When optimizing cost or comparing model quality, you can run Opus for some roles and Sonnet for others by editing the agent frontmatter, with no host changes required. Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
+When optimizing cost or comparing model quality, you can route different roles to different models. For CLI-based hosts, edit the agent frontmatter. For openai-compat, edit the config — see [Using openai-compat](#using-openai-compat-openai-compatible-apis). Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
 
 ### Why use multiple hosts?
 
@@ -525,7 +525,7 @@ model: sonnet        # claude-sonnet — implementation
 
 To change a model for a specific role, edit that agent file directly. Re-running `devteam init --host claude-code --force` regenerates all agent files from the framework defaults, so keep custom model overrides in mind if you re-init.
 
-For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft.
+For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft. For openai-compat, model selection is per-role in `.devteam/config.yml` under `hosts.openai-compat.models` — see [Using openai-compat](#using-openai-compat-openai-compatible-apis).
 
 ### Common configurations
 
@@ -566,6 +566,141 @@ routing:
 
 With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model peer review](#multi-model-peer-review) for the full picture.
 
+### Using openai-compat (OpenAI-compatible APIs)
+
+`openai-compat` is Stagecraft's HTTP-native host adapter. Instead of spawning a CLI subprocess, it calls any provider that exposes an OpenAI-compatible Chat Completions API. That includes OpenAI, OpenRouter, Fireworks AI, Fuel iX, DeepSeek-compatible endpoints, Moonshot-compatible endpoints, and internal API gateways that expose `/v1/chat/completions`. No CLI to install.
+
+#### Setup
+
+```bash
+devteam init --host openai-compat
+```
+
+What this installs:
+- `.openai-compat/prompts/roles/` — role prompts in markdown format
+- `.openai-compat/skills/` — Stagecraft skills in markdown format
+- `.devteam/rules/` — shared pipeline and gate rules
+- `.devteam/templates/` — shared artifact templates
+
+No `.claude/` agents, no hooks, no slash commands are installed.
+
+#### Configuration
+
+Add a `hosts` block to `.devteam/config.yml`:
+
+```yaml
+routing:
+  default_host: openai-compat
+
+hosts:
+  openai-compat:
+    base_url: https://api.openai.com/v1       # or any compatible provider base URL
+    api_key_env: OPENAI_API_KEY               # names the env var that holds the key
+    models:
+      default:    gpt-4.1                     # fallback for unmapped roles
+      principal:  gpt-4.1
+      security:   gpt-4.1
+      red-team:   gpt-4.1
+      migrations: gpt-4.1
+      pm:         gpt-4.1
+      backend:    gpt-4.1-mini
+      frontend:   gpt-4.1-mini
+      platform:   gpt-4.1-mini
+      reviewer:   gpt-4.1-mini
+      qa:         gpt-4.1-mini
+      verifier:   gpt-4.1
+```
+
+The `api_key_env` field names the *env var that holds the key*, not the key itself — so the config file is safe to commit:
+
+```bash
+# .env (not committed)
+OPENAI_API_KEY=sk-...
+```
+
+Provider-specific example:
+
+```yaml
+hosts:
+  openai-compat:
+    base_url: https://api.fireworks.ai/inference/v1
+    api_key_env: FIREWORKS_API_KEY
+    models:
+      default: accounts/fireworks/models/qwen3-coder-480b-a35b-instruct
+```
+
+#### Environment variables
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `OPENAI_COMPAT_BASE_URL` | Base URL when `base_url` is not in config | `https://openrouter.ai/api/v1` (backward-compatible fallback; prefer explicit `base_url`) |
+| `OPENAI_COMPAT_API_KEY` | API key when `api_key_env` is not in config | *(required)* |
+| `OPENAI_COMPAT_MODEL` | Model when no per-role mapping and no `models.default` | *(required if no per-role mapping)* |
+
+Resolution order: `.devteam/config.yml` → environment variables. When `api_key_env` is set in config, only that env var is read for the key; `OPENAI_COMPAT_API_KEY` is the fallback when `api_key_env` is absent from config.
+
+See [`docs/reference/environment-variables.md`](reference/environment-variables.md) for the full list of env vars Stagecraft reads, including `DEVTEAM_VERBOSE` and OTel tracing vars.
+
+#### Headless and auto-detection
+
+`openai-compat` is HTTP-native — it has no CLI to spawn. When the configured `default_host` declares `httpNative: true` (which openai-compat does), `devteam stage <name>` **auto-enables headless mode without needing `--headless`**:
+
+```
+[devteam] openai-compat is HTTP-native — running headlessly
+```
+
+Passing `--headless` explicitly is also accepted and has the same effect. This auto-detection applies only when `default_host` is an httpNative adapter; routing a single role to openai-compat via `roles:` while keeping a CLI adapter as `default_host` still requires `--headless`.
+
+#### Limitations
+
+| Capability | Status |
+|---|---|
+| Headless invocation | ✓ auto-enabled (no CLI needed) |
+| Shell (`bash` tool) | ✓ for roles that include `Bash` in their `toolBudget` |
+| File I/O (`write_file`, `read_file`, `list_files`) | ✓ |
+| Allowed-writes enforcement | Post-hoc git-diff audit (same as codex/gemini-cli) |
+| Tool budget enforcement | Prompt-only — model is instructed via prompt; no API-level blocking |
+| Hooks (`PreToolUse`, `PostToolUse`, `Stop`) | ✗ |
+| Subagents | ✗ |
+| Slash commands | ✗ |
+| Worktrees | ✗ — stage-04 parallel workstreams run without git-worktree isolation |
+| Goal loop | ✗ — replaced by a 40-iteration tool-call loop per dispatch |
+| Per-role model selection | ✓ via `hosts.openai-compat.models.<role>` in config |
+
+**Security posture.** The `bash` tool runs direct, allowlisted project commands only. It parses the command string into argv and rejects shell syntax such as pipes, redirects, background jobs, command substitution, env-prefix assignments, path-qualified executables, and non-allowlisted command names. Allowlisted commands still run with the same OS permissions as the invoking process, so run Stagecraft inside your normal project sandbox when that boundary matters.
+
+**max_tokens cap.** The default is 32 768 tokens per API call. If the model hits this limit mid-tool-call, its arguments may be truncated (malformed JSON). The adapter emits a `warn: max_tokens hit` warning and the tool-call loop attempts recovery. Very long artifact writes are the most common trigger; if you see the warning repeatedly, raise `DEFAULT_MAX_TOKENS` in `hosts/openai-compat/invoke.js`.
+
+**Function-calling reliability and context length.** Some models route function calls through their chat template (an internal token-based format) rather than the OpenAI `tool_calls` JSON structure. These models work well at short context but can regress at long context — emitting raw internal markup (e.g. `<|tool_call_argument_begin|>` or `functions.func_name:idx` ID prefixes) in the response `content` field instead of populating `tool_calls`. When this happens, the adapter receives an empty `tool_calls` array, no tool is executed, no gate is written, and the orchestrator halts with `structural-input`.
+
+Signs of this failure mode in the run log:
+- Tool call markup visible in the model's text output rather than in `[devteam] openai-compat: tool` lines
+- `structural-input` halt with a "no gate" message immediately after a stage that read many files
+- Subsequent retry succeeds (because context resets between dispatches)
+
+Mitigation: keep `pipeline/context.md` concise; route long-context stages (build, verification) to a model with verified native `tool_calls` support such as DeepSeek V3/V4 or Qwen2.5-Coder. The auto-fix retry cycle normally recovers after one or two attempts.
+
+#### Model recommendations by role tier
+
+| Role tier | Example model ID | Example provider | Notes |
+|---|---|---|---|
+| Reasoning (principal, security, red-team, migrations, pm) | `gpt-4.1`, `deepseek/deepseek-v4-pro` | OpenAI, OpenRouter, DeepSeek-compatible gateway | Prefer reliable native `tool_calls` |
+| Implementation (backend, frontend, platform, reviewer) | `gpt-4.1-mini`, `moonshotai/kimi-k2.7-code` | OpenAI, OpenRouter, Moonshot-compatible gateway | ⚠ see note below for Kimi |
+| Test authoring (qa) | `gpt-4.1-mini`, `qwen/qwen3.6-27b` | OpenAI, OpenRouter, Fireworks AI | |
+| Verification (verifier) | `gpt-4.1`, `xiaomimimo/mimo-v2.5-pro` | OpenAI, OpenRouter, Fuel iX/internal gateway | |
+
+Any model that supports OpenAI function-calling and has sufficient context window (≥ 100 k tokens recommended for build stages) works.
+
+**⚠ Kimi K2.7-Code note.** Kimi K2 models use an internal `functions.func_name:idx` tool-call ID format. Some providers normalize this before inference; others expose the raw chat-template behavior. At long context — typically after a stage with many `read_file` calls — the model can revert to its internal format, emitting tool calls as text content rather than via `tool_calls`. The effect is `finish_reason: stop` with no tool execution and no gate, followed by an orchestrator `structural-input` halt. The auto-fix retry usually recovers since context resets on each dispatch. For stages known to be context-heavy (`backend`, `verifier`), consider substituting a provider/model combination with verified native `tool_calls`, such as OpenAI GPT models, DeepSeek V3/V4, or Qwen Coder variants. This is a [documented upstream issue](https://blog.vllm.ai/2025/10/28/Kimi-K2-Accuracy.html) tracked by the vLLM and Moonshot teams.
+
+#### Resuming after an escalation
+
+The command to clear a gate and restart a stage is `devteam restart <stage>`, not `devteam run --restart`:
+
+```bash
+devteam restart build && devteam run
+```
+
 ### Multi-host in headless mode
 
 Headless mode (`--headless`) works normally in multi-host setups. Each workstream spawns its own host CLI process; they run concurrently within a stage. Every host you route work to must support headless (all three shipped adapters do). In an unattended pipeline loop, mixed-host stages produce gates through the same contract and advance the pipeline normally.
@@ -586,7 +721,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec` for codex, `gemini` for gemini-cli), pipes the rendered prompt to stdin, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli), pipes the rendered prompt to stdin, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)

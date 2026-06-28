@@ -195,7 +195,7 @@ Per-stage logs written by `devteam stage X --headless`. Contains the full stdout
 
 - **Where:** `pipeline/logs/<workstreamId>.log`. For multi-role stages, one file per workstream (`stage-04.backend.log`, `stage-04.frontend.log`, etc.).
 - **Written by:** `core/adapters/headless.js → runHeadless()`, automatically when a stage runs in `--headless` mode. Does not apply to user-driven mode; the transcript lives in the host tool's session log.
-- **Read by:** You, post-hoc or while the stage is running. `cat pipeline/logs/stage-04.backend.log` for the full transcript of one workstream. Output is streamed directly to disk with constant memory use and flushed before the dispatch resolves, so liveness checks and `tail -f` can observe progress during long runs.
+- **Read by:** You, post-hoc or while the stage is running. `cat pipeline/logs/stage-04.backend.log` for the full transcript of one workstream. Output is streamed directly to disk with constant memory use and flushed before the dispatch resolves, so liveness checks and `tail -f` can observe progress during long runs. The terminal does not mirror host output by default; set `DEVTEAM_HEADLESS_TEE=1` or `DEVTEAM_VERBOSE=1` when you want live stdout/stderr.
 - **Opt out:** `DEVTEAM_NO_LOG=1` in the environment.
 - **Companion command:** `devteam log [--follow]` for a chronological cross-stage timeline. The per-stage logs are the deep-dive; `devteam log` is the overview.
 

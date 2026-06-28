@@ -45,6 +45,11 @@ describe("capabilities.json — adapter declarations", () => {
     assert.ok(caps.enforces.allowed_writes, "allowed_writes missing");
     assert.ok(caps.enforces.stoplist, "stoplist missing");
   });
+
+  it("codex headless command grants workspace writes for artifact and gate creation", () => {
+    const caps = require(path.join(REPO_ROOT, "hosts", "codex", "capabilities.json"));
+    assert.equal(caps.headlessCommand, "codex exec --sandbox workspace-write");
+  });
 });
 
 // ---------------------------------------------------------------------------

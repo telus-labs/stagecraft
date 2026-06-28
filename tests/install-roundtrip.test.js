@@ -1,5 +1,6 @@
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, cleanup } = require("./_helpers");
 const { listHosts, loadAdapter } = require(path.join(REPO_ROOT, "core", "router"));
@@ -52,6 +53,24 @@ describe("install round-trip per adapter", () => {
         adapter.install(cwd);
         const s = adapter.status(cwd);
         assert.equal(s.ok, true, `${host} status not ok: missing=${s.missing.join(", ")}`);
+      });
+
+      it("markdown hosts install artifact templates under .devteam/templates", () => {
+        const cwd = track(makeTargetProject());
+        const adapter = loadAdapter(host);
+        if (adapter.capabilities.skillFormat !== "markdown") return;
+
+        adapter.install(cwd);
+        const templatePath = path.join(cwd, ".devteam", "templates", "brief-template.md");
+        assert.ok(fs.existsSync(templatePath), `${host} did not install brief-template.md`);
+
+        fs.unlinkSync(templatePath);
+        const status = adapter.status(cwd);
+        assert.equal(status.ok, false, `${host} status should notice missing installed template`);
+        assert.ok(
+          status.missing.includes(templatePath),
+          `${host} status missing list did not include ${templatePath}`,
+        );
       });
 
       it("uninstall removes the install payload", () => {

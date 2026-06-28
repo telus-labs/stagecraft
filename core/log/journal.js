@@ -162,9 +162,10 @@ function walkArtifacts(dir, relBase, out, epochMs = 0) {
  * Returns { icon, label, status, extras } — caller formats.
  */
 function summarizeGate(gate) {
+  const stagePart = gate.stage ?? "unknown";
   const id = gate.workstream
-    ? `${gate.stage}.${gate.workstream}`
-    : gate.stage;
+    ? `${stagePart}.${gate.workstream}`
+    : stagePart;
   const status = gate.status || "?";
   const icon = STATUS_ICONS[status] || "•";
   const extras = stageExtras(gate);

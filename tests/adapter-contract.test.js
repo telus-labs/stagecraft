@@ -88,13 +88,17 @@ describe("adapter contract", () => {
         });
       }
 
-      it("if headless is true, exports invoke() AND headlessCommand", () => {
+      it("if headless is true, exports invoke() AND (headlessCommand or httpNative)", () => {
         if (adapter.capabilities.headless) {
           assert.equal(typeof adapter.invoke, "function",
             `${host} declares headless but no invoke()`);
-          assert.ok(typeof adapter.capabilities.headlessCommand === "string"
-                    && adapter.capabilities.headlessCommand.length > 0,
-            `${host} declares headless but no headlessCommand string`);
+          // httpNative adapters drive the model via HTTP rather than a CLI
+          // subprocess — they have no headlessCommand by design.
+          if (!adapter.capabilities.httpNative) {
+            assert.ok(typeof adapter.capabilities.headlessCommand === "string"
+                      && adapter.capabilities.headlessCommand.length > 0,
+              `${host} declares headless but neither headlessCommand nor httpNative is set`);
+          }
         }
       });
 
@@ -260,8 +264,8 @@ describe("adapter contract: cross-host gate-footer equivalence", () => {
 // --patch fix workstreams routed to codex or gemini-cli receive the
 // same scoping constraint as claude-code and generic.
 describe("adapter contract: PATCH MODE rendering", () => {
-  // All four currently-shipped hosts expose renderStagePrompt.
-  const HOSTS_WITH_RENDER = ["claude-code", "generic", "codex", "gemini-cli"];
+  // All hosts that expose renderStagePrompt.
+  const HOSTS_WITH_RENDER = ["claude-code", "generic", "codex", "gemini-cli", "openai-compat"];
 
   // The normalized PATCH MODE heading — we check presence/absence of
   // this sentinel rather than byte-pinning the full block, to allow for
@@ -446,7 +450,7 @@ describe("adapter contract: claude-code renderSettingsLocal portable hooks", () 
 // After 6.1 the budget comes from core/roles.toolBudgetFor (host-neutral);
 // descriptorWithBudget() uses that real value instead of a fabricated array.
 describe("adapter contract: tool budget section rendering", () => {
-  const PROMPT_ONLY_HOSTS = ["codex", "gemini-cli", "generic"];
+  const PROMPT_ONLY_HOSTS = ["codex", "gemini-cli", "generic", "openai-compat"];
   const { toolBudgetFor: rolesBudgetFor } = require(path.join(REPO_ROOT, "core", "roles"));
 
   function descriptorWithBudget() {
@@ -514,7 +518,7 @@ describe("adapter contract: 6.1 host-neutral tool-budget resolution", () => {
 
   // ── 1. Advisory section rendered + budget in descriptor for non-claude hosts ──
 
-  for (const host of ["codex", "gemini-cli", "generic"]) {
+  for (const host of ["codex", "gemini-cli", "generic", "openai-compat"]) {
     it(`${host}: descriptor.toolBudget populated from core/roles (pm role)`, () => {
       const plan = runStage("requirements", { cwd: cwd(host) });
       const ws = plan.workstreams[0];

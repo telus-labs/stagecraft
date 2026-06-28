@@ -6,6 +6,7 @@ const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { getOrchestrator } = require(path.join(__dirname, "..", "get-orchestrator"));
 const _escalation = require(path.join(__dirname, "..", "..", "escalation"));
 const renderPrincipalRulingPrompt = _escalation.renderPrincipalRulingPrompt;
+const isHttpNativePrincipal = _escalation.isHttpNativePrincipal;
 
 const name = "ruling";
 
@@ -66,8 +67,9 @@ async function run(positional, _flags) {
 
   const prompt = renderPrincipalRulingPrompt(topic, contextPaths, targetGate);
 
-  if (!_flags.headless) {
+  if (!_flags.headless && !isHttpNativePrincipal(cwd)) {
     // User-driven mode: print the prompt for paste-into-host.
+    // httpNative hosts have no interactive fallback; they always auto-dispatch.
     const onboarding = [
       "════════════════════════════════════════════════════════════════════",
       `  Principal-ruling prompt for: ${topic}`,
