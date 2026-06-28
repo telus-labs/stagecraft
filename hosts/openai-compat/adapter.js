@@ -10,8 +10,8 @@
 //   - no hooks          → gate polling is orchestrator-driven (no SubagentStop)
 //   - no subagents      → each workstream dispatches sequentially in its HTTP loop
 //   - no headlessCommand → invoke() bypasses runHeadless entirely
-//   - shell via bash()  → roles with "Bash" in toolBudget receive the bash tool;
-//                         security posture matches claude-code --dangerously-skip-permissions
+//   - shell via bash()  → roles with "Bash" in toolBudget receive a direct,
+//                         allowlisted command executor
 //
 // Configuration (.devteam/config.yml):
 //   hosts:

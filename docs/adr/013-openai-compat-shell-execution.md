@@ -26,14 +26,14 @@ The question is how to give openai-compat shell execution without introducing a 
 
 Add a `bash(command)` function tool to `hosts/openai-compat/tools.js` and set `enforces.shell: true` in `capabilities.json`.
 
-The model calls `bash` the same way it calls `write_file` — as a function call in the chat-completions tool-call protocol. Execution uses Node.js `child_process.spawn("sh", ["-c", command], { cwd, detached: true })`, captures stdout and stderr, kills the command's process group when the shell exits or times out, and returns a structured result string (exit code + stdout + stderr, truncated to 8 KB each). The 40-iteration tool-call loop in `invoke.js` already provides the re-try / convergence behaviour that claude-code's goal-loop provides externally.
+The model calls `bash` the same way it calls `write_file` — as a function call in the chat-completions tool-call protocol. For scanner compatibility and command-injection resistance, the command string is parsed into argv and is never passed through a shell. The executor rejects pipes, redirects, background jobs, command substitution, env-prefix assignments, path-qualified executables, and non-allowlisted command names. Execution uses Node.js `child_process.spawn()` with a detached process group, captures stdout and stderr, kills the process group on timeout, and returns a structured result string (exit code + stdout + stderr, truncated to 8 KB each). The 40-iteration tool-call loop in `invoke.js` already provides the re-try / convergence behaviour that claude-code's goal-loop provides externally.
 
 `bash` is included in the tool set when the role's `toolBudget` contains `"Bash"` (from `core/roles.js::ROLE_TOOLS`). Roles without `Bash` in their budget (pm, reviewer) do not receive the tool.
 
 ## Consequences
 
 - All 18 pipeline stages can now route to openai-compat; no fallback to claude-code, codex, or gemini-cli is required.
-- The security posture is identical to `claude --dangerously-skip-permissions`: the model executes commands in the project working directory with the same OS permissions as the invoking process. Operators who require stronger sandboxing should wrap the Node.js process in a container or revisit an allow-list model in a future ADR.
+- The security posture is narrower than `claude --dangerously-skip-permissions` because shell syntax and non-allowlisted executables are rejected, but allowlisted commands still run in the project working directory with the same OS permissions as the invoking process. Operators who require stronger sandboxing should wrap the Node.js process in a container.
 - Bash failures and tool errors log to stderr in quiet mode; verbose mode logs every tool call and result summary.
 - Timeouts: each `bash` call accepts an optional `timeout_ms` argument; the default is 60 s. The outer `ctx.timeoutMs` caps the full dispatch, so run-away loops are bounded at two levels.
 
@@ -43,6 +43,6 @@ The model calls `bash` the same way it calls `write_file` — as a function call
 
 **Thin `stagecraft-shell` CLI wrapper** — a small Node.js script that accepts a prompt on stdin, calls an OpenAI-compatible API, runs the tool-call loop (including bash), and exits. Stagecraft treats it as a `headlessCommand`. This is architecturally equivalent to running `invoke.js` as a subprocess; it duplicates the logic and adds a binary to install.
 
-**Allow-list model** — declare a `hosts.openai-compat.allowed_commands` list in `.devteam/config.yml` and reject any command not on the list. Provides a tighter security surface but is fragile (projects use `yarn`, `pnpm`, `make`, custom scripts) and adds maintenance burden for marginal gain given the existing write-audit tripwire.
+**Project-configured allow-list model** — declare a `hosts.openai-compat.allowed_commands` list in `.devteam/config.yml`. The shipped implementation uses a built-in allowlist instead, so the default posture is scanner-friendly without adding per-project setup.
 
 **OpenHands / external agent runtime** — route shell stages to a sandboxed Docker-backed agent (OpenHands). Appropriate for security-critical production environments but introduces a running-service dependency and requires a different API client; the overhead far exceeds what five stages need.

@@ -32,7 +32,7 @@ The capability check is in `core/orchestrator.js::assertCapabilities`. It compar
 
 ### Option A — Add a `bash` tool to the openai-compat adapter *(chosen)*
 
-Extend `hosts/openai-compat/tools.js` with a `bash(command)` function tool. The model calls it the same way it calls `write_file`. Execution uses Node.js `child_process.spawn` with a detached process group, returns stdout + stderr + exit code as the tool result, and the loop continues.
+Extend `hosts/openai-compat/tools.js` with a `bash(command)` function tool. The model calls it the same way it calls `write_file`. Execution parses the command string into argv, rejects shell syntax and non-allowlisted executables, uses Node.js `child_process.spawn` with a detached process group, returns stdout + stderr + exit code as the tool result, and the loop continues.
 
 **What changes:** `tools.js` (BASH definition + executeBash), `capabilities.json` (shell: true), `buildTools()` (include bash when toolBudget has Bash), `executeTool()` (dispatch).
 
@@ -40,14 +40,14 @@ Extend `hosts/openai-compat/tools.js` with a `bash(command)` function tool. The 
 - Zero new dependencies — pure `child_process`, already used in headless.js
 - Architecturally coherent: the model makes decisions through tool calls, not prompt engineering
 - No separate process to install or maintain
-- Identical approach to how claude-code exposes shell to subagents
+- Similar operational role to how claude-code exposes shell to subagents, with a narrower direct-command executor
 - Solves all 5 blocked stages simultaneously
 
 **Cons:**
-- No sandboxing out of the box — same posture as `claude --dangerously-skip-permissions`
-- Adds a new attack surface: a coerced model could request arbitrary commands
+- No OS sandboxing out of the box — allowlisted commands still run with the invoking process's permissions
+- Adds a new attack surface: a coerced model could request allowed verification, package, or deploy commands
 
-**Security verdict:** Identical posture to what's already accepted for claude-code. The threat model is the same: a capable but trustworthy model executing commands in your project. Mitigation is the same: run in CI with restricted credentials, review logs, use post-hoc write audit as a tripwire.
+**Security verdict:** Narrower than a raw shell because shell syntax and non-allowlisted executables are rejected, but still not an OS sandbox. The threat model is a capable but trustworthy model executing approved project commands. Mitigation remains: run in CI with restricted credentials, review logs, and use post-hoc write audit as a tripwire.
 
 ---
 
@@ -118,15 +118,16 @@ const BASH = {
   function: {
     name: "bash",
     description:
-      "Execute a shell command in the project root and return stdout, stderr, and exit code. " +
+      "Execute an allowlisted command in the project root and return stdout, stderr, and exit code. " +
       "Use for running tests, linters, build scripts, and deploy commands. " +
+      "The command is parsed into argv and is not run through a shell. " +
       "Working directory is always the project root.",
     parameters: {
       type: "object",
       properties: {
         command: {
           type: "string",
-          description: "Shell command to run. Executed via `sh -c` at the project root.",
+          description: "Command to run at the project root. Use direct commands such as `npm test`, not shell syntax.",
         },
         timeout_ms: {
           type: "number",
@@ -141,8 +142,8 @@ const BASH = {
 
 ### Execution model
 
-- `spawn("sh", ["-c", command], { cwd, detached: true })`
-- Kills the command's process group when the shell exits or the timeout fires so background children do not keep inherited stdout/stderr pipes open
+- Parse the command string into argv, reject shell syntax, then `spawn()` one of the built-in allowlisted executables with `{ cwd, detached: true }`
+- Kills the command's process group when the command exits or the timeout fires so child processes do not keep inherited stdout/stderr pipes open
 - Captures stdout and stderr separately
 - Returns a structured result string: `exit_code`, `stdout`, `stderr` (each truncated to 8 KB to prevent message bloat in long tool-call loops)
 - Quiet mode logs writes, bash failures, and tool errors; verbose mode logs every tool call and result summary

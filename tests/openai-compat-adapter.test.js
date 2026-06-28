@@ -2,7 +2,7 @@
 //
 // Coverage:
 //   1. tools.js — buildTools, executeTool (write_file, read_file, list_files, bash)
-//   2. tools.js — executeBash (success, failure, timeout)
+//   2. tools.js — executeBash (success, failure, timeout, shell-syntax rejection)
 //   3. invoke.js — resolveConfig (env vars + config.yml merge)
 //   4. invoke.js — invoke() agentic loop (fetch mocked to avoid real API calls)
 //   5. adapter.js — install/status/uninstall/renderStagePrompt via contract
@@ -283,12 +283,13 @@ describe("openai-compat tools", () => {
   describe("executeTool — bash", () => {
     it("dispatches bash tool call to executeBash and returns output", async () => {
       const cwd = tmpdir();
+      fs.writeFileSync(path.join(cwd, "ok.js"), "console.log('hello-from-bash');\n", "utf8");
       const result = await executeTool(
         {
           id: "tc_bash1",
           function: {
             name: "bash",
-            arguments: JSON.stringify({ command: "echo hello-from-bash" }),
+            arguments: JSON.stringify({ command: "node ok.js" }),
           },
         },
         cwd,
@@ -300,12 +301,13 @@ describe("openai-compat tools", () => {
 
     it("returns non-zero exit code for failing commands", async () => {
       const cwd = tmpdir();
+      fs.writeFileSync(path.join(cwd, "fail42.js"), "process.exit(42);\n", "utf8");
       const result = await executeTool(
         {
           id: "tc_bash2",
           function: {
             name: "bash",
-            arguments: JSON.stringify({ command: "exit 42" }),
+            arguments: JSON.stringify({ command: "node fail42.js" }),
           },
         },
         cwd,
@@ -338,14 +340,20 @@ describe("openai-compat tools", () => {
   describe("executeBash", () => {
     it("returns exit_code 0 and stdout for successful command", async () => {
       const cwd = tmpdir();
-      const result = await executeBash("echo stagecraft", cwd, null);
+      fs.writeFileSync(path.join(cwd, "ok.js"), "console.log('stagecraft');\n", "utf8");
+      const result = await executeBash("node ok.js", cwd, null);
       assert.ok(result.includes("exit_code: 0"), `got: ${result}`);
       assert.ok(result.includes("stagecraft"), `expected echo output; got: ${result}`);
     });
 
     it("returns non-zero exit_code and stderr for failing command", async () => {
       const cwd = tmpdir();
-      const result = await executeBash("sh -c 'echo error-msg >&2; exit 1'", cwd, null);
+      fs.writeFileSync(
+        path.join(cwd, "fail.js"),
+        "process.stderr.write('error-msg\\n'); process.exit(1);\n",
+        "utf8",
+      );
+      const result = await executeBash("node fail.js", cwd, null);
       assert.ok(result.includes("exit_code: 1"), `got: ${result}`);
       assert.ok(result.includes("error-msg"), `expected stderr content; got: ${result}`);
     });
@@ -357,16 +365,25 @@ describe("openai-compat tools", () => {
       assert.ok(result.includes("timed out"), `expected 'timed out' in message; got: ${result}`);
     });
 
-    it("terminates background processes and returns promptly", async () => {
+    it("rejects shell background syntax", async () => {
       const cwd = tmpdir();
-      const t0 = Date.now();
-      // Start a long-running background process — should be killed when the
-      // shell exits and not block the bash tool for its full duration.
       const result = await executeBash("sleep 60 &\necho done", cwd, 5000);
-      const elapsed = Date.now() - t0;
-      assert.ok(result.includes("exit_code: 0"), `got: ${result}`);
-      assert.ok(result.includes("done"), `expected echo output; got: ${result}`);
-      assert.ok(elapsed < 4000, `expected prompt return (<4 s); took ${elapsed} ms`);
+      assert.ok(result.startsWith("error:"), `expected shell syntax rejection; got: ${result}`);
+      assert.ok(result.includes("shell syntax is not supported"));
+    });
+
+    it("rejects shell redirect syntax", async () => {
+      const cwd = tmpdir();
+      const result = await executeBash("echo error-msg >&2", cwd, 1000);
+      assert.ok(result.startsWith("error:"), `expected shell syntax rejection; got: ${result}`);
+      assert.ok(result.includes("shell syntax is not supported"));
+    });
+
+    it("rejects non-allowlisted commands", async () => {
+      const cwd = tmpdir();
+      const result = await executeBash("python --version", cwd, 1000);
+      assert.ok(result.startsWith("error:"), `expected allowlist rejection; got: ${result}`);
+      assert.ok(result.includes("not allowlisted"));
     });
 
     it("blocks find against an absolute sibling-prefix path", async () => {
@@ -745,6 +762,11 @@ hosts:
       default: test/model
 `);
     process.env.OPENAI_COMPAT_BASH_TEST_KEY = "sk-bash-stub";
+    fs.writeFileSync(
+      path.join(cwd, "make-sentinel.js"),
+      "require('node:fs').writeFileSync('bash-sentinel.txt', 'bash-ran\\n');\n",
+      "utf8",
+    );
 
     const gateContent = JSON.stringify({
       stage: "stage-04a",
@@ -758,14 +780,14 @@ hosts:
     global.fetch = async () => {
       callCount++;
       if (callCount === 1) {
-        // Model runs a bash command to create a sentinel file
+        // Model runs an allowlisted command to create a sentinel file.
         return {
           ok: true,
           json: async () => makeApiResponse(null, [{
             id: "tc_bash_loop",
             function: {
               name: "bash",
-              arguments: JSON.stringify({ command: "echo bash-ran > bash-sentinel.txt" }),
+              arguments: JSON.stringify({ command: "node make-sentinel.js" }),
             },
           }]),
         };

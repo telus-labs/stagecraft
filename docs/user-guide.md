@@ -667,7 +667,7 @@ Passing `--headless` explicitly is also accepted and has the same effect. This a
 | Goal loop | ✗ — replaced by a 40-iteration tool-call loop per dispatch |
 | Per-role model selection | ✓ via `hosts.openai-compat.models.<role>` in config |
 
-**Security posture.** The `bash` tool gives the model the ability to run arbitrary shell commands — equivalent to `--dangerously-skip-permissions`. All commands are logged to stderr before execution. This matches the posture of headless Claude Code and Codex.
+**Security posture.** The `bash` tool runs direct, allowlisted project commands only. It parses the command string into argv and rejects shell syntax such as pipes, redirects, background jobs, command substitution, env-prefix assignments, path-qualified executables, and non-allowlisted command names. Allowlisted commands still run with the same OS permissions as the invoking process, so run Stagecraft inside your normal project sandbox when that boundary matters.
 
 **max_tokens cap.** The default is 32 768 tokens per API call. If the model hits this limit mid-tool-call, its arguments may be truncated (malformed JSON). The adapter emits a `warn: max_tokens hit` warning and the tool-call loop attempts recovery. Very long artifact writes are the most common trigger; if you see the warning repeatedly, raise `DEFAULT_MAX_TOKENS` in `hosts/openai-compat/invoke.js`.
 

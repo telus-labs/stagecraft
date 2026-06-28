@@ -396,7 +396,7 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   lines.push("`devteam stage build` and `devteam stage pre-review` dispatch a full model");
   lines.push("run and can take 5–30 minutes. Always pass `timeout_ms: 1800000` (30 min)");
   lines.push("when calling these via the bash tool. Example:");
-  lines.push('  bash({ command: "devteam stage build --workstream backend --headless 2>&1", timeout_ms: 1800000 })');
+  lines.push('  bash({ command: "devteam stage build --workstream backend --headless", timeout_ms: 1800000 })');
   lines.push("");
   lines.push("## Done when");
   lines.push("");

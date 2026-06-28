@@ -6,11 +6,12 @@
 //   write_file   — write a file; enforces descriptor.allowedWrites at call time
 //   read_file    — read a file; enforces project-root boundary
 //   list_files   — list a directory; enforces project-root boundary
-//   bash         — execute a shell command; included when role toolBudget has "Bash"
+//   bash         — execute an allowlisted command; included when role toolBudget has "Bash"
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { splitCommand } = require("../../core/command-line");
 const { isAllowed } = require("../../core/guards/write-audit");
 
 const DEFAULT_BASH_TIMEOUT_MS = 60_000;
@@ -84,8 +85,10 @@ function buildBashTool() {
     function: {
       name: "bash",
       description:
-        "Execute a shell command in the project root and return stdout, stderr, and exit code. " +
+        "Execute an allowlisted command in the project root and return stdout, stderr, and exit code. " +
         "Use for running tests, linters, build scripts, and deploy commands. " +
+        "The command is parsed into argv and is not run through a shell, so pipes, redirects, " +
+        "background jobs, command substitution, and env-prefix assignments are rejected. " +
         "Working directory is always the project root." +
         platformNote,
       parameters: {
@@ -93,7 +96,7 @@ function buildBashTool() {
         properties: {
           command: {
             type: "string",
-            description: "Shell command to run. Executed via `sh -c` at the project root.",
+            description: "Command to run at the project root. Use a direct command such as `npm test`, not shell syntax.",
           },
           timeout_ms: {
             type: "number",
@@ -147,7 +150,7 @@ function resolveSafe(cwd, relPath) {
   return { resolved, error: null };
 }
 
-// Execute a shell command in the project root. Returns a structured string
+// Execute an allowlisted command in the project root. Returns a structured string
 // (exit_code / stdout / stderr) to send back as the tool message content.
 // Matches `find` invocations that search from the filesystem root or bare home
 // directory — these scan the entire disk and reliably time out.
@@ -166,20 +169,88 @@ const ABS_PATH_FIND_RE = /\bfind\s+(?:"(\/[^"]*)"|'(\/[^']*)'|(\/\S*))/;
 // infinite loop) or attempt an interactive command that has no terminal.
 const RECURSIVE_DEVTEAM_RE = /\bdevteam\s+(fix-escalation|ruling)\b/;
 
-// Execute a shell command asynchronously using a detached process group.
+const SHELL_SYNTAX_TOKENS = new Set(["|", "||", "&", "&&", ";", "<", ">", ">>", "2>", "2>>"]);
+const SHELL_SYNTAX_RE = /[|&;<>`$]/;
+const ENV_ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+function validateCommandArgv(command) {
+  let parsed;
+  try {
+    parsed = splitCommand(command, "bash command");
+  } catch (err) {
+    return { error: `invalid command: ${err.message}` };
+  }
+  const { bin, args } = parsed;
+  if (path.isAbsolute(bin) || bin.includes("/") || bin.includes("\\")) {
+    return { error: "absolute or path-qualified executables are not allowed; use an allowlisted command name" };
+  }
+  if (ENV_ASSIGNMENT_RE.test(bin)) {
+    return { error: "environment-variable prefixes are not supported; run the configured script directly" };
+  }
+  const badToken = [bin, ...args].find((token) =>
+    SHELL_SYNTAX_TOKENS.has(token) || SHELL_SYNTAX_RE.test(token) || ENV_ASSIGNMENT_RE.test(token),
+  );
+  if (badToken) {
+    return {
+      error:
+        `shell syntax is not supported in bash tool commands (found "${badToken}"). ` +
+        "Use direct argv-style commands such as `npm test`, `npx eslint .`, or `git status --short`.",
+    };
+  }
+  return { bin, args, error: null };
+}
+
+function spawnAllowedCommand(bin, args, options) {
+  switch (bin) {
+    case "awk": return spawn("awk", args, options);
+    case "cat": return spawn("cat", args, options);
+    case "chmod": return spawn("chmod", args, options);
+    case "cp": return spawn("cp", args, options);
+    case "devteam": return spawn("devteam", args, options);
+    case "docker": return spawn("docker", args, options);
+    case "find": return spawn("find", args, options);
+    case "git": return spawn("git", args, options);
+    case "grep": return spawn("grep", args, options);
+    case "head": return spawn("head", args, options);
+    case "kubectl": return spawn("kubectl", args, options);
+    case "ls": return spawn("ls", args, options);
+    case "make": return spawn("make", args, options);
+    case "mkdir": return spawn("mkdir", args, options);
+    case "mv": return spawn("mv", args, options);
+    case "node": return spawn(process.execPath, args, options);
+    case "npm": return spawn("npm", args, options);
+    case "npx": return spawn("npx", args, options);
+    case "pnpm": return spawn("pnpm", args, options);
+    case "pwd": return spawn("pwd", args, options);
+    case "rm": return spawn("rm", args, options);
+    case "sed": return spawn("sed", args, options);
+    case "sleep": return spawn("sleep", args, options);
+    case "sort": return spawn("sort", args, options);
+    case "tail": return spawn("tail", args, options);
+    case "terraform": return spawn("terraform", args, options);
+    case "test": return spawn("test", args, options);
+    case "true": return spawn("true", args, options);
+    case "false": return spawn("false", args, options);
+    case "uniq": return spawn("uniq", args, options);
+    case "wc": return spawn("wc", args, options);
+    case "yarn": return spawn("yarn", args, options);
+    default:
+      return null;
+  }
+}
+
+// Execute a command asynchronously using a detached process group.
 //
 // Why async spawn instead of spawnSync: spawnSync holds stdout/stderr pipes
 // open until every process that inherited those file descriptors closes them.
-// When the model runs `node server.js &` (background) the server inherits the
-// shell's pipe handles. Even though the shell exits quickly, spawnSync waits
-// indefinitely for the server to exit — causing the observed 60 s / 30 s / 20 s
-// timeouts in the red-team stage.
+// A directly spawned process can still start child processes. With detached:
+// true, timeout cleanup can kill the whole process group instead of only the
+// parent.
 //
-// With detached: true the shell and all its children (including background
-// processes started with &) share a process group. When the shell exits we
-// immediately send SIGKILL to the whole group (-child.pid), which terminates
-// any lingering children and closes their pipe write-ends, allowing the
-// `close` event to fire and the result to be returned promptly.
+// Commands are never executed through a shell. The model supplies a command
+// string for compatibility with shell-shaped instructions, but Stagecraft
+// parses it into argv, rejects shell syntax, and only spawns explicit
+// allowlisted executables.
 function executeBash(command, cwd, timeoutMs) {
   if (FILESYSTEM_ROOT_FIND_RE.test(command)) {
     return Promise.resolve("error: filesystem root search blocked — search within the project directory instead (e.g. 'find . -name ...' or 'find pipeline/ -name ...')");
@@ -196,25 +267,36 @@ function executeBash(command, cwd, timeoutMs) {
   if (RECURSIVE_DEVTEAM_RE.test(command)) {
     return Promise.resolve("error: recursive escalation blocked — do not call 'devteam fix-escalation' or 'devteam ruling' from inside a pipeline agent; you are already the escalation applicator");
   }
+  const parsed = validateCommandArgv(command);
+  if (parsed.error) {
+    return Promise.resolve(`error: ${parsed.error}`);
+  }
 
   const timeout = (typeof timeoutMs === "number" && timeoutMs > 0)
     ? timeoutMs
     : DEFAULT_BASH_TIMEOUT_MS;
 
   return new Promise((resolve) => {
-    const child = spawn("sh", ["-c", command], {
+    const child = spawnAllowedCommand(parsed.bin, parsed.args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      detached: true, // shell becomes process group leader; children share the group
+      detached: true, // process becomes group leader; child processes share the group
     });
+    if (!child) {
+      resolve(
+        `error: command "${parsed.bin}" is not allowlisted for the bash tool. ` +
+        "Use project scripts through npm/yarn/pnpm, or one of the documented verification/deploy commands.",
+      );
+      return;
+    }
 
     const stdoutBufs = [];
     const stderrBufs = [];
     let exitCode = null;
     let settled = false;
 
-    // Kill all processes in the shell's process group. Used both on shell exit
-    // (to reap background children) and on timeout (to reap everything).
+    // Kill all processes in the command's process group. Used on timeout and
+    // after process exit to reap any children that inherited the pipes.
     function killGroup() {
       try { process.kill(-child.pid, "SIGKILL"); } catch { /* ESRCH: already gone */ }
     }
@@ -229,9 +311,8 @@ function executeBash(command, cwd, timeoutMs) {
     child.stdout.on("data", (d) => { stdoutBufs.push(d); });
     child.stderr.on("data", (d) => { stderrBufs.push(d); });
 
-    // When the shell exits (including after it forks background children),
-    // kill the whole process group so the background children release their
-    // inherited pipe write-ends and the `close` event can fire.
+    // When the command exits, kill the whole process group so child processes
+    // release inherited pipe write-ends and the `close` event can fire.
     child.on("exit", (code) => {
       exitCode = code;
       killGroup();
