@@ -2,8 +2,8 @@
 
 Phase plans produced from the 2026-06-10 full-framework review and subsequent audits. Each phase is a set of
 PR-sized work items with file/line anchors, acceptance criteria, and verification commands,
-written to be executed one item at a time. **Phases 1–20 are complete. Phase 21 is
-proposed for review and is not authorized for implementation.
+written to be executed one item at a time. **Phases 1–20 are complete. Phases 21 and 22
+are proposed for review and are not authorized for implementation.
 Real-project evidence collection remains the active capability priority.**
 
 | Phase | Plan | Prompts | Theme | Status |
@@ -30,6 +30,7 @@ Real-project evidence collection remains the active capability priority.**
 | 19 | [phase-19-polyglot-verification.md](phase-19-polyglot-verification.md) | — | B7 deterministic Node, pytest, and Go suite aggregation | ✅ complete (PR #264) |
 | 20 | [phase-20-run-watch.md](phase-20-run-watch.md) | — | ADR-007 foreground terminal liveness UX | ✅ complete (PR #268) |
 | 21 | [phase-21-cloud-runner-adapter.md](phase-21-cloud-runner-adapter.md) | — | A3 remote workstream execution through a transport-backed host adapter | 📝 proposed for review |
+| 22 | [phase-22-docker-headless-runner.md](phase-22-docker-headless-runner.md) | — | Docker-based unattended local runner for long headless pipelines | 📝 proposed for review |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status

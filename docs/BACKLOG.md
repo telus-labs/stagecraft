@@ -80,6 +80,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | A2 | **Cursor / Windsurf / Aider / Cline adapters** | 3 | 3 | One per IDE-embedded agent. Each is an adapter, mostly install-payload work. |
 | A3 | **Cloud-runner adapter** (e.g. AWS Lambda + Bedrock, Replit Agent) | 4 | 4 | Host adapter that runs one workstream on a remote worker, not the user's laptop. Enables long-running stages (multi-hour audits, big test suites). [Phase 21 plan proposed for review.](../plans/phase-21-cloud-runner-adapter.md) |
 | A5 | **API-direct adapter** (no host CLI; talks to Anthropic / OpenAI / Google APIs directly) | 3 | 3 | For users who don't want to install claude-code or codex but still want orchestration. Lighter dependency footprint. |
+| A7 | **Docker-based headless runner** ([#282](https://github.com/telus-labs/stagecraft/issues/282)) | 4 | 2 | Package Stagecraft and headless-capable hosts into a container so long `devteam run` executions can continue unattended with project state persisted on a mounted volume. Lower blast radius than A3 because the whole local orchestrator runs inside one container. [Phase 22 plan proposed for review.](../plans/phase-22-docker-headless-runner.md) |
 
 ## B. Pipeline depth — more/richer stages
 
