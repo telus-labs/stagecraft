@@ -13,6 +13,7 @@ If you've never used Stagecraft before, read EXAMPLE first. This page is a refer
 - [Your three moments of control](#your-three-moments-of-control)
 - [Install + first run](#install--first-run)
 - [Daily loop](#daily-loop)
+- [Prototype first, harden later](#prototype-first-harden-later)
 - [Running each stage](#running-each-stage)
 - [Multi-host setups](#multi-host-setups)
 - [Headless mode](#headless-mode)
@@ -139,6 +140,51 @@ A third command becomes relevant after any stage that produces deferred findings
 ```bash
 devteam advise          # "triage the noted_for_followup items"
 ```
+
+## Prototype first, harden later
+
+Use `devteam prototype` when the work is still exploratory: a UI sketch, product
+workflow, technical feasibility test, or internal demo that needs fast feedback
+before it deserves the full SDLC treatment.
+
+Prototype mode creates a packet under `pipeline/prototypes/<id>/`:
+
+- `intent.md` — what you are trying to learn.
+- `build-prompt.md` — a fast-build prompt for a coding agent or human pair.
+- `feedback.md` — notes from demos and review.
+- `promotion.md` — the handoff into a normal Stagecraft track.
+- `prototype.json` — metadata for tooling.
+
+Start, record feedback, then promote when the shape settles:
+
+```bash
+devteam prototype start "settings flow" --feature "Try a faster account-settings flow"
+devteam prototype note settings-flow --feedback "Users missed the save state"
+devteam prototype promote settings-flow --track full
+```
+
+`promote` appends the hardening command to `promotion.md`:
+
+```bash
+devteam run --feature-file pipeline/prototypes/settings-flow/promotion.md --track full
+```
+
+Prototype packets are not gates and do not satisfy sign-off, deploy, or CI
+evidence. They are intentionally committable learning records: Stagecraft's
+managed `.gitignore` excludes volatile runtime files, but not
+`pipeline/prototypes/`. If the prototype touches auth, payments, migrations,
+secrets, customer data, infrastructure, or anything production-bound, promote it
+to a normal track before broader use.
+
+### Prototype mode with openai-compat
+
+`devteam prototype` itself is a local CLI workflow, so it works the same no
+matter which host you configured. When you use the generated `build-prompt.md`
+with `openai-compat`, the host's `write_file` tool can write prototype packet
+files as long as the dispatch descriptor allows `pipeline/prototypes/<id>/`.
+Those writes still stay inside the project root and still go through
+openai-compat's allowed-write checks; allowing the prototype packet does not
+grant writes elsewhere in the repo.
 
 ### Follow-up item triage
 

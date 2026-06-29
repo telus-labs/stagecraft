@@ -314,6 +314,17 @@ Lifts ADRs and lessons from any project into a shared store at `~/.stagecraft/me
 
 ### Core commands — the everyday loop
 
+**`devteam prototype <start|note|promote>`** — pre-SDLC prototype mode for fast
+learning before a change deserves delivery gates.
+
+- `start` creates `pipeline/prototypes/<id>/` with `intent.md`,
+  `build-prompt.md`, `feedback.md`, `promotion.md`, and `prototype.json`
+- `note` appends demo or stakeholder feedback to the packet
+- `promote` writes the hardening command for a normal Stagecraft track, for
+  example `devteam run --feature-file pipeline/prototypes/<id>/promotion.md --track full`
+- Prototype packets are intentionally not gate evidence; they are committable
+  learning records that make the later full/quick/hotfix run better informed
+
 **`devteam assess [--description "..."] [--json] [--apply] [--confirm] [files...]`** — rule-based track recommendation before starting a run.
 
 - Analyzes description keywords and file/content heuristics (security patterns, migration files, config-only paths) to recommend a track

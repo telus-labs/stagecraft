@@ -30,6 +30,7 @@ describe("writeGitignoreBlock", () => {
     assert.ok(content.includes("pipeline/run.lock"));
     assert.ok(content.includes(".devteam/memory/"));
     assert.ok(content.includes(".devteam/evidence-project-id"));
+    assert.ok(!content.includes("pipeline/prototypes/"), "prototype packets are committable learning artifacts");
   });
 
   it("appends block to existing .gitignore with no block; preserves existing content", () => {
