@@ -76,7 +76,7 @@ Evaluating further (long-form): [docs/presentation-notes.md](docs/presentation-n
 | 4 | [docs/runbooks/README.md](docs/runbooks/README.md) | Troubleshooting index: symptom → runbook section |
 | 5 | [docs/cost.md](docs/cost.md) | Cost tracking, pricing table, and budget workflow |
 
-Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
+Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [hosts/docker/README.md](hosts/docker/README.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
 
 ### Contributor — I change Stagecraft
 

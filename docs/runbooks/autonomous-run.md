@@ -107,6 +107,29 @@ and `--json` are mutually exclusive. When watch output is redirected or stderr i
 not a TTY, Stagecraft prints a warning and uses the existing line-per-event format
 without ANSI control sequences.
 
+### Launching in the Docker runner
+
+For unattended local or worker-machine runs, build the runner from the
+Stagecraft repo and execute it against a mounted target project:
+
+```bash
+docker build -f hosts/docker/Dockerfile -t stagecraft-runner:local .
+
+cd /path/to/target-project
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -v "$PWD:/workspace" \
+  --env-file .devteam/docker.env \
+  stagecraft-runner:local run --cwd /workspace --budget-usd 10
+```
+
+The container runs the same `devteam run` loop documented here. It does not
+change gate semantics, exit codes, or the consequence ceiling. It keeps
+credentials runtime-only, reports existing `pipeline/run.lock` files, and
+removes a stale lock only when `STAGECRAFT_RUNNER_CLEAR_STALE_LOCK=1` is set.
+See [`hosts/docker/README.md`](../../hosts/docker/README.md) for UID/GID build
+args, secret handling, and resource limits.
+
 ## What it writes
 
 | File | Purpose |

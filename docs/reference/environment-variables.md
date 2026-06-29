@@ -37,6 +37,14 @@ Resolution order: `.devteam/config.yml` → environment variables. When `api_key
 
 ---
 
+## Docker runner
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `STAGECRAFT_RUNNER_CLEAR_STALE_LOCK` | `0` | Docker entrypoint option. Set to `1` only after confirming `pipeline/run.lock` is stale; the wrapper removes the lock before delegating to `devteam`. Active locks are never removed. |
+
+---
+
 ## Pipeline paths and change isolation
 
 | Variable | Default | Description |
