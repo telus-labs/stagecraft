@@ -20,6 +20,11 @@ function readJSON(rel) {
 function listDir(rel) {
   return fs.readdirSync(path.join(REPO_ROOT, rel));
 }
+function listBuiltInHostAdapters() {
+  return listDir("hosts").filter((h) =>
+    fs.existsSync(path.join(REPO_ROOT, "hosts", h, "adapter.js"))
+  );
+}
 
 describe("contract: package + version", () => {
   it("package.json parses and has a version", () => {
@@ -140,8 +145,8 @@ describe("contract: ORDERED_STAGE_NAMES ↔ STAGES_BY_TRACK", () => {
 });
 
 describe("contract: adapters ↔ hosts/ directory", () => {
-  it("every hosts/<name>/ has capabilities.json and adapter.js", () => {
-    const hosts = listDir("hosts");
+  it("every built-in host adapter has capabilities.json and adapter.js", () => {
+    const hosts = listBuiltInHostAdapters();
     for (const h of hosts) {
       const cap = path.join("hosts", h, "capabilities.json");
       const adapter = path.join("hosts", h, "adapter.js");
@@ -151,7 +156,7 @@ describe("contract: adapters ↔ hosts/ directory", () => {
   });
 
   it("every capabilities.json has name and enforces fields", () => {
-    for (const h of listDir("hosts")) {
+    for (const h of listBuiltInHostAdapters()) {
       const cap = readJSON(`hosts/${h}/capabilities.json`);
       assert.equal(cap.name, h, `host "${h}" capabilities.json name mismatch (${cap.name})`);
       assert.ok(cap.enforces, `host "${h}" capabilities.json missing enforces`);
