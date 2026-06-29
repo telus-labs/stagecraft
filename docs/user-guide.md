@@ -155,13 +155,19 @@ Prototype mode creates a packet under `pipeline/prototypes/<id>/`:
 - `promotion.md` — the handoff into a normal Stagecraft track.
 - `prototype.json` — metadata for tooling.
 
-Start, record feedback, then promote when the shape settles:
+Start the packet, build the prototype from its generated prompt, record
+feedback, then promote when the shape settles:
 
 ```bash
 devteam prototype start "settings flow" --feature "Try a faster account-settings flow"
 devteam prototype note settings-flow --feedback "Users missed the save state"
 devteam prototype promote settings-flow --track full
 ```
+
+There is deliberately no `devteam prototype build` command yet. Prototype mode
+is a packet workflow: Stagecraft writes the intent and build prompt; you hand
+that prompt to your coding host or a human pair. The normal gated pipeline starts
+only after promotion.
 
 `promote` appends the hardening command to `promotion.md`:
 
@@ -189,9 +195,8 @@ Start the packet:
 devteam prototype start "token cost estimator" --feature "Prototype a browser UI where a user pastes a block of text and sees an approximate token count plus estimated input cost for selected Gemini, OpenAI, and Anthropic models. Use hard-coded model prices in the prototype; accuracy is directional, not billing-grade."
 ```
 
-Open `pipeline/prototypes/token-cost-estimator/build-prompt.md`, then give it
-to your coding agent or use it as the brief for a manual spike. Add the concrete
-prototype shape before building:
+Open `pipeline/prototypes/token-cost-estimator/build-prompt.md` and add the
+concrete prototype shape before building:
 
 ```markdown
 Build a single-page prototype for estimating LLM input cost.
@@ -218,7 +223,32 @@ Learning goal:
 - Is the UI understandable enough without real tokenizer integration?
 ```
 
-Run or demo the prototype, then record what you learned:
+Now hand that build prompt to your host. In user-driven mode, paste the contents
+of `build-prompt.md` into Claude Code, Codex, Gemini CLI, or another coding
+agent from the target project root. For headless-capable CLIs, a practical local
+pattern is:
+
+```bash
+# Codex CLI
+codex exec --sandbox workspace-write < pipeline/prototypes/token-cost-estimator/build-prompt.md
+
+# Claude Code
+claude --print < pipeline/prototypes/token-cost-estimator/build-prompt.md
+
+# Gemini CLI
+gemini < pipeline/prototypes/token-cost-estimator/build-prompt.md
+```
+
+The agent should build the prototype directly in your project, not write normal
+Stagecraft gates. For a small browser UI, ask it to either create a static HTML
+file you can open directly or add an npm script such as `npm run dev`. Then run
+the app with the command it created or documented, for example:
+
+```bash
+npm run dev
+```
+
+Demo the running prototype, then record what you learned:
 
 ```bash
 devteam prototype note token-cost-estimator --feedback "The textarea plus comparison table was enough for a first demo. Users asked for output-token cost and a disclaimer that the estimate is not provider billing data."
