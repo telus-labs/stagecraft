@@ -161,14 +161,17 @@ feedback, then promote when the shape settles:
 
 ```bash
 devteam prototype start "settings flow" --feature "Try a faster account-settings flow"
+devteam prototype build settings-flow --host openai-compat
 devteam prototype note settings-flow --feedback "Users missed the save state"
 devteam prototype promote settings-flow --track full
 ```
 
-There is deliberately no `devteam prototype build` command yet. Prototype mode
-is a packet workflow: Stagecraft writes the intent and build prompt; you hand
-that prompt to your coding host or a human pair. The normal gated pipeline starts
-only after promotion.
+`prototype build` is deliberately separate from `start`. Stagecraft writes the
+intent and build prompt first; you explicitly choose when to let a headless host
+act on it. By default the host runs inside
+`pipeline/prototypes/<id>/workspace/`, so throwaway files stay with the packet.
+Use `--apply-to-project` only when you intentionally want the prototype build to
+touch the project root. The normal gated pipeline starts only after promotion.
 
 `promote` appends the hardening command to `promotion.md`:
 
@@ -197,7 +200,7 @@ devteam prototype start "token cost estimator" --feature "Prototype a browser UI
 ```
 
 Open `pipeline/prototypes/token-cost-estimator/build-prompt.md` and add the
-concrete prototype shape before building:
+concrete prototype shape before running the build:
 
 ```markdown
 Build a single-page prototype for estimating LLM input cost.
@@ -224,32 +227,26 @@ Learning goal:
 - Is the UI understandable enough without real tokenizer integration?
 ```
 
-Now hand that build prompt to your host. In user-driven mode, paste the contents
-of `build-prompt.md` into Claude Code, Codex, Gemini CLI, or another coding
-agent from the target project root. For headless-capable CLIs, a practical local
-pattern is:
+Now let Stagecraft run the prototype build through a headless host. The safest
+default keeps generated files in the packet-local workspace:
 
 ```bash
-# Codex CLI
-codex exec --sandbox workspace-write < pipeline/prototypes/token-cost-estimator/build-prompt.md
-
-# Claude Code
-claude --print < pipeline/prototypes/token-cost-estimator/build-prompt.md
-
-# Gemini CLI
-gemini < pipeline/prototypes/token-cost-estimator/build-prompt.md
+devteam prototype build token-cost-estimator --host openai-compat
 ```
 
-The agent should build the prototype directly in your project, not write normal
-Stagecraft gates. For a small browser UI, ask it to either create a static HTML
-file you can open directly or add an npm script such as `npm run dev`. Then run
-the app with the command it created or documented, for example:
+The build output lands under
+`pipeline/prototypes/token-cost-estimator/workspace/` and the transcript lands
+under `pipeline/logs/prototype.token-cost-estimator.log`. If you want the agent
+to modify the real application tree, pass `--apply-to-project`:
 
 ```bash
-npm run dev
+devteam prototype build token-cost-estimator --host codex --apply-to-project
 ```
 
-Demo the running prototype, then record what you learned:
+That flag is intentionally loud: the build is still not gate evidence, but it
+can now touch normal project files. For a small browser UI, ask the agent to
+either create a static HTML file you can open directly or add an npm script such
+as `npm run dev`. Then demo the running prototype and record what you learned:
 
 ```bash
 devteam prototype note token-cost-estimator --feedback "The textarea plus comparison table was enough for a first demo. Users asked for output-token cost and a disclaimer that the estimate is not provider billing data."
@@ -280,13 +277,12 @@ and sign-off.
 
 ### Prototype mode with openai-compat
 
-`devteam prototype` itself is a local CLI workflow, so it works the same no
-matter which host you configured. When you use the generated `build-prompt.md`
-with `openai-compat`, the host's `write_file` tool can write prototype packet
-files as long as the dispatch descriptor allows `pipeline/prototypes/<id>/`.
-Those writes still stay inside the project root and still go through
-openai-compat's allowed-write checks; allowing the prototype packet does not
-grant writes elsewhere in the repo.
+`devteam prototype build --host openai-compat` uses the same HTTP-native host as
+normal Stagecraft workstreams. By default, its `write_file` tool is allowed to
+write only inside the prototype packet, including `workspace/`. Passing
+`--apply-to-project` expands the allowed write scope to the project root for
+that prototype build only. Neither mode writes normal gates or satisfies
+sign-off/deploy.
 
 ### Follow-up item triage
 

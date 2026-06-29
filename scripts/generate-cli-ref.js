@@ -41,8 +41,8 @@ const COMMANDS = [
   },
   {
     name:        "prototype",
-    synopsis:    "devteam prototype <start|note|promote> [id-or-title] [options]",
-    description: "Pre-SDLC fast-learning workflow. Creates prototype packets, appends feedback, and writes a promotion handoff into a normal Stagecraft track.",
+    synopsis:    "devteam prototype <start|build|note|promote> [id-or-title] [options]",
+    description: "Pre-SDLC fast-learning workflow. Creates prototype packets, optionally runs the build prompt through a headless host, appends feedback, and writes a promotion handoff into a normal Stagecraft track.",
   },
   {
     name:        "commit",

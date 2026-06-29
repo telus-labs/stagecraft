@@ -5,8 +5,12 @@ const path = require("node:path");
 
 const { generateHelp } = require(path.join(__dirname, "..", "flags"));
 const { TRACKS } = require(path.join(__dirname, "..", "..", "pipeline", "stages"));
+const { loadConfig, resolveHost } = require(path.join(__dirname, "..", "..", "config"));
+const { loadAdapter } = require(path.join(__dirname, "..", "..", "router"));
+const { version } = require(path.join(__dirname, "..", "..", "..", "package.json"));
 
 const name = "prototype";
+const ORCHESTRATOR_ID = `devteam@${version}`;
 
 const flags = {
   cwd:          { type: "string",  description: "Target project directory" },
@@ -14,6 +18,9 @@ const flags = {
   feature:      { type: "string",  description: "Prototype intent text" },
   "feature-file": { type: "string", description: "Read prototype intent from a UTF-8 file" },
   feedback:     { type: "string",  description: "Feedback text for prototype note" },
+  host:         { type: "string",  description: "Host for prototype build (default: routing.default_host)" },
+  "apply-to-project": { type: "boolean", description: "Allow prototype build writes outside the packet workspace" },
+  "timeout-ms": { type: "number",  description: "Prototype build timeout in milliseconds" },
   track:        { type: "string",  description: "Promotion target track (default: full)" },
   force:        { type: "boolean", description: "Overwrite an existing prototype packet on start" },
   json:         { type: "boolean", description: "Machine-readable output" },
@@ -21,7 +28,7 @@ const flags = {
 };
 
 function usage() {
-  return generateHelp("devteam prototype <start|note|promote> [id-or-title] [options]", flags);
+  return generateHelp("devteam prototype <start|build|note|promote> [id-or-title] [options]", flags);
 }
 
 function slugify(input) {
@@ -65,6 +72,72 @@ function appendFile(file, content) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function readJsonSafe(file) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function updateManifest(dir, mutator) {
+  const manifestPath = path.join(dir, "prototype.json");
+  const manifest = readJsonSafe(manifestPath) || {};
+  mutator(manifest);
+  manifest.updated_at = nowIso();
+  writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+}
+
+function ensurePrototype(cwd, id, subcommand) {
+  if (!id) throw new Error(`prototype ${subcommand} requires an id`);
+  const dir = prototypeDir(cwd, id);
+  if (!fs.existsSync(dir)) throw new Error(`prototype "${id}" does not exist`);
+  return dir;
+}
+
+function readPacketFile(dir, name) {
+  const file = path.join(dir, name);
+  if (!fs.existsSync(file)) {
+    throw new Error(`prototype packet is missing ${name}`);
+  }
+  return fs.readFileSync(file, "utf8");
+}
+
+function buildDispatchPrompt({ id, title, dirRel, workspaceRel, intent, buildPrompt, applyToProject }) {
+  const writeScope = applyToProject
+    ? "the target project root; keep prototype changes easy to discard"
+    : `the packet workspace at ${workspaceRel}`;
+  return `# Prototype Build Dispatch — ${title}
+
+You are building a Stagecraft prototype packet.
+
+This is pre-SDLC exploratory work, not gate evidence. Do not write normal
+Stagecraft gates, do not claim sign-off, and do not deploy to production.
+
+Prototype id: ${id}
+Packet directory: ${dirRel}
+Current working directory: ${applyToProject ? "." : workspaceRel}
+Allowed write scope: ${writeScope}
+
+Rules:
+- Build only what is needed for fast learning and demo feedback.
+- Prefer local/demo data over production data.
+- Keep shortcuts visible in ${dirRel}/promotion.md.
+- Append demo instructions or run commands to ${dirRel}/promotion.md when useful.
+- Avoid auth, payments, migrations, secrets, customer data, and infrastructure
+  changes unless a human explicitly accepted that risk.
+- Do not write files under pipeline/gates/.
+
+## intent.md
+
+${intent.trim()}
+
+## build-prompt.md
+
+${buildPrompt.trim()}
+`;
 }
 
 function startPrototype(positional, flagsObj) {
@@ -184,50 +257,146 @@ devteam prototype note ${id} --feedback "..."
 function notePrototype(positional, flagsObj) {
   const cwd = flagsObj.cwd || process.cwd();
   const id = positional[0];
-  if (!id) throw new Error("prototype note requires an id");
   if (!flagsObj.feedback) throw new Error("prototype note requires --feedback");
-  const dir = prototypeDir(cwd, id);
-  if (!fs.existsSync(dir)) throw new Error(`prototype "${id}" does not exist`);
+  const dir = ensurePrototype(cwd, id, "note");
 
   const entry = `\n## ${nowIso()}\n\n${flagsObj.feedback.trim()}\n`;
   appendFile(path.join(dir, "feedback.md"), entry);
 
-  const manifestPath = path.join(dir, "prototype.json");
-  try {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    manifest.updated_at = nowIso();
-    writeFile(manifestPath, JSON.stringify(manifest, null, 2));
-  } catch {
-    // Feedback is the source of value here; tolerate a missing or hand-edited manifest.
-  }
+  updateManifest(dir, (manifest) => { manifest.status = manifest.status || "prototype"; });
 
   const result = { id, feedback_file: rel(cwd, path.join(dir, "feedback.md")) };
   if (flagsObj.json) console.log(JSON.stringify(result, null, 2));
   else console.log(`Appended feedback to ${result.feedback_file}`);
 }
 
+async function buildPrototype(positional, flagsObj) {
+  const cwd = flagsObj.cwd || process.cwd();
+  const id = positional[0];
+  const dir = ensurePrototype(cwd, id, "build");
+  const manifest = readJsonSafe(path.join(dir, "prototype.json")) || {};
+  const title = manifest.title || id;
+  const config = loadConfig(cwd);
+  const hostName = flagsObj.host || resolveHost(config, "prototype", "prototype");
+  const adapter = loadAdapter(hostName);
+
+  if (!adapter.capabilities?.headless || typeof adapter.invoke !== "function") {
+    throw new Error(
+      `host "${hostName}" cannot run prototype builds headlessly. ` +
+      "Use --host with a headless-capable host or hand the build prompt to a CLI.",
+    );
+  }
+
+  const applyToProject = flagsObj.applyToProject === true;
+  const workspace = applyToProject ? cwd : path.join(dir, "workspace");
+  fs.mkdirSync(workspace, { recursive: true });
+
+  const intent = readPacketFile(dir, "intent.md");
+  const buildPrompt = readPacketFile(dir, "build-prompt.md");
+  const dirRel = rel(cwd, dir);
+  const workspaceRel = rel(cwd, workspace) || ".";
+  const prompt = buildDispatchPrompt({
+    id,
+    title,
+    dirRel,
+    workspaceRel,
+    intent,
+    buildPrompt,
+    applyToProject,
+  });
+  const allowedWrites = applyToProject ? ["**"] : [`${dirRel}/`];
+  const descriptor = {
+    stage: "prototype",
+    name: "Prototype Build",
+    role: "prototype",
+    workstreamId: `prototype.${id}`,
+    objective: `Build prototype packet ${id}`,
+    readFirst: [`${dirRel}/intent.md`, `${dirRel}/build-prompt.md`],
+    allowedWrites,
+    artifact: applyToProject ? "." : `${workspaceRel}/`,
+    template: null,
+    expectedGate: {},
+    toolBudget: null,
+  };
+  const ctx = {
+    cwd,
+    processCwd: workspace,
+    track: "prototype",
+    feature: manifest.title || id,
+    orchestrator: ORCHESTRATOR_ID,
+    timeoutMs: flagsObj.timeoutMs,
+  };
+
+  const startedAt = nowIso();
+  const result = await adapter.invoke(descriptor, ctx, prompt);
+  const status = result.exitCode === 0 && !result.timedOut ? "built" : "build-failed";
+  const buildRecord = {
+    started_at: startedAt,
+    completed_at: nowIso(),
+    host: hostName,
+    status,
+    exit_code: result.exitCode,
+    timed_out: result.timedOut === true,
+    duration_ms: result.durationMs,
+    workspace: workspaceRel,
+    apply_to_project: applyToProject,
+    log_file: result.logPath ? rel(cwd, result.logPath) : null,
+  };
+
+  updateManifest(dir, (m) => {
+    m.id = m.id || id;
+    m.title = m.title || title;
+    m.status = status === "built" ? "prototype-built" : "prototype-build-failed";
+    m.last_build = buildRecord;
+    m.builds = Array.isArray(m.builds) ? m.builds : [];
+    m.builds.push(buildRecord);
+  });
+
+  const output = {
+    id,
+    host: hostName,
+    status,
+    exit_code: result.exitCode,
+    timed_out: result.timedOut === true,
+    workspace: workspaceRel,
+    apply_to_project: applyToProject,
+    log_file: buildRecord.log_file,
+    duration_ms: result.durationMs,
+  };
+
+  if (flagsObj.json) {
+    console.log(JSON.stringify(output, null, 2));
+  } else if (status === "built") {
+    console.log(`Prototype build completed: ${id}`);
+    console.log(`Workspace: ${workspaceRel}`);
+    if (buildRecord.log_file) console.log(`Log: ${buildRecord.log_file}`);
+    console.log("Reminder: prototype builds are not gate evidence.");
+  } else {
+    console.error(`Prototype build failed: ${id}`);
+    if (buildRecord.log_file) console.error(`Log: ${buildRecord.log_file}`);
+  }
+
+  if (status !== "built") process.exit(1);
+}
+
 function promotePrototype(positional, flagsObj) {
   const cwd = flagsObj.cwd || process.cwd();
   const id = positional[0];
-  if (!id) throw new Error("prototype promote requires an id");
   const track = flagsObj.track || "full";
   if (!TRACKS.includes(track)) {
     throw new Error(`unknown promotion track "${track}". Valid: ${TRACKS.join(", ")}`);
   }
-  const dir = prototypeDir(cwd, id);
-  if (!fs.existsSync(dir)) throw new Error(`prototype "${id}" does not exist`);
+  const dir = ensurePrototype(cwd, id, "promote");
 
   const promotionPath = path.join(dir, "promotion.md");
   const command = `devteam run --feature-file ${rel(cwd, promotionPath)} --track ${track}`;
   appendFile(promotionPath, `\n## Promotion Command\n\n\`\`\`bash\n${command}\n\`\`\`\n`);
 
-  const manifestPath = path.join(dir, "prototype.json");
   try {
-    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-    manifest.status = "promotion-ready";
-    manifest.promotion_track = track;
-    manifest.updated_at = nowIso();
-    writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+    updateManifest(dir, (manifest) => {
+      manifest.status = "promotion-ready";
+      manifest.promotion_track = track;
+    });
   } catch {
     // Keep promote usable even after manual packet edits.
   }
@@ -256,6 +425,11 @@ function run(positional, flagsObj) {
   switch (subcommand) {
     case "start":
       return startPrototype(rest, flagsObj);
+    case "build":
+      return buildPrototype(rest, flagsObj).catch((err) => {
+        console.error(`devteam: ${err.message}`);
+        process.exit(1);
+      });
     case "note":
       return notePrototype(rest, flagsObj);
     case "promote":

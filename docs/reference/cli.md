@@ -69,20 +69,23 @@ Bounded autonomous driver with optional TTY watch mode: loop next â†’ dispatch â
 | --auto-commit      | bool   | Automatically commit pipeline artifacts after a clean halt (ceiling, --until, budget)                |
 | --watch            | bool   | Render rolling liveness status on an interactive terminal                                            |
 
-### `devteam prototype <start|note|promote> [id-or-title] [options]`
+### `devteam prototype <start|build|note|promote> [id-or-title] [options]`
 
-Pre-SDLC fast-learning workflow. Creates prototype packets, appends feedback, and writes a promotion handoff into a normal Stagecraft track.
+Pre-SDLC fast-learning workflow. Creates prototype packets, optionally runs the build prompt through a headless host, appends feedback, and writes a promotion handoff into a normal Stagecraft track.
 
-| Flag           | Type   | Description                                     |
-| -------------- | ------ | ----------------------------------------------- |
-| --cwd          | string | Target project directory                        |
-| --id           | string | Prototype id (default: slug from title)         |
-| --feature      | string | Prototype intent text                           |
-| --feature-file | string | Read prototype intent from a UTF-8 file         |
-| --feedback     | string | Feedback text for prototype note                |
-| --track        | string | Promotion target track (default: full)          |
-| --force        | bool   | Overwrite an existing prototype packet on start |
-| --json         | bool   | Machine-readable output                         |
+| Flag               | Type   | Description                                               |
+| ------------------ | ------ | --------------------------------------------------------- |
+| --cwd              | string | Target project directory                                  |
+| --id               | string | Prototype id (default: slug from title)                   |
+| --feature          | string | Prototype intent text                                     |
+| --feature-file     | string | Read prototype intent from a UTF-8 file                   |
+| --feedback         | string | Feedback text for prototype note                          |
+| --host             | string | Host for prototype build (default: routing.default_host)  |
+| --apply-to-project | bool   | Allow prototype build writes outside the packet workspace |
+| --timeout-ms       | number | Prototype build timeout in milliseconds                   |
+| --track            | string | Promotion target track (default: full)                    |
+| --force            | bool   | Overwrite an existing prototype packet on start           |
+| --json             | bool   | Machine-readable output                                   |
 
 ### `devteam commit [options]`
 

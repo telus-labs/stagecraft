@@ -71,15 +71,19 @@ delivery evidence:
 
 ```bash
 devteam prototype start "settings flow" --feature "Try a faster account-settings flow"
+devteam prototype build settings-flow --host openai-compat
 devteam prototype note settings-flow --feedback "Users missed the save state"
 devteam prototype promote settings-flow --track full
 ```
 
 Prototype packets live under `pipeline/prototypes/<id>/` and contain intent,
-build prompt, feedback, promotion handoff, and metadata files. They are not gate
-evidence and do not satisfy sign-off or deploy. When the idea settles, promote
-the packet into a normal track with the generated `devteam run --feature-file
-... --track <t>` command.
+build prompt, packet-local workspace, feedback, promotion handoff, and metadata
+files. They are not gate evidence and do not satisfy sign-off or deploy.
+`prototype build` runs in `pipeline/prototypes/<id>/workspace/` by default; use
+`--apply-to-project` only when you intentionally want throwaway prototype code
+to touch the project root. When the idea settles, promote the packet into a
+normal track with the generated `devteam run --feature-file ... --track <t>`
+command.
 
 ### What if I want to skip a stage?
 
@@ -305,13 +309,17 @@ Swap `base_url`, `api_key_env`, and model IDs for your provider. See [Using open
 
 ### Does prototype mode work with openai-compat?
 
-Yes. The `devteam prototype` command is local filesystem tooling, so it does not
-depend on any host. If an openai-compat workstream uses a prototype packet as
-context, its `write_file` tool can create or update files under
-`pipeline/prototypes/<id>/` when that directory is listed in the workstream's
-allowed writes. The same project-root and allowed-write checks still apply, so
-permission to write a prototype packet does not imply permission to write source
-or gate files.
+Yes. `devteam prototype start`, `note`, and `promote` are local filesystem
+tooling. `devteam prototype build` can use `openai-compat` as its headless host:
+
+```bash
+devteam prototype build settings-flow --host openai-compat
+```
+
+By default, the build runs from `pipeline/prototypes/<id>/workspace/` and
+openai-compat's post-hoc write audit only allows that packet directory. Passing
+`--apply-to-project` deliberately expands the prototype write scope to the
+project root, but the output is still not gate evidence.
 
 ### Which roles should get expensive models (Opus) vs. cheaper ones?
 

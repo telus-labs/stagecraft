@@ -59,7 +59,7 @@ Completed backlog items are preserved here so the active backlog tables stay sca
 | E | E7 | `/goal` integration for convergence-shaped stages | 3 | 2 | v0.6.0 · [CHANGELOG](../CHANGELOG.md#060--2026-06-11) |
 | E | E8 | Codebase audit feature | 5 | 3 | v0.3.0 · [CHANGELOG](../CHANGELOG.md#030--2026-05-29) |
 | E | E10 | Autonomous run watch mode | 3 | 1 | PR #268 · Phase 20 |
-| E | E11 | Prototype mode | 4 | 2 | Planned Phase 23 · pre-SDLC packet for fast learning, feedback, and explicit promotion into a normal delivery track. See [Phase 23 plan](../plans/phase-23-prototype-mode.md). |
+| E | E11 | Prototype mode | 4 | 2 | Unreleased · pre-SDLC packet for fast learning, optional host-run builds, feedback, and explicit promotion into a normal delivery track. See [Phase 23 plan](../plans/phase-23-prototype-mode.md). |
 | F | F1 | GitHub PR integration | 4 | 3 | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
 | F | F4 | CI runner integration | 4 | 3 | v0.4.0 (GitHub Actions only) · [CHANGELOG](../CHANGELOG.md#040--2026-05-28) |
 | G | G1 | Multi-model peer review |  |  | v0.2.0 · [CHANGELOG](../CHANGELOG.md#020--2026-05-27) |
@@ -113,7 +113,7 @@ No open items. B7 moved to [Shipped](#shipped) in Phase 19.
 |---|---|---|---|---|
 | E3 | **VS Code extension** | 3 | 3 | Sidebar with stage status, "run next stage" button, gate viewer. |
 | E9 | **Conversational stage mode** `[cmp-E-4]` | 3 | 3 | `devteam stage requirements --interactive` opens a conversation with the PM subagent to refine the brief through Q&A before producing the artifact. Useful specifically for upstream stages (requirements, design, clarification) where the artifact benefits from refinement before being rendered. Architecture supports it (adapters could expose streaming-conversation alongside one-shot render). Implement if user feedback indicates the gate-driven loop is too rigid for upstream stages. Related to E7 but different mechanism: E7 is host-loops-until-condition; E9 is stage-manager-converses-with-agent. |
-| E11 | **Prototype mode** | 4 | 2 | `devteam prototype` creates a lightweight pre-SDLC packet for fast local builds, feedback capture, and explicit discard/iterate/promote decisions. It is deliberately not a production gate track; promotion hands off into `devteam run --feature-file ... --track <t>`. |
+| E11 | **Prototype mode** | 4 | 2 | `devteam prototype` creates a lightweight pre-SDLC packet, can run the build prompt in a packet workspace, captures feedback, and records explicit discard/iterate/promote decisions. It is deliberately not a production gate track; promotion hands off into `devteam run --feature-file ... --track <t>`. |
 
 ## F. Integrations — where the team plugs in
 
