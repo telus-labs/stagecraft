@@ -189,7 +189,7 @@ function runHeadless(adapter, descriptor, ctx, preRenderedPrompt) {
 
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, {
-      cwd: ctx.cwd,
+      cwd: ctx.processCwd || ctx.cwd,
       // When logging is on we read stdout/stderr ourselves to duplicate
       // them into the transcript; when off, inherit gets us the historical
       // terminal-color behavior for free.

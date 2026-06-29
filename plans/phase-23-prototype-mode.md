@@ -1,6 +1,7 @@
 # Phase 23 — Prototype Mode
 
-Status: proposed for implementation
+Status: implemented as an unreleased pre-SDLC workflow; this branch adds the
+explicit host-run build enhancement.
 
 ## Problem
 
@@ -29,6 +30,13 @@ gate evidence. It creates a lightweight prototype packet under
 - `promotion.md` — the explicit discard/iterate/promote handoff.
 - `prototype.json` — machine-readable metadata for tooling.
 
+`devteam prototype build` is an explicit execution step, not part of `start`.
+It runs `build-prompt.md` through a selected headless host and records the
+result in `prototype.json`. The default process cwd is
+`pipeline/prototypes/<id>/workspace/`, which keeps throwaway code inside the
+packet. `--apply-to-project` is the deliberate escape hatch for prototype work
+that should modify the project root.
+
 Promotion is a deliberate boundary. A promoted prototype feeds a normal
 `devteam run --feature-file <promotion.md> --track <full|quick|...>` invocation.
 Until then, prototype artifacts are learning records, not delivery evidence.
@@ -52,6 +60,7 @@ devteam prototype start "dashboard concept" \
 Record feedback:
 
 ```bash
+devteam prototype build dashboard-concept --host openai-compat
 devteam prototype note dashboard-concept \
   --feedback "The stage list works, but the blocker affordance is buried."
 ```
@@ -73,24 +82,29 @@ Prototype mode should optimize speed, but not normalize unsafe shortcuts:
 - No production deploy claim.
 - No sign-off/deploy gate bypass.
 - No generated gate chain.
+- Build is explicit (`prototype build`), not automatic during `start`.
+- Default build writes stay under `pipeline/prototypes/<id>/workspace/`.
+- Project-root writes require `--apply-to-project`.
 - Explicit `known_shortcuts` and `risks_discovered` sections in promotion.
 - Strong warning for auth, payments, migrations, secrets, customer data, or
   infrastructure changes: promote to a normal track before broad use.
 
 ## Implementation Plan
 
-1. Add `core/cli/commands/prototype.js` with `start`, `note`, and `promote`
-   subcommands.
+1. Add `core/cli/commands/prototype.js` with `start`, `build`, `note`, and
+   `promote` subcommands.
 2. Register `prototype` in `bin/devteam` and CLI help.
 3. Add tests for packet creation, slug handling, feedback appends, promotion
-   command generation, no-overwrite behavior, and JSON output.
+   command generation, no-overwrite behavior, JSON output, host-run builds,
+   packet-local default writes, and `--apply-to-project`.
 4. Document the workflow in README and user guide references.
 5. Add consistency/backlog/changelog coverage.
 
 ## Non-goals
 
 - Do not add a named `prototype` entry to `STAGES_BY_TRACK` in this phase.
-- Do not invoke host CLIs or run autonomous agents directly.
+- Do not auto-invoke host CLIs during `start`; execution requires
+  `prototype build`.
 - Do not allow prototype packets to satisfy normal gate validators.
 - Do not implement automatic risk classification yet.
 
