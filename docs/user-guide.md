@@ -176,6 +176,77 @@ managed `.gitignore` excludes volatile runtime files, but not
 secrets, customer data, infrastructure, or anything production-bound, promote it
 to a normal track before broader use.
 
+### Tutorial: prototype a token cost estimator
+
+This short walkthrough uses prototype mode to explore a small internal tool:
+a token cost estimator for Gemini, OpenAI, and Anthropic models. The prototype
+has one simple UI: paste a block of text, estimate token count, then show
+approximate input cost across a few hard-coded model prices.
+
+Start the packet:
+
+```bash
+devteam prototype start "token cost estimator" --feature "Prototype a browser UI where a user pastes a block of text and sees an approximate token count plus estimated input cost for selected Gemini, OpenAI, and Anthropic models. Use hard-coded model prices in the prototype; accuracy is directional, not billing-grade."
+```
+
+Open `pipeline/prototypes/token-cost-estimator/build-prompt.md`, then give it
+to your coding agent or use it as the brief for a manual spike. Add the concrete
+prototype shape before building:
+
+```markdown
+Build a single-page prototype for estimating LLM input cost.
+
+UI:
+- A large textarea labelled "Text to estimate".
+- A small summary row showing estimated tokens and character count.
+- A comparison table with provider, model, USD per 1M input tokens, and estimated cost.
+- Recalculate live as the text changes.
+
+Prototype assumptions:
+- Keep all pricing values hard-coded in the frontend.
+- Use a simple estimate of 1 token per 4 characters.
+- Include at least these example rows:
+  - Gemini 1.5 Flash: $0.075 / 1M input tokens
+  - Gemini 1.5 Pro: $1.25 / 1M input tokens
+  - GPT-4o mini: $0.15 / 1M input tokens
+  - GPT-4o: $5.00 / 1M input tokens
+  - Claude 3 Haiku: $0.25 / 1M input tokens
+  - Claude 3.5 Sonnet: $3.00 / 1M input tokens
+
+Learning goal:
+- Can users quickly compare rough cost across providers before choosing a model?
+- Is the UI understandable enough without real tokenizer integration?
+```
+
+Run or demo the prototype, then record what you learned:
+
+```bash
+devteam prototype note token-cost-estimator --feedback "The textarea plus comparison table was enough for a first demo. Users asked for output-token cost and a disclaimer that the estimate is not provider billing data."
+```
+
+Before promoting, edit
+`pipeline/prototypes/token-cost-estimator/promotion.md` so it captures what
+should become production work. For this example, useful acceptance criteria
+would include replacing hard-coded prices with a maintained pricing source,
+adding output-token estimates, naming the tokenizer approximation clearly, and
+covering empty, short, and long text inputs.
+
+When the prototype is worth hardening, promote it into a normal track:
+
+```bash
+devteam prototype promote token-cost-estimator --track quick
+```
+
+Stagecraft appends the command to `promotion.md`:
+
+```bash
+devteam run --feature-file pipeline/prototypes/token-cost-estimator/promotion.md --track quick
+```
+
+That handoff is the point where the cost estimator stops being a throwaway
+learning artifact and starts receiving normal Stagecraft gates, tests, review,
+and sign-off.
+
 ### Prototype mode with openai-compat
 
 `devteam prototype` itself is a local CLI workflow, so it works the same no
