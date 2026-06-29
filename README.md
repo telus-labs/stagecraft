@@ -76,7 +76,7 @@ Evaluating further (long-form): [docs/presentation-notes.md](docs/presentation-n
 | 4 | [docs/runbooks/README.md](docs/runbooks/README.md) | Troubleshooting index: symptom → runbook section |
 | 5 | [docs/cost.md](docs/cost.md) | Cost tracking, pricing table, and budget workflow |
 
-Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
+Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [hosts/docker/README.md](hosts/docker/README.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
 
 ### Contributor — I change Stagecraft
 
@@ -107,6 +107,7 @@ A coordinated team of role-specific subagents running a structured software-deve
 - **18-stage gated pipeline** — requirements (PM) → design (Principal) → build (specialist workstreams) → peer-review (Reviewer × 4) → QA → deploy → retrospective. Each stage writes a machine-readable gate; the next stage cannot start until the gate passes.
 - **6 tracks** — `full`, `quick`, `nano`, `config-only`, `dep-update`, `hotfix`. Pick by change size; `devteam assess` infers the right track from description keywords and file heuristics.
 - **Prototype packets** — `devteam prototype` gives exploratory work a pre-SDLC lane: intent, build prompt, feedback notes, and an explicit promotion handoff into a normal track when the idea is ready to harden.
+- **Docker runner** — `hosts/docker/` packages `devteam` into a non-root container for unattended headless runs against a mounted project, with conservative lock reporting and runtime-only credentials.
 - **Per-workstream gate JSON** — every stage writes a gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
 - **Multi-host routing** — `.devteam/config.yml` picks which host runs which role. Claude for design, Codex for backend, Gemini for QA — the gate JSON is the stable contract.
 - **Bounded autonomous driver** — `devteam run` loops `next → dispatch → merge` until `pipeline-complete`; `devteam stage <name> --headless` drives a single stage non-interactively.

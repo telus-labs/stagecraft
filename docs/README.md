@@ -31,6 +31,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [runbooks/open-followups.md](runbooks/open-followups.md) — extract ticket stubs from `open_followups[]` after a run
 - [runbooks/deploy-failure.md](runbooks/deploy-failure.md) — Stage 8 failure: classify, diagnose, rollback, retry
 - [runbooks/autonomous-run.md](runbooks/autonomous-run.md) — `devteam run`: bounded autonomous driver reference
+- [../hosts/docker/README.md](../hosts/docker/README.md) — Docker-based headless runner for unattended local orchestration
 - [runbooks/repair-flow.md](runbooks/repair-flow.md) — `devteam run --repair`: diagnosis gate approval, scope-gate FAIL recovery, tri-state reproduction
 - [runbook-template.md](runbook-template.md) — template and guide for writing new runbooks
 
@@ -46,6 +47,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [adr/011-authenticated-gate-chain.md](adr/011-authenticated-gate-chain.md) — HMAC gate authentication, strict policy, and trust boundaries
 - [adr/012-explicit-resolution-acceptance.md](adr/012-explicit-resolution-acceptance.md) — hash-bound human acceptance evidence for H3
 - [adr/013-openai-compat-shell-execution.md](adr/013-openai-compat-shell-execution.md) — openai-compat shell execution: native bash tool, first-class host status
+- [adr/014-docker-headless-runner.md](adr/014-docker-headless-runner.md) — Docker runner trust boundary and packaging decision
 - [autonomous-execution-design.md](autonomous-execution-design.md) — design notes for the bounded autonomous driver (companion to ADR-003)
 - [openai-compat-design.md](openai-compat-design.md) — options analysis and design notes for the openai-compat host adapter (companion to ADR-013)
 - [spec-authoring.md](spec-authoring.md) — writing AC-N criteria and scaffolding the spec file

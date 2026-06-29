@@ -1,6 +1,6 @@
 # Phase 22 — Docker-Based Headless Runner
 
-**Status:** Proposed for review; no implementation is authorized by this plan.
+**Status:** Implemented in the Docker runner PR; ADR-014 accepted.
 **Source:** GitHub #282.
 **Purpose:** package Stagecraft and headless-capable hosts into a repeatable container
 runtime for unattended pipeline execution while keeping all pipeline state in the
@@ -37,9 +37,9 @@ orchestrator. Stagecraft still owns:
 The Docker runner changes the recommended unattended-execution trust boundary. It
 touches secrets, filesystem ownership, stale locks, host credential provisioning, and
 support expectations for long-running runs. Phase 22 therefore begins with ADR-014.
-Implementation must not begin until ADR-014 is accepted.
+Implementation began after ADR-014 was accepted.
 
-ADR-014 must lock these decisions:
+ADR-014 locks these decisions:
 
 1. **Containerized local orchestration.** The whole orchestrator runs in the container;
    no per-stage result protocol or external queue is introduced.

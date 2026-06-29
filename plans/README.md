@@ -30,7 +30,7 @@ Real-project evidence collection remains the active capability priority.**
 | 19 | [phase-19-polyglot-verification.md](phase-19-polyglot-verification.md) | — | B7 deterministic Node, pytest, and Go suite aggregation | ✅ complete (PR #264) |
 | 20 | [phase-20-run-watch.md](phase-20-run-watch.md) | — | ADR-007 foreground terminal liveness UX | ✅ complete (PR #268) |
 | 21 | [phase-21-cloud-runner-adapter.md](phase-21-cloud-runner-adapter.md) | — | A3 remote workstream execution through a transport-backed host adapter | 📝 proposed for review |
-| 22 | [phase-22-docker-headless-runner.md](phase-22-docker-headless-runner.md) | — | Docker-based unattended local runner for long headless pipelines | 📝 proposed for review |
+| 22 | [phase-22-docker-headless-runner.md](phase-22-docker-headless-runner.md) | — | Docker-based unattended local runner for long headless pipelines | ✅ complete — ADR-014 + `hosts/docker/` |
 
 **Executing with Sonnet:** every work item has an exact paste-ready prompt in
 [prompts/ALL-PROMPTS.md](prompts/ALL-PROMPTS.md) (single source of truth, with status

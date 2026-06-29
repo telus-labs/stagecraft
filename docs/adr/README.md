@@ -53,6 +53,7 @@ What else was on the table and why we didn't pick those.
 | [011](011-authenticated-gate-chain.md) | Authenticated gate chain: optional HMAC-SHA256, explicit signed-only policy, provider-neutral KMS path deferred | Accepted |
 | [012](012-explicit-resolution-acceptance.md) | Explicit resolution acceptance: hash-bound human evidence without free-form resolution export | Accepted |
 | [013](013-openai-compat-shell-execution.md) | openai-compat shell execution: native bash tool over subprocess wrapper | Accepted |
+| [014](014-docker-headless-runner.md) | Docker-based headless runner: local containerized orchestration with mounted-project state | Accepted |
 
 ### Deferred
 

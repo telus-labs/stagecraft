@@ -325,6 +325,21 @@ learning before a change deserves delivery gates.
 - Prototype packets are intentionally not gate evidence; they are committable
   learning records that make the later full/quick/hotfix run better informed
 
+**Docker headless runner** — `hosts/docker/` packages the normal `devteam` CLI
+into a non-root container for unattended local orchestration.
+
+- Build with `docker build -f hosts/docker/Dockerfile -t stagecraft-runner .`
+- Run against a mounted project, for example
+  `docker run --rm -v "$PWD:/workspace" stagecraft-runner run --cwd /workspace`
+- Keeps `.devteam/`, `pipeline/`, gates, logs, and run-state files on the
+  mounted project volume
+- Reports active or stale `pipeline/run.lock` files with resume/force guidance;
+  explicit stale-lock removal requires `STAGECRAFT_RUNNER_CLEAR_STALE_LOCK=1`
+- Credentials enter only at runtime through env vars, env files, Docker secrets,
+  or a supervisor's secret manager
+- The base image is host-neutral; `openai-compat` is the no-extra-CLI path, and
+  teams can layer CLI hosts in derived images
+
 **`devteam assess [--description "..."] [--json] [--apply] [--confirm] [files...]`** — rule-based track recommendation before starting a run.
 
 - Analyzes description keywords and file/content heuristics (security patterns, migration files, config-only paths) to recommend a track

@@ -17,6 +17,7 @@ If you've never used Stagecraft before, read EXAMPLE first. This page is a refer
 - [Running each stage](#running-each-stage)
 - [Multi-host setups](#multi-host-setups)
 - [Headless mode](#headless-mode)
+- [Docker runner](#docker-runner)
 - [The web UI](#the-web-ui)
 - [Persistent memory](#persistent-memory)
 - [Observability (OpenTelemetry)](#observability-opentelemetry)
@@ -1029,6 +1030,48 @@ DEVTEAM_HEADLESS_COMMAND=cat devteam stage requirements --headless
 ```
 
 `cat` just echoes the prompt; the gate won't be written, so the run exits 1. Useful for verifying the spawn + pipe machinery without `claude` / `codex` installed.
+
+## Docker runner
+
+Use the Docker runner when you want `devteam run` to continue without relying on
+your interactive shell or laptop session. It runs the normal local orchestrator
+inside one container and keeps all durable project state on the mounted project
+directory.
+
+Build the image from the Stagecraft repository:
+
+```bash
+docker build -f hosts/docker/Dockerfile -t stagecraft-runner:local .
+```
+
+Run it from the target project:
+
+```bash
+docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -v "$PWD:/workspace" \
+  --env-file .devteam/docker.env \
+  stagecraft-runner:local run --cwd /workspace --watch
+```
+
+The `devteam` prefix is optional:
+
+```bash
+docker run --rm -v "$PWD:/workspace" stagecraft-runner:local devteam status --cwd /workspace
+```
+
+The base image does not bake in provider credentials or a specific CLI host. Use
+`openai-compat` for the simplest no-extra-CLI setup, or layer Claude Code, Codex
+CLI, Gemini CLI, or private tools in a derived image if your team has a
+non-interactive auth flow.
+
+On startup the entrypoint reports an existing `pipeline/run.lock` and prints
+safe resume/force guidance. It does not silently delete locks. If you have
+confirmed a lock is stale and want the wrapper to remove it before delegating,
+set `STAGECRAFT_RUNNER_CLEAR_STALE_LOCK=1`.
+
+See [`hosts/docker/README.md`](../hosts/docker/README.md) for UID/GID build
+args, secret handling, resource limits, and troubleshooting.
 
 ## The web UI
 

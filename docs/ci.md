@@ -9,6 +9,7 @@ This is the **F4** BACKLOG item.
 - [Required GitHub permissions](#required-github-permissions)
 - [What the PR review experience looks like](#what-the-pr-review-experience-looks-like)
 - [Why not run the pipeline in CI?](#why-not-run-the-pipeline-in-ci)
+- [Autonomous jobs and the Docker runner](#autonomous-jobs-and-the-docker-runner)
 - [Other CI systems](#other-ci-systems)
 - [Pinning + drift](#pinning--drift)
 - [See also](#see-also)
@@ -92,6 +93,32 @@ Three reasons:
 3. **Shape mismatch.** A PR has *already been built*. Running `devteam stage build` against a PR doesn't fit the model.
 
 The validate-and-publish path (this workflow) is the appropriate CI integration. If your team eventually wants to run a `nano` track on `dependabot` PRs, or an `audit-quick` on PRs touching sensitive paths, those belong in separate adjacent workflow files, not as a replacement for this one.
+
+## Autonomous jobs and the Docker runner
+
+When you intentionally want CI or a scheduler to run model work, keep it in a
+separate job from `devteam ci install`'s validation workflow. The Docker runner
+is the supported packaging path for that use case: it runs the normal
+orchestrator as a non-root user against a mounted workspace and writes normal
+`pipeline/` artifacts back to the checkout.
+
+```yaml
+- name: Build Stagecraft runner
+  run: docker build -f hosts/docker/Dockerfile -t stagecraft-runner:ci .
+
+- name: Run low-risk pipeline
+  run: |
+    docker run --rm \
+      -v "$PWD:/workspace" \
+      --env-file .devteam/docker.env \
+      stagecraft-runner:ci run --cwd /workspace --track nano --budget-usd 10
+```
+
+Generate `.devteam/docker.env` from CI secrets or use your platform's native
+secret injection. Do not bake provider keys into the image. The runner preserves
+normal `devteam run` exit codes, including the consequence ceiling and advisory
+strictness, so CI scripts can handle success, halt, and advisory-blocked states
+the same way they do outside Docker.
 
 ## Other CI systems
 
