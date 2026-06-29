@@ -167,6 +167,46 @@ describe("openai-compat tools", () => {
       assert.ok(!fs.existsSync(path.join(cwd, "src", "evil.js")));
     });
 
+    it("allows prototype packet files when the prototype directory is allowed", async () => {
+      const cwd = tmpdir();
+      const result = await executeTool(
+        {
+          id: "tc_proto1",
+          function: {
+            name: "write_file",
+            arguments: JSON.stringify({
+              path: "pipeline/prototypes/settings-flow/feedback.md",
+              content: "# Feedback\n",
+            }),
+          },
+        },
+        cwd,
+        ["pipeline/prototypes/settings-flow/"],
+      );
+      assert.ok(result.startsWith("ok:"), `expected ok: prefix; got: ${result}`);
+      assert.equal(
+        fs.readFileSync(path.join(cwd, "pipeline", "prototypes", "settings-flow", "feedback.md"), "utf8"),
+        "# Feedback\n",
+      );
+    });
+
+    it("prototype directory permission does not grant writes outside that packet", async () => {
+      const cwd = tmpdir();
+      const result = await executeTool(
+        {
+          id: "tc_proto2",
+          function: {
+            name: "write_file",
+            arguments: JSON.stringify({ path: "pipeline/brief.md", content: "# Brief" }),
+          },
+        },
+        cwd,
+        ["pipeline/prototypes/settings-flow/"],
+      );
+      assert.ok(result.startsWith("error:"), `expected error; got: ${result}`);
+      assert.ok(!fs.existsSync(path.join(cwd, "pipeline", "brief.md")));
+    });
+
     it("rejects directory traversal", async () => {
       const cwd = tmpdir();
       const result = await executeTool(

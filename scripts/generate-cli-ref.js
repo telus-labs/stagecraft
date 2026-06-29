@@ -40,6 +40,11 @@ const COMMANDS = [
     description: "Bounded autonomous driver with optional TTY watch mode: loop next → dispatch → merge until pipeline-complete, halting for anything that needs a human. Use --feature for new work; --repair for bug fixes.",
   },
   {
+    name:        "prototype",
+    synopsis:    "devteam prototype <start|note|promote> [id-or-title] [options]",
+    description: "Pre-SDLC fast-learning workflow. Creates prototype packets, appends feedback, and writes a promotion handoff into a normal Stagecraft track.",
+  },
+  {
     name:        "commit",
     synopsis:    "devteam commit [options]",
     description: "Stage exactly the right pipeline artifacts for completed stages and generate a meaningful commit message. Tracks a cursor so repeated calls are idempotent.",

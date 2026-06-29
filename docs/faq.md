@@ -64,6 +64,23 @@ No. The CLI, orchestrator, validator, and hooks are all Node. The host CLIs (`cl
 
 ## Using the pipeline
 
+### I am just prototyping. Do I need the full pipeline?
+
+No. Use `devteam prototype` when you need a fast learning loop rather than
+delivery evidence:
+
+```bash
+devteam prototype start "settings flow" --feature "Try a faster account-settings flow"
+devteam prototype note settings-flow --feedback "Users missed the save state"
+devteam prototype promote settings-flow --track full
+```
+
+Prototype packets live under `pipeline/prototypes/<id>/` and contain intent,
+build prompt, feedback, promotion handoff, and metadata files. They are not gate
+evidence and do not satisfy sign-off or deploy. When the idea settles, promote
+the packet into a normal track with the generated `devteam run --feature-file
+... --track <t>` command.
+
 ### What if I want to skip a stage?
 
 If a stage isn't appropriate for your change, pick a track that doesn't include it. See [`docs/tracks.md`](tracks.md) — `nano` skips most stages, `quick` skips design + clarification + pre-review, etc.
@@ -285,6 +302,16 @@ hosts:
 ```
 
 Swap `base_url`, `api_key_env`, and model IDs for your provider. See [Using openai-compat](user-guide.md#using-openai-compat-openai-compatible-apis) for the full config schema, env vars, limitations, and model recommendations.
+
+### Does prototype mode work with openai-compat?
+
+Yes. The `devteam prototype` command is local filesystem tooling, so it does not
+depend on any host. If an openai-compat workstream uses a prototype packet as
+context, its `write_file` tool can create or update files under
+`pipeline/prototypes/<id>/` when that directory is listed in the workstream's
+allowed writes. The same project-root and allowed-write checks still apply, so
+permission to write a prototype packet does not imply permission to write source
+or gate files.
 
 ### Which roles should get expensive models (Opus) vs. cheaper ones?
 
