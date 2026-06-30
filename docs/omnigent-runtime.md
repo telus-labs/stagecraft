@@ -84,6 +84,7 @@ hosts:
     model: gpt-5-codex
     session_mode: no-session
     prompt_transport: prompt-file
+    policy_mode: off
 ```
 
 This renders the same shape as the default command, with configured additions:
@@ -107,6 +108,7 @@ hosts:
     server_url: https://omnigent.internal.example
     session_mode: session
     prompt_transport: stdin
+    policy_mode: file
     extra_args:
       - --profile
       - delivery-team
@@ -128,6 +130,30 @@ prompt transport flags (`-p`, `--prompt`, or `--prompt-file`). Prompt text is
 not mirrored to the operator console by default; only transcript output from
 Omnigent is logged.
 
+## Policy Bridge
+
+`policy_mode` controls whether Stagecraft renders workstream constraints into an
+Omnigent policy file:
+
+| Value | Behavior |
+|---|---|
+| `off` | Default. Stagecraft includes constraints in the prompt and keeps post-hoc write audit/gate validation as the enforcement backstop. |
+| `file` | Writes a private temporary JSON policy file and passes `--policy-file <path>` to Omnigent. The file is removed after the process exits. |
+
+The generated policy includes:
+
+- the workstream, stage, and role
+- `allowedWrites` as filesystem write allowlist input
+- shell/network requirements from the stage definition
+- the host-neutral role tool budget from `core/roles.js`
+- an explicit note that Stagecraft still performs post-run write audit and gate
+  validation
+
+This is a tool-call-time enforcement request to Omnigent, not a replacement for
+Stagecraft validation. If the selected Omnigent harness ignores or cannot enforce
+the policy file, Stagecraft still audits writes after the run and blocks on
+missing or malformed gates exactly as before.
+
 Mixed routing:
 
 ```yaml
@@ -138,9 +164,9 @@ routing:
     verifier: omnigent
 ```
 
-Policy and sandbox configuration is still a follow-up. Until that bridge is
-implemented, allowed writes remain post-hoc audited by Stagecraft and tool
-budgets/stoplists remain prompt-only for Omnigent.
+Policy-file bridging is opt-in. Until `policy_mode: file` is enabled, allowed
+writes remain post-hoc audited by Stagecraft and tool budgets/stoplists remain
+prompt-only for Omnigent.
 
 ## Follow-Up Phases
 
@@ -153,9 +179,10 @@ Parent tracking issue: [#291](https://github.com/telus-labs/stagecraft/issues/29
 2. **Prompt transport hardening** ([#293](https://github.com/telus-labs/stagecraft/issues/293)). Implemented in the Phase 24.3 slice:
    default to `--prompt-file`, support stdin, retain `-p` as a compatibility
    fallback, and classify OS command-length failures as prompt transport errors.
-3. **Policy bridge** ([#294](https://github.com/telus-labs/stagecraft/issues/294)). Map Stagecraft `allowedWrites`, shell/network
-   requirements, and tool budgets into Omnigent policies where supported.
-   Stagecraft's post-hoc audit remains the backstop.
+3. **Policy bridge** ([#294](https://github.com/telus-labs/stagecraft/issues/294)). Implemented in the Phase 24.4 slice:
+   `policy_mode: file` maps Stagecraft `allowedWrites`, shell/network
+   requirements, and tool budgets into a temporary Omnigent policy file while
+   keeping Stagecraft's post-hoc audit as the backstop.
 4. **Session evidence** ([#295](https://github.com/telus-labs/stagecraft/issues/295)). Capture Omnigent conversation/session IDs and relevant
    policy verdict summaries in logs or adapter-private metadata without adding
    host-specific fields to gate schemas.

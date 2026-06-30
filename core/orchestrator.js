@@ -261,6 +261,7 @@ function buildDescriptor(stageDef, role, opts = {}) {
       ? effectiveDef.goalCondition.replace("{workstreamId}", wsId)
       : null,
     expectedGate: effectiveDef.gate,
+    requiredCapabilities: effectiveDef.requiredCapabilities || null,
     changeId,
     // G10: per-role tool budget declared by the adapter (e.g. ["Read","Glob","Grep"]).
     // null means the adapter declared no budget (full host surface applies).
