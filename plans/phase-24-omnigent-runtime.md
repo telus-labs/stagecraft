@@ -1,7 +1,7 @@
 # Phase 24 — Omnigent Runtime Adapter
 
-Status: initial adapter and launch-profile slices implemented; policy/session
-evidence integration remains planned under parent issue
+Status: initial adapter, launch-profile, and prompt-transport slices
+implemented; policy/session evidence integration remains planned under parent issue
 [#291](https://github.com/telus-labs/stagecraft/issues/291).
 
 ## Goal
@@ -83,10 +83,12 @@ node --test tests/omnigent-adapter.test.js
 
 Tracking issue: [#293](https://github.com/telus-labs/stagecraft/issues/293).
 
+Status: implemented.
+
 Deliverables:
 
-- prefer `--prompt-file` or stdin if Omnigent exposes it
-- fallback to `-p` remains supported
+- prefer `--prompt-file`, with stdin available through config
+- fallback to `-p` remains supported through `prompt_transport: argument`
 - structural-input diagnostics distinguish command-length failure from model
   no-gate failure
 
@@ -94,6 +96,12 @@ Acceptance:
 
 - long Stagecraft prompts do not depend on OS argument-length limits
 - no prompt text is echoed into the operator console by default
+
+Verification:
+
+```bash
+node --test tests/omnigent-adapter.test.js
+```
 
 ## Phase 24.4 — Policy Bridge
 

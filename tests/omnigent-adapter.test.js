@@ -36,7 +36,7 @@ describe("omnigent adapter", () => {
     ]);
   });
 
-  it("keeps the default launch profile backward-compatible", () => {
+  it("uses prompt-file transport by default for config-built launch profiles", () => {
     const cwd = makeTargetProject({
       config: "routing:\n  default_host: omnigent\npipeline:\n  default_track: full\n",
     });
@@ -45,13 +45,13 @@ describe("omnigent adapter", () => {
       delete process.env.DEVTEAM_HEADLESS_COMMAND;
       const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
       assert.equal(built.bin, "omnigent");
-      assert.deepEqual(built.args, [
-        "run",
-        ".omnigent/stagecraft/agent.yaml",
-        "--no-session",
-        "-p",
-        "stage prompt",
-      ]);
+      assert.deepEqual(built.args.slice(0, 3), ["run", ".omnigent/stagecraft/agent.yaml", "--no-session"]);
+      assert.equal(built.args[3], "--prompt-file");
+      assert.ok(fs.existsSync(built.args[4]), "prompt file should exist");
+      assert.equal(fs.readFileSync(built.args[4], "utf8"), "stage prompt");
+      assert.match(built.displayCommand, /--prompt-file <stage-prompt-file>/);
+      built.cleanupPrompt();
+      assert.equal(fs.existsSync(built.args[4]), false);
     } finally {
       if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
       else delete process.env.DEVTEAM_HEADLESS_COMMAND;
@@ -73,6 +73,7 @@ describe("omnigent adapter", () => {
         "    model: claude-sonnet-4",
         "    server_url: https://omnigent.internal",
         "    session_mode: session",
+        "    prompt_transport: argument",
         "    extra_args:",
         "      - --profile",
         "      - team-alpha",
@@ -99,6 +100,38 @@ describe("omnigent adapter", () => {
         "stage prompt",
       ]);
       assert.equal(built.profile.sessionMode, "session");
+      assert.equal(built.promptTransport, "argument");
+    } finally {
+      if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
+      else delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      cleanup(cwd);
+    }
+  });
+
+  it("supports stdin prompt transport without putting prompt text in arguments", () => {
+    const cwd = makeTargetProject({
+      config: [
+        "routing:",
+        "  default_host: omnigent",
+        "pipeline:",
+        "  default_track: full",
+        "hosts:",
+        "  omnigent:",
+        "    prompt_transport: stdin",
+        "",
+      ].join("\n"),
+    });
+    const original = process.env.DEVTEAM_HEADLESS_COMMAND;
+    try {
+      delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
+      assert.deepEqual(built.args, [
+        "run",
+        ".omnigent/stagecraft/agent.yaml",
+        "--no-session",
+      ]);
+      assert.equal(built.stdinText, "stage prompt");
+      assert.match(built.displayCommand, /< <stage-prompt>/);
     } finally {
       if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
       else delete process.env.DEVTEAM_HEADLESS_COMMAND;
@@ -140,6 +173,7 @@ describe("omnigent adapter", () => {
       process.env.DEVTEAM_HEADLESS_COMMAND = "omnigent run override.yaml --no-session --harness env";
       const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
       assert.equal(built.source, "env");
+      assert.equal(built.promptTransport, "argument");
       assert.deepEqual(built.args, [
         "run",
         "override.yaml",
@@ -152,6 +186,29 @@ describe("omnigent adapter", () => {
     } finally {
       if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
       else delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      cleanup(cwd);
+    }
+  });
+
+  it("rejects unknown prompt transport modes", () => {
+    const cwd = makeTargetProject({
+      config: [
+        "routing:",
+        "  default_host: omnigent",
+        "pipeline:",
+        "  default_track: full",
+        "hosts:",
+        "  omnigent:",
+        "    prompt_transport: telepathy",
+        "",
+      ].join("\n"),
+    });
+    try {
+      assert.throws(
+        () => adapter.resolveLaunchProfile({ cwd }),
+        /prompt_transport must be one of/,
+      );
+    } finally {
       cleanup(cwd);
     }
   });
