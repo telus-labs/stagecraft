@@ -761,6 +761,8 @@ hosts:
 
 `prompt_transport` defaults to `prompt-file`, which avoids OS command-length limits and keeps prompt text out of command arguments. Use `stdin` when the selected Omnigent runtime supports stdin one-shot prompts, or `argument` for legacy `-p <prompt>` compatibility. `policy_mode: file` passes a temporary Omnigent policy file containing allowed writes, shell/network requirements, and the role tool budget; Stagecraft still runs post-hoc write audit and gate validation after Omnigent exits. `DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
 
+If Omnigent prints a session or conversation identifier, Stagecraft writes an adapter-private sidecar at `pipeline/logs/<workstreamId>.omnigent.json`. The sidecar keeps IDs and policy verdict counts only; prompts, transcript excerpts, and raw policy lines are not copied into that metadata file, and gate JSON schemas remain host-neutral.
+
 ### Using openai-compat (OpenAI-compatible APIs)
 
 `openai-compat` is Stagecraft's HTTP-native host adapter. Instead of spawning a CLI subprocess, it calls any provider that exposes an OpenAI-compatible Chat Completions API. That includes OpenAI, OpenRouter, Fireworks AI, Fuel iX, DeepSeek-compatible endpoints, Moonshot-compatible endpoints, and internal API gateways that expose `/v1/chat/completions`. No CLI to install.

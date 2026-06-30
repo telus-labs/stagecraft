@@ -236,6 +236,50 @@ describe("omnigent adapter", () => {
     }
   });
 
+  it("collects Omnigent session IDs and policy verdict counts from output", () => {
+    const evidence = adapter.emptyOmnigentEvidence();
+    adapter.collectOmnigentEvidence(evidence, [
+      "Omnigent session_id: sess_abc-123",
+      "conversation_id=conv.xyz",
+      "policy verdict: allowed write",
+      "policy verdict: denied shell",
+      "policy warning: network not requested",
+      "policy blocked tool call",
+    ].join("\n"));
+    assert.equal(evidence.session.session_id, "sess_abc-123");
+    assert.equal(evidence.session.conversation_id, "conv.xyz");
+    assert.deepEqual(evidence.policyVerdicts, {
+      allow: 1,
+      deny: 1,
+      warn: 1,
+      block: 1,
+    });
+  });
+
+  it("writes adapter-private Omnigent evidence without gate-schema fields or prompt text", () => {
+    const cwd = makeTargetProject();
+    try {
+      const evidence = adapter.emptyOmnigentEvidence();
+      adapter.collectOmnigentEvidence(evidence, "session: sess_123\npolicy verdict: denied\n");
+      const evidencePath = adapter.writeOmnigentEvidence(
+        { cwd, changeId: null },
+        { stage: "stage-04", role: "backend", workstreamId: "stage-04.backend" },
+        evidence,
+        path.join(cwd, "pipeline", "logs", "stage-04.backend.log"),
+      );
+      assert.ok(evidencePath.endsWith("stage-04.backend.omnigent.json"));
+      const payload = JSON.parse(fs.readFileSync(evidencePath, "utf8"));
+      assert.equal(payload.schema_version, "stagecraft.omnigent.evidence.v1");
+      assert.equal(payload.session.session_id, "sess_123");
+      assert.equal(payload.policy_verdicts.deny, 1);
+      assert.equal(payload.privacy.prompt_retained, false);
+      assert.equal(Object.hasOwn(payload, "gate"), false);
+      assert.equal(JSON.stringify(payload).includes("stage prompt"), false);
+    } finally {
+      cleanup(cwd);
+    }
+  });
+
   it("supports explicit session resume launch profiles", () => {
     const built = adapter.buildOmnigentCommandFromProfile({
       agentSpecPath: ".omnigent/stagecraft/agent.yaml",
