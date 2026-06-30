@@ -23,7 +23,8 @@ The `omnigent` host adapter installs:
 - shared rules and templates under `.devteam/`
 - a default Omnigent agent spec at `.omnigent/stagecraft/agent.yaml`
 
-The headless command is:
+With no `hosts.omnigent` config block, the adapter keeps the Phase 24.1
+headless command:
 
 ```bash
 omnigent run .omnigent/stagecraft/agent.yaml --no-session
@@ -34,8 +35,9 @@ Unlike the existing CLI hosts, Omnigent's one-shot path accepts the prompt as
 the shared stdin-based `runHeadless()` helper.
 
 The installed default agent spec uses Omnigent's Codex harness because that
-harness carries its own coding tools. Operators can override the command with
-`DEVTEAM_HEADLESS_COMMAND` for experiments, for example:
+harness carries its own coding tools. Operators can choose harnesses and launch
+topology in `.devteam/config.yml`; `DEVTEAM_HEADLESS_COMMAND` remains the
+highest-precedence emergency override, for example:
 
 ```bash
 DEVTEAM_HEADLESS_COMMAND='omnigent run .omnigent/stagecraft/agent.yaml --no-session --harness claude-sdk' \
@@ -69,6 +71,50 @@ routing:
   default_host: omnigent
 ```
 
+Local no-session execution is the default and can be made explicit:
+
+```yaml
+routing:
+  default_host: omnigent
+
+hosts:
+  omnigent:
+    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    harness: codex
+    model: gpt-5-codex
+    session_mode: no-session
+```
+
+This renders the same shape as the default command, with configured additions:
+
+```bash
+omnigent run .omnigent/stagecraft/agent.yaml --harness codex --model gpt-5-codex --no-session -p <stage-prompt>
+```
+
+Server-backed execution omits `--no-session` and can pass a server URL plus
+safe extra arguments:
+
+```yaml
+routing:
+  default_host: omnigent
+
+hosts:
+  omnigent:
+    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    harness: claude-sdk
+    model: claude-sonnet-4
+    server_url: https://omnigent.internal.example
+    session_mode: session
+    extra_args:
+      - --profile
+      - delivery-team
+```
+
+To resume a known session, set `session_mode: resume` and `session_id`; the
+adapter passes `--session <id>`. `extra_args` is an array, not a shell string,
+and cannot override Stagecraft's prompt transport flags (`-p`, `--prompt`, or
+`--prompt-file`).
+
 Mixed routing:
 
 ```yaml
@@ -79,17 +125,18 @@ routing:
     verifier: omnigent
 ```
 
-Future work should add a first-class `hosts.omnigent` config block for harness,
-model, server URL, sandbox profile, and policy selection instead of relying on
-the command string.
+Policy and sandbox configuration is still a follow-up. Until that bridge is
+implemented, allowed writes remain post-hoc audited by Stagecraft and tool
+budgets/stoplists remain prompt-only for Omnigent.
 
 ## Follow-Up Phases
 
 Parent tracking issue: [#291](https://github.com/telus-labs/stagecraft/issues/291).
 
-1. **Configurable Omnigent launch profile** ([#292](https://github.com/telus-labs/stagecraft/issues/292)). Add `hosts.omnigent.*` config
-   fields for harness, model, server, no-session/session mode, and agent spec
-   path. Preserve `DEVTEAM_HEADLESS_COMMAND` as the emergency override.
+1. **Configurable Omnigent launch profile** ([#292](https://github.com/telus-labs/stagecraft/issues/292)). Implemented in the Phase 24.2 slice:
+   `hosts.omnigent.*` config fields select harness, model, server URL,
+   no-session/session/resume mode, agent spec path, and safe extra args while
+   preserving `DEVTEAM_HEADLESS_COMMAND` as the emergency override.
 2. **Prompt transport hardening** ([#293](https://github.com/telus-labs/stagecraft/issues/293)). Prefer an upstream Omnigent
    `--prompt-file` or stdin option so long Stagecraft prompts never hit command
    argument limits.

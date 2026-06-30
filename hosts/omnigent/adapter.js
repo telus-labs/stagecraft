@@ -11,6 +11,7 @@ const { spawn } = require("node:child_process");
 const capabilities = require("./capabilities.json");
 const { makeMarkdownHostAdapter } = require("../../core/adapters/markdown-host");
 const { splitCommand } = require("../../core/command-line");
+const { loadConfig } = require("../../core/config");
 const { gatesDir, logsDir, pipelineRoot } = require("../../core/paths");
 const { snapshotWritables, auditWrites } = require("../../core/guards/write-audit");
 const { terminateChild } = require("../../core/process-kill");
@@ -22,6 +23,7 @@ const {
 
 const shared = makeMarkdownHostAdapter(capabilities);
 const AGENT_SPEC_REL = capabilities.agentSpec;
+const DEFAULT_SESSION_MODE = "no-session";
 
 function agentSpecText() {
   return [
@@ -41,10 +43,10 @@ function agentSpecText() {
     "  acting, write only the requested artifact and gate paths, and finish only",
     "  after the gate JSON exists at the exact path named in the prompt.",
     "",
-    "# Operators may override the harness/model at invocation time by changing",
-    "# hosts.omnigent.headlessCommand in a wrapper, or by setting",
-    "# DEVTEAM_HEADLESS_COMMAND for a run. The installed default favors the",
-    "# Codex harness because it carries its own coding tools.",
+    "# Operators may override harness/model/session launch settings through",
+    "# .devteam/config.yml hosts.omnigent, or set DEVTEAM_HEADLESS_COMMAND for",
+    "# one emergency run. The installed default favors the Codex harness because",
+    "# it carries its own coding tools.",
     "",
   ].join("\n");
 }
@@ -92,9 +94,94 @@ function uninstall(targetDir) {
   if (fs.existsSync(spec)) fs.unlinkSync(spec);
 }
 
+function optionalString(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function safeExtraArgs(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new Error("hosts.omnigent.extra_args must be an array of strings");
+  }
+  const forbidden = new Set(["-p", "--prompt", "--prompt-file"]);
+  return value.map((arg, idx) => {
+    if (typeof arg !== "string" || arg.length === 0) {
+      throw new Error(`hosts.omnigent.extra_args[${idx}] must be a non-empty string`);
+    }
+    if (forbidden.has(arg)) {
+      throw new Error(`hosts.omnigent.extra_args[${idx}] cannot override Stagecraft prompt transport`);
+    }
+    return arg;
+  });
+}
+
+function resolveLaunchProfile(ctx = {}) {
+  let raw = {};
+  try {
+    raw = loadConfig(ctx.cwd || process.cwd())?._raw?.hosts?.omnigent || {};
+  } catch {
+    raw = {};
+  }
+  const sessionMode = optionalString(raw.session_mode) ||
+    (raw.no_session === false ? "session" : DEFAULT_SESSION_MODE);
+  const allowedSessionModes = new Set(["no-session", "session", "resume"]);
+  if (!allowedSessionModes.has(sessionMode)) {
+    throw new Error(
+      `hosts.omnigent.session_mode must be one of: ${[...allowedSessionModes].join(", ")}`,
+    );
+  }
+  return {
+    agentSpecPath: optionalString(raw.agent_spec_path) ||
+      optionalString(raw.agent_spec) ||
+      AGENT_SPEC_REL,
+    harness: optionalString(raw.harness),
+    model: optionalString(raw.model),
+    serverUrl: optionalString(raw.server_url),
+    sessionMode,
+    sessionId: optionalString(raw.session_id),
+    extraArgs: safeExtraArgs(raw.extra_args),
+  };
+}
+
+function buildOmnigentCommandFromProfile(profile = resolveLaunchProfile()) {
+  const args = ["run", profile.agentSpecPath || AGENT_SPEC_REL];
+  if (profile.harness) args.push("--harness", profile.harness);
+  if (profile.model) args.push("--model", profile.model);
+  if (profile.serverUrl) args.push("--server-url", profile.serverUrl);
+  if (profile.sessionMode === "no-session") args.push("--no-session");
+  if (profile.sessionMode === "resume") {
+    if (!profile.sessionId) {
+      throw new Error("hosts.omnigent.session_id is required when session_mode is resume");
+    }
+    args.push("--session", profile.sessionId);
+  }
+  args.push(...(profile.extraArgs || []));
+  return { bin: "omnigent", args, displayCommand: ["omnigent", ...args].join(" ") };
+}
+
 function buildOmnigentArgs(cmdString, prompt) {
   const { bin, args } = splitCommand(cmdString, "headlessCommand");
   return { bin, args: [...args, "-p", prompt] };
+}
+
+function buildOmnigentInvocation(prompt, ctx = {}) {
+  if (process.env.DEVTEAM_HEADLESS_COMMAND) {
+    const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND;
+    return {
+      ...buildOmnigentArgs(cmdString, prompt),
+      displayCommand: `${cmdString} -p <stage-prompt>`,
+      source: "env",
+    };
+  }
+  const profile = resolveLaunchProfile(ctx);
+  const command = buildOmnigentCommandFromProfile(profile);
+  return {
+    bin: command.bin,
+    args: [...command.args, "-p", prompt],
+    displayCommand: `${command.displayCommand} -p <stage-prompt>`,
+    source: "config",
+    profile,
+  };
 }
 
 function isOrchestratorWrite(ctx, relPath) {
@@ -108,13 +195,12 @@ function isOrchestratorWrite(ctx, relPath) {
 }
 
 function invoke(descriptor, ctx, preRenderedPrompt) {
-  const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND || capabilities.headlessCommand;
   const prompt = preRenderedPrompt || shared.renderStagePrompt(descriptor, ctx);
-  let bin, args;
+  let bin, args, displayCommand;
   try {
-    ({ bin, args } = buildOmnigentArgs(cmdString, prompt));
+    ({ bin, args, displayCommand } = buildOmnigentInvocation(prompt, ctx));
   } catch (err) {
-    return Promise.reject(new Error(`invalid headlessCommand "${cmdString}": ${err.message}`));
+    return Promise.reject(new Error(`invalid Omnigent launch profile: ${err.message}`));
   }
 
   const gatePath = path.join(gatesDir(ctx.cwd, ctx.changeId), `${descriptor.workstreamId}.json`);
@@ -142,7 +228,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       logWriter = createTranscriptWriter(logPath, [
         `# Stage transcript: ${descriptor.workstreamId}`,
         "# Host: omnigent",
-        `# Command: ${cmdString} -p <stage-prompt>`,
+        `# Command: ${displayCommand}`,
         `# Started: ${new Date().toISOString()}`,
         "# ---",
         "",
@@ -240,5 +326,8 @@ module.exports = {
   renderStagePrompt: shared.renderStagePrompt,
   invoke,
   buildOmnigentArgs,
+  buildOmnigentCommandFromProfile,
+  buildOmnigentInvocation,
+  resolveLaunchProfile,
   agentSpecText,
 };

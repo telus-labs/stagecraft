@@ -727,6 +727,36 @@ What this installs:
 
 Current posture is intentionally conservative: no hooks, no Stagecraft-managed subagent fan-out, no slash commands, and no worktree mapping. Allowed writes are audited after the process exits, while stoplist and tool budget constraints are prompt-only. See [Omnigent runtime adapter](omnigent-runtime.md) for the Phase 24 design and follow-up issues.
 
+Choose an Omnigent launch profile in `.devteam/config.yml` without rewriting the installed agent YAML:
+
+```yaml
+routing:
+  default_host: omnigent
+
+hosts:
+  omnigent:
+    harness: codex
+    model: gpt-5-codex
+    session_mode: no-session
+```
+
+For a server-backed topology, add `server_url` and use `session_mode: session`:
+
+```yaml
+hosts:
+  omnigent:
+    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    harness: claude-sdk
+    model: claude-sonnet-4
+    server_url: https://omnigent.internal.example
+    session_mode: session
+    extra_args:
+      - --profile
+      - delivery-team
+```
+
+`DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
+
 ### Using openai-compat (OpenAI-compatible APIs)
 
 `openai-compat` is Stagecraft's HTTP-native host adapter. Instead of spawning a CLI subprocess, it calls any provider that exposes an OpenAI-compatible Chat Completions API. That includes OpenAI, OpenRouter, Fireworks AI, Fuel iX, DeepSeek-compatible endpoints, Moonshot-compatible endpoints, and internal API gateways that expose `/v1/chat/completions`. No CLI to install.
