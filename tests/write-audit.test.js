@@ -374,6 +374,10 @@ describe("adapter capabilities — post-hoc-audit declared", () => {
     assert.equal(loadCap("gemini-cli").enforces.allowed_writes, "post-hoc-audit");
   });
 
+  test("omnigent.enforces.allowed_writes = post-hoc-audit", () => {
+    assert.equal(loadCap("omnigent").enforces.allowed_writes, "post-hoc-audit");
+  });
+
   test("claude-code.enforces.allowed_writes = tool-call-time (unchanged)", () => {
     assert.equal(loadCap("claude-code").enforces.allowed_writes, "tool-call-time");
   });

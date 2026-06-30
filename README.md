@@ -2,7 +2,7 @@
 
 **Stagecraft is an orchestrator that runs your AI coding tool through a structured 18-stage pipeline.** PM writes the brief. Principal designs. Specialists build their areas. Reviewers critique. QA tests. Each stage produces an artifact and a machine-readable gate. The next stage cannot start until the gate passes. The full run is on disk: auditable, resumable, not buried in a chat log.
 
-Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Claude for review. The gate JSON is the contract.
+Works across **Claude Code**, **Codex CLI**, **Gemini CLI**, **Omnigent**, an **OpenAI-compatible API host**, and a **generic** no-host mode. One project, one config, one or more hosts. Different roles can run on different models — Claude for design, Codex for backend, Gemini for QA, Omnigent for meta-harness execution, Claude for review. The gate JSON is the contract.
 
 ```bash
 devteam init --host claude-code        # one-time install in your project
@@ -76,7 +76,7 @@ Evaluating further (long-form): [docs/presentation-notes.md](docs/presentation-n
 | 4 | [docs/runbooks/README.md](docs/runbooks/README.md) | Troubleshooting index: symptom → runbook section |
 | 5 | [docs/cost.md](docs/cost.md) | Cost tracking, pricing table, and budget workflow |
 
-Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [hosts/docker/README.md](hosts/docker/README.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
+Reference: [docs/faq.md](docs/faq.md) · [docs/git-workflow.md](docs/git-workflow.md) · [docs/ci.md](docs/ci.md) · [hosts/docker/README.md](hosts/docker/README.md) · [docs/omnigent-runtime.md](docs/omnigent-runtime.md) · [docs/memory.md](docs/memory.md) · [docs/observability.md](docs/observability.md) · [docs/reproducibility.md](docs/reproducibility.md) · [docs/runbooks/escalation.md](docs/runbooks/escalation.md) · [docs/runbooks/fix-and-retry.md](docs/runbooks/fix-and-retry.md) · [docs/runbooks/open-followups.md](docs/runbooks/open-followups.md) · [docs/runbooks/deploy-failure.md](docs/runbooks/deploy-failure.md) · [docs/runbooks/autonomous-run.md](docs/runbooks/autonomous-run.md) · [docs/runbook-template.md](docs/runbook-template.md)
 
 ### Contributor — I change Stagecraft
 
@@ -109,7 +109,7 @@ A coordinated team of role-specific subagents running a structured software-deve
 - **Prototype packets** — `devteam prototype` gives exploratory work a pre-SDLC lane: intent, build prompt, feedback notes, and an explicit promotion handoff into a normal track when the idea is ready to harden.
 - **Docker runner** — `hosts/docker/` packages `devteam` into a non-root container for unattended headless runs against a mounted project, with conservative lock reporting and runtime-only credentials.
 - **Per-workstream gate JSON** — every stage writes a gate to `pipeline/gates/`. Validator enforces shape; orchestrator merges multi-role stage gates.
-- **Multi-host routing** — `.devteam/config.yml` picks which host runs which role. Claude for design, Codex for backend, Gemini for QA — the gate JSON is the stable contract.
+- **Multi-host routing** — `.devteam/config.yml` picks which host runs which role. Claude for design, Codex for backend, Gemini for QA, Omnigent for meta-harness execution — the gate JSON is the stable contract.
 - **Bounded autonomous driver** — `devteam run` loops `next → dispatch → merge` until `pipeline-complete`; `devteam stage <name> --headless` drives a single stage non-interactively.
 
 Full feature catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**.
@@ -119,7 +119,7 @@ Full feature catalogue: **[docs/FEATURES.md](docs/FEATURES.md)**.
 **Platform:** macOS, Linux, and native Windows are supported. CI exercises the core Windows portability surface on Node 22: CLI startup, initialization, diagnostics, quoted host commands, executable discovery, and timeout termination. WSL2 remains a supported option when a host CLI or project toolchain expects a POSIX shell.
 
 - Node.js ≥ 20
-- At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), **Gemini CLI** (`gemini --version` works), or just a terminal (generic adapter — prompts rendered for manual use, no automation)
+- At least one of: **Claude Code** (`claude --version` works), **Codex CLI** (`codex --version` works), **Gemini CLI** (`gemini --version` works), **Omnigent** (`omnigent --version` works), an OpenAI-compatible API key for `openai-compat`, or just a terminal (generic adapter — prompts rendered for manual use, no automation)
 - Git (recommended for version-controlling artifacts; the pipeline itself does not require it)
 
 ## Quick start
@@ -130,7 +130,7 @@ git clone <this-repo> && cd stagecraft && npm install && npm link
 
 # 2. In your target project — install the host adapter surface
 cd ~/projects/my-app
-devteam init --host claude-code         # or: codex / gemini-cli / claude-code,codex
+devteam init --host claude-code         # or: codex / gemini-cli / omnigent / openai-compat / claude-code,codex
 
 # 3. Verify
 devteam doctor                           # should be all green
@@ -140,7 +140,7 @@ Then drive the pipeline. There are two ways to run a stage:
 
 ### Path A — `--headless` (single terminal, start here)
 
-The orchestrator drives the host CLI for you (`claude --print`, `codex exec --sandbox workspace-write`, `gemini`). One command per stage; model output is captured in `pipeline/logs/<workstreamId>.log` by default. Best for first runs, CI, and scripted use.
+The orchestrator drives the host runtime for you (`claude --print`, `codex exec --sandbox workspace-write`, `gemini`, or `omnigent run ...`). One command per stage; model output is captured in `pipeline/logs/<workstreamId>.log` by default. Best for first runs, CI, and scripted use.
 
 ```bash
 devteam stage requirements --feature "Add SMS notification opt-in" --headless
@@ -216,9 +216,9 @@ For `--host claude-code` in a target project:
 | `.claude/settings.local.json` | Hooks: validator on `Stop`/`SubagentStop`; approval-derivation on `PostToolUse`; secret-scan on `PreToolUse` |
 | `pipeline/gates/` | Empty workspace dir for gate files |
 
-For `--host codex`: similar but rendered into `.codex/prompts/roles/`, `.codex/skills/`, with no hooks or slash commands (codex doesn't have those primitives).
+For `--host codex` or `--host gemini-cli`: similar but rendered into the host's markdown prompt/skill directories, with no hooks or slash commands. For `--host omnigent`: rendered into `.omnigent/stagecraft/roles/`, `.omnigent/stagecraft/skills/`, plus a default `.omnigent/stagecraft/agent.yaml`. For `--host openai-compat`: rendered into `.openai-compat/prompts/roles/` and `.openai-compat/skills/`.
 
-For multi-host (`--host claude-code,codex`): both surfaces installed side-by-side; the routing config decides who handles what at runtime.
+For multi-host (`--host claude-code,codex` or `--host claude-code,omnigent`): both surfaces installed side-by-side; the routing config decides who handles what at runtime.
 
 ## CLI reference
 
@@ -281,7 +281,7 @@ Full operational guidance: [`docs/user-guide.md` § Auditing a codebase](docs/us
 ## Architecture in one diagram
 
 ```
-User in any AI tool (Claude Code, Codex, terminal)
+User in any AI tool (Claude Code, Codex, Omnigent, terminal)
          │
          │  /devteam slash command, or `devteam` CLI
          ▼
@@ -341,6 +341,8 @@ stagecraft/
 │   ├── claude-code/
 │   ├── codex/
 │   ├── gemini-cli/
+│   ├── omnigent/
+│   ├── openai-compat/
 │   └── generic/
 └── docs/                       ← guides, walkthroughs, BACKLOG
 ```

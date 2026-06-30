@@ -14,11 +14,11 @@ Stagecraft is an orchestrator that runs your AI coding tool through a structured
 
 ## Supported hosts
 
-Stagecraft is model-agnostic. It runs on whichever AI CLI you already have — Claude Code, Codex, Gemini CLI, any other tool that can accept a prompt and write files — or an OpenAI-compatible Chat Completions endpoint through the HTTP-native host.
+Stagecraft is model-agnostic. It runs on whichever AI runtime you already have — Claude Code, Codex, Gemini CLI, Omnigent, any other tool that can accept a prompt and write files — or an OpenAI-compatible Chat Completions endpoint through the HTTP-native host.
 
-Five adapters ship: `claude-code` (primary, with hooks and slash commands), `codex`, `gemini-cli`, `generic`, and `openai-compat`. Each declares its capabilities — headless support, hooks, subagents, enforcement levels — in `hosts/<host>/capabilities.json`.
+Six adapters ship: `claude-code` (primary, with hooks and slash commands), `codex`, `gemini-cli`, `omnigent`, `generic`, and `openai-compat`. Each declares its capabilities — headless support, hooks, subagents, enforcement levels — in `hosts/<host>/capabilities.json`.
 
-See **[`docs/reference/hosts.md`](reference/hosts.md)** for the full capability and enforcement matrix across all five hosts.
+See **[`docs/reference/hosts.md`](reference/hosts.md)** for the full capability and enforcement matrix across all six hosts.
 
 ---
 
@@ -341,7 +341,8 @@ into a non-root container for unattended local orchestration.
 - Credentials enter only at runtime through env vars, env files, Docker secrets,
   or a supervisor's secret manager
 - The base image is host-neutral; `openai-compat` is the no-extra-CLI path, and
-  teams can layer CLI hosts in derived images
+  teams can layer CLI/runtime hosts such as Claude Code, Codex, Gemini CLI, or
+  Omnigent in derived images
 
 **`devteam assess [--description "..."] [--json] [--apply] [--confirm] [files...]`** — rule-based track recommendation before starting a run.
 
@@ -553,7 +554,7 @@ See [`docs/runbooks/autonomous-run.md`](runbooks/autonomous-run.md) for the laun
 For `build` (stage-04) and `qa` (stage-06) stages, hosts that declare `capabilities.goalLoop: true` (claude-code and codex) automatically receive `/goal "<condition>"` prepended to the headless prompt. The condition is a workstream-specific exit criterion from `stages.js`; the host loops internally until its stated objective is met rather than running a fixed number of turns.
 
 - Automatically active when: stage has a `goalCondition`, host declares `goalLoop: true`, and workstream runs headless
-- Gemini CLI and generic adapter do not declare `goalLoop: true` — unaffected; receive the prompt unchanged
+- Gemini CLI, Omnigent, openai-compat, and the generic adapter do not declare `goalLoop: true` — unaffected; receive the prompt unchanged
 - Interactive (non-headless) runs are also unaffected
 
 ### Multi-model peer review — diversity as a correctness strategy

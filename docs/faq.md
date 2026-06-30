@@ -32,13 +32,13 @@ Three distinct concepts that appear together everywhere:
 
 - **Role** — a job function performed by an AI agent: PM, Principal, Backend, Security, Red-team, etc. Each role has a brief in `roles/<name>.md` that defines its responsibilities and constraints.
 - **Stage** — a pipeline step with a defined objective, artifact, and gate: requirements, design, build, peer-review, etc. Each stage dispatches one or more roles to do the work.
-- **Host** — how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`). The fourth, `openai-compat`, is HTTP-native — it calls any OpenAI-compatible Chat Completions endpoint directly without a CLI.
+- **Host** — how Stagecraft delivers work to a model. Runtime-based hosts include Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`), and Omnigent (`omnigent`). `openai-compat` is HTTP-native — it calls any OpenAI-compatible Chat Completions endpoint directly without a CLI. `generic` renders prompts for manual use.
 
 A stage assigns roles; routing assigns those roles to hosts; the hosts invoke models. The gate JSON is what all three produce in common.
 
 ### Do I need Claude Code or Codex CLI installed to use this?
 
-No, not strictly. Two adapters work without a dedicated CLI:
+No, not strictly. Two paths work without a dedicated model CLI:
 
 - **`openai-compat`** routes directly to any OpenAI-compatible Chat Completions API endpoint (OpenAI, OpenRouter, Fireworks AI, Fuel iX, provider-hosted open-weight models, or internal gateways) via HTTP — no CLI, full headless support, bash tool included. This is the recommended no-install option when you have an API key for a hosted model. See [Using openai-compat](user-guide.md#using-openai-compat-openai-compatible-apis) in the user guide for setup.
 - **`generic`** renders prompts to stdout for manual paste into any LLM or workflow. What you give up: no slash commands, no hooks, no headless invocation.
@@ -258,7 +258,7 @@ Check the filename. Multi-role workstream gates use a dot separator: `pipeline/g
 
 ### Can I use two hosts in the same pipeline run?
 
-Yes — that's a first-class feature. Install both adapters (`devteam init --host claude-code,codex`) and edit `.devteam/config.yml`:
+Yes — that's a first-class feature. Install both adapters (`devteam init --host claude-code,codex` or `devteam init --host claude-code,omnigent`) and edit `.devteam/config.yml`:
 
 ```yaml
 routing:

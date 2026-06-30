@@ -100,7 +100,7 @@ npm link
 
 # 3. In your target project
 cd ~/projects/my-app
-devteam init --host claude-code        # or codex / gemini-cli / openai-compat
+devteam init --host claude-code        # or codex / gemini-cli / omnigent / openai-compat
 ```
 
 `devteam init` lays down:
@@ -110,7 +110,7 @@ my-app/
 ├── .devteam/
 │   ├── config.yml              ← routing + track defaults
 │   └── rules/                  ← 10 top-level rule docs + per-stage stage-NN.md files
-├── .claude/                    ← (or .codex/, .gemini/, depending on host)
+├── .claude/                    ← (or .codex/, .gemini/, .omnigent/, depending on host)
 │   ├── agents/                 ← 12 role subagents
 │   ├── skills/                 ← 13 task helpers (implement, review-rubric, …)
 │   ├── commands/               ← /devteam, /audit, /audit-quick (claude-code only)
@@ -588,11 +588,11 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 ### What "host" means
 
-A *host* controls how Stagecraft delivers work to a model. Three built-in hosts are CLI-based: Claude Code (`claude`), Codex CLI (`codex`), and Gemini CLI (`gemini`) — Stagecraft renders a stage prompt and pipes it to the host CLI, which manages model invocation, tool permissions, and output capture. The fourth built-in host, `openai-compat`, is HTTP-native: it calls any OpenAI-compatible Chat Completions API directly, no CLI required.
+A *host* controls how Stagecraft delivers work to a model. Four built-in hosts are CLI/runtime based: Claude Code (`claude`), Codex CLI (`codex`), Gemini CLI (`gemini`), and Omnigent (`omnigent`). Stagecraft renders a stage prompt and lets that runtime manage model invocation, tool permissions, and output capture. The `openai-compat` host is HTTP-native: it calls any OpenAI-compatible Chat Completions API directly, no CLI required. The `generic` host only renders prompts for manual use.
 
-**Host and model are two different things.** For CLI-based hosts, which model runs is configured inside the host (e.g., Claude Code's `.claude/agents/<role>.md` has a `model:` field; Codex and Gemini use their own settings). For `openai-compat`, the model is set per-role in `.devteam/config.yml` under `hosts.openai-compat.models`.
+**Host and model are two different things.** For CLI/runtime hosts, which model runs is configured inside the host (e.g., Claude Code's `.claude/agents/<role>.md` has a `model:` field; Codex, Gemini, and Omnigent use their own settings). For `openai-compat`, the model is set per-role in `.devteam/config.yml` under `hosts.openai-compat.models`.
 
-When optimizing cost or comparing model quality, you can route different roles to different models. For CLI-based hosts, edit the agent frontmatter. For openai-compat, edit the config — see [Using openai-compat](#using-openai-compat-openai-compatible-apis). Multiple hosts are only needed when mixing CLIs (e.g. Claude Code for some roles, Codex for others).
+When optimizing cost or comparing model quality, you can route different roles to different models. For CLI/runtime hosts, edit the host's native configuration. For openai-compat, edit the config — see [Using openai-compat](#using-openai-compat-openai-compatible-apis). Multiple hosts are only needed when mixing runtimes (e.g. Claude Code for some roles, Codex or Omnigent for others).
 
 ### Why use multiple hosts?
 
@@ -600,7 +600,7 @@ When optimizing cost or comparing model quality, you can route different roles t
 
 **Model diversity.** Different models have different blind spots. Routing specific roles to specific models captures independent opinions without manual effort. The formalized version, where every code-review area runs on all configured hosts in parallel, is [multi-model peer review](#multi-model-peer-review). Neither is automatic: red-team routes to `default_host` unless you add a `roles: red-team:` override, and multi-model peer review requires setting `review_fanout`.
 
-**Tool fit.** Claude Code is strong on design, complex review, and reasoning about architecture. Codex CLI is fast at backend implementation. Gemini CLI is inexpensive for pattern-matching tasks like QA. Use the right tool for the job.
+**Tool fit.** Claude Code is strong on design, complex review, and reasoning about architecture. Codex CLI is fast at backend implementation. Gemini CLI is inexpensive for pattern-matching tasks like QA. Omnigent is useful when you want Stagecraft to dispatch through a meta-harness that can wrap multiple agent runtimes. Use the right tool for the job.
 
 ### Setting up multiple hosts
 
@@ -611,7 +611,7 @@ devteam init --host claude-code,codex
 ```
 
 What this does, in sequence, for each host:
-- Lays down its role prompt files (`.claude/agents/` for claude-code, `.codex/prompts/roles/` for codex)
+- Lays down its role prompt files (`.claude/agents/` for claude-code, `.codex/prompts/roles/` for codex, `.omnigent/stagecraft/roles/` for omnigent)
 - Installs slash commands, hooks, rules, and skills where the host supports them
 - Skips files already written by an earlier host in the list (rules in `.devteam/rules/` are shared between hosts and only written once)
 
@@ -669,7 +669,7 @@ model: sonnet        # claude-sonnet — implementation
 
 To change a model for a specific role, edit that agent file directly. Re-running `devteam init --host claude-code --force` regenerates all agent files from the framework defaults, so keep custom model overrides in mind if you re-init.
 
-For Codex and Gemini, model selection is handled in those tools' own configuration files, outside Stagecraft. For openai-compat, model selection is per-role in `.devteam/config.yml` under `hosts.openai-compat.models` — see [Using openai-compat](#using-openai-compat-openai-compatible-apis).
+For Codex, Gemini, and Omnigent, model selection is handled in those tools' own configuration files, outside Stagecraft. For openai-compat, model selection is per-role in `.devteam/config.yml` under `hosts.openai-compat.models` — see [Using openai-compat](#using-openai-compat-openai-compatible-apis).
 
 ### Common configurations
 
@@ -709,6 +709,23 @@ routing:
 ```
 
 With three hosts and four review areas, Stage 5 produces 12 parallel workstreams. Any FAIL from any model on any area blocks the stage. See [Multi-model peer review](#multi-model-peer-review) for the full picture.
+
+### Using Omnigent
+
+`omnigent` is Stagecraft's adapter for the [Omnigent](https://github.com/omnigent-ai/omnigent) meta-harness. Stagecraft still owns routing, gates, write audits, retries, and `devteam next`; Omnigent owns the runtime that consumes one workstream prompt.
+
+```bash
+devteam init --host omnigent
+devteam stage requirements --feature "Add SMS notification opt-in" --headless
+```
+
+What this installs:
+- `.omnigent/stagecraft/agent.yaml` — the default Omnigent agent spec
+- `.omnigent/stagecraft/roles/` — role prompts in markdown format
+- `.omnigent/stagecraft/skills/` — Stagecraft skills in markdown format
+- `.devteam/rules/` and `.devteam/templates/` — shared Stagecraft rules and templates
+
+Current posture is intentionally conservative: no hooks, no Stagecraft-managed subagent fan-out, no slash commands, and no worktree mapping. Allowed writes are audited after the process exits, while stoplist and tool budget constraints are prompt-only. See [Omnigent runtime adapter](omnigent-runtime.md) for the Phase 24 design and follow-up issues.
 
 ### Using openai-compat (OpenAI-compatible APIs)
 
@@ -847,7 +864,7 @@ devteam restart build && devteam run
 
 ### Multi-host in headless mode
 
-Headless mode (`--headless`) works normally in multi-host setups. Each workstream spawns its own host CLI process; they run concurrently within a stage. Every host you route work to must support headless (all three shipped adapters do). In an unattended pipeline loop, mixed-host stages produce gates through the same contract and advance the pipeline normally.
+Headless mode (`--headless`) works normally in multi-host setups. Each workstream spawns its own host process or native adapter invocation; they run concurrently within a stage. Every host you route work to must support headless (`claude-code`, `codex`, `gemini-cli`, `omnigent`, and `openai-compat` do; `generic` does not). In an unattended pipeline loop, mixed-host stages produce gates through the same contract and advance the pipeline normally.
 
 ### When single-host is the right call
 
@@ -865,7 +882,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli), pipes the rendered prompt to stdin, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent.yaml --no-session -p <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)
@@ -1175,7 +1192,7 @@ Inside Claude Code (after `devteam init --host claude-code`):
 /audit --resume         # continue from the last completed phase (uses docs/audit/status.json)
 ```
 
-On Codex / Gemini CLI / generic hosts, invoke the `auditor` role with the `audit` skill:
+On Codex / Gemini CLI / Omnigent / generic / openai-compat hosts, invoke the `auditor` role with the `audit` skill:
 
 ```
 You are the auditor. Read .codex/skills/audit/SKILL.md and run a full audit.
@@ -1490,7 +1507,7 @@ This is automatic with no config required. It fires when:
 - The routed host declares `capabilities.goalLoop: true`
 - The workstream runs headless (`--headless`)
 
-Gemini CLI and the generic adapter do not declare `goalLoop: true` and are unaffected. Interactive (non-headless) runs also skip the `/goal` prepend.
+Gemini CLI, Omnigent, openai-compat, and the generic adapter do not declare `goalLoop: true` and are unaffected. Interactive (non-headless) runs also skip the `/goal` prepend.
 
 ### Stoplist
 

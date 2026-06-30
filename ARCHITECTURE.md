@@ -1,6 +1,6 @@
 # Stagecraft — Architecture
 
-Stagecraft is a model-agnostic pipeline for running an AI dev team (PM → Principal → Build → Review → QA → Deploy → Retro) inside any AI coding tool (Claude Code, Codex, Gemini CLI, plain terminal). The CLI binary is `devteam`; the project is Stagecraft.
+Stagecraft is a model-agnostic pipeline for running an AI dev team (PM → Principal → Build → Review → QA → Deploy → Retro) inside any AI coding tool or runtime (Claude Code, Codex, Gemini CLI, Omnigent, OpenAI-compatible APIs, plain terminal). The CLI binary is `devteam`; the project is Stagecraft.
 
 This work was previously split across two repos (`claude-dev-team`, `codex-dev-team`) sharing ~90% of their code and diverging slowly. This project replaces both with a single core and per-host adapters.
 
@@ -17,7 +17,7 @@ This work was previously split across two repos (`claude-dev-team`, `codex-dev-t
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  User (inside Claude Code, Codex, Gemini CLI, or a terminal)    │
+│  User (inside Claude Code, Codex, Omnigent, or a terminal)      │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │  invokes via host-native surface
@@ -124,6 +124,13 @@ stagecraft/
 │   │   └── install/
 │   │       ├── prompts/             ← .codex/prompts/roles/*
 │   │       └── skills/              ← .codex/skills/*
+│   ├── omnigent/
+│   │   ├── adapter.js
+│   │   └── capabilities.json        ← installs .omnigent/stagecraft/agent.yaml
+│   ├── openai-compat/
+│   │   ├── adapter.js
+│   │   ├── capabilities.json
+│   │   └── tools.js                 ← HTTP-native tool loop
 │   └── generic/                     ← plain CLI, no in-host integration
 │       ├── adapter.js
 │       └── capabilities.json

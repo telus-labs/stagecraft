@@ -3,7 +3,7 @@
 
 # Host Capability Reference
 
-Derived from `hosts/*/capabilities.json`. 5 host adapters.
+Derived from `hosts/*/capabilities.json`. 6 host adapters.
 Run `npm run docs:generate` to regenerate after editing capabilities files.
 
 ### Capabilities
@@ -14,6 +14,7 @@ Run `npm run docs:generate` to regenerate after editing capabilities files.
 | codex         | Codex CLI                              | yes      | no    | no        | no            | yes       | yes      |
 | gemini-cli    | Gemini CLI                             | yes      | no    | no        | no            | yes       | no       |
 | generic       | Generic CLI (no host integration)      | no       | no    | no        | no            | no        | no       |
+| omnigent      | Omnigent                               | yes      | no    | no        | no            | no        | no       |
 | openai-compat | OpenAI-compatible Chat Completions API | yes      | no    | no        | no            | no        | no       |
 
 ### Enforcement levels
@@ -26,18 +27,20 @@ How each host enforces the framework's core rules:
 | codex         | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | gemini-cli    | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | generic       | prompt-only    | prompt-only    | not enforced | not enforced | prompt-only |
+| omnigent      | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | openai-compat | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 
 ### Headless commands
 
 Command the orchestrator spawns in `--headless` mode:
 
-| Host          | headlessCommand                               |
-| ------------- | --------------------------------------------- |
-| claude-code   | claude --dangerously-skip-permissions --print |
-| codex         | codex exec --sandbox workspace-write          |
-| gemini-cli    | gemini                                        |
-| openai-compat | —                                             |
+| Host          | headlessCommand                                           |
+| ------------- | --------------------------------------------------------- |
+| claude-code   | claude --dangerously-skip-permissions --print             |
+| codex         | codex exec --sandbox workspace-write                      |
+| gemini-cli    | gemini                                                    |
+| omnigent      | omnigent run .omnigent/stagecraft/agent.yaml --no-session |
+| openai-compat | —                                                         |
 
 ### Enforcement level glossary
 

@@ -2,13 +2,13 @@
 
 ## Summary
 
-Stagecraft has a broad `node:test` suite: 91 files, about 1,800 explicit declarations
-that expand to 1,941 runtime tests, no committed skips, and strong lockstep coverage around gates,
+Stagecraft has a broad `node:test` suite: 104 files, more than 2,000 explicit declarations
+that expand to 2,203 runtime tests, no committed skips, and strong lockstep coverage around gates,
 routing, orchestration, and autonomous retries. The repository CI is green on Node
 20, 22, and 24. The main gap is platform evidence: recently shipped Windows behavior
 is simulated on Ubuntu but never executed by a Windows runner.
 
-The final CI-equivalent run passed 1,941/1,941 tests in 66.4 seconds. The audit's first
+The latest CI-equivalent run passed 2,203/2,203 tests. The audit's first
 local run was not a valid product signal: the sandbox
 denied local socket binds and the deliberately incomplete new audit directory made
 the consistency regression tests fail. A clean final run is required after all audit
