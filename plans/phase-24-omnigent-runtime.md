@@ -1,7 +1,7 @@
 # Phase 24 — Omnigent Runtime Adapter
 
-Status: initial adapter slice implemented; policy/session integration remains
-planned under parent issue
+Status: initial adapter and launch-profile slices implemented; policy/session
+evidence integration remains planned under parent issue
 [#291](https://github.com/telus-labs/stagecraft/issues/291).
 
 ## Goal
@@ -57,11 +57,13 @@ npx eslint .
 
 Tracking issue: [#292](https://github.com/telus-labs/stagecraft/issues/292).
 
+Status: implemented.
+
 Deliverables:
 
 - `hosts.omnigent` config block in `.devteam/config.yml`
-- fields for `agent_spec`, `harness`, `model`, `server`, `session_mode`, and
-  optional extra args
+- fields for `agent_spec_path`/`agent_spec`, `harness`, `model`, `server_url`,
+  `session_mode`, `session_id`, and optional `extra_args`
 - docs for local and remote Omnigent server topologies
 
 Acceptance:
@@ -70,6 +72,12 @@ Acceptance:
 - config can select `claude-sdk`, `codex`, or another Omnigent harness without
   editing installed YAML
 - `DEVTEAM_HEADLESS_COMMAND` still overrides all config for emergency use
+
+Verification:
+
+```bash
+node --test tests/omnigent-adapter.test.js
+```
 
 ## Phase 24.3 — Prompt Transport
 
