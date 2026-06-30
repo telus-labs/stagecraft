@@ -26,6 +26,7 @@ const shared = makeMarkdownHostAdapter(capabilities);
 const AGENT_SPEC_REL = capabilities.agentSpec;
 const DEFAULT_SESSION_MODE = "no-session";
 const DEFAULT_PROMPT_TRANSPORT = "prompt-file";
+const DEFAULT_POLICY_MODE = "off";
 
 function agentSpecText() {
   return [
@@ -129,6 +130,8 @@ function resolveLaunchProfile(ctx = {}) {
   const allowedSessionModes = new Set(["no-session", "session", "resume"]);
   const promptTransport = optionalString(raw.prompt_transport) || DEFAULT_PROMPT_TRANSPORT;
   const allowedPromptTransports = new Set(["prompt-file", "stdin", "argument"]);
+  const policyMode = optionalString(raw.policy_mode) || DEFAULT_POLICY_MODE;
+  const allowedPolicyModes = new Set(["off", "file"]);
   if (!allowedSessionModes.has(sessionMode)) {
     throw new Error(
       `hosts.omnigent.session_mode must be one of: ${[...allowedSessionModes].join(", ")}`,
@@ -137,6 +140,11 @@ function resolveLaunchProfile(ctx = {}) {
   if (!allowedPromptTransports.has(promptTransport)) {
     throw new Error(
       `hosts.omnigent.prompt_transport must be one of: ${[...allowedPromptTransports].join(", ")}`,
+    );
+  }
+  if (!allowedPolicyModes.has(policyMode)) {
+    throw new Error(
+      `hosts.omnigent.policy_mode must be one of: ${[...allowedPolicyModes].join(", ")}`,
     );
   }
   return {
@@ -149,6 +157,7 @@ function resolveLaunchProfile(ctx = {}) {
     sessionMode,
     sessionId: optionalString(raw.session_id),
     promptTransport,
+    policyMode,
     extraArgs: safeExtraArgs(raw.extra_args),
   };
 }
@@ -196,6 +205,62 @@ function buildPromptFile(prompt) {
   }
 }
 
+function buildPolicyFile(policy) {
+  try {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-omnigent-policy-"));
+    const policyPath = path.join(dir, "policy.json");
+    fs.writeFileSync(policyPath, JSON.stringify(policy, null, 2) + "\n", { encoding: "utf8", mode: 0o600 });
+    return {
+      policyPath,
+      cleanup() {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+      },
+    };
+  } catch (err) {
+    throw promptTransportError(`omnigent policy-file generation failed: ${err.message}`);
+  }
+}
+
+function buildStagecraftPolicy(descriptor = {}) {
+  const toolBudget = Array.isArray(descriptor.toolBudget) ? descriptor.toolBudget : [];
+  const requiredCapabilities = descriptor.requiredCapabilities || {};
+  const shellRequired = requiredCapabilities.shell === true;
+  const networkRequired = requiredCapabilities.network === true;
+  return {
+    schema_version: "stagecraft.omnigent.policy.v1",
+    workstream: descriptor.workstreamId || null,
+    stage: descriptor.stage || null,
+    role: descriptor.role || null,
+    enforcement_request: "tool-call-time",
+    stagecraft_backstop: {
+      allowed_writes: "post-hoc-audit",
+      gate_validation: "required-after-run",
+    },
+    filesystem: {
+      allowed_writes: Array.isArray(descriptor.allowedWrites) ? descriptor.allowedWrites : [],
+    },
+    sandbox: {
+      shell: shellRequired ? "required" : (toolBudget.includes("Bash") ? "allowed-by-role-budget" : "not-requested"),
+      network: networkRequired ? "required" : "not-requested",
+    },
+    tool_budget: {
+      allowed_tools: toolBudget,
+    },
+  };
+}
+
+function attachPolicyFile(command, descriptor, policyMode) {
+  if (policyMode !== "file") return command;
+  const policyFile = buildPolicyFile(buildStagecraftPolicy(descriptor));
+  return {
+    ...command,
+    args: [...command.args, "--policy-file", policyFile.policyPath],
+    displayCommand: `${command.displayCommand} --policy-file <stagecraft-policy-file>`,
+    policyPath: policyFile.policyPath,
+    cleanupPolicy: policyFile.cleanup,
+  };
+}
+
 function attachPromptTransport(command, prompt, transport) {
   if (transport === "prompt-file") {
     const promptFile = buildPromptFile(prompt);
@@ -223,7 +288,7 @@ function attachPromptTransport(command, prompt, transport) {
   };
 }
 
-function buildOmnigentInvocation(prompt, ctx = {}) {
+function buildOmnigentInvocation(prompt, ctx = {}, descriptor = null) {
   if (process.env.DEVTEAM_HEADLESS_COMMAND) {
     const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND;
     return {
@@ -234,7 +299,7 @@ function buildOmnigentInvocation(prompt, ctx = {}) {
     };
   }
   const profile = resolveLaunchProfile(ctx);
-  const command = buildOmnigentCommandFromProfile(profile);
+  const command = attachPolicyFile(buildOmnigentCommandFromProfile(profile), descriptor, profile.policyMode);
   return {
     ...attachPromptTransport(command, prompt, profile.promptTransport),
     source: "config",
@@ -254,9 +319,9 @@ function isOrchestratorWrite(ctx, relPath) {
 
 function invoke(descriptor, ctx, preRenderedPrompt) {
   const prompt = preRenderedPrompt || shared.renderStagePrompt(descriptor, ctx);
-  let bin, args, displayCommand, stdinText, cleanupPrompt;
+  let bin, args, displayCommand, stdinText, cleanupPrompt, cleanupPolicy;
   try {
-    ({ bin, args, displayCommand, stdinText, cleanupPrompt } = buildOmnigentInvocation(prompt, ctx));
+    ({ bin, args, displayCommand, stdinText, cleanupPrompt, cleanupPolicy } = buildOmnigentInvocation(prompt, ctx, descriptor));
   } catch (err) {
     if (err.omnigentPromptTransport) {
       return Promise.reject(err);
@@ -349,6 +414,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       if (timer) clearTimeout(timer);
       endLog(`spawn error: ${err.message}`);
       if (cleanupPrompt) cleanupPrompt();
+      if (cleanupPolicy) cleanupPolicy();
       if (err.code === "E2BIG") {
         reject(new Error(
           "omnigent prompt argument exceeded the OS command-length limit. " +
@@ -365,6 +431,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       if (timer) clearTimeout(timer);
       endLog(timedOut ? "TIMED OUT" : String(exitCode));
       if (cleanupPrompt) cleanupPrompt();
+      if (cleanupPolicy) cleanupPolicy();
 
       let writeViolations = [];
       if (beforeSnapshot) {
@@ -406,6 +473,7 @@ module.exports = {
   buildOmnigentCommandFromProfile,
   buildOmnigentInvocation,
   attachPromptTransport,
+  buildStagecraftPolicy,
   resolveLaunchProfile,
   agentSpecText,
 };

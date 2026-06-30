@@ -739,6 +739,7 @@ hosts:
     model: gpt-5-codex
     session_mode: no-session
     prompt_transport: prompt-file
+    policy_mode: off
 ```
 
 For a server-backed topology, add `server_url` and use `session_mode: session`:
@@ -752,12 +753,13 @@ hosts:
     server_url: https://omnigent.internal.example
     session_mode: session
     prompt_transport: stdin
+    policy_mode: file
     extra_args:
       - --profile
       - delivery-team
 ```
 
-`prompt_transport` defaults to `prompt-file`, which avoids OS command-length limits and keeps prompt text out of command arguments. Use `stdin` when the selected Omnigent runtime supports stdin one-shot prompts, or `argument` for legacy `-p <prompt>` compatibility. `DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
+`prompt_transport` defaults to `prompt-file`, which avoids OS command-length limits and keeps prompt text out of command arguments. Use `stdin` when the selected Omnigent runtime supports stdin one-shot prompts, or `argument` for legacy `-p <prompt>` compatibility. `policy_mode: file` passes a temporary Omnigent policy file containing allowed writes, shell/network requirements, and the role tool budget; Stagecraft still runs post-hoc write audit and gate validation after Omnigent exits. `DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
 
 ### Using openai-compat (OpenAI-compatible APIs)
 

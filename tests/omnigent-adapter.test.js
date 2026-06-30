@@ -139,6 +139,103 @@ describe("omnigent adapter", () => {
     }
   });
 
+  it("renders Stagecraft constraints into an Omnigent policy document", () => {
+    const policy = adapter.buildStagecraftPolicy({
+      stage: "stage-06",
+      role: "qa",
+      workstreamId: "stage-06",
+      allowedWrites: ["pipeline/test-report.md", "pipeline/gates/stage-06.json"],
+      requiredCapabilities: { shell: true, network: true },
+      toolBudget: ["Read", "Write", "Bash"],
+    });
+    assert.equal(policy.schema_version, "stagecraft.omnigent.policy.v1");
+    assert.deepEqual(policy.filesystem.allowed_writes, [
+      "pipeline/test-report.md",
+      "pipeline/gates/stage-06.json",
+    ]);
+    assert.equal(policy.sandbox.shell, "required");
+    assert.equal(policy.sandbox.network, "required");
+    assert.deepEqual(policy.tool_budget.allowed_tools, ["Read", "Write", "Bash"]);
+    assert.equal(policy.stagecraft_backstop.allowed_writes, "post-hoc-audit");
+  });
+
+  it("attaches an Omnigent policy file when policy_mode is file", () => {
+    const cwd = makeTargetProject({
+      config: [
+        "routing:",
+        "  default_host: omnigent",
+        "pipeline:",
+        "  default_track: full",
+        "hosts:",
+        "  omnigent:",
+        "    prompt_transport: argument",
+        "    policy_mode: file",
+        "",
+      ].join("\n"),
+    });
+    const original = process.env.DEVTEAM_HEADLESS_COMMAND;
+    try {
+      delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      const built = adapter.buildOmnigentInvocation("stage prompt", { cwd }, {
+        stage: "stage-04a",
+        role: "principal",
+        workstreamId: "stage-04a",
+        allowedWrites: ["pipeline/pre-review.md"],
+        requiredCapabilities: { shell: true },
+        toolBudget: ["Read", "Bash"],
+      });
+      const policyFlagIndex = built.args.indexOf("--policy-file");
+      assert.notEqual(policyFlagIndex, -1);
+      const policyPath = built.args[policyFlagIndex + 1];
+      assert.ok(fs.existsSync(policyPath), "policy file should exist");
+      const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
+      assert.equal(policy.workstream, "stage-04a");
+      assert.equal(policy.sandbox.shell, "required");
+      assert.deepEqual(policy.filesystem.allowed_writes, ["pipeline/pre-review.md"]);
+      assert.match(built.displayCommand, /--policy-file <stagecraft-policy-file>/);
+      built.cleanupPolicy();
+      assert.equal(fs.existsSync(policyPath), false);
+    } finally {
+      if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
+      else delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      cleanup(cwd);
+    }
+  });
+
+  it("does not attach a policy file when policy_mode is off", () => {
+    const cwd = makeTargetProject({
+      config: [
+        "routing:",
+        "  default_host: omnigent",
+        "pipeline:",
+        "  default_track: full",
+        "hosts:",
+        "  omnigent:",
+        "    prompt_transport: argument",
+        "    policy_mode: off",
+        "",
+      ].join("\n"),
+    });
+    const original = process.env.DEVTEAM_HEADLESS_COMMAND;
+    try {
+      delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      const built = adapter.buildOmnigentInvocation("stage prompt", { cwd }, {
+        stage: "stage-04a",
+        role: "principal",
+        workstreamId: "stage-04a",
+        allowedWrites: ["pipeline/pre-review.md"],
+        requiredCapabilities: { shell: true },
+        toolBudget: ["Read", "Bash"],
+      });
+      assert.equal(built.args.includes("--policy-file"), false);
+      assert.equal(built.policyPath, undefined);
+    } finally {
+      if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
+      else delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      cleanup(cwd);
+    }
+  });
+
   it("supports explicit session resume launch profiles", () => {
     const built = adapter.buildOmnigentCommandFromProfile({
       agentSpecPath: ".omnigent/stagecraft/agent.yaml",
@@ -207,6 +304,29 @@ describe("omnigent adapter", () => {
       assert.throws(
         () => adapter.resolveLaunchProfile({ cwd }),
         /prompt_transport must be one of/,
+      );
+    } finally {
+      cleanup(cwd);
+    }
+  });
+
+  it("rejects unknown policy modes", () => {
+    const cwd = makeTargetProject({
+      config: [
+        "routing:",
+        "  default_host: omnigent",
+        "pipeline:",
+        "  default_track: full",
+        "hosts:",
+        "  omnigent:",
+        "    policy_mode: maybe",
+        "",
+      ].join("\n"),
+    });
+    try {
+      assert.throws(
+        () => adapter.resolveLaunchProfile({ cwd }),
+        /policy_mode must be one of/,
       );
     } finally {
       cleanup(cwd);

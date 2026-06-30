@@ -1,7 +1,7 @@
 # Phase 24 — Omnigent Runtime Adapter
 
-Status: initial adapter, launch-profile, and prompt-transport slices
-implemented; policy/session evidence integration remains planned under parent issue
+Status: initial adapter, launch-profile, prompt-transport, and policy-file
+bridge slices implemented; session evidence integration remains planned under parent issue
 [#291](https://github.com/telus-labs/stagecraft/issues/291).
 
 ## Goal
@@ -107,13 +107,15 @@ node --test tests/omnigent-adapter.test.js
 
 Tracking issue: [#294](https://github.com/telus-labs/stagecraft/issues/294).
 
+Status: implemented.
+
 Deliverables:
 
-- map Stagecraft allowed writes into Omnigent filesystem policy inputs where
-  supported
+- map Stagecraft allowed writes into an Omnigent policy-file filesystem section
 - map shell/network stage requirements into Omnigent sandbox/policy settings
-- map role tool budgets into Omnigent policies where supported
-- document which guarantees are tool-call-time vs post-hoc
+- map role tool budgets into Omnigent policy input
+- document which guarantees are tool-call-time requests vs post-hoc Stagecraft
+  validation
 
 Acceptance:
 
@@ -121,6 +123,12 @@ Acceptance:
 - docs clearly state the fallback when an Omnigent harness cannot enforce a
   rule natively
 - Stagecraft post-hoc write audit remains active
+
+Verification:
+
+```bash
+node --test tests/omnigent-adapter.test.js tests/adapter-contract.test.js
+```
 
 ## Phase 24.5 — Session Evidence
 
