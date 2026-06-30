@@ -5,14 +5,15 @@
 Stagecraft is a model-agnostic AI software-delivery orchestrator. Its CLI binary is
 `devteam`; the core renders stage prompts, validates JSON gates, routes workstreams to
 host adapters, and advances or halts an on-disk pipeline. It does not call a model API
-directly. Claude Code, Codex, Gemini CLI, and a generic terminal adapter provide the
+directly unless routed through an adapter. Claude Code, Codex, Gemini CLI, Omnigent,
+the generic terminal adapter, and an OpenAI-compatible API adapter provide the
 model-facing execution surfaces.
 
 This is the **third full Stagecraft self-audit**, started 2026-06-18. The prior audit
 (2026-06-03, v0.4.0, post-derive-approvals) is archived at
 `docs/audit-archive/2026-06-03-v0.4.0-post-derive-approvals/`. Since that audit the
-repository has moved from 254 to 538 tracked files, from 49 to 91 test files, from 17
-to 19 stage definitions, and from v0.4.0 to v0.7.0.
+repository has moved from 254 to 554 tracked files, from 49 to 104 test files, from 17
+to 18 ordered pipeline stages, and from v0.4.0 to v0.9.0.
 
 ## Languages and frameworks
 
@@ -34,7 +35,7 @@ framework. The project deliberately uses Node built-ins and `node:test`.
 - Runtime dependencies: `js-yaml` and six OpenTelemetry packages.
 - Optional runtime dependency: `@huggingface/transformers` for local embeddings.
 - Development dependencies: ESLint, `@eslint/js`, and `eslint-plugin-security`.
-- Package version: `0.7.0`; package remains `private: true`.
+- Package version: `0.9.0`; package remains `private: true`.
 
 ## Commands
 
@@ -88,23 +89,23 @@ Dominant but less formally centralized patterns:
 
 ## Repository size
 
-Measured from tracked files on 2026-06-18:
+Measured from tracked files on 2026-06-30:
 
 | Surface | Count / size |
 |---|---:|
-| Tracked files | 538 |
-| JavaScript files | 205 |
-| JavaScript lines | 50,898 |
-| `core/` files | 123 |
-| `core/` JavaScript lines | 19,398 |
-| Test files | 91 |
-| Documentation markdown files | 77 |
+| Tracked files | 554 |
+| JavaScript files | 239 |
+| JavaScript lines | 61,916 |
+| `core/` files | 143 |
+| `core/` JavaScript lines | 24,780 |
+| Test files | 104 |
+| Documentation markdown files | 96 |
 | Role briefs | 12 |
 | Rules files | 29 |
 | Skills | 20 |
-| Stage definitions | 19 (18 ordered pipeline stages plus the stage registry shape) |
+| Stage definitions | 18 ordered pipeline stages |
 | Tracks | 6 |
-| First-party hosts | 4 |
+| First-party hosts | 6 |
 | CLI command modules | 34 |
 
 This is a single-package application, not a monorepo. Host directories are adapters,

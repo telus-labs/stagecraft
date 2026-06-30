@@ -17,7 +17,7 @@ const { getStage } = require(path.join(REPO_ROOT, "core", "pipeline", "stages"))
 // ---------------------------------------------------------------------------
 
 describe("capabilities.json — adapter declarations", () => {
-  const adapters = ["claude-code", "codex", "gemini-cli", "generic"];
+  const adapters = ["claude-code", "codex", "gemini-cli", "generic", "omnigent"];
 
   for (const name of adapters) {
     const caps = require(path.join(REPO_ROOT, "hosts", name, "capabilities.json"));

@@ -78,7 +78,7 @@ pipeline engine; the driver owns run-scoped autonomous state.
 
 | Integration | Used by | Boundary quality |
 |---|---|---|
-| Claude Code / Codex / Gemini CLI | Host adapters via child processes | Isolated behind adapter contract and shared headless runner |
+| Claude Code / Codex / Gemini CLI / Omnigent | Host adapters via child processes | Isolated behind adapter contract and shared headless runner or adapter-specific invoke path |
 | External `@devteam/host-*` package | Router discovery | Same adapter contract as first-party hosts |
 | OpenTelemetry OTLP | `core/observability.js` | Optional; no-op without endpoint; standard environment variables |
 | Hugging Face Transformers | `core/memory/embed.js` | Optional dependency; local provider with deterministic test stub |

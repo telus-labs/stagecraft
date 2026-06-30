@@ -1,0 +1,23 @@
+{
+  "name": "omnigent",
+  "displayName": "Omnigent",
+  "version": "1",
+  "hooks": false,
+  "subagents": false,
+  "slashCommands": false,
+  "worktrees": false,
+  "headless": true,
+  "headlessCommand": "omnigent run .omnigent/stagecraft/agent.yaml --no-session",
+  "goalLoop": false,
+  "skillFormat": "markdown",
+  "rolePromptsDir": ".omnigent/stagecraft/roles",
+  "skillsDir": ".omnigent/stagecraft/skills",
+  "agentSpec": ".omnigent/stagecraft/agent.yaml",
+  "enforces": {
+    "allowed_writes": "post-hoc-audit",
+    "stoplist": "prompt-only",
+    "shell": true,
+    "network": true,
+    "tool_budget": "prompt-only"
+  }
+}

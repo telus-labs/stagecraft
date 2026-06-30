@@ -41,7 +41,7 @@ useful distinction is the **source of operational truth**:
 |---|---|---|---|---|---|---|---|---|
 | Primary primitive | Stage + gate | Agent/workflow | Spec → plan → tasks → implement | Standard + shaped spec | Proposal + spec delta | Spec/steering/hook/agent | Adaptive three-phase workflow | Session + agent/harness + policy |
 | Source of truth | Gate/artifact files | Workflow artifacts | Markdown spec chain | Injected standards | Current specs + change folders | Workspace steering/specs | Generated AI-DLC docs/rules | Agent YAML + server/session state |
-| Host posture | Per-stage/per-role routing across 4 first-party adapters plus plugins | Installs into multiple tools | 30 integrations + generic | Works alongside major coding agents | Broad slash-command/AGENTS integrations | Native Kiro surfaces | Rules for Kiro, Q, Cursor, Cline, Claude, Copilot | Common orchestration over Claude Code, Codex, Cursor, Pi, and custom agents |
+| Host posture | Per-stage/per-role routing across 6 first-party adapters plus plugins | Installs into multiple tools | 30 integrations + generic | Works alongside major coding agents | Broad slash-command/AGENTS integrations | Native Kiro surfaces | Rules for Kiro, Q, Cursor, Cline, Claude, Copilot | Common orchestration over Claude Code, Codex, Cursor, Pi, and custom agents |
 | Mechanical gating | Strong: schemas, validator overrides, direct lint/test/SCA, chain | Mostly workflow-guided | Analyze/checklists; extensions add governance | Not its center | Format validation and archive flow | Hooks and agent workflow | Evaluator + human approval tenet | Action policies can allow, block, or pause; spend/tool caps and OS sandboxing |
 | Post-build depth | Review, red-team, QA, a11y, observability, verification, performance, sign-off, deploy, retro | Method-dependent implementation/testing | Core flow ends at implement | Outside scope | Apply/archive after implementation | Agent/hook dependent | Construction + Operations | Defined by the selected agent; no prescribed software-delivery lifecycle |
 | Isolation | Bounded change roots optional | Project workflow context | Feature directories/presets | Standards workspace | First-class change folders | Workspace/task context | Generated project docs | Local OS sandboxes and disposable managed cloud sandboxes |
@@ -70,10 +70,9 @@ parity drift and enables one run to route different workstreams through differen
 
 ## 4. Stagecraft in June 2026
 
-Stagecraft is v0.8.0: 18 ordered stages, 6 tracks, 4 first-party host adapters, 34 CLI
-command modules, 50,898 JavaScript lines, 91 test files, and 1,941 passing runtime
-tests. The project has moved substantially beyond the v0.5 snapshot in the prior
-comparison.
+Stagecraft is v0.9.0: 18 ordered stages, 6 tracks, 6 first-party host adapters, 34 CLI
+command modules, 104 test files, and 2,203 passing runtime tests. The project has
+moved substantially beyond the v0.5 snapshot in the prior comparison.
 
 Material capabilities added or matured since that snapshot include:
 
@@ -165,10 +164,11 @@ evidence must exist before the pipeline advances**. Omnigent does not prescribe
 Stagecraft's requirements-to-retrospective lifecycle; Stagecraft does not provide
 Omnigent's session server, shared UI, remote collaboration, or sandbox fleet.
 
-The strongest relationship is compositional. A future Omnigent host adapter could let
-Stagecraft dispatch a stage into an Omnigent-governed session while Stagecraft retains
-the pipeline artifacts and gate chain. No such adapter is shipped today, so this is an
-integration direction rather than a current capability claim.
+The strongest relationship is compositional. Stagecraft now includes an initial
+`omnigent` host adapter that dispatches one workstream prompt through Omnigent while
+Stagecraft retains the pipeline artifacts, post-hoc write audit, and gate chain.
+Omnigent-native policy bridging, session evidence, and director-style multi-workstream
+consolidation remain planned follow-ups rather than current capability claims.
 
 ## 6. Where Stagecraft wins, and where it does not
 

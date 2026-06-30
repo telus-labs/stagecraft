@@ -453,7 +453,7 @@ Pause for questions.
 Common questions and short answers.
 
 **Q: How does this compare to LangGraph / CrewAI / AutoGen?**
-> Different problem space. Those are agent-framework libraries; you write Python and they coordinate LLM calls. Stagecraft is a pipeline scaffold for AI coding tools. Model invocation happens inside Claude / Codex / Gemini, not via a framework SDK. If your team already lives in those tools, Stagecraft meets you there.
+> Different problem space. Those are agent-framework libraries; you write Python and they coordinate LLM calls. Stagecraft is a pipeline scaffold for AI coding tools. Model invocation happens inside Claude / Codex / Gemini / Omnigent, or through the `openai-compat` HTTP adapter. If your team already lives in those tools, Stagecraft meets you there.
 
 **Q: What if my LLM doesn't follow the rules?**
 > Role briefs are instructions, not enforcement, except where hooks enforce. The Claude Code hooks enforce `allowedWrites` at tool-call time: if backend tries to write `src/frontend/*`, the write is rejected. For things that aren't hook-enforceable, the gate validator catches them post-hoc. A FAIL gate halts the pipeline.

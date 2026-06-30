@@ -56,12 +56,12 @@ old source-of-truth locations, and test/version claims disagree.
 
 - **Locations:** `AGENTS.md:15` (~1,641), `CONTRIBUTING.md:215` (~1,200), and
   `plans/README.md:53` (1,161).
-- **Gap:** the final CI-equivalent run executes 1,941 tests across 91 files.
-- **Suggested fix:** use “~1,940 tests” in current contributor docs, or avoid a count
+- **Gap:** the latest CI-equivalent run executes 2,203 tests across 104 files.
+- **Suggested fix:** use “~2,200 tests” in current contributor docs, or avoid a count
   where it adds maintenance without decision value. Historical phase narratives can
   keep their contemporaneous counts.
-- **verified_by:** the final `CI=true DEVTEAM_HEADLESS_COMMAND=cat npm test` run
-  reported 1,941 passing tests; the suite contains 91 test files.
+- **verified_by:** the latest `CI=true DEVTEAM_HEADLESS_COMMAND=cat npm test` run
+  reported 2,203 passing tests; the suite contains 104 test files.
 - **Confidence:** HIGH.
 
 ### D-5 — Feature support still declares Stagecraft POSIX-only
@@ -80,9 +80,9 @@ old source-of-truth locations, and test/version claims disagree.
 ### D-6 — Comparative analysis is a v0.5 snapshot with unrefreshed external claims
 
 - **Location:** `docs/comparative-analysis.md`.
-- **Gap:** the matrix reports Stagecraft v0.5.0, ~23k LOC, ~1,100 tests, and explicitly
-  says competitors were not reverified after 2026-06-03. Stagecraft is v0.7.0 with
-  50,898 JavaScript lines and ~1,800 declared tests; competitor ecosystems also moved.
+- **Gap:** the matrix previously reported Stagecraft v0.5.0, ~23k LOC, ~1,100 tests, and explicitly
+  said competitors were not reverified after 2026-06-03. Stagecraft is v0.9.0 with
+  61,916 JavaScript lines and 2,203 runtime tests; competitor ecosystems also moved.
 - **Suggested fix:** refresh first-party facts, distinguish methodology/tooling more
   carefully, and replace dated opportunity rows with current strategic deltas.
 - **verified_by:** `package.json`, repository inventory in `00-project-context.md`, and
