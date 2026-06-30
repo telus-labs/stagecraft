@@ -154,6 +154,27 @@ Stagecraft validation. If the selected Omnigent harness ignores or cannot enforc
 the policy file, Stagecraft still audits writes after the run and blocks on
 missing or malformed gates exactly as before.
 
+## Session Evidence
+
+When Omnigent output includes session or conversation identifiers, Stagecraft
+records adapter-private evidence beside the workstream transcript:
+
+```text
+pipeline/logs/<workstreamId>.omnigent.json
+```
+
+The sidecar uses schema `stagecraft.omnigent.evidence.v1` and may include:
+
+- Omnigent `session_id` and `conversation_id`
+- policy verdict counts (`allow`, `deny`, `warn`, `block`)
+- the related transcript path
+- workstream, stage, role, host, and observation timestamp
+
+It deliberately does not add fields to gate JSON, does not retain prompt text,
+does not keep raw transcript excerpts, and does not store raw policy lines.
+This gives operators a pointer back to the Omnigent session while preserving
+Stagecraft's host-neutral gate schemas and evidence export posture.
+
 Mixed routing:
 
 ```yaml
@@ -183,9 +204,10 @@ Parent tracking issue: [#291](https://github.com/telus-labs/stagecraft/issues/29
    `policy_mode: file` maps Stagecraft `allowedWrites`, shell/network
    requirements, and tool budgets into a temporary Omnigent policy file while
    keeping Stagecraft's post-hoc audit as the backstop.
-4. **Session evidence** ([#295](https://github.com/telus-labs/stagecraft/issues/295)). Capture Omnigent conversation/session IDs and relevant
-   policy verdict summaries in logs or adapter-private metadata without adding
-   host-specific fields to gate schemas.
+4. **Session evidence** ([#295](https://github.com/telus-labs/stagecraft/issues/295)). Implemented in the Phase 24.5 slice:
+   capture Omnigent conversation/session IDs and policy verdict counts in an
+   adapter-private log sidecar without adding host-specific fields to gate
+   schemas.
 5. **Optional stage consolidation** ([#296](https://github.com/telus-labs/stagecraft/issues/296)). Explore a separate mode where one
    Omnigent director session handles multiple Stagecraft workstreams and writes
    every expected workstream gate. This must preserve the workstream gate

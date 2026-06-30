@@ -1,7 +1,8 @@
 # Phase 24 — Omnigent Runtime Adapter
 
-Status: initial adapter, launch-profile, prompt-transport, and policy-file
-bridge slices implemented; session evidence integration remains planned under parent issue
+Status: initial adapter, launch-profile, prompt-transport, policy-file bridge,
+and session-evidence slices implemented; director-mode design remains planned
+under parent issue
 [#291](https://github.com/telus-labs/stagecraft/issues/291).
 
 ## Goal
@@ -134,18 +135,26 @@ node --test tests/omnigent-adapter.test.js tests/adapter-contract.test.js
 
 Tracking issue: [#295](https://github.com/telus-labs/stagecraft/issues/295).
 
+Status: implemented.
+
 Deliverables:
 
 - capture Omnigent session/conversation identifiers when available
-- record adapter-private metadata in logs or durable dispatch evidence without
-  changing gate schemas
-- add cost/session correlation guidance
+- record adapter-private metadata in a `pipeline/logs/*.omnigent.json` sidecar
+  without changing gate schemas
+- retain policy verdict counts without raw policy lines
 
 Acceptance:
 
 - exported gate schemas remain host-neutral
 - operators can trace a Stagecraft workstream log back to the Omnigent session
   that produced it
+
+Verification:
+
+```bash
+node --test tests/omnigent-adapter.test.js
+```
 
 ## Phase 24.6 — Director Experiment
 

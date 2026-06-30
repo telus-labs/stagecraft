@@ -317,6 +317,68 @@ function isOrchestratorWrite(ctx, relPath) {
     normalized.startsWith(`${relLogsDir}/`);
 }
 
+function emptyOmnigentEvidence() {
+  return {
+    session: {},
+    policyVerdicts: { allow: 0, deny: 0, warn: 0, block: 0 },
+  };
+}
+
+function sanitizeEvidenceId(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(trimmed) ? trimmed : null;
+}
+
+function collectOmnigentEvidence(evidence, chunk) {
+  const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk || "");
+  const sessionMatch = text.match(/\b(?:omnigent[_ -]?)?session(?:[_ -]?id)?\s*[:=]\s*([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/i);
+  const conversationMatch = text.match(/\b(?:conversation|thread)(?:[_ -]?id)?\s*[:=]\s*([A-Za-z0-9][A-Za-z0-9._:-]{0,127})/i);
+  const sessionId = sanitizeEvidenceId(sessionMatch?.[1]);
+  const conversationId = sanitizeEvidenceId(conversationMatch?.[1]);
+  if (sessionId) evidence.session.session_id = sessionId;
+  if (conversationId) evidence.session.conversation_id = conversationId;
+
+  for (const line of text.split(/\r?\n/)) {
+    if (!/\bpolicy\b/i.test(line)) continue;
+    if (/\b(allow|allowed|pass|passed)\b/i.test(line)) evidence.policyVerdicts.allow += 1;
+    if (/\b(deny|denied|reject|rejected)\b/i.test(line)) evidence.policyVerdicts.deny += 1;
+    if (/\b(warn|warning)\b/i.test(line)) evidence.policyVerdicts.warn += 1;
+    if (/\b(block|blocked)\b/i.test(line)) evidence.policyVerdicts.block += 1;
+  }
+  return evidence;
+}
+
+function hasOmnigentEvidence(evidence) {
+  return Boolean(evidence.session.session_id || evidence.session.conversation_id) ||
+    Object.values(evidence.policyVerdicts).some((count) => count > 0);
+}
+
+function writeOmnigentEvidence(ctx, descriptor, evidence, logPath) {
+  if (!hasOmnigentEvidence(evidence)) return null;
+  const logsDirPath = logsDir(ctx.cwd, ctx.changeId);
+  fs.mkdirSync(logsDirPath, { recursive: true });
+  const evidencePath = path.join(logsDirPath, `${descriptor.workstreamId}.omnigent.json`);
+  const payload = {
+    schema_version: "stagecraft.omnigent.evidence.v1",
+    host: "omnigent",
+    workstream: descriptor.workstreamId,
+    stage: descriptor.stage,
+    role: descriptor.role,
+    observed_at: new Date().toISOString(),
+    log_path: logPath ? path.relative(ctx.cwd, logPath).replace(/\\/g, "/") : null,
+    session: evidence.session,
+    policy_verdicts: evidence.policyVerdicts,
+    privacy: {
+      prompt_retained: false,
+      transcript_excerpt_retained: false,
+      raw_policy_lines_retained: false,
+    },
+  };
+  fs.writeFileSync(evidencePath, JSON.stringify(payload, null, 2) + "\n", "utf8");
+  return evidencePath;
+}
+
 function invoke(descriptor, ctx, preRenderedPrompt) {
   const prompt = preRenderedPrompt || shared.renderStagePrompt(descriptor, ctx);
   let bin, args, displayCommand, stdinText, cleanupPrompt, cleanupPolicy;
@@ -338,6 +400,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
   const liveTee = ctx.tee === true ||
     process.env.DEVTEAM_HEADLESS_TEE === "1" ||
     process.env.DEVTEAM_VERBOSE === "1";
+  const omnigentEvidence = emptyOmnigentEvidence();
   let logPath = null;
   let logWriter = null;
   let logEnded = false;
@@ -387,12 +450,14 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
 
     if (logWriter !== null) {
       child.stdout.on("data", (chunk) => {
+        collectOmnigentEvidence(omnigentEvidence, chunk);
         if (liveTee) {
           try { process.stdout.write(chunk); } catch { /* closed pipe */ }
         }
         logWriter.append(chunk);
       });
       child.stderr.on("data", (chunk) => {
+        collectOmnigentEvidence(omnigentEvidence, chunk);
         if (liveTee) {
           try { process.stderr.write(chunk); } catch { /* closed pipe */ }
         }
@@ -441,6 +506,10 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       }
 
       const gateExists = fs.existsSync(gatePath);
+      let evidencePath = null;
+      try {
+        evidencePath = writeOmnigentEvidence(ctx, descriptor, omnigentEvidence, logPath);
+      } catch { /* evidence is best-effort and adapter-private */ }
       let isStub = false;
       if (gateExists) {
         try {
@@ -457,6 +526,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
         durationMs: Date.now() - start,
         timedOut,
         writeViolations,
+        evidencePath,
       });
     });
   });
@@ -474,6 +544,9 @@ module.exports = {
   buildOmnigentInvocation,
   attachPromptTransport,
   buildStagecraftPolicy,
+  collectOmnigentEvidence,
+  emptyOmnigentEvidence,
+  writeOmnigentEvidence,
   resolveLaunchProfile,
   agentSpecText,
 };
