@@ -738,6 +738,7 @@ hosts:
     harness: codex
     model: gpt-5-codex
     session_mode: no-session
+    prompt_transport: prompt-file
 ```
 
 For a server-backed topology, add `server_url` and use `session_mode: session`:
@@ -750,12 +751,13 @@ hosts:
     model: claude-sonnet-4
     server_url: https://omnigent.internal.example
     session_mode: session
+    prompt_transport: stdin
     extra_args:
       - --profile
       - delivery-team
 ```
 
-`DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
+`prompt_transport` defaults to `prompt-file`, which avoids OS command-length limits and keeps prompt text out of command arguments. Use `stdin` when the selected Omnigent runtime supports stdin one-shot prompts, or `argument` for legacy `-p <prompt>` compatibility. `DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
 
 ### Using openai-compat (OpenAI-compatible APIs)
 
@@ -912,7 +914,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent.yaml --no-session -p <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt-file <prompt-file>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)

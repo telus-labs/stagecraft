@@ -5,6 +5,7 @@
 // Omnigent owns the underlying model/harness session for one workstream.
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
@@ -24,6 +25,7 @@ const {
 const shared = makeMarkdownHostAdapter(capabilities);
 const AGENT_SPEC_REL = capabilities.agentSpec;
 const DEFAULT_SESSION_MODE = "no-session";
+const DEFAULT_PROMPT_TRANSPORT = "prompt-file";
 
 function agentSpecText() {
   return [
@@ -125,9 +127,16 @@ function resolveLaunchProfile(ctx = {}) {
   const sessionMode = optionalString(raw.session_mode) ||
     (raw.no_session === false ? "session" : DEFAULT_SESSION_MODE);
   const allowedSessionModes = new Set(["no-session", "session", "resume"]);
+  const promptTransport = optionalString(raw.prompt_transport) || DEFAULT_PROMPT_TRANSPORT;
+  const allowedPromptTransports = new Set(["prompt-file", "stdin", "argument"]);
   if (!allowedSessionModes.has(sessionMode)) {
     throw new Error(
       `hosts.omnigent.session_mode must be one of: ${[...allowedSessionModes].join(", ")}`,
+    );
+  }
+  if (!allowedPromptTransports.has(promptTransport)) {
+    throw new Error(
+      `hosts.omnigent.prompt_transport must be one of: ${[...allowedPromptTransports].join(", ")}`,
     );
   }
   return {
@@ -139,6 +148,7 @@ function resolveLaunchProfile(ctx = {}) {
     serverUrl: optionalString(raw.server_url),
     sessionMode,
     sessionId: optionalString(raw.session_id),
+    promptTransport,
     extraArgs: safeExtraArgs(raw.extra_args),
   };
 }
@@ -164,6 +174,55 @@ function buildOmnigentArgs(cmdString, prompt) {
   return { bin, args: [...args, "-p", prompt] };
 }
 
+function promptTransportError(message) {
+  const err = new Error(message);
+  err.omnigentPromptTransport = true;
+  return err;
+}
+
+function buildPromptFile(prompt) {
+  try {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "devteam-omnigent-prompt-"));
+    const promptPath = path.join(dir, "prompt.md");
+    fs.writeFileSync(promptPath, prompt, { encoding: "utf8", mode: 0o600 });
+    return {
+      promptPath,
+      cleanup() {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort cleanup */ }
+      },
+    };
+  } catch (err) {
+    throw promptTransportError(`omnigent prompt-file transport failed: ${err.message}`);
+  }
+}
+
+function attachPromptTransport(command, prompt, transport) {
+  if (transport === "prompt-file") {
+    const promptFile = buildPromptFile(prompt);
+    return {
+      ...command,
+      args: [...command.args, "--prompt-file", promptFile.promptPath],
+      displayCommand: `${command.displayCommand} --prompt-file <stage-prompt-file>`,
+      promptTransport: transport,
+      cleanupPrompt: promptFile.cleanup,
+    };
+  }
+  if (transport === "stdin") {
+    return {
+      ...command,
+      displayCommand: `${command.displayCommand} < <stage-prompt>`,
+      promptTransport: transport,
+      stdinText: prompt,
+    };
+  }
+  return {
+    ...command,
+    args: [...command.args, "-p", prompt],
+    displayCommand: `${command.displayCommand} -p <stage-prompt>`,
+    promptTransport: "argument",
+  };
+}
+
 function buildOmnigentInvocation(prompt, ctx = {}) {
   if (process.env.DEVTEAM_HEADLESS_COMMAND) {
     const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND;
@@ -171,14 +230,13 @@ function buildOmnigentInvocation(prompt, ctx = {}) {
       ...buildOmnigentArgs(cmdString, prompt),
       displayCommand: `${cmdString} -p <stage-prompt>`,
       source: "env",
+      promptTransport: "argument",
     };
   }
   const profile = resolveLaunchProfile(ctx);
   const command = buildOmnigentCommandFromProfile(profile);
   return {
-    bin: command.bin,
-    args: [...command.args, "-p", prompt],
-    displayCommand: `${command.displayCommand} -p <stage-prompt>`,
+    ...attachPromptTransport(command, prompt, profile.promptTransport),
     source: "config",
     profile,
   };
@@ -196,10 +254,13 @@ function isOrchestratorWrite(ctx, relPath) {
 
 function invoke(descriptor, ctx, preRenderedPrompt) {
   const prompt = preRenderedPrompt || shared.renderStagePrompt(descriptor, ctx);
-  let bin, args, displayCommand;
+  let bin, args, displayCommand, stdinText, cleanupPrompt;
   try {
-    ({ bin, args, displayCommand } = buildOmnigentInvocation(prompt, ctx));
+    ({ bin, args, displayCommand, stdinText, cleanupPrompt } = buildOmnigentInvocation(prompt, ctx));
   } catch (err) {
+    if (err.omnigentPromptTransport) {
+      return Promise.reject(err);
+    }
     return Promise.reject(new Error(`invalid Omnigent launch profile: ${err.message}`));
   }
 
@@ -249,8 +310,15 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, {
       cwd: ctx.processCwd || ctx.cwd,
-      stdio: logWriter !== null ? ["ignore", "pipe", "pipe"] : ["ignore", "inherit", "inherit"],
+      stdio: stdinText !== undefined
+        ? ["pipe", logWriter !== null ? "pipe" : "inherit", logWriter !== null ? "pipe" : "inherit"]
+        : (logWriter !== null ? ["ignore", "pipe", "pipe"] : ["ignore", "inherit", "inherit"]),
     });
+
+    if (stdinText !== undefined) {
+      child.stdin.on("error", () => { /* child closed stdin early */ });
+      child.stdin.end(stdinText);
+    }
 
     if (logWriter !== null) {
       child.stdout.on("data", (chunk) => {
@@ -280,6 +348,14 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
     child.on("error", (err) => {
       if (timer) clearTimeout(timer);
       endLog(`spawn error: ${err.message}`);
+      if (cleanupPrompt) cleanupPrompt();
+      if (err.code === "E2BIG") {
+        reject(new Error(
+          "omnigent prompt argument exceeded the OS command-length limit. " +
+          "Set hosts.omnigent.prompt_transport to prompt-file or stdin.",
+        ));
+        return;
+      }
       reject(new Error(
         `omnigent invoke failed to spawn "${bin}": ${err.message}. Is omnigent installed and on PATH?`,
       ));
@@ -288,6 +364,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
     child.on("close", (exitCode) => {
       if (timer) clearTimeout(timer);
       endLog(timedOut ? "TIMED OUT" : String(exitCode));
+      if (cleanupPrompt) cleanupPrompt();
 
       let writeViolations = [];
       if (beforeSnapshot) {
@@ -328,6 +405,7 @@ module.exports = {
   buildOmnigentArgs,
   buildOmnigentCommandFromProfile,
   buildOmnigentInvocation,
+  attachPromptTransport,
   resolveLaunchProfile,
   agentSpecText,
 };

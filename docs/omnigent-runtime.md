@@ -24,15 +24,15 @@ The `omnigent` host adapter installs:
 - a default Omnigent agent spec at `.omnigent/stagecraft/agent.yaml`
 
 With no `hosts.omnigent` config block, the adapter keeps the Phase 24.1
-headless command:
+headless command shape:
 
 ```bash
-omnigent run .omnigent/stagecraft/agent.yaml --no-session
+omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt-file <stage-prompt-file>
 ```
 
 Unlike the existing CLI hosts, Omnigent's one-shot path accepts the prompt as
-`-p/--prompt`, so the adapter implements a custom `invoke()` instead of using
-the shared stdin-based `runHeadless()` helper.
+`--prompt-file`, stdin, or legacy `-p/--prompt`, so the adapter implements a
+custom `invoke()` instead of using the shared stdin-based `runHeadless()` helper.
 
 The installed default agent spec uses Omnigent's Codex harness because that
 harness carries its own coding tools. Operators can choose harnesses and launch
@@ -83,12 +83,13 @@ hosts:
     harness: codex
     model: gpt-5-codex
     session_mode: no-session
+    prompt_transport: prompt-file
 ```
 
 This renders the same shape as the default command, with configured additions:
 
 ```bash
-omnigent run .omnigent/stagecraft/agent.yaml --harness codex --model gpt-5-codex --no-session -p <stage-prompt>
+omnigent run .omnigent/stagecraft/agent.yaml --harness codex --model gpt-5-codex --no-session --prompt-file <stage-prompt-file>
 ```
 
 Server-backed execution omits `--no-session` and can pass a server URL plus
@@ -105,15 +106,27 @@ hosts:
     model: claude-sonnet-4
     server_url: https://omnigent.internal.example
     session_mode: session
+    prompt_transport: stdin
     extra_args:
       - --profile
       - delivery-team
 ```
 
 To resume a known session, set `session_mode: resume` and `session_id`; the
-adapter passes `--session <id>`. `extra_args` is an array, not a shell string,
-and cannot override Stagecraft's prompt transport flags (`-p`, `--prompt`, or
-`--prompt-file`).
+adapter passes `--session <id>`.
+
+`prompt_transport` can be:
+
+| Value | Behavior |
+|---|---|
+| `prompt-file` | Default. Writes the Stagecraft prompt to a private temporary file, passes `--prompt-file <path>`, and removes the file after Omnigent exits. |
+| `stdin` | Writes the prompt to process stdin without putting prompt text in arguments. |
+| `argument` | Compatibility fallback. Appends `-p <prompt>` and emits a structural command-length diagnostic if the OS rejects the argument vector. |
+
+`extra_args` is an array, not a shell string, and cannot override Stagecraft's
+prompt transport flags (`-p`, `--prompt`, or `--prompt-file`). Prompt text is
+not mirrored to the operator console by default; only transcript output from
+Omnigent is logged.
 
 Mixed routing:
 
@@ -137,9 +150,9 @@ Parent tracking issue: [#291](https://github.com/telus-labs/stagecraft/issues/29
    `hosts.omnigent.*` config fields select harness, model, server URL,
    no-session/session/resume mode, agent spec path, and safe extra args while
    preserving `DEVTEAM_HEADLESS_COMMAND` as the emergency override.
-2. **Prompt transport hardening** ([#293](https://github.com/telus-labs/stagecraft/issues/293)). Prefer an upstream Omnigent
-   `--prompt-file` or stdin option so long Stagecraft prompts never hit command
-   argument limits.
+2. **Prompt transport hardening** ([#293](https://github.com/telus-labs/stagecraft/issues/293)). Implemented in the Phase 24.3 slice:
+   default to `--prompt-file`, support stdin, retain `-p` as a compatibility
+   fallback, and classify OS command-length failures as prompt transport errors.
 3. **Policy bridge** ([#294](https://github.com/telus-labs/stagecraft/issues/294)). Map Stagecraft `allowedWrites`, shell/network
    requirements, and tool budgets into Omnigent policies where supported.
    Stagecraft's post-hoc audit remains the backstop.
