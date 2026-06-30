@@ -208,17 +208,17 @@ Parent tracking issue: [#291](https://github.com/telus-labs/stagecraft/issues/29
    capture Omnigent conversation/session IDs and policy verdict counts in an
    adapter-private log sidecar without adding host-specific fields to gate
    schemas.
-5. **Optional stage consolidation** ([#296](https://github.com/telus-labs/stagecraft/issues/296)). Explore a separate mode where one
-   Omnigent director session handles multiple Stagecraft workstreams and writes
-   every expected workstream gate. This must preserve the workstream gate
-   contract before it can replace Stagecraft fan-out.
+5. **Optional stage consolidation** ([#296](https://github.com/telus-labs/stagecraft/issues/296)). Design complete in
+   [Omnigent director-mode design](omnigent-director-mode.md): any prototype
+   must be behind an explicit experimental flag, must write every expected
+   child workstream gate, and must preserve the existing merge/validation path.
 
 ## Non-Goals
 
 - Do not move Stagecraft's gate validator or `next()` decision logic into
   Omnigent.
 - Do not add Omnigent-specific fields to the host-neutral gate schema.
-- Do not claim tool-call-time enforcement until Omnigent policy integration is
-  wired and tested through the adapter.
+- Do not claim policy enforcement beyond the selected Omnigent harness'
+  documented behavior; Stagecraft's post-hoc validation remains active.
 - Do not make Omnigent the only route to multi-model execution; Stagecraft's
   existing per-role host routing remains supported.
