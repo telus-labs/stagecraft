@@ -27,6 +27,7 @@ Navigation index for the `docs/` directory. Nothing here is load-bearing for a p
 - [evidence.md](evidence.md) — offline readiness, explicit resolution acceptance, and privacy-safe export
 - [reproducibility.md](reproducibility.md) — gate fingerprint fields, replay readiness, drift detection
 - [omnigent-runtime.md](omnigent-runtime.md) — Omnigent as a Stagecraft host runtime: adapter boundary, shipped slice, and phased policy/session bridge
+- [omnigent-director-mode.md](omnigent-director-mode.md) — experimental design for letting one Omnigent director session coordinate several Stagecraft workstreams without changing gate contracts
 - [runbooks/escalation.md](runbooks/escalation.md) — what to read and decide when `devteam next` says `resolve-escalation`
 - [runbooks/fix-and-retry.md](runbooks/fix-and-retry.md) — fix-and-retry halt: red-team, QA, pre-review, peer-review (11 cases)
 - [runbooks/open-followups.md](runbooks/open-followups.md) — extract ticket stubs from `open_followups[]` after a run

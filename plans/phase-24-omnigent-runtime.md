@@ -160,6 +160,8 @@ node --test tests/omnigent-adapter.test.js
 
 Tracking issue: [#296](https://github.com/telus-labs/stagecraft/issues/296).
 
+Status: design complete; no prototype shipped.
+
 Deliverables:
 
 - design only, then prototype behind an explicit experimental flag
@@ -171,6 +173,8 @@ Acceptance:
 - existing per-workstream merge behavior remains unchanged
 - a missing or malformed child gate blocks the stage exactly as it does today
 - no change to the stable gate identity fields
+
+Design reference: [`docs/omnigent-director-mode.md`](../docs/omnigent-director-mode.md).
 
 ## Open Questions
 
