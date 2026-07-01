@@ -430,6 +430,19 @@ describe("omnigent adapter", () => {
     }
   });
 
+  it("ignores only Omnigent-managed Codex runtime-home writes during post-hoc audit", () => {
+    assert.equal(
+      adapter.isOmnigentRuntimeWrite(".codex-tmp/omnigent-codex-home-z6nyl4u1/.personality_migration"),
+      true,
+    );
+    assert.equal(
+      adapter.isOmnigentRuntimeWrite(".codex-tmp/omnigent-codex-home-z6nyl4u1/.tmp/plugins/.agents/skills/plugin-creator/SKILL.md"),
+      true,
+    );
+    assert.equal(adapter.isOmnigentRuntimeWrite(".codex-tmp/other-home/.tmp/file"), false);
+    assert.equal(adapter.isOmnigentRuntimeWrite("src/backend/server.js"), false);
+  });
+
   it("renders prompts that point at Omnigent-installed role prompts", () => {
     const prompt = adapter.renderStagePrompt({
       stage: "stage-01",

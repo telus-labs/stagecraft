@@ -154,6 +154,9 @@ This is a tool-call-time enforcement request to Omnigent, not a replacement for
 Stagecraft validation. If the selected Omnigent harness ignores or cannot enforce
 the policy file, Stagecraft still audits writes after the run and blocks on
 missing or malformed gates exactly as before.
+The audit ignores Omnigent/Codex runtime-home cache writes under
+`.codex-tmp/omnigent-codex-home-*`; normal project paths remain subject to the
+workstream `allowedWrites` list.
 
 ## Session Evidence
 

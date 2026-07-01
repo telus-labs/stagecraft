@@ -338,6 +338,11 @@ function isOrchestratorWrite(ctx, relPath) {
     normalized.startsWith(`${relLogsDir}/`);
 }
 
+function isOmnigentRuntimeWrite(relPath) {
+  const normalized = String(relPath || "").replace(/\\/g, "/");
+  return normalized.startsWith(".codex-tmp/omnigent-codex-home-");
+}
+
 function emptyOmnigentEvidence() {
   return {
     session: {},
@@ -523,7 +528,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       if (beforeSnapshot) {
         const afterSnapshot = snapshotWritables(ctx.cwd);
         const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
-        writeViolations = violations.filter((v) => !isOrchestratorWrite(ctx, v));
+        writeViolations = violations.filter((v) => !isOrchestratorWrite(ctx, v) && !isOmnigentRuntimeWrite(v));
       }
 
       const gateExists = fs.existsSync(gatePath);
@@ -567,6 +572,7 @@ module.exports = {
   buildStagecraftPolicy,
   collectOmnigentEvidence,
   emptyOmnigentEvidence,
+  isOmnigentRuntimeWrite,
   writeOmnigentEvidence,
   resolveLaunchProfile,
   agentSpecText,
