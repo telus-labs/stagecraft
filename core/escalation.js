@@ -316,6 +316,11 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   ];
   if (escalatingGate) {
     lines.push(`- \`${escalatingGate}\` — the escalating gate`);
+    lines.push("  - If this gate has `escalation_reason` containing retry-budget or");
+    lines.push("    convergence exhaustion, treat it as a failed repair loop. You");
+    lines.push("    must fix the underlying blocker(s), not clear/downgrade the gate.");
+    lines.push("  - Read its `blockers[]`, `warnings[]`, `escalation_reason`, and");
+    lines.push("    `decision_needed`; these are part of the work order.");
     lines.push("- Adjacent workstream gates in `pipeline/gates/`");
   }
   lines.push("- `pipeline/code-review/by-*.md` (if this is a peer-review escalation)");
@@ -365,6 +370,14 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   lines.push("**Build fixes** (test bug, implementation gap):");
   lines.push("  `devteam stage build --workstream <role> --headless`");
   lines.push("  roles: backend, frontend, platform, qa");
+  lines.push("If the ruling says a file is owned by a workstream, dispatch that");
+  lines.push("workstream even if it was not part of the original active_roles set.");
+  lines.push("Examples:");
+  lines.push("- `package.json`, lockfiles, lint/typecheck config, Docker/compose, and");
+  lines.push("  root toolchain scripts are platform-owned unless the design says");
+  lines.push("  otherwise: run `devteam stage build --workstream platform --headless`.");
+  lines.push("- A missing `npm run lint` script is a platform build fix, not a");
+  lines.push("  pre-review gate correction.");
   lines.push("Do NOT use `devteam restart qa` for a build fix — that clears");
   lines.push("the QA testing stage (stage-06), not the build workstream.");
   lines.push("");
@@ -388,6 +401,10 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   lines.push("- Do not call `devteam ruling` — that is an interactive command for humans.");
   lines.push("- Do not write source code under `src/` (dispatch a build");
   lines.push("  workstream agent for that)");
+  lines.push("- Do not resolve convergence exhaustion by changing an ESCALATE gate");
+  lines.push("  to WARN/PASS while `blockers[]` still contains the unresolved issue");
+  lines.push("  or verifier fields such as `lint_passed` / `tests_passed` remain false.");
+  lines.push("  That is a false resolution; dispatch the owning build workstream.");
   lines.push("- Do not dispatch stages the ruling does not mention");
   lines.push("- Do not ask for confirmation — implement directly");
   lines.push("");
@@ -403,6 +420,57 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
   lines.push("`devteam next` reports an action other than `resolve-escalation`.");
   lines.push("Run `devteam next` at the end and report its output.");
   return lines.join("\n");
+}
+
+function readGateIfPresent(gatePath) {
+  if (!gatePath || !fs.existsSync(gatePath)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function isConvergenceEscalationGate(gate) {
+  if (!gate || gate.status !== "ESCALATE") return false;
+  const text = [
+    gate.escalation_reason,
+    gate.decision_needed,
+    ...(Array.isArray(gate.blockers) ? gate.blockers : []),
+  ].join("\n");
+  return /\b(convergence|retry budget exhausted|no-progress|no-source-change)\b/i.test(text);
+}
+
+function hasUnresolvedGateFailure(gate) {
+  if (!gate || typeof gate !== "object") return false;
+  if (Array.isArray(gate.blockers) && gate.blockers.length > 0) return true;
+  for (const field of [
+    "lint_passed",
+    "tests_passed",
+    "type_check_passed",
+    "dependency_review_passed",
+    "license_check_passed",
+  ]) {
+    if (gate[field] === false) return true;
+  }
+  return false;
+}
+
+function guardConvergenceGateResolution(gatePath, beforeGate) {
+  if (!gatePath || !isConvergenceEscalationGate(beforeGate)) return null;
+  const afterGate = readGateIfPresent(gatePath);
+  if (!afterGate || afterGate.status === "ESCALATE") return null;
+  if (!hasUnresolvedGateFailure(afterGate)) return null;
+  try {
+    fs.writeFileSync(gatePath, JSON.stringify(beforeGate, null, 2) + "\n", "utf8");
+  } catch { /* validation still reports the violation */ }
+  return {
+    code: "invalid-convergence-resolution",
+    message:
+      "escalation applicator changed a convergence-exhausted gate out of ESCALATE " +
+      "while blockers or verifier failures remain; restored the original gate",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -494,10 +562,16 @@ function runRuling(cwd, { topic, targetGate = null, contextPaths = [] } = {}) {
 function runFixEscalation(cwd, { escalatingGate = null } = {}) {
   const rulings = loadPrincipalRulingLines(cwd);
   if (rulings.length === 0) return Promise.resolve({ exitCode: 2, reason: "no rulings" });
+  const beforeGate = readGateIfPresent(escalatingGate);
   const prompt = renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate);
   return dispatchToPrincipal(cwd, prompt, {
     label: "escalation-applicator",
     allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md", "pipeline/runbook.md"],
+  }).then((result) => {
+    const violation = guardConvergenceGateResolution(escalatingGate, beforeGate);
+    if (!violation) return result;
+    process.stderr.write(`[devteam] ${violation.code}: ${violation.message}\n`);
+    return { ...result, exitCode: result.exitCode === 0 ? 1 : result.exitCode, violation: violation.code };
   });
 }
 
@@ -530,6 +604,9 @@ module.exports = {
   deriveTopicFromGate,
   renderPrincipalRulingPrompt,
   renderEscalationApplicatorPrompt,
+  guardConvergenceGateResolution,
+  hasUnresolvedGateFailure,
+  isConvergenceEscalationGate,
   dispatchToPrincipal,
   isHttpNativePrincipal,
   runRuling,

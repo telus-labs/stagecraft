@@ -8,7 +8,7 @@ Each dev works in its own worktree:
 Invoke in parallel:
   `dev-backend`  → `src/backend/`  → `pipeline/pr-backend.md`
   `dev-frontend` → `src/frontend/` → `pipeline/pr-frontend.md`
-  `dev-platform` → `src/infra/`    → `pipeline/pr-platform.md`
+  `dev-platform` → `src/infra/` + root toolchain config → `pipeline/pr-platform.md`
 
 Gate file per workstream: `pipeline/gates/stage-04.{area}.json`
 All three must have `"status": "PASS"` before proceeding.
@@ -36,6 +36,12 @@ or missing scripts before reporting the gate as PASS.
 If no lint or test script is defined yet (e.g. `package.json` has not been
 created), create one as part of this workstream's deliverables — that is a
 missing artifact, not a reason to skip verification.
+
+Root package-manager scripts and shared toolchain config (`package.json`,
+lockfiles, ESLint/TypeScript config, Docker/compose files) are platform-owned
+unless the design spec or a Principal ruling assigns them elsewhere. If
+Stage 4a fails because `npm run lint` is missing, dispatch the platform build
+workstream to add the script/config, then rerun pre-review.
 
 ## Gate
 

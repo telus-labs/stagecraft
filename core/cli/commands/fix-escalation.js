@@ -7,6 +7,7 @@ const _escalation = require(path.join(__dirname, "..", "..", "escalation"));
 const renderEscalationApplicatorPrompt = _escalation.renderEscalationApplicatorPrompt;
 const loadPrincipalRulings = _escalation.loadPrincipalRulingLines;
 const isHttpNativePrincipal = _escalation.isHttpNativePrincipal;
+const runFixEscalation = _escalation.runFixEscalation;
 
 const name = "fix-escalation";
 
@@ -58,10 +59,7 @@ async function run(positional, _flags) {
   // Dispatch via the shared in-process helper in core.
   let exitCode;
   try {
-    ({ exitCode } = await _escalation.dispatchToPrincipal(cwd, prompt, {
-      label: "escalation-applicator",
-      allowedWrites: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md", "pipeline/runbook.md"],
-    }));
+    ({ exitCode } = await runFixEscalation(cwd, { escalatingGate }));
   } catch (err) {
     console.error(err.message);
     process.exit(1);

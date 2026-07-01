@@ -10,7 +10,8 @@ stage — setting up infra, CI, and the deploy rails for a new feature.
 
 ## Procedure
 
-1. Read `pipeline/design-spec.md` — set up infra and CI to support what's being built.
+1. Read `pipeline/design-spec.md` — set up infra, CI, and root toolchain
+   config to support what's being built.
 2. Append an `## Assumptions` block to `pipeline/context.md` for non-obvious
    infra choices (ports, volumes, healthcheck targets) per coding-principles §1.
    Write the **Plan** preamble at the top of `pipeline/pr-platform.md` per §4.
@@ -19,9 +20,14 @@ stage — setting up infra, CI, and the deploy rails for a new feature.
    - Add a `healthcheck:` to every HTTP service so `docker compose up --wait` works
    - Use `.env` for all secrets and environment-specific values — never hardcode
    - Mount source directories as volumes for local dev hot-reload where appropriate
-4. Write or update any supporting infra config (`.env.example`, nginx config, etc.).
-   Keep changes inside `src/infra/` and root compose/env files; cross-boundary
-   edits need a `CONCERN:` line first (coding-principles §3).
+4. Write or update any supporting infra/toolchain config (`.env.example`,
+   nginx config, `package.json` scripts, lockfiles, ESLint/TypeScript config,
+   Docker/compose files, etc.). Root package-manager scripts and shared
+   toolchain config are platform-owned unless the design spec or a Principal
+   ruling assigns them elsewhere. If `npm run lint` is missing, add the script
+   and any minimal config needed for Stage 4a to run it mechanically.
+   Keep source-code changes inside `src/infra/`; cross-boundary edits need a
+   `CONCERN:` line first (coding-principles §3).
 5. Finish `pipeline/pr-platform.md`. Include `## Out of Scope — Noticed`. Also:
 
    - **`## Verify`** — required before writing a PASS gate. One bullet per
