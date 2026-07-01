@@ -24,8 +24,10 @@ const {
 
 const shared = makeMarkdownHostAdapter(capabilities);
 const AGENT_SPEC_REL = capabilities.agentSpec;
+const AGENT_CONFIG_REL = path.posix.join(AGENT_SPEC_REL, "config.yaml");
+const LEGACY_AGENT_SPEC_REL = ".omnigent/stagecraft/agent.yaml";
 const DEFAULT_SESSION_MODE = "no-session";
-const DEFAULT_PROMPT_TRANSPORT = "prompt-file";
+const DEFAULT_PROMPT_TRANSPORT = "argument";
 const DEFAULT_POLICY_MODE = "off";
 
 function agentSpecText() {
@@ -38,7 +40,9 @@ function agentSpecText() {
     "  session exits.",
     "",
     "executor:",
-    "  harness: codex",
+    "  type: omnigent",
+    "  config:",
+    "    harness: codex",
     "",
     "prompt: |",
     "  You are executing a single Stagecraft workstream.",
@@ -55,7 +59,7 @@ function agentSpecText() {
 }
 
 function installAgentSpec(targetDir, opts = {}) {
-  const dest = path.join(targetDir, AGENT_SPEC_REL);
+  const dest = path.join(targetDir, AGENT_CONFIG_REL);
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   if (fs.existsSync(dest) && !opts.force) {
     return { written: [], skipped: [dest], warnings: [] };
@@ -78,7 +82,7 @@ function status(targetDir) {
   const base = shared.status(targetDir);
   const missing = [...base.missing];
   const stale = [...base.stale];
-  const spec = path.join(targetDir, AGENT_SPEC_REL);
+  const spec = path.join(targetDir, AGENT_CONFIG_REL);
   if (!fs.existsSync(spec)) missing.push(spec);
   else if (fs.statSync(spec).size === 0) stale.push(spec);
   return {
@@ -93,8 +97,10 @@ function status(targetDir) {
 
 function uninstall(targetDir) {
   shared.uninstall(targetDir);
-  const spec = path.join(targetDir, AGENT_SPEC_REL);
-  if (fs.existsSync(spec)) fs.unlinkSync(spec);
+  const bundle = path.join(targetDir, AGENT_SPEC_REL);
+  const legacySpec = path.join(targetDir, LEGACY_AGENT_SPEC_REL);
+  if (fs.existsSync(bundle)) fs.rmSync(bundle, { recursive: true, force: true });
+  if (fs.existsSync(legacySpec)) fs.unlinkSync(legacySpec);
 }
 
 function optionalString(value) {
@@ -147,10 +153,11 @@ function resolveLaunchProfile(ctx = {}) {
       `hosts.omnigent.policy_mode must be one of: ${[...allowedPolicyModes].join(", ")}`,
     );
   }
+  const configuredAgentSpecPath = optionalString(raw.agent_spec_path) ||
+    optionalString(raw.agent_spec);
   return {
-    agentSpecPath: optionalString(raw.agent_spec_path) ||
-      optionalString(raw.agent_spec) ||
-      AGENT_SPEC_REL,
+    agentSpecPath: configuredAgentSpecPath || AGENT_SPEC_REL,
+    usesDefaultAgentSpec: !configuredAgentSpecPath,
     harness: optionalString(raw.harness),
     model: optionalString(raw.model),
     serverUrl: optionalString(raw.server_url),
@@ -160,6 +167,19 @@ function resolveLaunchProfile(ctx = {}) {
     policyMode,
     extraArgs: safeExtraArgs(raw.extra_args),
   };
+}
+
+function ensureDefaultAgentSpecBundle(cwd) {
+  if (!cwd) return;
+  const configPath = path.join(cwd, AGENT_CONFIG_REL);
+  const expected = agentSpecText();
+  if (fs.existsSync(configPath)) {
+    try {
+      if (fs.readFileSync(configPath, "utf8") === expected) return;
+    } catch { /* rewrite below */ }
+  }
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, expected, "utf8");
 }
 
 function buildOmnigentCommandFromProfile(profile = resolveLaunchProfile()) {
@@ -180,7 +200,7 @@ function buildOmnigentCommandFromProfile(profile = resolveLaunchProfile()) {
 
 function buildOmnigentArgs(cmdString, prompt) {
   const { bin, args } = splitCommand(cmdString, "headlessCommand");
-  return { bin, args: [...args, "-p", prompt] };
+  return { bin, args: [...args, "--prompt", prompt] };
 }
 
 function promptTransportError(message) {
@@ -282,8 +302,8 @@ function attachPromptTransport(command, prompt, transport) {
   }
   return {
     ...command,
-    args: [...command.args, "-p", prompt],
-    displayCommand: `${command.displayCommand} -p <stage-prompt>`,
+    args: [...command.args, "--prompt", prompt],
+    displayCommand: `${command.displayCommand} --prompt <stage-prompt>`,
     promptTransport: "argument",
   };
 }
@@ -293,12 +313,13 @@ function buildOmnigentInvocation(prompt, ctx = {}, descriptor = null) {
     const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND;
     return {
       ...buildOmnigentArgs(cmdString, prompt),
-      displayCommand: `${cmdString} -p <stage-prompt>`,
+      displayCommand: `${cmdString} --prompt <stage-prompt>`,
       source: "env",
       promptTransport: "argument",
     };
   }
   const profile = resolveLaunchProfile(ctx);
+  if (profile.usesDefaultAgentSpec) ensureDefaultAgentSpecBundle(ctx.cwd);
   const command = attachPolicyFile(buildOmnigentCommandFromProfile(profile), descriptor, profile.policyMode);
   return {
     ...attachPromptTransport(command, prompt, profile.promptTransport),
@@ -315,6 +336,11 @@ function isOrchestratorWrite(ctx, relPath) {
     normalized === path.posix.join(relPipelineRoot, "run-state.json") ||
     normalized === path.posix.join(relPipelineRoot, "run.lock") ||
     normalized.startsWith(`${relLogsDir}/`);
+}
+
+function isOmnigentRuntimeWrite(relPath) {
+  const normalized = String(relPath || "").replace(/\\/g, "/");
+  return normalized.startsWith(".codex-tmp/omnigent-codex-home-");
 }
 
 function emptyOmnigentEvidence() {
@@ -483,7 +509,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       if (err.code === "E2BIG") {
         reject(new Error(
           "omnigent prompt argument exceeded the OS command-length limit. " +
-          "Set hosts.omnigent.prompt_transport to prompt-file or stdin.",
+          "Set hosts.omnigent.prompt_transport to stdin, or prompt-file if your Omnigent CLI supports --prompt-file.",
         ));
         return;
       }
@@ -502,7 +528,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       if (beforeSnapshot) {
         const afterSnapshot = snapshotWritables(ctx.cwd);
         const { violations } = auditWrites(beforeSnapshot, afterSnapshot, descriptor.allowedWrites || []);
-        writeViolations = violations.filter((v) => !isOrchestratorWrite(ctx, v));
+        writeViolations = violations.filter((v) => !isOrchestratorWrite(ctx, v) && !isOmnigentRuntimeWrite(v));
       }
 
       const gateExists = fs.existsSync(gatePath);
@@ -546,6 +572,7 @@ module.exports = {
   buildStagecraftPolicy,
   collectOmnigentEvidence,
   emptyOmnigentEvidence,
+  isOmnigentRuntimeWrite,
   writeOmnigentEvidence,
   resolveLaunchProfile,
   agentSpecText,

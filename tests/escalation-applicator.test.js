@@ -18,6 +18,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { REPO_ROOT, makeTargetProject, seedGate, cleanup } = require("./_helpers");
 const { run } = require(path.join(REPO_ROOT, "core", "driver"));
+const {
+  guardConvergenceGateResolution,
+  renderEscalationApplicatorPrompt,
+} = require(path.join(REPO_ROOT, "core", "escalation"));
 
 let _dirs = [];
 function track(cwd) { _dirs.push(cwd); return cwd; }
@@ -49,6 +53,52 @@ const peerReviewEscalation = {
   gate: null,
   reason: "reviewers split",
 };
+
+describe("escalation applicator: convergence gate backstop", () => {
+  it("restores a convergence-exhausted gate if applicator downgrades it with blockers unresolved", () => {
+    const cwd = track(makeTargetProject());
+    const gatePath = seedGate(cwd, "stage-04a", {
+      stage: "stage-04a",
+      workstream: "platform",
+      status: "ESCALATE",
+      lint_passed: false,
+      blockers: ["`npm run lint` cannot execute because package.json has no lint script"],
+      escalation_reason: "driver retry budget exhausted for \"pre-review\" (2/2); escalating",
+      decision_needed: "Add fix instructions, then restart pre-review",
+    });
+    const before = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    fs.writeFileSync(gatePath, JSON.stringify({
+      ...before,
+      status: "WARN",
+      escalation_reason: undefined,
+      decision_needed: undefined,
+    }, null, 2) + "\n");
+
+    const violation = guardConvergenceGateResolution(gatePath, before);
+    const restored = JSON.parse(fs.readFileSync(gatePath, "utf8"));
+    assert.equal(violation.code, "invalid-convergence-resolution");
+    assert.equal(restored.status, "ESCALATE");
+    assert.equal(restored.escalation_reason, before.escalation_reason);
+    assert.deepEqual(restored.blockers, before.blockers);
+  });
+
+  it("tells applicators that missing lint scripts are platform build fixes, not gate corrections", () => {
+    const cwd = track(makeTargetProject());
+    const gatePath = seedGate(cwd, "stage-04a", {
+      stage: "stage-04a",
+      workstream: "platform",
+      status: "ESCALATE",
+      blockers: ["`npm run lint` cannot execute because `package.json` does not define a `lint` script."],
+      escalation_reason: "driver retry budget exhausted for \"pre-review\" (2/2); escalating",
+    });
+    const prompt = renderEscalationApplicatorPrompt(cwd, [
+      "PRINCIPAL-RULING: Root config ownership belongs to platform → `package.json` and lockfiles are platform-owned [class: file-ownership]",
+    ], gatePath);
+    assert.match(prompt, /missing `npm run lint` script is a platform build fix/i);
+    assert.match(prompt, /devteam stage build --workstream platform --headless/);
+    assert.match(prompt, /Do not resolve convergence exhaustion/i);
+  });
+});
 
 describe("driver: applicator-did-not-dispatch-build halt", () => {
   it("halts with applicator-did-not-dispatch-build when ruling orders build but no gate updated", async () => {

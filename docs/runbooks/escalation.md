@@ -172,6 +172,14 @@ devteam stage peer-review --headless
 devteam merge peer-review
 devteam next
 
+# For pre-review exhaustion caused by missing root package/tooling config
+# such as no package.json lint script:
+devteam stage build --workstream platform --patch --from pre-review --headless
+devteam merge build
+devteam restart pre-review
+devteam stage pre-review --headless
+devteam next
+
 # For a defect that requires clearing the whole build stage:
 devteam restart build --cascade
 devteam stage build --patch --from peer-review --headless
@@ -262,6 +270,12 @@ attempts, you are in no-progress exhaustion. If only one attempt exists and the 
 (`autonomy.max_retries = 2`) is the limit, the archive will have a single file.
 
 **Root cause is almost always one of two things:**
+
+Do **not** resolve convergence exhaustion by changing the current gate from
+`ESCALATE` to `WARN` or `PASS` while its `blockers[]` or verifier fields still
+show the defect. That is a false resolution. Fix the underlying owner surface
+and rerun the stage so the gate is regenerated from reality. `devteam
+fix-escalation` rejects and restores this class of false gate downgrade.
 
 **Root cause A — the implementation is fundamentally wrong.** The owning dev
 fixed the symptom (a specific assertion) but not the underlying behaviour. Each

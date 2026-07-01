@@ -318,11 +318,17 @@ function runStage(stageName, opts = {}) {
   }
 
   const gatesDir = getGatesDir(cwd, ctx.changeId);
-  const plan = computeDispatchPlan(stageDef, config, ctx.track, { gatesDir });
+  const hasExplicitWorkstreamFilter = Array.isArray(opts.workstream) && opts.workstream.length > 0;
+  const plan = computeDispatchPlan(stageDef, config, ctx.track, {
+    gatesDir: hasExplicitWorkstreamFilter ? null : gatesDir,
+  });
 
   // Apply --workstream filter BEFORE rendering prompts so only the requested
   // workstreams are built. This is the single shared filter for both headless
   // and non-headless modes — keeping them identical.
+  // Explicit --workstream is an operator/applicator override: it may target a
+  // role suppressed by stage-01 active_roles when a later Principal ruling says
+  // that suppressed role owns the repair surface.
   //
   // Role-prefix match rule: filter values are bare role names. For fanout stages,
   // each fanout entry keeps the bare role name (e.g. ws.role = "backend" even when

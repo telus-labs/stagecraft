@@ -11,32 +11,33 @@ describe("omnigent adapter", () => {
     const cwd = makeTargetProject();
     try {
       const result = adapter.install(cwd);
-      const spec = path.join(cwd, ".omnigent", "stagecraft", "agent.yaml");
-      assert.ok(result.written.includes(spec), "install result should include agent.yaml");
-      assert.ok(fs.existsSync(spec), "agent.yaml should exist");
+      const spec = path.join(cwd, ".omnigent", "stagecraft", "agent", "config.yaml");
+      assert.ok(result.written.includes(spec), "install result should include agent/config.yaml");
+      assert.ok(fs.existsSync(spec), "agent/config.yaml should exist");
       assert.match(fs.readFileSync(spec, "utf8"), /name: stagecraft_workstream/);
+      assert.match(fs.readFileSync(spec, "utf8"), /type: omnigent/);
       assert.equal(adapter.status(cwd).ok, true);
     } finally {
       cleanup(cwd);
     }
   });
 
-  it("builds an Omnigent one-shot command by passing the rendered prompt via -p", () => {
+  it("builds an Omnigent one-shot command by passing the rendered prompt via --prompt", () => {
     const built = adapter.buildOmnigentArgs(
-      "omnigent run .omnigent/stagecraft/agent.yaml --no-session",
+      "omnigent run .omnigent/stagecraft/agent --no-session",
       "stage prompt",
     );
     assert.equal(built.bin, "omnigent");
     assert.deepEqual(built.args, [
       "run",
-      ".omnigent/stagecraft/agent.yaml",
+      ".omnigent/stagecraft/agent",
       "--no-session",
-      "-p",
+      "--prompt",
       "stage prompt",
     ]);
   });
 
-  it("uses prompt-file transport by default for config-built launch profiles", () => {
+  it("uses --prompt transport by default for config-built launch profiles", () => {
     const cwd = makeTargetProject({
       config: "routing:\n  default_host: omnigent\npipeline:\n  default_track: full\n",
     });
@@ -45,13 +46,41 @@ describe("omnigent adapter", () => {
       delete process.env.DEVTEAM_HEADLESS_COMMAND;
       const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
       assert.equal(built.bin, "omnigent");
-      assert.deepEqual(built.args.slice(0, 3), ["run", ".omnigent/stagecraft/agent.yaml", "--no-session"]);
-      assert.equal(built.args[3], "--prompt-file");
-      assert.ok(fs.existsSync(built.args[4]), "prompt file should exist");
-      assert.equal(fs.readFileSync(built.args[4], "utf8"), "stage prompt");
-      assert.match(built.displayCommand, /--prompt-file <stage-prompt-file>/);
-      built.cleanupPrompt();
-      assert.equal(fs.existsSync(built.args[4]), false);
+      assert.deepEqual(built.args, [
+        "run",
+        ".omnigent/stagecraft/agent",
+        "--no-session",
+        "--prompt",
+        "stage prompt",
+      ]);
+      assert.ok(
+        fs.existsSync(path.join(cwd, ".omnigent", "stagecraft", "agent", "config.yaml")),
+        "default invocation should ensure the Omnigent bundle exists",
+      );
+      assert.equal(built.promptTransport, "argument");
+      assert.match(built.displayCommand, /--prompt <stage-prompt>/);
+    } finally {
+      if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
+      else delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      cleanup(cwd);
+    }
+  });
+
+  it("self-heals legacy default agent.yaml installs into an Omnigent bundle", () => {
+    const cwd = makeTargetProject({
+      config: "routing:\n  default_host: omnigent\npipeline:\n  default_track: full\n",
+    });
+    const legacy = path.join(cwd, ".omnigent", "stagecraft", "agent.yaml");
+    const config = path.join(cwd, ".omnigent", "stagecraft", "agent", "config.yaml");
+    const original = process.env.DEVTEAM_HEADLESS_COMMAND;
+    try {
+      fs.mkdirSync(path.dirname(legacy), { recursive: true });
+      fs.writeFileSync(legacy, adapter.agentSpecText(), "utf8");
+      delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
+      assert.deepEqual(built.args.slice(0, 2), ["run", ".omnigent/stagecraft/agent"]);
+      assert.ok(fs.existsSync(config), "default invocation should write agent/config.yaml");
+      assert.match(fs.readFileSync(config, "utf8"), /name: stagecraft_workstream/);
     } finally {
       if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
       else delete process.env.DEVTEAM_HEADLESS_COMMAND;
@@ -96,7 +125,7 @@ describe("omnigent adapter", () => {
         "https://omnigent.internal",
         "--profile",
         "team-alpha",
-        "-p",
+        "--prompt",
         "stage prompt",
       ]);
       assert.equal(built.profile.sessionMode, "session");
@@ -127,7 +156,7 @@ describe("omnigent adapter", () => {
       const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
       assert.deepEqual(built.args, [
         "run",
-        ".omnigent/stagecraft/agent.yaml",
+        ".omnigent/stagecraft/agent",
         "--no-session",
       ]);
       assert.equal(built.stdinText, "stage prompt");
@@ -321,7 +350,7 @@ describe("omnigent adapter", () => {
         "--no-session",
         "--harness",
         "env",
-        "-p",
+        "--prompt",
         "stage prompt",
       ]);
     } finally {
@@ -399,6 +428,19 @@ describe("omnigent adapter", () => {
     } finally {
       cleanup(cwd);
     }
+  });
+
+  it("ignores only Omnigent-managed Codex runtime-home writes during post-hoc audit", () => {
+    assert.equal(
+      adapter.isOmnigentRuntimeWrite(".codex-tmp/omnigent-codex-home-z6nyl4u1/.personality_migration"),
+      true,
+    );
+    assert.equal(
+      adapter.isOmnigentRuntimeWrite(".codex-tmp/omnigent-codex-home-z6nyl4u1/.tmp/plugins/.agents/skills/plugin-creator/SKILL.md"),
+      true,
+    );
+    assert.equal(adapter.isOmnigentRuntimeWrite(".codex-tmp/other-home/.tmp/file"), false);
+    assert.equal(adapter.isOmnigentRuntimeWrite("src/backend/server.js"), false);
   });
 
   it("renders prompts that point at Omnigent-installed role prompts", () => {

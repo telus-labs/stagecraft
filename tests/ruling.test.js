@@ -6,6 +6,8 @@
 
 const { describe, it, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { BIN, makeTargetProject, cleanup } = require("./_helpers");
 
@@ -91,22 +93,23 @@ describe("ruling: user-driven mode (no --headless)", () => {
 });
 
 describe("ruling: --headless mode", () => {
-  it("pipes the prompt through the host's headless command", () => {
+  it("dispatches the prompt through the host's headless command", () => {
     const cwd = track(makeTargetProject({
       // Route principal to a host with capabilities.headless: true.
       // codex/claude-code/gemini-cli all qualify; codex is fine.
       config: "routing:\n  default_host: codex\npipeline:\n  default_track: full\n",
     }));
-    // DEVTEAM_HEADLESS_COMMAND = cat → the prompt we pipe in comes back on stdout
+    // DEVTEAM_HEADLESS_COMMAND = cat → the prompt comes back through the
+    // transcript log captured by runHeadless.
     const r = run([
       "ruling",
       "--topic", "F-12 must-fix vs defer",
       "--headless",
     ], { cwd, env: { DEVTEAM_HEADLESS_COMMAND: "cat" } });
     assert.equal(r.status, 0, `non-zero exit; stderr: ${r.stderr}`);
-    // The prompt body should appear in stdout (echoed by cat from stdin)
-    assert.match(r.stdout, /# Principal Ruling Request/);
-    assert.match(r.stdout, /F-12 must-fix vs defer/);
+    const log = fs.readFileSync(path.join(cwd, "pipeline", "logs", "principal-ruling.log"), "utf8");
+    assert.match(log, /# Principal Ruling Request/);
+    assert.match(log, /F-12 must-fix vs defer/);
     // Status-line framing on stderr
     assert.match(r.stderr, /dispatching principal-ruling/);
     assert.match(r.stderr, /principal-ruling complete/);

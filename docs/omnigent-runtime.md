@@ -21,17 +21,18 @@ The `omnigent` host adapter installs:
 - role prompts under `.omnigent/stagecraft/roles/`
 - Stagecraft skills under `.omnigent/stagecraft/skills/`
 - shared rules and templates under `.devteam/`
-- a default Omnigent agent spec at `.omnigent/stagecraft/agent.yaml`
+- a default Omnigent agent bundle at `.omnigent/stagecraft/agent/`
+  (`config.yaml` plus any future bundled assets)
 
 With no `hosts.omnigent` config block, the adapter keeps the Phase 24.1
 headless command shape:
 
 ```bash
-omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt-file <stage-prompt-file>
+omnigent run .omnigent/stagecraft/agent --no-session --prompt <stage-prompt>
 ```
 
 Unlike the existing CLI hosts, Omnigent's one-shot path accepts the prompt as
-`--prompt-file`, stdin, or legacy `-p/--prompt`, so the adapter implements a
+`--prompt`, stdin, or opt-in `--prompt-file`, so the adapter implements a
 custom `invoke()` instead of using the shared stdin-based `runHeadless()` helper.
 
 The installed default agent spec uses Omnigent's Codex harness because that
@@ -40,7 +41,7 @@ topology in `.devteam/config.yml`; `DEVTEAM_HEADLESS_COMMAND` remains the
 highest-precedence emergency override, for example:
 
 ```bash
-DEVTEAM_HEADLESS_COMMAND='omnigent run .omnigent/stagecraft/agent.yaml --no-session --harness claude-sdk' \
+DEVTEAM_HEADLESS_COMMAND='omnigent run .omnigent/stagecraft/agent --no-session --harness claude-sdk' \
   devteam stage build --headless
 ```
 
@@ -50,7 +51,7 @@ The first adapter slice is intentionally conservative:
 
 | Capability | Current posture |
 |---|---|
-| `headless` | yes, through `omnigent run ... -p` |
+| `headless` | yes, through `omnigent run ... --prompt` |
 | `hooks` | no; Stagecraft polls/validates gate files after the process exits |
 | `subagents` | no; Stagecraft still dispatches one workstream per role |
 | `slashCommands` | no; users invoke `devteam` directly |
@@ -79,18 +80,18 @@ routing:
 
 hosts:
   omnigent:
-    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    agent_spec_path: .omnigent/stagecraft/agent
     harness: codex
     model: gpt-5-codex
     session_mode: no-session
-    prompt_transport: prompt-file
+    prompt_transport: argument
     policy_mode: off
 ```
 
 This renders the same shape as the default command, with configured additions:
 
 ```bash
-omnigent run .omnigent/stagecraft/agent.yaml --harness codex --model gpt-5-codex --no-session --prompt-file <stage-prompt-file>
+omnigent run .omnigent/stagecraft/agent --harness codex --model gpt-5-codex --no-session --prompt <stage-prompt>
 ```
 
 Server-backed execution omits `--no-session` and can pass a server URL plus
@@ -102,7 +103,7 @@ routing:
 
 hosts:
   omnigent:
-    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    agent_spec_path: .omnigent/stagecraft/agent
     harness: claude-sdk
     model: claude-sonnet-4
     server_url: https://omnigent.internal.example
@@ -121,9 +122,9 @@ adapter passes `--session <id>`.
 
 | Value | Behavior |
 |---|---|
-| `prompt-file` | Default. Writes the Stagecraft prompt to a private temporary file, passes `--prompt-file <path>`, and removes the file after Omnigent exits. |
+| `argument` | Default. Appends `--prompt <prompt>` and emits a structural command-length diagnostic if the OS rejects the argument vector. |
 | `stdin` | Writes the prompt to process stdin without putting prompt text in arguments. |
-| `argument` | Compatibility fallback. Appends `-p <prompt>` and emits a structural command-length diagnostic if the OS rejects the argument vector. |
+| `prompt-file` | Compatibility mode for Omnigent CLIs that support it. Writes the Stagecraft prompt to a private temporary file, passes `--prompt-file <path>`, and removes the file after Omnigent exits. |
 
 `extra_args` is an array, not a shell string, and cannot override Stagecraft's
 prompt transport flags (`-p`, `--prompt`, or `--prompt-file`). Prompt text is
@@ -153,6 +154,9 @@ This is a tool-call-time enforcement request to Omnigent, not a replacement for
 Stagecraft validation. If the selected Omnigent harness ignores or cannot enforce
 the policy file, Stagecraft still audits writes after the run and blocks on
 missing or malformed gates exactly as before.
+The audit ignores Omnigent/Codex runtime-home cache writes under
+`.codex-tmp/omnigent-codex-home-*`; normal project paths remain subject to the
+workstream `allowedWrites` list.
 
 ## Session Evidence
 
@@ -198,8 +202,9 @@ Parent tracking issue: [#291](https://github.com/telus-labs/stagecraft/issues/29
    no-session/session/resume mode, agent spec path, and safe extra args while
    preserving `DEVTEAM_HEADLESS_COMMAND` as the emergency override.
 2. **Prompt transport hardening** ([#293](https://github.com/telus-labs/stagecraft/issues/293)). Implemented in the Phase 24.3 slice:
-   default to `--prompt-file`, support stdin, retain `-p` as a compatibility
-   fallback, and classify OS command-length failures as prompt transport errors.
+   default to Omnigent's current `--prompt` one-shot path, support stdin, retain
+   opt-in `--prompt-file` compatibility for CLIs that expose it, and classify OS
+   command-length failures as prompt transport errors.
 3. **Policy bridge** ([#294](https://github.com/telus-labs/stagecraft/issues/294)). Implemented in the Phase 24.4 slice:
    `policy_mode: file` maps Stagecraft `allowedWrites`, shell/network
    requirements, and tool budgets into a temporary Omnigent policy file while

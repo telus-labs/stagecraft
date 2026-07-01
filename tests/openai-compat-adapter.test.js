@@ -526,6 +526,34 @@ hosts:
   });
 });
 
+describe("openai-compat post-hoc audit exemptions", () => {
+  it("exempts orchestrator writes in in-place and bounded isolation only", () => {
+    const cwd = makeProject(null);
+    const { isOrchestratorWrite } = require(invokePath);
+
+    assert.equal(
+      isOrchestratorWrite(fixtureContext(cwd), "pipeline/run-log.jsonl"),
+      true,
+    );
+    assert.equal(
+      isOrchestratorWrite(fixtureContext(cwd), "pipeline/logs/stage-01.log"),
+      true,
+    );
+
+    const boundedCtx = fixtureContext(cwd, { isolation: "bounded", changeId: "hello-world" });
+    assert.equal(
+      isOrchestratorWrite(boundedCtx, "pipeline/changes/hello-world/run-state.json"),
+      true,
+    );
+    assert.equal(
+      isOrchestratorWrite(boundedCtx, "pipeline/changes/hello-world/logs/stage-04.backend.log"),
+      true,
+    );
+    assert.equal(isOrchestratorWrite(boundedCtx, "pipeline/run-state.json"), false);
+    assert.equal(isOrchestratorWrite(boundedCtx, "src/backend/server.js"), false);
+  });
+});
+
 // ── 3. invoke.js — invoke() agentic loop (fetch mocked) ────────────────────
 
 describe("openai-compat invoke() agentic loop", () => {

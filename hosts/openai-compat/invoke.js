@@ -21,7 +21,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
-const { gatesDir } = require("../../core/paths");
+const { gatesDir, logsDir, pipelineRoot } = require("../../core/paths");
 const { loadConfig } = require("../../core/config");
 const { snapshotWritables, auditWrites } = require("../../core/guards/write-audit");
 const { buildTools, executeTool } = require("./tools");
@@ -233,20 +233,16 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
   }
 
   // Post-hoc write audit. Orchestrator-internal files (heartbeats, state
-  // transitions, advisory lock) are written between snapshots but are never
-  // model-written — exempt them so they don't flip the gate to FAIL.
-  const ORCHESTRATOR_WRITES = new Set([
-    "pipeline/run-log.jsonl",
-    "pipeline/run-state.json",
-    "pipeline/run.lock",
-  ]);
+  // transitions, advisory lock, transcript logs) are written between snapshots
+  // but are never model-written — exempt them so they don't flip the gate to
+  // FAIL in either in-place or bounded isolation.
   const afterSnapshot = snapshotWritables(ctx.cwd);
   const { violations: rawViolations } = auditWrites(
     beforeSnapshot,
     afterSnapshot,
     descriptor.allowedWrites || [],
   );
-  const violations = rawViolations.filter((v) => !ORCHESTRATOR_WRITES.has(v));
+  const violations = rawViolations.filter((v) => !isOrchestratorWrite(ctx, v));
   // Logging deferred to orchestrator so sibling-workstream false positives
   // (parallel stage writes captured in this snapshot window) can be filtered
   // before any ⛔ line is emitted.
@@ -275,4 +271,14 @@ async function invoke(descriptor, ctx, preRenderedPrompt) {
   };
 }
 
-module.exports = { invoke, resolveConfig, callAPI };
+function isOrchestratorWrite(ctx, relPath) {
+  const relPipelineRoot = path.relative(ctx.cwd, pipelineRoot(ctx.cwd, ctx.changeId)).replace(/\\/g, "/");
+  const relLogsDir = path.relative(ctx.cwd, logsDir(ctx.cwd, ctx.changeId)).replace(/\\/g, "/");
+  const normalized = String(relPath || "").replace(/\\/g, "/");
+  return normalized === path.posix.join(relPipelineRoot, "run-log.jsonl") ||
+    normalized === path.posix.join(relPipelineRoot, "run-state.json") ||
+    normalized === path.posix.join(relPipelineRoot, "run.lock") ||
+    normalized.startsWith(`${relLogsDir}/`);
+}
+
+module.exports = { invoke, resolveConfig, callAPI, isOrchestratorWrite };

@@ -49,11 +49,20 @@ describe("orchestrator: buildDescriptor honors overrides", () => {
     const build = getStage("build");
     const backend = buildDescriptor(build, "backend");
     const frontend = buildDescriptor(build, "frontend");
+    const platform = buildDescriptor(build, "platform");
     assert.ok(backend.allowedWrites.some((p) => p.includes("src/backend/")));
     assert.ok(!backend.allowedWrites.some((p) => p.includes("src/frontend/")),
       "backend should NOT see src/frontend/");
     assert.ok(frontend.allowedWrites.some((p) => p.includes("src/frontend/")));
     assert.ok(!frontend.allowedWrites.some((p) => p.includes("src/backend/")));
+    assert.ok(
+      isAllowed("package.json", platform.allowedWrites),
+      "platform should own root package/toolchain config writes",
+    );
+    assert.ok(
+      isAllowed("eslint.config.js", platform.allowedWrites),
+      "platform should own lint config writes",
+    );
   });
 
   it("falls back to stage-level allowedWrites when no roleWrites", () => {
@@ -78,6 +87,18 @@ describe("orchestrator: buildDescriptor honors overrides", () => {
     const build = getStage("build");
     const d = buildDescriptor(build, "platform");
     assert.equal(d.workstreamId, "stage-04.platform");
+  });
+
+  it("explicit --workstream can target a role suppressed by active_roles", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", {
+      active_roles: ["backend", "qa"],
+      status: "PASS",
+    });
+    const r = runStage("build", { cwd, workstream: ["platform"] });
+    assert.equal(r.workstreams.length, 1);
+    assert.equal(r.workstreams[0].role, "platform");
+    assert.equal(r.workstreams[0].descriptor.workstreamId, "stage-04.platform");
   });
 
   it("all LLM-dispatched stages allow their workstream gate path", () => {
