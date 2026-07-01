@@ -409,13 +409,16 @@ function renderEscalationApplicatorPrompt(cwd, rulings, escalatingGate) {
 // Dispatch (relocated + unified from cmdRuling / cmdFixEscalation).
 // ---------------------------------------------------------------------------
 
-// Pipe `prompt` to the principal-routed host headlessly. Returns a Promise of
-// { exitCode, host }. Throws (with a CLI-compatible message) if the host can't
-// be loaded or doesn't support headless — callers convert to their own exit.
+// Dispatch `prompt` to the principal-routed host headlessly. Returns a Promise
+// of { exitCode, host }. Throws (with a CLI-compatible message) if the host
+// can't be loaded or doesn't support headless — callers convert to their own
+// exit.
 //
-// `allowedWrites` controls which file paths the write_file tool may target
-// (for httpNative hosts only — non-httpNative hosts shell out and don't use
-// this). Callers should pass the tightest set that their agent actually needs:
+// `allowedWrites` controls which file paths the host may target. Adapters with
+// an invoke() hook receive the pre-rendered prompt so they can use host-specific
+// prompt transport (for example Omnigent's --prompt argument) and audit writes
+// consistently. Plain headless adapters fall back to piping the prompt to stdin.
+// Callers should pass the tightest set that their agent actually needs:
 //   - Principal ruling writer: ["pipeline/context.md"]
 //   - Escalation applicator: ["pipeline/gates/*.json", "pipeline/code-review/by-*.md"]
 function dispatchToPrincipal(cwd, prompt, { label = "principal", allowedWrites = ["pipeline/context.md"] } = {}) {
@@ -433,15 +436,16 @@ function dispatchToPrincipal(cwd, prompt, { label = "principal", allowedWrites =
     throw new Error(`Principal host "${host}" does not support --headless (capabilities.headless is false).`);
   }
 
-  // httpNative hosts (e.g. openai-compat) call invoke() directly; no subprocess.
-  if (adapter.capabilities.httpNative && typeof adapter.invoke === "function") {
+  if (typeof adapter.invoke === "function") {
     const descriptor = {
       workstreamId: label,
+      stage: label,
       role: "principal",
       allowedWrites,
     };
-    const ctx = { cwd };
-    process.stderr.write(`[devteam] dispatching ${label} → ${host} (http-native)\n`);
+    const ctx = { cwd, isolation: "in-place", log: true };
+    const mode = adapter.capabilities.httpNative ? "http-native" : "headless";
+    process.stderr.write(`[devteam] dispatching ${label} → ${host} (${mode})\n`);
     return adapter.invoke(descriptor, ctx, prompt).then((result) => {
       if (Array.isArray(result.writeViolations) && result.writeViolations.length > 0) {
         for (const v of result.writeViolations) {

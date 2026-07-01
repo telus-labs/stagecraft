@@ -198,4 +198,42 @@ describe("dispatchToPrincipal: quoted command support", () => {
       else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
     }
   });
+
+  it("uses adapter prompt transport for Omnigent principal dispatch", async () => {
+    const cwd = track(makeTargetProject({
+      config: "routing:\n  default_host: omnigent\npipeline:\n  default_track: full\n",
+    }));
+    const harnessDir = track(fs.mkdtempSync(path.join(os.tmpdir(), "devteam-test-")));
+    const recorder = path.join(harnessDir, "record-omnigent.js");
+    const output = path.join(harnessDir, "invocation.json");
+    fs.writeFileSync(recorder, [
+      "const fs = require('node:fs');",
+      "let stdin = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { stdin += chunk; });",
+      "process.stdin.on('end', () => {",
+      "  fs.writeFileSync(process.argv[2], JSON.stringify({",
+      "    args: process.argv.slice(3),",
+      "    stdin,",
+      "  }, null, 2) + '\\n');",
+      "});",
+      "",
+    ].join("\n"), "utf8");
+
+    const oldEnv = process.env.DEVTEAM_HEADLESS_COMMAND;
+    process.env.DEVTEAM_HEADLESS_COMMAND = `${process.execPath} ${recorder} ${output}`;
+    try {
+      const result = await dispatchToPrincipal(cwd, "apply this ruling", {
+        label: "escalation-applicator",
+        allowedWrites: ["pipeline/gates/*.json"],
+      });
+      assert.equal(result.exitCode, 0);
+      const invocation = JSON.parse(fs.readFileSync(output, "utf8"));
+      assert.deepEqual(invocation.args, ["--prompt", "apply this ruling"]);
+      assert.equal(invocation.stdin, "");
+    } finally {
+      if (oldEnv === undefined) delete process.env.DEVTEAM_HEADLESS_COMMAND;
+      else process.env.DEVTEAM_HEADLESS_COMMAND = oldEnv;
+    }
+  });
 });
