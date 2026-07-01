@@ -41,7 +41,7 @@ Acceptance:
 - `devteam hosts` lists `omnigent`
 - `devteam init --host omnigent` installs role prompts, skills, templates, rules,
   and the Omnigent agent YAML
-- `devteam stage <name> --headless` can invoke `omnigent run ... -p <prompt>`
+- `devteam stage <name> --headless` can invoke `omnigent run ... --prompt <prompt>`
   when Omnigent is on `PATH`
 - write violations are returned to the orchestrator as `writeViolations`
 
@@ -88,8 +88,8 @@ Status: implemented.
 
 Deliverables:
 
-- prefer `--prompt-file`, with stdin available through config
-- fallback to `-p` remains supported through `prompt_transport: argument`
+- prefer Omnigent's current `--prompt`, with stdin available through config
+- opt-in `--prompt-file` remains supported through `prompt_transport: prompt-file`
 - structural-input diagnostics distinguish command-length failure from model
   no-gate failure
 
@@ -177,7 +177,7 @@ Acceptance:
 - Should Omnigent session mode default to `--no-session` for reproducibility, or
   persistent sessions for better supervision?
 - Should Stagecraft generate one agent YAML per role, or a single generic
-  workstream executor plus `-p` prompt?
+  workstream executor plus `--prompt` prompt?
 - Which Omnigent policy fields are stable enough to treat as a Stagecraft
   adapter contract rather than a best-effort integration?
 - Should remote Omnigent server execution be modeled as part of this host

@@ -738,7 +738,7 @@ hosts:
     harness: codex
     model: gpt-5-codex
     session_mode: no-session
-    prompt_transport: prompt-file
+    prompt_transport: argument
     policy_mode: off
 ```
 
@@ -759,7 +759,7 @@ hosts:
       - delivery-team
 ```
 
-`prompt_transport` defaults to `prompt-file`, which avoids OS command-length limits and keeps prompt text out of command arguments. Use `stdin` when the selected Omnigent runtime supports stdin one-shot prompts, or `argument` for legacy `-p <prompt>` compatibility. `policy_mode: file` passes a temporary Omnigent policy file containing allowed writes, shell/network requirements, and the role tool budget; Stagecraft still runs post-hoc write audit and gate validation after Omnigent exits. `DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
+`prompt_transport` defaults to `argument`, which uses Omnigent's current `--prompt <prompt>` one-shot path. Use `stdin` when the selected Omnigent runtime supports stdin one-shot prompts, or `prompt-file` only with Omnigent CLIs that expose `--prompt-file`. `policy_mode: file` passes a temporary Omnigent policy file containing allowed writes, shell/network requirements, and the role tool budget; Stagecraft still runs post-hoc write audit and gate validation after Omnigent exits. `DEVTEAM_HEADLESS_COMMAND` still overrides this block for one-off recovery or experiments.
 
 If Omnigent prints a session or conversation identifier, Stagecraft writes an adapter-private sidecar at `pipeline/logs/<workstreamId>.omnigent.json`. The sidecar keeps IDs and policy verdict counts only; prompts, transcript excerpts, and raw policy lines are not copied into that metadata file, and gate JSON schemas remain host-neutral.
 
@@ -918,7 +918,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt-file <prompt-file>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)

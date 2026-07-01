@@ -25,7 +25,7 @@ const {
 const shared = makeMarkdownHostAdapter(capabilities);
 const AGENT_SPEC_REL = capabilities.agentSpec;
 const DEFAULT_SESSION_MODE = "no-session";
-const DEFAULT_PROMPT_TRANSPORT = "prompt-file";
+const DEFAULT_PROMPT_TRANSPORT = "argument";
 const DEFAULT_POLICY_MODE = "off";
 
 function agentSpecText() {
@@ -180,7 +180,7 @@ function buildOmnigentCommandFromProfile(profile = resolveLaunchProfile()) {
 
 function buildOmnigentArgs(cmdString, prompt) {
   const { bin, args } = splitCommand(cmdString, "headlessCommand");
-  return { bin, args: [...args, "-p", prompt] };
+  return { bin, args: [...args, "--prompt", prompt] };
 }
 
 function promptTransportError(message) {
@@ -282,8 +282,8 @@ function attachPromptTransport(command, prompt, transport) {
   }
   return {
     ...command,
-    args: [...command.args, "-p", prompt],
-    displayCommand: `${command.displayCommand} -p <stage-prompt>`,
+    args: [...command.args, "--prompt", prompt],
+    displayCommand: `${command.displayCommand} --prompt <stage-prompt>`,
     promptTransport: "argument",
   };
 }
@@ -293,7 +293,7 @@ function buildOmnigentInvocation(prompt, ctx = {}, descriptor = null) {
     const cmdString = process.env.DEVTEAM_HEADLESS_COMMAND;
     return {
       ...buildOmnigentArgs(cmdString, prompt),
-      displayCommand: `${cmdString} -p <stage-prompt>`,
+      displayCommand: `${cmdString} --prompt <stage-prompt>`,
       source: "env",
       promptTransport: "argument",
     };
@@ -483,7 +483,7 @@ function invoke(descriptor, ctx, preRenderedPrompt) {
       if (err.code === "E2BIG") {
         reject(new Error(
           "omnigent prompt argument exceeded the OS command-length limit. " +
-          "Set hosts.omnigent.prompt_transport to prompt-file or stdin.",
+          "Set hosts.omnigent.prompt_transport to stdin, or prompt-file if your Omnigent CLI supports --prompt-file.",
         ));
         return;
       }

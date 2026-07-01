@@ -1,3 +1,3 @@
 ## Changed
 
-- Prefer Omnigent prompt-file transport by default, with stdin and legacy `-p` compatibility modes.
+- Use Omnigent's current `--prompt` transport by default, with stdin and opt-in `--prompt-file` compatibility modes.

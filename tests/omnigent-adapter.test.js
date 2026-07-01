@@ -21,7 +21,7 @@ describe("omnigent adapter", () => {
     }
   });
 
-  it("builds an Omnigent one-shot command by passing the rendered prompt via -p", () => {
+  it("builds an Omnigent one-shot command by passing the rendered prompt via --prompt", () => {
     const built = adapter.buildOmnigentArgs(
       "omnigent run .omnigent/stagecraft/agent.yaml --no-session",
       "stage prompt",
@@ -31,12 +31,12 @@ describe("omnigent adapter", () => {
       "run",
       ".omnigent/stagecraft/agent.yaml",
       "--no-session",
-      "-p",
+      "--prompt",
       "stage prompt",
     ]);
   });
 
-  it("uses prompt-file transport by default for config-built launch profiles", () => {
+  it("uses --prompt transport by default for config-built launch profiles", () => {
     const cwd = makeTargetProject({
       config: "routing:\n  default_host: omnigent\npipeline:\n  default_track: full\n",
     });
@@ -45,13 +45,15 @@ describe("omnigent adapter", () => {
       delete process.env.DEVTEAM_HEADLESS_COMMAND;
       const built = adapter.buildOmnigentInvocation("stage prompt", { cwd });
       assert.equal(built.bin, "omnigent");
-      assert.deepEqual(built.args.slice(0, 3), ["run", ".omnigent/stagecraft/agent.yaml", "--no-session"]);
-      assert.equal(built.args[3], "--prompt-file");
-      assert.ok(fs.existsSync(built.args[4]), "prompt file should exist");
-      assert.equal(fs.readFileSync(built.args[4], "utf8"), "stage prompt");
-      assert.match(built.displayCommand, /--prompt-file <stage-prompt-file>/);
-      built.cleanupPrompt();
-      assert.equal(fs.existsSync(built.args[4]), false);
+      assert.deepEqual(built.args, [
+        "run",
+        ".omnigent/stagecraft/agent.yaml",
+        "--no-session",
+        "--prompt",
+        "stage prompt",
+      ]);
+      assert.equal(built.promptTransport, "argument");
+      assert.match(built.displayCommand, /--prompt <stage-prompt>/);
     } finally {
       if (original !== undefined) process.env.DEVTEAM_HEADLESS_COMMAND = original;
       else delete process.env.DEVTEAM_HEADLESS_COMMAND;
@@ -96,7 +98,7 @@ describe("omnigent adapter", () => {
         "https://omnigent.internal",
         "--profile",
         "team-alpha",
-        "-p",
+        "--prompt",
         "stage prompt",
       ]);
       assert.equal(built.profile.sessionMode, "session");
@@ -321,7 +323,7 @@ describe("omnigent adapter", () => {
         "--no-session",
         "--harness",
         "env",
-        "-p",
+        "--prompt",
         "stage prompt",
       ]);
     } finally {
