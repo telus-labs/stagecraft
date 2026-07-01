@@ -720,14 +720,14 @@ devteam stage requirements --feature "Add SMS notification opt-in" --headless
 ```
 
 What this installs:
-- `.omnigent/stagecraft/agent.yaml` — the default Omnigent agent spec
+- `.omnigent/stagecraft/agent/config.yaml` — the default Omnigent agent bundle config
 - `.omnigent/stagecraft/roles/` — role prompts in markdown format
 - `.omnigent/stagecraft/skills/` — Stagecraft skills in markdown format
 - `.devteam/rules/` and `.devteam/templates/` — shared Stagecraft rules and templates
 
 Current posture is intentionally conservative: no hooks, no Stagecraft-managed subagent fan-out, no slash commands, and no worktree mapping. Allowed writes are audited after the process exits, while stoplist and tool budget constraints are prompt-only. See [Omnigent runtime adapter](omnigent-runtime.md) for the Phase 24 design and follow-up issues.
 
-Choose an Omnigent launch profile in `.devteam/config.yml` without rewriting the installed agent YAML:
+Choose an Omnigent launch profile in `.devteam/config.yml` without rewriting the installed agent bundle:
 
 ```yaml
 routing:
@@ -747,7 +747,7 @@ For a server-backed topology, add `server_url` and use `session_mode: session`:
 ```yaml
 hosts:
   omnigent:
-    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    agent_spec_path: .omnigent/stagecraft/agent
     harness: claude-sdk
     model: claude-sonnet-4
     server_url: https://omnigent.internal.example
@@ -918,7 +918,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent --no-session --prompt <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)

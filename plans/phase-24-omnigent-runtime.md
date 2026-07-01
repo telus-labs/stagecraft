@@ -32,7 +32,7 @@ Deliverables:
 
 - `hosts/omnigent/capabilities.json`
 - `hosts/omnigent/adapter.js`
-- installed `.omnigent/stagecraft/agent.yaml`
+- installed `.omnigent/stagecraft/agent/config.yaml`
 - contract and adapter-specific tests
 - generated host reference docs
 
@@ -40,7 +40,7 @@ Acceptance:
 
 - `devteam hosts` lists `omnigent`
 - `devteam init --host omnigent` installs role prompts, skills, templates, rules,
-  and the Omnigent agent YAML
+  and the Omnigent agent bundle
 - `devteam stage <name> --headless` can invoke `omnigent run ... --prompt <prompt>`
   when Omnigent is on `PATH`
 - write violations are returned to the orchestrator as `writeViolations`
@@ -176,7 +176,7 @@ Acceptance:
 
 - Should Omnigent session mode default to `--no-session` for reproducibility, or
   persistent sessions for better supervision?
-- Should Stagecraft generate one agent YAML per role, or a single generic
+- Should Stagecraft generate one agent bundle per role, or a single generic
   workstream executor plus `--prompt` prompt?
 - Which Omnigent policy fields are stable enough to treat as a Stagecraft
   adapter contract rather than a best-effort integration?

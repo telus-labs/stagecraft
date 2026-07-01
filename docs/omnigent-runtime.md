@@ -21,13 +21,14 @@ The `omnigent` host adapter installs:
 - role prompts under `.omnigent/stagecraft/roles/`
 - Stagecraft skills under `.omnigent/stagecraft/skills/`
 - shared rules and templates under `.devteam/`
-- a default Omnigent agent spec at `.omnigent/stagecraft/agent.yaml`
+- a default Omnigent agent bundle at `.omnigent/stagecraft/agent/`
+  (`config.yaml` plus any future bundled assets)
 
 With no `hosts.omnigent` config block, the adapter keeps the Phase 24.1
 headless command shape:
 
 ```bash
-omnigent run .omnigent/stagecraft/agent.yaml --no-session --prompt <stage-prompt>
+omnigent run .omnigent/stagecraft/agent --no-session --prompt <stage-prompt>
 ```
 
 Unlike the existing CLI hosts, Omnigent's one-shot path accepts the prompt as
@@ -40,7 +41,7 @@ topology in `.devteam/config.yml`; `DEVTEAM_HEADLESS_COMMAND` remains the
 highest-precedence emergency override, for example:
 
 ```bash
-DEVTEAM_HEADLESS_COMMAND='omnigent run .omnigent/stagecraft/agent.yaml --no-session --harness claude-sdk' \
+DEVTEAM_HEADLESS_COMMAND='omnigent run .omnigent/stagecraft/agent --no-session --harness claude-sdk' \
   devteam stage build --headless
 ```
 
@@ -79,7 +80,7 @@ routing:
 
 hosts:
   omnigent:
-    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    agent_spec_path: .omnigent/stagecraft/agent
     harness: codex
     model: gpt-5-codex
     session_mode: no-session
@@ -90,7 +91,7 @@ hosts:
 This renders the same shape as the default command, with configured additions:
 
 ```bash
-omnigent run .omnigent/stagecraft/agent.yaml --harness codex --model gpt-5-codex --no-session --prompt <stage-prompt>
+omnigent run .omnigent/stagecraft/agent --harness codex --model gpt-5-codex --no-session --prompt <stage-prompt>
 ```
 
 Server-backed execution omits `--no-session` and can pass a server URL plus
@@ -102,7 +103,7 @@ routing:
 
 hosts:
   omnigent:
-    agent_spec_path: .omnigent/stagecraft/agent.yaml
+    agent_spec_path: .omnigent/stagecraft/agent
     harness: claude-sdk
     model: claude-sonnet-4
     server_url: https://omnigent.internal.example

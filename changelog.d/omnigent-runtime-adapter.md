@@ -1,6 +1,6 @@
 - **Omnigent runtime adapter** (closes #291). Adds a first-party `omnigent` host adapter that
   installs Stagecraft role prompts, skills, rules, templates, and a default
-  Omnigent agent YAML under `.omnigent/stagecraft/`, then invokes Omnigent's
+  Omnigent agent bundle under `.omnigent/stagecraft/agent/`, then invokes Omnigent's
   one-shot `omnigent run ... --no-session --prompt <prompt>` path for headless
   workstreams. The design and Phase 24 plan document the intended evolution:
   configurable harness/model launch profiles (#292), hardened prompt transport
