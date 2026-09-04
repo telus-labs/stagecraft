@@ -4,11 +4,12 @@
 // transcript log — never the raw JSONL. Also accumulates per-message usage
 // into one orchestrator-observed telemetry record.
 //
-// omp --mode json event shapes (omp 18.1.10, observed from a live
-// invocation — an error turn, so the usage numbers were zero, but the
-// envelope, field names, and terminal frame are what a successful turn
-// emits too; a successful multi-step run has not yet been captured, so the
-// summation rule below is the conservative reading of the schema):
+// omp --mode json event shapes (omp 18.1.10, observed from live
+// invocations: an error turn for the envelope and field names, then a
+// real stage-01 dispatch — 19 tool calls, 2m08s — that produced
+// tokens_in 583,393 / tokens_out 8,337 with the summation rule below,
+// consistent with ~20 model calls each re-sending a 25–35K context and
+// no double counting from turn_end/agent_end):
 //   {"type":"agent_start"}
 //   {"type":"turn_start"}
 //   {"type":"message_start","message":{...}}

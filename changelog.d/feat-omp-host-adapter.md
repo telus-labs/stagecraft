@@ -17,9 +17,12 @@
   *Scope note:* enforcement is `post-hoc-audit`/`prompt-only`, the same tier
   as codex and antigravity. omp exposes a blocking pre-tool `tool_call` hook
   that could lift this to tool-call-time; that is a follow-up, not part of this
-  change. The JSON event shapes were confirmed against omp 18.1.10 on an error
-  turn (zero usage); the per-message summation rule is the conservative reading
-  of the schema and should be re-checked against the first real dispatch log.
+  change. The JSON event shapes and the per-message summation were confirmed
+  against omp 18.1.10 on a real stage-01 dispatch (19 tool calls, 583K input
+  tokens observed, `cost_usd_derived` computed from `core/pricing.js`). Through
+  an OpenAI-completions proxy omp reports `cacheRead: 0` and no cost, so
+  `cached_tokens` is absent and `cost_usd` is null on that path; a direct
+  Anthropic provider is expected to populate both.
 - **`devteam stage` names the host it actually routes to.** The user-driven
   preamble said "Inside Claude Code: paste the prompt, OR type `/devteam …`"
   and "pipes the prompt to `claude --print`" for every host. It now lists the
