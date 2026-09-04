@@ -53,6 +53,45 @@ function featureArg(_flags) {
   return "";
 }
 
+// Summarize the distinct hosts a stage's workstreams route to, for the
+// preamble. Falls back to the host name (and no headless bin) when an
+// adapter can't be loaded — the preamble is a hint, never a hard failure.
+function describeHosts(workstreams) {
+  const { loadAdapter } = require(path.join(__dirname, "..", "..", "router"));
+  const { splitCommand } = require(path.join(__dirname, "..", "..", "command-line"));
+  const seen = new Set();
+  const names = [];
+  const bins = [];
+  let slashCommands = false;
+  for (const ws of workstreams || []) {
+    const host = ws && ws.host;
+    if (!host || seen.has(host)) continue;
+    seen.add(host);
+    let caps = null;
+    try { caps = loadAdapter(host).capabilities || null; } catch { caps = null; }
+    names.push((caps && caps.displayName) || host);
+    if (caps && caps.slashCommands) slashCommands = true;
+    if (caps && caps.headless && caps.headlessCommand) {
+      try {
+        const { bin, args } = splitCommand(caps.headlessCommand, "headlessCommand");
+        // Show the subcommand (`codex exec`, `omnigent run`) when the first
+        // arg is one, else the first short mode flag (`claude --print`,
+        // `omp -p`); long option flags such as permission switches stay out.
+        const first = args[0];
+        const shown = typeof first === "string" && !first.startsWith("-")
+          ? first
+          : args.find((a) => a.startsWith("-") && a.length <= 8);
+        bins.push(shown ? `${bin} ${shown}` : bin);
+      } catch { /* unparsable command: leave it out of the hint */ }
+    }
+  }
+  return {
+    names: names.length > 0 ? names.join(" / ") : "your host",
+    headlessBins: bins.length > 0 ? bins.join("` / `") : null, // null: no host here runs headless
+    slashCommands,
+  };
+}
+
 // Onboarding hint printed before the rendered prompt in user-driven mode.
 // Suppressed under --headless (the prompt is piped to a host CLI) and
 // under --json (currently a no-op for stage but reserved). The framing
@@ -66,6 +105,13 @@ function printStagePreamble(result, _flags) {
   const wsCount = result.workstreams.length;
   const wsWord = wsCount === 1 ? "workstream" : "workstreams";
   const featurePart = featureArg(_flags);
+  // Name the hosts this stage actually routes to, not claude-code by
+  // default: an omp or codex operator reading "paste into Claude Code"
+  // and "pipes to `claude --print`" is being told about another tool.
+  const hosts = describeHosts(result.workstreams);
+  const pasteLine = hosts.slashCommands
+    ? `    1. Inside ${hosts.names}: paste the prompt, OR type`
+    : `    1. Inside ${hosts.names}: paste the prompt`;
   const lines = [
     "",
     "═══════════════════════════════════════════════════════════════════════",
@@ -77,11 +123,19 @@ function printStagePreamble(result, _flags) {
     "  the model writes back.",
     "",
     "  To run this stage, pick one:",
-    "    1. Inside Claude Code: paste the prompt, OR type",
-    `         /devteam stage ${name2}${featurePart}`,
-    "    2. Headless from terminal:",
-    `         devteam stage ${name2}${featurePart} --headless`,
-    "       (orchestrator pipes the prompt to `claude --print` and waits)",
+    pasteLine,
+    ...(hosts.slashCommands ? [`         /devteam stage ${name2}${featurePart}`] : []),
+    ...(hosts.headlessBins
+      ? [
+        "    2. Headless from terminal:",
+        `         devteam stage ${name2}${featurePart} --headless`,
+        `       (orchestrator pipes the prompt to \`${hosts.headlessBins}\` and waits)`,
+      ]
+      : [
+        `    2. Headless from terminal: not available — ${hosts.names} declares no headless command.`,
+        "       Route the stage to a headless host in .devteam/config.yml, then run:",
+        `         devteam stage ${name2}${featurePart} --headless`,
+      ]),
     "",
     `  When done, each workstream writes pipeline/gates/${stage}*.json.`,
     "  Then run `devteam next` to see what to do next.",

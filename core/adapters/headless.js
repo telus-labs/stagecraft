@@ -50,6 +50,7 @@ const { splitCommand } = require("../command-line");
 const { terminateChild } = require("../process-kill");
 const { createStreamJsonExtractor } = require("./claude-stream-json");
 const { createCodexJsonExtractor } = require("./codex-exec-json");
+const { createOmpJsonExtractor } = require("./omp-json");
 const { wrapContainedInvocation } = require("../containment");
 
 // capabilities.usageFormat → extractor factory. Adapters that don't declare
@@ -58,6 +59,7 @@ const { wrapContainedInvocation } = require("../containment");
 const USAGE_EXTRACTORS = {
   "claude-stream-json": createStreamJsonExtractor,
   "codex-exec-json": createCodexJsonExtractor,
+  "omp-json": createOmpJsonExtractor,
 };
 
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes

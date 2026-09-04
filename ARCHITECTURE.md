@@ -124,6 +124,9 @@ stagecraft/
 │   │   └── install/
 │   │       ├── prompts/             ← .codex/prompts/roles/*
 │   │       └── skills/              ← .codex/skills/*
+│   ├── omp/                         ← Oh My Pi: `omp -p --mode json`, usageFormat omp-json
+│   │   ├── adapter.js
+│   │   └── capabilities.json        ← renders into .omp/prompts/roles + .omp/skills
 │   ├── omnigent/
 │   │   ├── adapter.js
 │   │   └── capabilities.json        ← installs .omnigent/stagecraft/agent/config.yaml

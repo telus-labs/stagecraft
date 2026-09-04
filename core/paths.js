@@ -73,6 +73,7 @@ const FRAMEWORK_OWNED_PREFIXES = [
   ".codex/",
   ".codex-tmp/",
   ".omnigent/",
+  ".omp/",
   ".openai-compat/",
 ];
 

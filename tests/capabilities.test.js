@@ -20,7 +20,7 @@ describe("capabilities.json — adapter declarations", () => {
   // 34.4: gemini-cli moved to packages/host-gemini-cli/ (plugin package,
   // not under hosts/); its own capabilities.json coverage now lives in
   // packages/host-gemini-cli/tests/adapter.test.js.
-  const adapters = ["claude-code", "codex", "generic", "omnigent"];
+  const adapters = ["claude-code", "codex", "generic", "omnigent", "omp"];
 
   for (const name of adapters) {
     const caps = require(path.join(REPO_ROOT, "hosts", name, "capabilities.json"));

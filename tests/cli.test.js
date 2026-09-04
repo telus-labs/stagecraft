@@ -169,8 +169,14 @@ describe("cli: stage", () => {
     // Preamble identifies the stage and explains what to do.
     assert.match(r.stdout, /Stage stage-01 \(requirements\)/);
     assert.match(r.stdout, /devteam does\s*\n\s*NOT call a model/);
-    assert.match(r.stdout, /Inside Claude Code/);
-    assert.match(r.stdout, /devteam stage requirements --feature "test feature" --headless/);
+    // The fixture routes to `generic`, so the preamble names that host — not
+    // Claude Code — and, since generic declares no headless command, says so
+    // instead of promising a `--headless` invocation that would fail.
+    assert.match(r.stdout, /Inside Generic CLI \(no host integration\): paste the prompt/);
+    assert.doesNotMatch(r.stdout, /Inside Claude Code/);
+    assert.doesNotMatch(r.stdout, /\/devteam stage requirements/, "slash-command hint only for hosts that declare slashCommands");
+    assert.match(r.stdout, /Headless from terminal: not available — Generic CLI \(no host integration\) declares no headless command/);
+    assert.doesNotMatch(r.stdout, /claude --print/);
     // Postamble points to the next concrete action.
     assert.match(r.stdout, /Run `devteam next` to advance the pipeline/);
   });

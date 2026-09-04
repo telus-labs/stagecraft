@@ -90,8 +90,8 @@ parity drift and enables one run to route different workstreams through differen
 ## 4. Stagecraft in September 2026
 
 Stagecraft is v0.12.0: 18 ordered stages in the `full` track (20 stage definitions
-including the compact QA fold and repair diagnosis), 10 tracks, 7 first-party host
-adapters (claude-code, codex, antigravity, openai-compat, acp, omnigent, generic;
+including the compact QA fold and repair diagnosis), 10 tracks, 8 first-party host
+adapters (claude-code, codex, antigravity, omp, openai-compat, acp, omnigent, generic;
 gemini-cli lives in the `@devteam/host-gemini-cli` plugin package after Google retired
 the CLI upstream), 45 CLI commands, 26 accepted ADRs, and 3,721 passing offline tests
 across 178 files. Native Windows CI runs a smoke job; host dispatch is not yet exercised
