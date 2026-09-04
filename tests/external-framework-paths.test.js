@@ -119,7 +119,10 @@ describe("36.2: rendered prompt (acp host) framework-path resolution", () => {
 
       const prompt = adapter.renderStagePrompt(descriptor, ctx);
 
-      const briefMatch = prompt.match(/Read the role prompt at `([^`]+)`/);
+      // Either pointer form carries the path: the pre-inlining "Read the role
+      // prompt at" sentence, or the inlined "source:" note that replaced it so
+      // the model is not told to re-read a brief already in the prompt.
+      const briefMatch = prompt.match(/(?:Read the role prompt at|inlined below; source:) `([^`]+)`/);
       assert.ok(briefMatch, "expected a role-prompt pointer line in the rendered prompt");
       const briefPath = briefMatch[1];
       assert.ok(path.isAbsolute(briefPath), `role brief pointer must be absolute: ${briefPath}`);

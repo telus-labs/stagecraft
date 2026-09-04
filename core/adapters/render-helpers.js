@@ -270,12 +270,60 @@ function renderGoalCondition(lines, descriptor) {
 // prompts.inline_framework, the brief's content is appended verbatim right
 // after it, making the whole layer byte-identical across dispatches of the
 // same role and — same reasoning as renderFrameworkPreamble above — cacheable.
-function renderRoleBriefBlock(lines, pointerLine, roleBriefRelPath, ctx) {
-  lines.push(pointerLine);
-  if (shouldInlineFramework(ctx)) {
+//
+// Double-instruction fix (post-37.2): inlining the brief verbatim left two
+// instructions that told the model to go read what it already had — the
+// pointer sentence ("Read the role prompt at …") and the brief's own
+// "## Read First" list, which names AGENTS.md and the rules files that layer
+// 1 just inlined. A live omp stage-01 dispatch obeyed both: 8 of its 13 file
+// reads were re-reads of inlined content, each a full model round trip
+// re-sending the growing context. So, when inlining:
+//   - `opts.inlinedPointerLine`, if given, replaces `pointerLine` (markdown
+//     hosts say "inlined below"; claude-code keeps its subagent instruction
+//     because that sentence does real work there);
+//   - bullets in the brief's "## Read First" section that name a file layer
+//     1 inlined (`opts.inlinedFiles`) are removed and replaced by one line
+//     saying they are already above. Bullets for volatile files
+//     (pipeline/context.md, brief.md, …) stay — those are not inlined.
+// The on-disk brief is untouched; only the inlined copy is rewritten.
+function annotateInlinedReadFirst(content, inlinedFiles) {
+  const inlined = new Set(Array.isArray(inlinedFiles) ? inlinedFiles : []);
+  if (inlined.size === 0 || typeof content !== "string") return content;
+  const lines = content.split("\n");
+  const start = lines.findIndex((l) => /^##\s+Read First\s*$/i.test(l));
+  if (start === -1) return content;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^##\s/.test(lines[i])) { end = i; break; }
+  }
+  const kept = [];
+  const dropped = [];
+  for (let i = start + 1; i < end; i++) {
+    const m = lines[i].match(/^-\s+`([^`]+)`/);
+    if (m && inlined.has(m[1])) dropped.push(m[1]);
+    else kept.push(lines[i]);
+  }
+  if (dropped.length === 0) return content;
+  const note = `(${dropped.map((f) => `\`${f}\``).join(", ")} ${dropped.length === 1 ? "is" : "are"} already inlined above under "Framework" — do not re-read ${dropped.length === 1 ? "it" : "them"}.)`;
+  // Keep one blank line after the heading, then the note, then whatever
+  // volatile bullets remain (trimming the blank run the drops may leave).
+  const rest = kept.join("\n").replace(/^\n+/, "").replace(/\n{3,}/g, "\n\n").trimEnd();
+  const section = [lines[start], "", note, ...(rest ? [rest] : []), ""];
+  return [...lines.slice(0, start), ...section, ...lines.slice(end)].join("\n");
+}
+
+function renderRoleBriefBlock(lines, pointerLine, roleBriefRelPath, ctx, opts = {}) {
+  const inline = shouldInlineFramework(ctx);
+  lines.push(inline && opts.inlinedPointerLine ? opts.inlinedPointerLine : pointerLine);
+  if (inline) {
     lines.push("");
     const content = readFrameworkFileContent(roleBriefRelPath, ctx);
-    lines.push(content !== null ? content.trimEnd() : `(missing: ${roleBriefRelPath})`);
+    if (content === null) {
+      lines.push(`(missing: ${roleBriefRelPath})`);
+    } else {
+      const inlinedFiles = opts.descriptor ? splitReadFirst(opts.descriptor.readFirst).framework : [];
+      lines.push(annotateInlinedReadFirst(content, inlinedFiles).trimEnd());
+    }
   }
   lines.push("");
 }
@@ -445,4 +493,4 @@ function appendGateFooter(lines, descriptor, ctx, hostName) {
   lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
 }
 
-module.exports = { allowedWritesCaption, appendGateFooter, readFrameworkFileContent, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderKnownPatterns, renderPatchBlock, renderPriorKnowledge, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, shouldInlineFramework, splitReadFirst, toolBudgetSection };
+module.exports = { allowedWritesCaption, annotateInlinedReadFirst, appendGateFooter, readFrameworkFileContent, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderKnownPatterns, renderPatchBlock, renderPriorKnowledge, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, shouldInlineFramework, splitReadFirst, toolBudgetSection };
