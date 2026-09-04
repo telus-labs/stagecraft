@@ -106,7 +106,7 @@ npm link
 
 # 3. In your target project
 cd ~/projects/my-app
-devteam init --host claude-code        # or codex / antigravity / omnigent / openai-compat / acp
+devteam init --host claude-code        # or codex / antigravity / omp / omnigent / openai-compat / acp
                                         # gemini-cli is a plugin (34.4): npm install @devteam/host-gemini-cli first
 ```
 
@@ -625,7 +625,7 @@ All other stages run unconditionally on their track. If you want to verify wheth
 
 ### What "host" means
 
-A *host* controls how Stagecraft delivers work to a model. Four built-in hosts are CLI/runtime based: Claude Code (`claude`), Codex CLI (`codex`), Antigravity CLI (`agy`), and Omnigent (`omnigent`). Stagecraft renders a stage prompt and lets that runtime manage model invocation, tool permissions, and output capture. The `openai-compat` host is HTTP-native: it calls any OpenAI-compatible Chat Completions API directly, no CLI required. The `generic` host only renders prompts for manual use. `acp` speaks [Agent Client Protocol](https://agentclientprotocol.com) to any ACP-compliant agent.
+A *host* controls how Stagecraft delivers work to a model. Five built-in hosts are CLI/runtime based: Claude Code (`claude`), Codex CLI (`codex`), Antigravity CLI (`agy`), Oh My Pi (`omp`), and Omnigent (`omnigent`). Stagecraft renders a stage prompt and lets that runtime manage model invocation, tool permissions, and output capture. The `openai-compat` host is HTTP-native: it calls any OpenAI-compatible Chat Completions API directly, no CLI required. The `generic` host only renders prompts for manual use. `acp` speaks [Agent Client Protocol](https://agentclientprotocol.com) to any ACP-compliant agent.
 
 **Gemini CLI is deprecated and retired to a plugin package.** Gemini CLI stopped serving free/Pro/Ultra requests 2026-06-18; Google's supported successor is Antigravity CLI. After one release with the doctor warning live, phase 34.4 moved the adapter out of `hosts/` into the `@devteam/host-gemini-cli` plugin package (`packages/host-gemini-cli/`) per the A4 pluggable-adapter mechanism — `devteam init --host gemini-cli` now requires `npm install @devteam/host-gemini-cli` first (the CLI tells you this if you forget). `devteam doctor` still warns whenever routing resolves any role or stage to `gemini-cli`, plugin installed or not. Migrate at your own pace with `devteam init --host antigravity` in existing projects, or start new projects with `--host antigravity` directly — the two hosts share the same install shape (markdown role prompts, no hooks/slash commands/native subagents, post-hoc write audit) so migration is a routing change, not a re-install.
 
@@ -1175,7 +1175,7 @@ When you want the orchestrator to drive the host CLI directly:
 devteam stage build --headless
 ```
 
-For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `agy --print` for antigravity, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent --no-session --prompt <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
+For each workstream, the orchestrator spawns the host's headless command (`claude --print` for claude-code, `codex exec --sandbox workspace-write` for codex, `agy --print` for antigravity, `omp -p --mode json` for omp, `gemini` for gemini-cli, `omnigent run .omnigent/stagecraft/agent --no-session --prompt <prompt>` for omnigent), or calls an HTTP-native adapter such as `openai-compat`, and waits for exit. Summary line per workstream:
 
 ```
 [devteam] dispatching backend → codex (headless)

@@ -1,0 +1,23 @@
+{
+  "name": "omp",
+  "displayName": "Oh My Pi",
+  "version": "1",
+  "hooks": false,
+  "subagents": false,
+  "slashCommands": false,
+  "worktrees": true,
+  "headless": true,
+  "headlessCommand": "omp -p --mode json --no-session --no-extensions --approval-mode yolo --tools read,write,edit,ast_edit,grep,glob,bash,lsp,todo",
+  "usageFormat": "omp-json",
+  "telemetry": "native",
+  "skillFormat": "markdown",
+  "rolePromptsDir": ".omp/prompts/roles",
+  "skillsDir": ".omp/skills",
+  "enforces": {
+    "allowed_writes": "post-hoc-audit",
+    "stoplist": "prompt-only",
+    "shell": true,
+    "network": true,
+    "tool_budget": "prompt-only"
+  }
+}

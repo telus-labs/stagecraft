@@ -3,7 +3,7 @@
 
 # Host Capability Reference
 
-Derived from `hosts/*/capabilities.json`. 7 host adapters.
+Derived from `hosts/*/capabilities.json`. 8 host adapters.
 Run `npm run docs:generate` to regenerate after editing capabilities files.
 
 ### Capabilities
@@ -16,6 +16,7 @@ Run `npm run docs:generate` to regenerate after editing capabilities files.
 | codex         | Codex CLI                              | yes      | no    | no        | no            | yes       | native    |
 | generic       | Generic CLI (no host integration)      | no       | no    | no        | no            | no        | estimated |
 | omnigent      | Omnigent                               | yes      | no    | no        | no            | no        | estimated |
+| omp           | Oh My Pi                               | yes      | no    | no        | no            | yes       | native    |
 | openai-compat | OpenAI-compatible Chat Completions API | yes      | no    | no        | no            | no        | native    |
 
 `telemetry`: `native` — token usage is parsed from the host CLI/API's own output (see docs/cost.md). `estimated` — no native capture; the orchestrator records a promptBytes/4 estimate flagged with `tokens_estimated: true`.
@@ -32,20 +33,22 @@ How each host enforces the framework's core rules:
 | codex         | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | generic       | prompt-only    | prompt-only    | not enforced | not enforced | prompt-only |
 | omnigent      | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
+| omp           | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 | openai-compat | post-hoc-audit | prompt-only    | enforced     | enforced     | prompt-only |
 
 ### Headless commands
 
 Command the orchestrator spawns in `--headless` mode:
 
-| Host          | headlessCommand                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| acp           | npx -y @agentclientprotocol/claude-agent-acp                                               |
-| antigravity   | agy --print --dangerously-skip-permissions                                                 |
-| claude-code   | claude --dangerously-skip-permissions --print --output-format stream-json --verbose        |
-| codex         | codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --json |
-| omnigent      | omnigent run .omnigent/stagecraft/agent --no-session                                       |
-| openai-compat | —                                                                                          |
+| Host          | headlessCommand                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| acp           | npx -y @agentclientprotocol/claude-agent-acp                                                                                  |
+| antigravity   | agy --print --dangerously-skip-permissions                                                                                    |
+| claude-code   | claude --dangerously-skip-permissions --print --output-format stream-json --verbose                                           |
+| codex         | codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --json                                    |
+| omnigent      | omnigent run .omnigent/stagecraft/agent --no-session                                                                          |
+| omp           | omp -p --mode json --no-session --no-extensions --approval-mode yolo --tools read,write,edit,ast_edit,grep,glob,bash,lsp,todo |
+| openai-compat | —                                                                                                                             |
 
 ### Enforcement level glossary
 
