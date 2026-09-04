@@ -377,8 +377,10 @@ function renderStagePromptLayers(descriptor, ctx) {
   // 37.2: the pointer sentence is kept unchanged either way — beyond being
   // the plan's required "short note," it also carries the Task-tool
   // subagent-invocation instruction, which inlining must not remove.
-  // prompts.inline_framework appends the brief's content right after it.
-  renderRoleBriefBlock(lines, `Use the **${agentName}** subagent (\`.claude/agents/${agentName}.md\`) for this workstream.`, `.claude/agents/${agentName}.md`, ctx);
+  // prompts.inline_framework appends the brief's content right after it,
+  // with the brief's "Read First" entries for already-inlined framework
+  // files annotated rather than re-instructed (see renderRoleBriefBlock).
+  renderRoleBriefBlock(lines, `Use the **${agentName}** subagent (\`.claude/agents/${agentName}.md\`) for this workstream.`, `.claude/agents/${agentName}.md`, ctx, { descriptor });
   const layer2End = lines.length;
 
   // --- Layer 3: learned context (constant per run) ---

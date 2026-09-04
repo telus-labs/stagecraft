@@ -978,9 +978,13 @@ By default (`prompts.inline_framework: true`), layers 1-2 carry the actual
 content of `AGENTS.md`, `.devteam/rules/*.md`, and the role brief — not just
 their paths — so the ~22 KB the model used to re-read itself via tool calls
 every dispatch sits in that byte-identical, cacheable position instead. A
-short "Source files" note keeps the paths visible in a transcript. Set it to
-`false` to revert to the pre-37.2 behaviour (the model reads the files
-itself):
+short "Source files" note keeps the paths visible in a transcript. The inlined
+copy of the role brief is also adjusted so it does not instruct a re-read: its
+"Read First" bullets for files already inlined above are replaced by one line
+saying so (the brief on disk is untouched), and markdown hosts render "Role
+brief for `<role>` (inlined below; source: `<path>`)" instead of "Read the
+role prompt at `<path>`". Set it to `false` to revert to the pre-37.2
+behaviour (the model reads the files itself, and both instructions return):
 
 ```yaml
 prompts:

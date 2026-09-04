@@ -152,8 +152,20 @@ function makeMarkdownHostAdapter(capabilities) {
 
     // --- Layer 2: role brief (constant per role) ---
     // 37.2: prompts.inline_framework appends the brief's content right after
-    // this pointer sentence — see renderRoleBriefBlock's why-comment.
-    renderRoleBriefBlock(lines, `Read the role prompt at \`${rolePromptPath}\` before acting on this stage.`, rolePromptRelPath, ctx);
+    // the pointer sentence — see renderRoleBriefBlock's why-comment. When it
+    // does, the pointer must not say "read the role prompt": the model would
+    // (and did) go read a file it already has. The inlined variant names the
+    // source path for transcript readers and says so.
+    renderRoleBriefBlock(
+      lines,
+      `Read the role prompt at \`${rolePromptPath}\` before acting on this stage.`,
+      rolePromptRelPath,
+      ctx,
+      {
+        descriptor,
+        inlinedPointerLine: `Role brief for \`${promptRole}\` (inlined below; source: \`${rolePromptPath}\` — already in this prompt, no need to read it).`,
+      },
+    );
     const layer2End = lines.length;
 
     // --- Layer 3: learned context (constant per run) ---
