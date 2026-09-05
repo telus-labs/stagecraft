@@ -92,6 +92,11 @@ const VALID_STATUSES = new Set(["PASS", "WARN", "FAIL", "ESCALATE"]);
 // Derived from the canonical source — stages.js is the single source of truth
 // for valid track names. Any track added there automatically propagates here.
 const VALID_TRACKS = new Set(TRACKS);
+// How far a gate's self-reported timestamp may sit from validation time before
+// it is called out. Six hours clears any timezone confusion a model might have
+// while still catching a midnight placeholder.
+const TIMESTAMP_SKEW_HOURS = 6;
+
 const REQUIRED_FIELDS = [
   "stage",
   "status",
@@ -762,6 +767,30 @@ function main() {
       `workstream suppression falls back to keyword inference; ` +
       `set active_roles explicitly in the gate for a reliable filter`,
     );
+  }
+
+  // A gate's timestamp is model-authored. Two runs wrote round placeholders
+  // (2026-09-04T00:00:00Z at 23:43; 05:30:00.000Z at 05:29) and nothing said
+  // so. Advisory only: the orchestrator's own _orchestrator_observed.at is the
+  // trusted time, but a self-reported field that is hours off, in the future,
+  // or not a date at all should be visible to whoever reads the gate.
+  if (typeof gate.timestamp === "string") {
+    // Date.parse is lenient — it reads "<ISO-8601>" as the year 8601 — so
+    // require the ISO shape before trusting the parse.
+    const isoShape = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.test(gate.timestamp);
+    const ts = isoShape ? Date.parse(gate.timestamp) : NaN;
+    if (Number.isNaN(ts)) {
+      advisories.push(`${latest.name} timestamp "${gate.timestamp}" is not an ISO-8601 date`);
+    } else {
+      const skewMs = ts - Date.now();
+      const hours = Math.abs(skewMs) / 3_600_000;
+      if (hours > TIMESTAMP_SKEW_HOURS) {
+        advisories.push(
+          `${latest.name} timestamp "${gate.timestamp}" is ${Math.round(hours)} h ${skewMs > 0 ? "in the future" : "in the past"} — ` +
+          "looks like a placeholder; the orchestrator's _orchestrator_observed.at is the trusted time",
+        );
+      }
+    }
   }
 
   const malformedLessons = findMalformedReinforcedLines();

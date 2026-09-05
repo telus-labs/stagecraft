@@ -97,7 +97,8 @@ Reading order:
      the other reviewer's file (lean tracks have neither — do not glob for them)
 
 Lint/tests are already verified on the stage-06 gate (`_orchestrator_stamped`);
-cite, do not re-run. Never read `pipeline/run-*.json`, `run-log.jsonl`, or
+cite them; one run to reproduce a specific suspicion is fine, re-running
+everything by default is not. Never read `pipeline/run-*.json`, `run-log.jsonl`, or
 `pipeline/logs/`. See `.devteam/rules/stage-05.md` § Reviewer efficiency.
 
 Focus on: API consumption correctness, UX impact of backend decisions, security

@@ -1349,6 +1349,18 @@ devteam stage red-team --headless --timeout-ms 0          # no cap
 
 The timeout is per workstream, not per stage. A multi-role stage with three parallel workstreams gets 3 × N ms total wall-clock.
 
+To set it once instead of per invocation, use `.devteam/config.yml`. A per-stage
+entry (by stage name or id) beats the run-wide default; `--timeout-ms` beats both;
+`0` means no cap:
+
+```yaml
+pipeline:
+  dispatch_timeout_ms: 600000     # run-wide default (10 min)
+  dispatch_timeouts:
+    peer-review: 1200000          # a 40-turn review on a real diff needs ~14 min
+    red-team: 1800000
+```
+
 ### Stubbing for tests
 
 Set `DEVTEAM_HEADLESS_COMMAND=cat` to bypass the real host CLI:

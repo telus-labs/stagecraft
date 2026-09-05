@@ -15,7 +15,7 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage, requiredApprovalsFor, isTrackPinnedBuildRole, trackLabel, isAdversarialReviewMode, isFrameworkReadFirstPath } = require("./pipeline/stages");
 const { resolveFrameworkPath } = require("./adapters/render-helpers");
-const { loadConfig, changeIdFromFeature, escalateModel } = require("./config");
+const { loadConfig, changeIdFromFeature, escalateModel, resolveDispatchTimeoutMs } = require("./config");
 const { gatesDir: getGatesDir, logsDir: getLogsDir, pipelineRoot, prefixPipelineRelative } = require("./paths");
 const { resolveAdapter } = require("./router");
 const { withSpan, setSpanAttributes } = require("./observability");
@@ -773,7 +773,9 @@ function runStage(stageName, opts = {}) {
     isolation,
     changeId: isolation === "bounded" ? changeIdFromFeature(feature) : null,
     orchestrator: ORCHESTRATOR_ID,
-    timeoutMs: typeof opts.timeoutMs === "number" ? opts.timeoutMs : undefined,
+    // --timeout-ms wins; else pipeline.dispatch_timeouts[<stage>] / dispatch_timeout_ms;
+    // else undefined so core/adapters/headless.js applies its 10-minute default.
+    timeoutMs: resolveDispatchTimeoutMs(opts.timeoutMs, config, stageDef, stageName),
     patchItems: Array.isArray(opts.patchItems) && opts.patchItems.length > 0 ? opts.patchItems : null,
     // 32.3: true when this dispatch is a fix-and-retry re-dispatch (set by
     // the driver from state.fixRetries), consulted below to decide whether

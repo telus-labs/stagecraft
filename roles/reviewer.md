@@ -46,8 +46,9 @@ On a lean track such as `loop`, `pipeline/design-spec.md` and `pipeline/adr/`
 may not exist because those stages did not run. Review against the brief and
 the exact dispatch scope; missing full-track artifacts are not blockers and
 not worth a glob to confirm. Lint and tests are already verified on the
-stage-06 gate (`_orchestrator_stamped.runs`, with receipts) — cite, do not
-re-run. Never read `pipeline/run-*.json`, `run-log.jsonl`, or
+stage-06 gate (`_orchestrator_stamped.runs`, with receipts) — cite them; one
+run to reproduce a specific suspicion is fine, re-running everything by
+default is not. Never read `pipeline/run-*.json`, `run-log.jsonl`, or
 `pipeline/logs/`. See `.devteam/rules/stage-05.md` § Reviewer efficiency.
 
 ### Review file format
