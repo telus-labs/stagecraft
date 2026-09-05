@@ -113,6 +113,15 @@ function observedOrAssertedCost(gate) {
   const observed = gate && gate._orchestrator_observed;
   const observedCost = nonNegativeNumber(observed && observed.cost_usd);
   if (observedCost !== null) return { cost_usd: observedCost, cost_basis: "observed" };
+  // Hosts that report tokens but no dollar figure (omp, codex) get a cost
+  // derived from core/pricing.js and stamped as cost_usd_derived — the same
+  // precedence costEntryForGate uses. Without this branch every such dispatch
+  // landed in the corpus with cost_usd: null (a whole omp loop run of seven
+  // dispatches summed to $0.00 while the gates carried $13.31), which is both
+  // why the run total could not be rebuilt from rows and why the evidence
+  // layer saw no cost coverage from those hosts.
+  const derivedCost = nonNegativeNumber(observed && observed.cost_usd_derived);
+  if (derivedCost !== null) return { cost_usd: derivedCost, cost_basis: "derived" };
   const assertedCost = nonNegativeNumber(gate && gate.cost_usd);
   if (assertedCost !== null) return { cost_usd: assertedCost, cost_basis: "model-asserted" };
   return { cost_usd: null, cost_basis: null };
