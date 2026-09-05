@@ -44,7 +44,12 @@ Before build or review work, read:
 5. Implement services, data models, and API endpoints as specified. Keep changes
    inside `src/backend/`; cross-boundary edits require a `CONCERN:` line first.
 6. Follow existing code conventions (read `src/backend/` before writing new files).
-7. Do not gold-plate. Simplicity First (coding-principles §2): every changed
+7. Keep server entry points importable without side effects: export the
+   server/app and call `listen()` only when the file is run directly
+   (`require.main === module` / `import.meta.main`). QA tests in-process on
+   an ephemeral port; an entry point that listens on import forces QA to
+   spawn and poll real processes, which is slow and has timed out dispatches.
+8. Do not gold-plate. Simplicity First (coding-principles §2): every changed
    line must trace to the spec or a `PM-ANSWER:`. Note any unrelated dead code
    or latent bugs under `## Out of Scope — Noticed` in the PR — do not fix them.
 8. Finish `pipeline/pr-backend.md` covering:

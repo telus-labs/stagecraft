@@ -11,7 +11,7 @@ const path = require("node:path");
 
 const { listRoles, ROLES_DIR, withSkillsDir } = require("../roles");
 const baseInstall = require("./base-install");
-const { renderPatchBlock, allowedWritesCaption, appendGateFooter, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, splitReadFirst, toolBudgetSection } = require("./render-helpers");
+const { renderPatchBlock, allowedWritesCaption, appendGateFooter, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderHostNotes, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, splitReadFirst, toolBudgetSection } = require("./render-helpers");
 
 const RULES_DIR = baseInstall.RULES_DIR;
 const SKILLS_DIR = baseInstall.SKILLS_DIR;
@@ -166,6 +166,12 @@ function makeMarkdownHostAdapter(capabilities) {
         inlinedPointerLine: `Role brief for \`${promptRole}\` (inlined below; source: \`${rolePromptPath}\` — already in this prompt, no need to read it).`,
       },
     );
+    // Host notes: operational facts about *this* host the model needs on
+    // every dispatch (e.g. how omp treats foreground servers). Constant per
+    // host, so they sit at the end of layer 2 and stay inside the cacheable
+    // prefix. Declared in capabilities.json as `promptNotes`; hosts without
+    // the key render nothing here.
+    renderHostNotes(lines, capabilities);
     const layer2End = lines.length;
 
     // --- Layer 3: learned context (constant per run) ---

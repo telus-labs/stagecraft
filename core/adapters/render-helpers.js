@@ -328,6 +328,22 @@ function renderRoleBriefBlock(lines, pointerLine, roleBriefRelPath, ctx, opts = 
   lines.push("");
 }
 
+// Host notes (hosts/<name>/capabilities.json `promptNotes`): short operational
+// facts about the host the model must know on every dispatch — e.g. that omp
+// auto-backgrounds a foreground command only after 60 s, so a server must be
+// started async or the dispatch burns a minute per attempt (a real QA dispatch
+// timed out at 600 s doing exactly that ten times). Rendered as one section so
+// they are visibly host-provided, not part of the role brief.
+function renderHostNotes(lines, capabilities) {
+  const notes = capabilities && Array.isArray(capabilities.promptNotes)
+    ? capabilities.promptNotes.filter((n) => typeof n === "string" && n.trim().length > 0)
+    : [];
+  if (notes.length === 0) return;
+  lines.push(`## Host notes (${capabilities.displayName || capabilities.name})`);
+  for (const n of notes) lines.push(`- ${n.trim()}`);
+  lines.push("");
+}
+
 function renderContextManifest(lines, descriptor) {
   const manifest = descriptor.contextManifest;
   if (!manifest || !Array.isArray(manifest.files) || manifest.files.length === 0) return;
@@ -493,4 +509,4 @@ function appendGateFooter(lines, descriptor, ctx, hostName) {
   lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
 }
 
-module.exports = { allowedWritesCaption, annotateInlinedReadFirst, appendGateFooter, readFrameworkFileContent, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderKnownPatterns, renderPatchBlock, renderPriorKnowledge, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, shouldInlineFramework, splitReadFirst, toolBudgetSection };
+module.exports = { allowedWritesCaption, annotateInlinedReadFirst, appendGateFooter, readFrameworkFileContent, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderHostNotes, renderKnownPatterns, renderPatchBlock, renderPriorKnowledge, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, shouldInlineFramework, splitReadFirst, toolBudgetSection };
