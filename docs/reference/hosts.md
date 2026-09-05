@@ -40,15 +40,15 @@ How each host enforces the framework's core rules:
 
 Command the orchestrator spawns in `--headless` mode:
 
-| Host          | headlessCommand                                                                                                               |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| acp           | npx -y @agentclientprotocol/claude-agent-acp                                                                                  |
-| antigravity   | agy --print --dangerously-skip-permissions                                                                                    |
-| claude-code   | claude --dangerously-skip-permissions --print --output-format stream-json --verbose                                           |
-| codex         | codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --json                                    |
-| omnigent      | omnigent run .omnigent/stagecraft/agent --no-session                                                                          |
-| omp           | omp -p --mode json --no-session --no-extensions --approval-mode yolo --tools read,write,edit,ast_edit,grep,glob,bash,lsp,todo |
-| openai-compat | —                                                                                                                             |
+| Host          | headlessCommand                                                                                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| acp           | npx -y @agentclientprotocol/claude-agent-acp                                                                                                                     |
+| antigravity   | agy --print --dangerously-skip-permissions                                                                                                                       |
+| claude-code   | claude --dangerously-skip-permissions --print --output-format stream-json --verbose                                                                              |
+| codex         | codex exec --sandbox workspace-write -c sandbox_workspace_write.network_access=true --json                                                                       |
+| omnigent      | omnigent run .omnigent/stagecraft/agent --no-session                                                                                                             |
+| omp           | omp -p --mode json --no-session --no-extensions --approval-mode yolo --config .devteam/omp/dispatch.yml --tools read,write,edit,ast_edit,grep,glob,bash,lsp,todo |
+| openai-compat | —                                                                                                                                                                |
 
 ### Enforcement level glossary
 

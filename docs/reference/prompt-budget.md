@@ -24,7 +24,7 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-02  | design                    | principal  | 14,281      | 14,820       | 29,101     | 7276    |
 | stage-03  | clarification             | pm         | 14,281      | 10,618       | 24,899     | 6225    |
 | stage-03b | executable-spec           | pm         | 14,281      | 10,618       | 24,899     | 6225    |
-| stage-04  | build                     | backend    | 14,281      | 7,817        | 22,098     | 5525    |
+| stage-04  | build                     | backend    | 14,281      | 8,185        | 22,466     | 5617    |
 | stage-04  | build                     | frontend   | 14,281      | 6,583        | 20,864     | 5216    |
 | stage-04  | build                     | platform   | 14,281      | 2,400        | 16,681     | 4171    |
 | stage-04  | build                     | qa         | 14,281      | 3,105        | 17,386     | 4347    |
@@ -87,7 +87,7 @@ stage-01,24899
 stage-02,29101
 stage-03,24899
 stage-03b,24899
-stage-04,22098
+stage-04,22466
 stage-04a,16681
 stage-04b,21584
 stage-04c,27964

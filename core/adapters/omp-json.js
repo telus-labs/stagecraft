@@ -58,6 +58,21 @@ function firstLine(s) {
   return String(s).split("\n").map((l) => l.trim()).find((l) => l.length > 0) || "";
 }
 
+const TOOL_ARG_KEYS = ["command", "path", "file_path", "filePath", "pattern", "glob", "query"];
+const TOOL_ARG_MAX = 160;
+
+function summarizeToolArgs(args) {
+  if (!args || typeof args !== "object") return "";
+  for (const key of TOOL_ARG_KEYS) {
+    const v = args[key];
+    if (typeof v === "string" && v.trim().length > 0) {
+      const oneLine = v.replace(/\s+/g, " ").trim();
+      return oneLine.length > TOOL_ARG_MAX ? `${oneLine.slice(0, TOOL_ARG_MAX - 1)}…` : oneLine;
+    }
+  }
+  return "";
+}
+
 function createOmpJsonExtractor() {
   let buffer = "";
   let mode = null; // null (undetermined) | "json" | "raw"
@@ -105,10 +120,16 @@ function createOmpJsonExtractor() {
         return out;
       }
       case "tool_execution_start": {
+        // omp emits { type, toolCallId, toolName, args } (event-controller.ts
+        // #handleToolExecutionStart). Show what the tool was asked to do —
+        // the bash command, or the path/pattern — so a transcript explains a
+        // slow or timed-out dispatch instead of listing bare tool names.
         const name = typeof obj.toolName === "string" ? obj.toolName
           : obj.toolCall && typeof obj.toolCall.name === "string" ? obj.toolCall.name
             : null;
-        return name ? `[tool ${name}]\n` : "";
+        if (!name) return "";
+        const summary = summarizeToolArgs(obj.args !== undefined ? obj.args : obj.toolCall && obj.toolCall.arguments);
+        return summary ? `[tool ${name}] ${summary}\n` : `[tool ${name}]\n`;
       }
       case "agent_end": {
         if (!sawMessageEnd && Array.isArray(obj.messages)) {
@@ -187,4 +208,4 @@ function createOmpJsonExtractor() {
   };
 }
 
-module.exports = { createOmpJsonExtractor };
+module.exports = { createOmpJsonExtractor, summarizeToolArgs };

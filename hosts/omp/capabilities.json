@@ -7,7 +7,12 @@
   "slashCommands": false,
   "worktrees": true,
   "headless": true,
-  "headlessCommand": "omp -p --mode json --no-session --no-extensions --approval-mode yolo --tools read,write,edit,ast_edit,grep,glob,bash,lsp,todo",
+  "headlessCommand": "omp -p --mode json --no-session --no-extensions --approval-mode yolo --config .devteam/omp/dispatch.yml --tools read,write,edit,ast_edit,grep,glob,bash,lsp,todo",
+  "dispatchConfigPath": ".devteam/omp/dispatch.yml",
+  "promptNotes": [
+    "Oh My Pi backgrounds a foreground shell command only after 60 s, and a Stagecraft dispatch has a 10-minute ceiling. Never start a server, file watcher, or REPL in the foreground. Start it with the bash tool's `async: true` (or `cmd > /dev/null 2>&1 &`), probe it with curl, and stop it when you are done — each foreground server start would otherwise cost this dispatch a full minute.",
+    "Single tool calls are capped at 120 s by `.devteam/omp/dispatch.yml` (installed by `devteam init --host omp`). A test suite that needs longer should be run in pieces."
+  ],
   "usageFormat": "omp-json",
   "telemetry": "native",
   "skillFormat": "markdown",

@@ -5,7 +5,7 @@ const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { REPO_ROOT } = require("./_helpers");
-const { createOmpJsonExtractor } = require(path.join(REPO_ROOT, "core", "adapters", "omp-json"));
+const { createOmpJsonExtractor, summarizeToolArgs } = require(path.join(REPO_ROOT, "core", "adapters", "omp-json"));
 
 function line(obj) {
   return `${JSON.stringify(obj)}\n`;
@@ -82,6 +82,30 @@ describe("createOmpJsonExtractor — JSON mode", () => {
     out += ex.push(line({ type: "tool_execution_start", toolCall: { name: "grep" } }));
     out += ex.end();
     assert.equal(out, "[tool edit]\n[tool grep]\n");
+  });
+
+  it("shows what the tool was asked to do: bash command, or path/pattern", () => {
+    const ex = createOmpJsonExtractor();
+    let out = ex.push(line({ type: "tool_execution_start", toolName: "bash", toolCallId: "t1", args: { command: "PORT=3001 node index.js &\n  sleep 1 && curl -s localhost:3001/health" } }));
+    out += ex.push(line({ type: "tool_execution_start", toolName: "read", toolCallId: "t2", args: { path: "pipeline/brief.md" } }));
+    out += ex.push(line({ type: "tool_execution_start", toolName: "glob", toolCallId: "t3", args: { pattern: "src/**/*.test.js" } }));
+    out += ex.push(line({ type: "tool_execution_start", toolName: "todo", toolCallId: "t4", args: { items: [1, 2] } }));
+    out += ex.end();
+    assert.equal(out, [
+      "[tool bash] PORT=3001 node index.js & sleep 1 && curl -s localhost:3001/health",
+      "[tool read] pipeline/brief.md",
+      "[tool glob] src/**/*.test.js",
+      "[tool todo]",
+      "",
+    ].join("\n"));
+  });
+
+  it("truncates a long command to one line of at most 160 characters", () => {
+    const long = "x".repeat(500);
+    assert.equal(summarizeToolArgs({ command: long }).length, 160);
+    assert.ok(summarizeToolArgs({ command: long }).endsWith("…"));
+    assert.equal(summarizeToolArgs(null), "");
+    assert.equal(summarizeToolArgs({ command: "   " }), "");
   });
 
   it("omits cache fields when zero and reports costUsd null when omp priced nothing", () => {
