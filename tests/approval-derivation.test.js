@@ -184,7 +184,7 @@ describe("approval-derivation: gate upsert (end-to-end)", () => {
     assert.equal(g.host, "claude-code", "legacy gate should be backfilled with HOST");
   });
 
-  it("creates nano gates with required_approvals=1 and review_shape=single", () => {
+  it("creates nano gates with required_approvals=1 and review_shape=scoped", () => {
     const cwd = track(makeTargetProject({
       config: "routing:\n  default_host: generic\npipeline:\n  default_track: nano\n",
     }));
@@ -193,7 +193,7 @@ describe("approval-derivation: gate upsert (end-to-end)", () => {
     const g = readGate(cwd, "stage-05.backend");
     assert.ok(g, "gate not written");
     assert.equal(g.required_approvals, 1, "nano needs 1 approval, not 2");
-    assert.equal(g.review_shape, "single");
+    assert.equal(g.review_shape, "scoped");
     assert.equal(g.track, "nano");
     assert.equal(g.status, "PASS", "1 approval should be enough on nano");
   });

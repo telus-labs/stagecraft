@@ -449,7 +449,9 @@ function applyVerdict({ area, verdict, blockers, reviewer, host, gatesDir: custo
         changes_requested: [],
         escalated_to_principal: false,
         required_approvals: required,
-        review_shape: required === 1 ? "single" : "matrix",
+        // Schema enum is ["scoped", "matrix"] (stage-05.schema.json); "single"
+        // was never a valid value and rules/stage-05.md has always said scoped.
+        review_shape: required === 1 ? "scoped" : "matrix",
       };
     }
 
