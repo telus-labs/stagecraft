@@ -112,7 +112,7 @@ if (isCriticWave) {
   writeGate("stage-05.reviewer", { ...base, stage: "stage-05", workstream: "reviewer", mode: "adversarial", status: "PASS", areas_reviewed: ["backend"], approved_areas: ["backend"], changes_requested: [] });
 } else {
   fs.writeFileSync(path.join(reviewDir, "by-reviewer.md"), "## Review of backend\\nLooks fine.\\nREVIEW: APPROVED\\n");
-  writeGate("stage-05", { ...base, stage: "stage-05", workstream: "reviewer", review_shape: "single", required_approvals: 1, approvals: ["reviewer"], changes_requested: [], escalated_to_principal: false, status: "PASS" });
+  writeGate("stage-05", { ...base, stage: "stage-05", workstream: "reviewer", review_shape: "scoped", required_approvals: 1, approvals: ["reviewer"], changes_requested: [], escalated_to_principal: false, status: "PASS" });
 }
 `);
   return writerPath;

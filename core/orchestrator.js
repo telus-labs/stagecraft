@@ -13,7 +13,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
-const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage, isTrackPinnedBuildRole, trackLabel, isAdversarialReviewMode, isFrameworkReadFirstPath } = require("./pipeline/stages");
+const { STAGES, getStage, orderedStageNamesForTrack, isStageInTrack, rolesForStage, requiredApprovalsFor, isTrackPinnedBuildRole, trackLabel, isAdversarialReviewMode, isFrameworkReadFirstPath } = require("./pipeline/stages");
 const { resolveFrameworkPath } = require("./adapters/render-helpers");
 const { loadConfig, changeIdFromFeature, escalateModel } = require("./config");
 const { gatesDir: getGatesDir, logsDir: getLogsDir, pipelineRoot, prefixPipelineRelative } = require("./paths");
@@ -517,6 +517,21 @@ function resolveReadFirstItem(item, prefix, opts) {
   return root === "framework" ? resolveFrameworkPath(prefixed, opts) : prefixed;
 }
 
+// The gate skeleton the prompt shows the model must agree with the track. The
+// static peer-review definition says review_shape "matrix" / required_approvals
+// 2 (the full-track default); a loop/nano/refactor/review-pr reviewer saw that
+// in its "Gate to write" block, "scoped"/1 in rules/stage-05.md, and went to
+// run-plan.json (three reads) to reconcile them before writing the gate it had
+// already been told to write. Derive both fields from the track's review
+// sizing instead. Gates without review_shape (adversarial mode's
+// challenges/verdict shape, every other stage) pass through unchanged.
+function shapeExpectedGate(stageDef, gate, track) {
+  if (!gate || typeof gate !== "object" || !("review_shape" in gate)) return gate;
+  const required = requiredApprovalsFor(stageDef, track);
+  if (typeof required !== "number") return gate;
+  return { ...gate, review_shape: required === 1 ? "scoped" : "matrix", required_approvals: required };
+}
+
 function buildDescriptor(stageDef, role, opts = {}) {
   // ADR-009 Phase 2: when intent === "repair" and the stage declares a
   // repairOverride, merge override fields on top of the base stage definition.
@@ -615,7 +630,7 @@ function buildDescriptor(stageDef, role, opts = {}) {
     goalCondition: effectiveDef.goalCondition
       ? effectiveDef.goalCondition.replace("{workstreamId}", wsId)
       : null,
-    expectedGate: effectiveDef.gate,
+    expectedGate: shapeExpectedGate(stageDef, effectiveDef.gate, opts.track),
     requiredCapabilities: effectiveDef.requiredCapabilities || null,
     changeId,
     // G10: per-role tool budget declared by the adapter (e.g. ["Read","Glob","Grep"]).
