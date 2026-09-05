@@ -193,14 +193,25 @@ function dispatchOutcomeTransition({
     });
   }
 
+  // Repeated timeouts are a capacity problem, not an input problem: the host
+  // was mid-work every time and the ceiling cut it off. Saying "structurally
+  // unworkable" sent an operator looking at the brief when the fix was a longer
+  // --timeout-ms or a smaller dispatch (a 40-turn peer review needed ~14 minutes
+  // against a 10-minute default, twice). Same halt class for compatibility with
+  // everything that keys off structural-input; different words.
+  const attempts = (transient[action.name] || 0) + 1;
+  const haltReason = timedOut
+    ? `dispatch of "${action.name}" hit the per-dispatch timeout ${attempts} time(s) in a row without ` +
+      `writing a gate. The host was still working each time, so the input may be fine — read ` +
+      `pipeline/logs/ to see what it was doing, then raise --timeout-ms or shrink the dispatch`
+    : `dispatch of "${action.name}" produced no gate and is not transient ` +
+      `(clean exit with no output, or repeated failure) — input is structurally unworkable`;
   return transitionResult(TRANSITION_CONTROLS.HALT, {
     summaryPatch: {
       halted: true,
       halt_action: "structural-input",
       halt_failure_class: "structural-input",
-      halt_reason:
-        `dispatch of "${action.name}" produced no gate and is not transient ` +
-        `(clean exit with no output, or repeated failure) — input is structurally unworkable`,
+      halt_reason: haltReason,
     },
     logEvents: [{ ...base, outcome: "structural-halt" }],
     emittedEvents: [{ type: "structural", ...base }],

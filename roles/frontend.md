@@ -90,10 +90,15 @@ Stage 5 for the rationale.
 
 Reading order:
   1. `pipeline/brief.md`
-  2. `pipeline/design-spec.md`
-  3. `pipeline/adr/` (all ADRs)
-  4. Other reviewer's file if it exists
-  5. Changed source files
+  2. `pipeline/pr-<area>.md` for the area(s) you review
+  3. The changed files listed in your dispatch's Changed-file manifest (or
+     `git diff`) — read once, in full
+  4. Only if present in this run: `pipeline/design-spec.md`, `pipeline/adr/`,
+     the other reviewer's file (lean tracks have neither — do not glob for them)
+
+Lint/tests are already verified on the stage-06 gate (`_orchestrator_stamped`);
+cite, do not re-run. Never read `pipeline/run-*.json`, `run-log.jsonl`, or
+`pipeline/logs/`. See `.devteam/rules/stage-05.md` § Reviewer efficiency.
 
 Focus on: API consumption correctness, UX impact of backend decisions, security
 (XSS, auth token handling, input sanitisation).

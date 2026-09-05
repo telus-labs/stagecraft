@@ -43,15 +43,25 @@ or missing scripts before reporting the gate as PASS. The orchestrator also stam
 your own `lint_passed`/`tests_passed` on this workstream's gate directly (before
 Stage 4a), so a false claim here is caught immediately, not two stages later.
 
-If no lint or test script is defined yet (e.g. `package.json` has not been
-created), create one as part of this workstream's deliverables — that is a
-missing artifact, not a reason to skip verification.
+**If the project has no `test` script** but you wrote tests, wire the
+existing runner into a `test` script so the orchestrator can run it — that
+is a missing artifact. **If the project has no `lint` script, do not add
+one.** Record `lint: not configured in this project` under
+`local_verification` and move on; the orchestrator stamps the gate with
+`lint unverified: no lint command configured` as a warning, which is the
+correct, honest outcome. Installing a linter, adding devDependencies, or
+writing an ESLint/TypeScript config to satisfy this section is scope creep:
+it is a project-tooling decision that belongs to the operator (or, on tracks
+that dispatch one, the platform workstream), not to a feature build. A
+hello-world build once spent five minutes and $5 fetching ESLint over the
+network for exactly this reason.
 
 Root package-manager scripts and shared toolchain config (`package.json`,
 lockfiles, ESLint/TypeScript config, Docker/compose files) are platform-owned
 unless the design spec or a Principal ruling assigns them elsewhere. If
-Stage 4a fails because `npm run lint` is missing, dispatch the platform build
-workstream to add the script/config, then rerun pre-review.
+Stage 4a fails because `npm run lint` is missing on a track that has a
+platform workstream, dispatch it to add the script/config, then rerun
+pre-review; on lean tracks the warning stands.
 
 ## Gate
 

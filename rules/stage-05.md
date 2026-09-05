@@ -45,27 +45,17 @@ exactly two `## Review of <area>` sections — never their own workstream.
 | `dev-platform`    | `backend` + `frontend`  |
 | `dev-qa`          | `frontend` + `platform` |
 
-Coverage: every workstream receives exactly 2 approvals from distinct reviewers:
-- `backend`:  dev-frontend + dev-platform
-- `frontend`: dev-platform + dev-qa
-- `platform`: dev-backend + dev-qa
-- `qa`:       dev-backend + dev-frontend
+Every workstream thus receives exactly 2 approvals from distinct reviewers.
 
 **Self-review is invalid.** A reviewer MUST NOT write a `## Review of <area>`
 section for the workstream they own — the hook skips and warns on self-reviews.
 
-**Stage manager guidance — FAIL with no `changes_requested`.** When a gate shows
-`status: "FAIL"` and `changes_requested` is empty, it means quorum has not
-been reached — no one has blocked the change. Steps:
-
-1. Run `devteam derive-approvals` first. The hook processes all existing
-   `by-*.md` files; approvals written in a prior session are not automatically
-   re-derived on session start.
-2. If still FAIL after re-derive, read the gate's `action_required` field —
-   it lists how many more approvals are needed and which reviewers are eligible.
-3. Have an eligible reviewer add the missing `## Review of <area>` section to
-   their `pipeline/code-review/by-<role>.md`, then run `devteam derive-approvals`
-   and `devteam merge peer-review`.
+**Stage manager guidance — FAIL with no `changes_requested`** means quorum
+not reached, nobody blocked. Run `devteam derive-approvals` (approvals from a
+prior session are not re-derived on start). If still FAIL, the gate's
+`action_required` says how many approvals are missing and who is eligible:
+have one add the `## Review of <area>` section to their `by-<role>.md`, then
+`devteam derive-approvals` and `devteam merge peer-review`.
 
 ### Review file format
 
@@ -119,10 +109,8 @@ If the reviewer finds a bug, missing guard, or other BLOCKER: they write
 halt. The orchestrator re-invokes the owning dev agent to fix it in their
 own worktree. **No fix-forward. No exceptions for "small" patches.**
 
-Rationale: silent inline fixes bypass the owning dev, skip re-review of
-the patched lines, and leave no audit trail tying the patch to a
-CHANGES-REQUESTED → addressed loop. If the one-line patch has a second
-bug, no reviewer is assigned to catch it.
+Rationale: an inline fix bypasses the owning dev, is never re-reviewed, and
+leaves no CHANGES-REQUESTED → addressed trail.
 
 ### Gate merge (hook-derived)
 
@@ -133,10 +121,20 @@ the hook reconciles the gate on every reviewer file save and overwrites any
 direct edit.
 
 Pre-read requirement (pass to each reviewer agent):
-  - `pipeline/brief.md`
-  - `pipeline/design-spec.md`
-  - `pipeline/adr/` (all files)
-  - The other reviewer's file if already written (sequential fallback)
+  - `pipeline/brief.md`, then `pipeline/pr-<area>.md` for the area(s) reviewed
+  - The changed files named in the dispatch's Changed-file manifest (or
+    `git diff`) — not the whole tree
+  - Only if they exist: `pipeline/design-spec.md`, `pipeline/adr/`, the other
+    reviewer's `by-*.md`. Lean tracks (`loop`/`nano`/`refactor`) have none
+    of these; absence is expected and not worth a glob.
+
+### Reviewer efficiency (every track)
+
+Every file opened slows every later turn. Do not re-run lint, tests, or
+`npm audit` when the stage-06 (or stage-04) gate carries
+`_orchestrator_stamped.runs` with `exit_code: 0` — cite it. Never read
+`pipeline/run-*.json`, `run-log.jsonl`, `pipeline/logs/`, or
+`.devteam/config.yml` — pipeline state, not the change.
 
 On architectural escalation: invoke `principal` agent. Principal ruling is binding.
 On deadlock (reviewers disagree, no escalation): invoke `principal` agent to decide.

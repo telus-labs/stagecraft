@@ -11,12 +11,30 @@ function normalizeRel(file) {
   return String(file || "").replace(/\\/g, "/").replace(/^\/+/, "");
 }
 
+// Directories that are never "the change": installed dependencies and build
+// output. `git status --untracked-files=all` lists every file under them when
+// a project's .gitignore is missing or incomplete — a hello-world whose build
+// ran `npm install eslint` handed its reviewer a 40-entry manifest with 1,150
+// omitted, all node_modules, and no usable changed-file list. Matched on any
+// path segment so nested packages (`packages/x/node_modules/`) are covered.
+const VENDORED_SEGMENTS = new Set([
+  "node_modules", "bower_components", "vendor",
+  "dist", "build", "out", "coverage", ".nyc_output",
+  ".next", ".nuxt", ".turbo", ".cache", ".parcel-cache",
+  "target", "__pycache__", ".venv", "venv", ".tox", ".mypy_cache", ".pytest_cache",
+]);
+
+function isVendoredPath(rel) {
+  return rel.split("/").some((segment) => VENDORED_SEGMENTS.has(segment));
+}
+
 function isManifestInputPath(file) {
   const rel = normalizeRel(file);
   if (!rel || rel.includes("\0")) return false;
   // The manifest describes the change under review — never Stagecraft's own
-  // state or the host surface `devteam init` wrote (core/paths.js).
-  return !isFrameworkOwnedPath(rel);
+  // state or the host surface `devteam init` wrote (core/paths.js), and never
+  // dependency or build trees (above).
+  return !isFrameworkOwnedPath(rel) && !isVendoredPath(rel);
 }
 
 function parsePorcelainStatus(stdout) {
@@ -94,5 +112,7 @@ module.exports = {
   DEFAULT_LIMIT,
   collectChangedFileManifest,
   isManifestInputPath,
+  isVendoredPath,
+  VENDORED_SEGMENTS,
   parsePorcelainStatus,
 };

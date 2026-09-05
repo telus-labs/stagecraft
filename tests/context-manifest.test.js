@@ -28,6 +28,22 @@ test("context-manifest: excludes process-only paths", () => {
   assert.equal(isManifestInputPath(".devteam/rules/pipeline.md"), false);
 });
 
+test("context-manifest: excludes dependency and build trees even when untracked", () => {
+  // A project with no node_modules in .gitignore lists every installed file as
+  // untracked; the reviewer was handed 40 manifest entries + 1,150 omitted, all
+  // node_modules. Dependencies and build output are never the change.
+  assert.equal(isManifestInputPath("node_modules/eslint/package.json"), false);
+  assert.equal(isManifestInputPath("packages/api/node_modules/x/index.js"), false);
+  assert.equal(isManifestInputPath("dist/bundle.js"), false);
+  assert.equal(isManifestInputPath("coverage/lcov.info"), false);
+  assert.equal(isManifestInputPath(".venv/lib/python3.12/site-packages/x.py"), false);
+  assert.equal(isManifestInputPath("target/debug/app"), false);
+  // Segment match, not substring: a source file merely named like one stays.
+  assert.equal(isManifestInputPath("src/build.js"), true);
+  assert.equal(isManifestInputPath("src/vendor-adapter.js"), true);
+  assert.equal(isManifestInputPath("docs/dist-notes.md"), true);
+});
+
 test("context-manifest: parses porcelain paths and rename targets", () => {
   const parsed = parsePorcelainStatus(" M src/app.js\0?? test/new.test.js\0R  src/old.js\0src/new.js\0");
   assert.deepEqual(parsed.map((f) => f.path), ["src/app.js", "test/new.test.js", "src/new.js"]);

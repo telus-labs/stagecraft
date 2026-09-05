@@ -35,14 +35,20 @@ Before any review work, read:
 
 Reading order:
   1. `pipeline/brief.md` — acceptance criteria
-  2. `pipeline/design-spec.md` — what was supposed to be built
-  3. `pipeline/adr/` — all ADRs for this run
-  4. Other reviewer's file if it exists (don't duplicate their points)
-  5. The changed source files (you will be given one or two areas to review)
+  2. `pipeline/pr-<area>.md` for the area(s) you review — the plan and its
+     `verify:` claims
+  3. The changed files listed in your dispatch's Changed-file manifest (or
+     `git diff`) — read these once, in full
+  4. Only if present in this run: `pipeline/design-spec.md`, `pipeline/adr/`,
+     the other reviewer's file (don't duplicate their points)
 
 On a lean track such as `loop`, `pipeline/design-spec.md` and `pipeline/adr/`
 may not exist because those stages did not run. Review against the brief and
-the exact dispatch scope; missing full-track artifacts are not blockers.
+the exact dispatch scope; missing full-track artifacts are not blockers and
+not worth a glob to confirm. Lint and tests are already verified on the
+stage-06 gate (`_orchestrator_stamped.runs`, with receipts) — cite, do not
+re-run. Never read `pipeline/run-*.json`, `run-log.jsonl`, or
+`pipeline/logs/`. See `.devteam/rules/stage-05.md` § Reviewer efficiency.
 
 ### Review file format
 
