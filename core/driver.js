@@ -966,7 +966,7 @@ async function run(opts = {}) {
   // token-accounting helpers moved with it: token_usage_baseline,
   // token_run_ids, and token_dispatches_expected are run-state fields, and
   // currentTokenUsage only reads them.
-  const { state, currentTokenUsage } = initRunState({
+  const { state, currentTokenUsage, currentCostUsage } = initRunState({
     resumedState,
     nowTs: nowIso(),
     cwd,
@@ -977,6 +977,7 @@ async function run(opts = {}) {
     intent,
     safetyPolicy,
     opts,
+    costDetail: costUsdDetail,
   });
 
   const summary = {
@@ -1321,7 +1322,7 @@ async function run(opts = {}) {
         untilIndex,
         until: opts.until,
         budgetUsd,
-        spent: budgetUsd == null ? 0 : totalCostUsd(cwd, changeId),
+        spent: budgetUsd == null ? 0 : currentCostUsage().total,
         budgetTokens,
         ...(() => {
           const usage = budgetTokens == null ? null : currentTokenUsage();
@@ -1588,7 +1589,7 @@ async function run(opts = {}) {
       // ADR-007 §2: emit heartbeat before next() so run-log.jsonl always has a
       // bounded last-event age regardless of dispatch duration. Cheap: no fs scans.
       const heartbeatIteration = (state.iterations || 0) + 1;
-      const heartbeatCost = costUsdDetail(cwd, changeId);
+      const heartbeatCost = currentCostUsage();
       const heartbeatTokens = currentTokenUsage();
       logEvent(cwd, changeId, {
         outcome: "heartbeat",
@@ -2019,7 +2020,7 @@ async function run(opts = {}) {
           untilIndex,
           until: opts.until,
           budgetUsd,
-          spent: budgetUsd == null ? 0 : totalCostUsd(cwd, changeId),
+          spent: budgetUsd == null ? 0 : currentCostUsage().total,
           budgetTokens,
           ...(() => {
             const usage = budgetTokens == null ? null : currentTokenUsage();
@@ -2390,7 +2391,10 @@ async function run(opts = {}) {
     // "mixed" / null (no cost data at all). The pre-dispatch --budget-usd check
     // (dispatchGuardTransition above) and halt semantics are unchanged; only the
     // cost figure they compare against now prefers observed cost (costUsdDetail).
-    const finalCost = costUsdDetail(cwd, changeId);
+    // Baseline (gates at run start) + every corpus row for this run lineage —
+    // survives the gate archiving a review round-trip does. See
+    // core/driver-run-state.js costUsageForRunIds.
+    const finalCost = currentCostUsage();
     summary.cost_usd = finalCost.total;
     summary.cost_basis = finalCost.basis;
     state.cost_usd = finalCost.total;

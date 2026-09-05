@@ -199,6 +199,51 @@ function tokenUsageForRunIds(cwd, runIds, expectedDispatches = 0) {
   });
 }
 
+// Cost mirrors tokens (tokenUsageForRunIds above): live gates hold only the
+// latest attempt of each stage, so a review round-trip that archives and
+// re-dispatches build/QA/review drops the first attempt's cost from any total
+// read off the gates. Run E (2026-09-05) reported "$5.17 spent" for a run whose
+// seven dispatches cost $13.31 — while tokens_used, summed from the corpus,
+// was right. So: freeze the gates' cost once as a baseline (gates written by
+// `devteam stage` before this run started), then add every corpus row for
+// this run lineage. Basis names match costUsdDetail's so the summary reads
+// the same whichever path produced it.
+function costEntryForRow(row) {
+  const cost = nonNegativeNumber(row && row.cost_usd);
+  if (cost === null) return null;
+  const basis = row.cost_basis === "observed" ? "observed"
+    : row.cost_basis === "derived" ? "derived"
+      : "model-asserted";
+  return { cost, basis };
+}
+
+function combineCostUsage(...parts) {
+  let total = 0;
+  const sources = new Set();
+  for (const part of parts) {
+    if (!part) continue;
+    total += nonNegativeNumber(part.total) ?? 0;
+    if (part.basis === "mixed") { sources.add("observed"); sources.add("derived"); sources.add("model-asserted"); }
+    else if (typeof part.basis === "string" && part.basis) sources.add(part.basis);
+  }
+  const basis = sources.size === 0 ? null : sources.size === 1 ? [...sources][0] : "mixed";
+  return { total, basis };
+}
+
+function costUsageForRunIds(cwd, runIds) {
+  const selected = new Set((runIds || []).filter(Boolean));
+  let total = 0;
+  const sources = new Set();
+  for (const row of readCorpus(cwd)) {
+    if (!selected.has(row.run_id)) continue;
+    const entry = costEntryForRow(row);
+    if (!entry) continue;
+    total += entry.cost;
+    sources.add(entry.basis);
+  }
+  return { total, basis: sources.size === 0 ? null : sources.size === 1 ? [...sources][0] : "mixed" };
+}
+
 // initRunState -- build (or reconcile) the run state for this invocation.
 //
 // `nowTs` is passed in rather than read from the clock here so a caller can
@@ -219,6 +264,10 @@ function initRunState({
   intent,
   safetyPolicy,
   opts = {},
+  // (cwd, changeId) => { total, basis } over the live gates — core/driver.js
+  // passes costUsdDetail. Injected rather than required to keep this module a
+  // leaf of driver.js, not a cycle.
+  costDetail = null,
 }) {
   const state = resumedState || {
     track: Array.isArray(effectiveTrack) ? effectiveTrack.join(",") : effectiveTrack,
@@ -289,7 +338,21 @@ function initRunState({
     tokenUsageForRunIds(cwd, state.token_run_ids, state.token_dispatches_expected),
   );
 
-  return { state, currentTokenUsage };
+  // A fresh run freezes whatever the gates already cost (stages run by hand
+  // before `devteam run`). A resumed state that predates this field gets a
+  // zero baseline: its earlier dispatches are already in the corpus under its
+  // run ids, and reading the live gates too would count them twice.
+  if (!state.cost_usage_baseline || typeof state.cost_usage_baseline !== "object") {
+    state.cost_usage_baseline = resumedState
+      ? { total: 0, basis: null }
+      : (typeof costDetail === "function" ? costDetail(cwd, changeId) : { total: 0, basis: null });
+  }
+  const currentCostUsage = () => combineCostUsage(
+    state.cost_usage_baseline,
+    costUsageForRunIds(cwd, state.token_run_ids),
+  );
+
+  return { state, currentTokenUsage, currentCostUsage };
 }
 
 module.exports = {
@@ -297,4 +360,7 @@ module.exports = {
   tokenUsageDetail,
   combineTokenUsage,
   tokenUsageForRunIds,
+  costEntryForRow,
+  combineCostUsage,
+  costUsageForRunIds,
 };

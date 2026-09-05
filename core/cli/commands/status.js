@@ -35,7 +35,17 @@ function lastMatchingEvent(logPath, predicate, maxLines = 500) {
   return null;
 }
 
-// Determine the run status from run-state.json and the last log event.
+const PROGRESS_OUTCOMES = new Set([
+  "heartbeat", "dispatch-started", "dispatched", "transient-retry", "stall-detected",
+  "fix-retry", "run-start", "run-plan",
+]);
+function isStatusEvent(e) {
+  const outcome = e && typeof e.outcome === "string" ? e.outcome : null;
+  if (!outcome) return false;
+  return outcome === "complete" || outcome === "halt" || outcome.endsWith("-halt") || PROGRESS_OUTCOMES.has(outcome);
+}
+
+// Determine the run status from run-state.json and the last status-bearing log event.
 function computeStatus(runState, lastEvent) {
   if (!runState) return "no-run";
   const lastOutcome = lastEvent && lastEvent.outcome;
@@ -93,7 +103,12 @@ function run(positional, _flags) {
   const now = Date.now();
 
   // Last event (any) for last_event_age_ms.
-  const lastEvent = lastMatchingEvent(logPath, () => true);
+  // The last line of run-log.jsonl is not always the run's state: run-end
+  // bookkeeping (evals-resolution-linked, pattern collection, memory ingest)
+  // is appended after the "complete" event, and a run that had finished read
+  // as "running" because of it. Walk back to the last event that says
+  // something about progress or termination.
+  const lastEvent = lastMatchingEvent(logPath, isStatusEvent);
   const lastEventTs = lastEvent && lastEvent.ts ? Date.parse(lastEvent.ts) : null;
   const lastEventAgeMs = lastEventTs != null ? now - lastEventTs : null;
 

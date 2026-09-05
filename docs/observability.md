@@ -150,7 +150,7 @@ Fields missing for a given dispatch are `null`, never omitted, so consumers can 
 - `model_observed`, `tokens_in`/`tokens_out`, `cost_usd` prefer the gate's
   `_orchestrator_observed` block (orchestrator-parsed CLI/API output — see
   items 28.1–28.3) over the model-asserted top-level gate fields.
-  `cost_basis` records which one won: `"observed"` or `"model-asserted"`
+  `cost_basis` records which one won: `"observed"` (host-reported), `"derived"` (priced from observed tokens via `core/pricing.js` — omp, codex), or `"model-asserted"`
   (`null` when neither is present).
 - `blockers` is sanitized through the same secret-scan path
   (`core/hooks/secret-scan.js scanContent`, reused by `core/patterns.js`

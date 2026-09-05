@@ -281,6 +281,35 @@ describe("devteam status — completed/halted states", () => {
     assert.equal(out.stall_detected, false);
   });
 
+  it("reports completed when run-end bookkeeping events follow the complete event", () => {
+    // Run E (2026-09-05): evals-resolution-linked was appended after "complete",
+    // and status read the run as running because it only looked at the last line.
+    const cwd = track(makeTargetProject());
+    const now = Date.now();
+    writeRunState(cwd, { track: "loop", intent: "feature", iterations: 9, completed: true, started_at: new Date(now - 1000000).toISOString() });
+    writeRunLog(cwd, [
+      { ts: new Date(now - 3000).toISOString(), outcome: "heartbeat", iteration: 9, stage: "peer-review", action: "run-stage" },
+      { ts: new Date(now - 2000).toISOString(), outcome: "complete", iteration: 9, action: "pipeline-complete" },
+      { ts: new Date(now - 1500).toISOString(), outcome: "evals-resolution-linked", linked: 1 },
+      { ts: new Date(now - 1000).toISOString(), outcome: "patterns-collected", candidates: 2 },
+    ]);
+    const { status, stdout } = runCLI(["status", "--json", "--cwd", cwd], { env: { CI: "true", DEVTEAM_NO_LOG: "1" } });
+    assert.equal(status, 0);
+    assert.equal(JSON.parse(stdout).status, "completed");
+  });
+
+  it("reports halted when bookkeeping follows a halt event", () => {
+    const cwd = track(makeTargetProject());
+    const now = Date.now();
+    writeRunState(cwd, { track: "loop", intent: "feature", iterations: 5, started_at: new Date(now - 1000000).toISOString() });
+    writeRunLog(cwd, [
+      { ts: new Date(now - 2000).toISOString(), outcome: "structural-halt", iteration: 5, stage: "stage-05" },
+      { ts: new Date(now - 1000).toISOString(), outcome: "context-section-change", section: "run-blockers" },
+    ]);
+    const { stdout } = runCLI(["status", "--json", "--cwd", cwd], { env: { CI: "true", DEVTEAM_NO_LOG: "1" } });
+    assert.equal(JSON.parse(stdout).status, "halted");
+  });
+
   it("human-readable output includes all key fields", () => {
     const cwd = track(makeTargetProject());
     const now = Date.now();
