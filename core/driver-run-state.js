@@ -253,6 +253,7 @@ function initRunState({
   state.logical_run_id = state.logical_run_id || state.started_at;
   // PR-B counters (resilient to a resumed state that predates them).
   state.fixRetries = state.fixRetries || {};      // code-defect re-dispatches per stage
+  state.ungated_usage = state.ungated_usage || null; // spend on no-gate dispatches (core/driver.js accumulateUngated)
   state.safety_policy = safetyPolicy;
   state.resolved_track = state.resolved_track || effectiveTrack;
   state.track_source = state.track_source || trackSource;

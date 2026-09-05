@@ -548,8 +548,19 @@ function buildDescriptor(stageDef, role, opts = {}) {
       "and exact documentation affected_files",
     );
   }
+  // Single-reviewer stages (loop, nano, refactor, review-pr) know exactly who
+  // reviews, so the `by-<reviewer>.md` placeholder is filled with the role
+  // here rather than left for the model to guess — one run wrote by-backend.md,
+  // the next by-reviewer.md with approvals: ["reviewer"]. Multi-reviewer stages
+  // and review_fanout keep the placeholder: there the file may be named for the
+  // host (by-codex.md) and the write audit treats <…> as a wildcard.
+  const rolesHere = opts.rolesInStage || stageDef.roles || [];
+  const fanoutActive = Array.isArray(opts.config?.routing?.review_fanout) && opts.config.routing.review_fanout.length > 0;
+  const fillReviewer = rolesHere.length === 1 && !fanoutActive
+    ? (p) => (typeof p === "string" ? p.replace(/<reviewer>/g, role) : p)
+    : (p) => p;
   const allowedWrites = effectiveDef.roleWrites?.[role] ?? effectiveDef.allowedWrites;
-  const resolvedAllowedWrites = Array.isArray(allowedWrites) ? allowedWrites.map(prefix) : allowedWrites;
+  const resolvedAllowedWrites = Array.isArray(allowedWrites) ? allowedWrites.map((p) => prefix(fillReviewer(p))) : allowedWrites;
   if (stageDef.stage === "stage-04" && role === DOCUMENTATION_ROLE) {
     for (const file of documentationScope.affectedFiles) {
       if (!resolvedAllowedWrites.includes(file)) resolvedAllowedWrites.push(file);
@@ -585,7 +596,7 @@ function buildDescriptor(stageDef, role, opts = {}) {
     role,
     rolesInStage: opts.rolesInStage || stageDef.roles,
     workstreamId: wsId,
-    objective: effectiveDef.objective,
+    objective: fillReviewer(effectiveDef.objective),
     readFirst: Array.isArray(effectiveDef.readFirst)
       ? effectiveDef.readFirst
           .filter((item) =>
@@ -599,7 +610,7 @@ function buildDescriptor(stageDef, role, opts = {}) {
       ...affectedFilesForDescriptor(stageDef, documentationScope),
       ...buildScope.files,
     ]),
-    artifact: prefix(effectiveDef.artifact),
+    artifact: prefix(fillReviewer(effectiveDef.artifact)),
     template: effectiveDef.template,
     goalCondition: effectiveDef.goalCondition
       ? effectiveDef.goalCondition.replace("{workstreamId}", wsId)
@@ -1100,6 +1111,7 @@ async function runStageHeadless(stageName, opts = {}) {
           logPath: r.logPath,
           director: true,
           directorWorkstreamId: descriptor.workstreamId,
+          routedModel: ws.model || null,
           writeViolations: r.writeViolations || [],
           ...telemetry,
         };
@@ -1499,7 +1511,7 @@ async function runStageHeadless(stageName, opts = {}) {
           isolationConflicts: reconciliation.conflicts,
         };
       }
-      const result = { role: ws.role, host: ws.host, descriptor: ws.descriptor, queueMs: queue.queueMs, promptHash, ...r, ...telemetry };
+      const result = { role: ws.role, host: ws.host, descriptor: ws.descriptor, queueMs: queue.queueMs, promptHash, routedModel: ws.model || null, ...r, ...telemetry };
       emitWorkstreamEvent({
         type: "workstream-finished",
         stage: plan.stage,

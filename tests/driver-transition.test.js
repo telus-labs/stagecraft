@@ -540,6 +540,23 @@ describe("dispatchOutcomeTransition: the silent-host halt names the host", () =>
     assert.equal(t.emittedEvents[0].type, "host-silent");
   });
 
+  it("repeated timeouts halt with capacity wording, not \"structurally unworkable\"", () => {
+    // Two 10-minute peer-review timeouts were reported as unworkable input; the
+    // fix was --timeout-ms 1200000 and the same input passed.
+    const t = dispatchOutcomeTransition({
+      action: { name: "peer-review" },
+      base: { iteration: 5, stage: "stage-05", name: "peer-review" },
+      transient: { "peer-review": 1 }, maxTransientRetries: 1, retryDelayMs: 0,
+      wroteGate: false, exitCode: null, timedOut: true, stubGate: false,
+      noOutput: false, hadWrites: false,
+    });
+    assert.equal(t.summaryPatch.halt_action, "structural-input", "halt class unchanged for compatibility");
+    assert.match(t.summaryPatch.halt_reason, /timeout 2 time\(s\) in a row/);
+    assert.match(t.summaryPatch.halt_reason, /raise --timeout-ms or shrink the dispatch/);
+    assert.match(t.summaryPatch.halt_reason, /pipeline\/logs\//);
+    assert.doesNotMatch(t.summaryPatch.halt_reason, /structurally unworkable/);
+  });
+
   it("a clean exit WITH output still halts as structural-input", () => {
     const t = dispatchOutcomeTransition({
       action: { name: "requirements" },

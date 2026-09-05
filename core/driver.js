@@ -58,6 +58,7 @@ const { enforceContextBudget } = require("./context-budget");
 const { detectNoProgress, noProgressEvidence, detectNoSourceChange, noSourceChangeEvidence } = require("./gates/convergence");
 const { checkStoplist, explainMatches, STOPLIST_TRACKS } = require("./guards/stoplist");
 const { category: evidenceCategory } = require("./evidence/analyzer");
+const { computeCostUsd } = require("./pricing");
 const { upsertSection } = require("./markers");
 const {
   TRANSITION_CONTROLS,
@@ -236,12 +237,49 @@ function dispatchObservation(base, result, attempt = 0) {
     // so a reviewer can tell an observed figure from a derived or
     // model-asserted one without re-reading gates.
     observation.cost_basis = costEntry.source;
+  } else if (!gate && result.usage && typeof result.usage === "object") {
+    // No gate, but the host reported usage (a timeout mid-work, a crash after
+    // the model ran). Two 10-minute peer-review timeouts consumed ~3M input
+    // tokens that runHeadless captured and this function dropped, because
+    // everything above reads the gate; the run then reported "$6.79 spent" for
+    // roughly twice that. Price it from the usage itself: host-reported cost if
+    // given, else the pricing table over the routed or observed model. Marked
+    // ungated so evidence consumers can keep excluding it from per-gate stats.
+    const u = result.usage;
+    const model = (typeof u.model === "string" && u.model) || result.routedModel || null;
+    const tokensIn = nonNegativeNumber(u.tokensIn);
+    const tokensOut = nonNegativeNumber(u.tokensOut);
+    if (model) observation.model = evidenceCategory(model);
+    if (tokensIn !== null) observation.tokens_in = tokensIn;
+    if (tokensOut !== null) observation.tokens_out = tokensOut;
+    const reported = nonNegativeNumber(u.costUsd);
+    const derived = reported === null && model && tokensIn !== null && tokensOut !== null
+      ? nonNegativeNumber(computeCostUsd({
+        model, tokens_in: tokensIn, tokens_out: tokensOut,
+        cached_tokens: u.cachedTokens, input_accounting: u.inputAccounting,
+      }))
+      : null;
+    if (reported !== null) { observation.cost_usd = reported; observation.cost_basis = "observed-ungated"; }
+    else if (derived !== null) { observation.cost_usd = derived; observation.cost_basis = "derived-ungated"; }
+    observation.ungated = true;
   }
   if (duration !== null) observation.duration_ms = duration;
   if (promptBytes !== null) observation.prompt_bytes = promptBytes;
   if (contextManifestFiles !== null) observation.context_manifest_files = contextManifestFiles;
   if (contextManifestOmitted !== null) observation.context_manifest_omitted = contextManifestOmitted;
   return observation;
+}
+
+// Spend on dispatches that produced no gate (see dispatchObservation). Kept
+// apart from the gate-derived total so --budget-usd semantics and the evidence
+// layer are unchanged; surfaced beside the total so the operator sees it.
+function accumulateUngated(state, observation) {
+  if (!observation || !observation.ungated) return;
+  const acc = state.ungated_usage || (state.ungated_usage = { dispatches: 0, tokens_in: 0, tokens_out: 0, cost_usd: 0 });
+  acc.dispatches += 1;
+  acc.tokens_in += nonNegativeNumber(observation.tokens_in) ?? 0;
+  acc.tokens_out += nonNegativeNumber(observation.tokens_out) ?? 0;
+  acc.cost_usd += nonNegativeNumber(observation.cost_usd) ?? 0;
 }
 
 function hashTargetedFixFiles(cwd, files) {
@@ -1439,7 +1477,7 @@ async function run(opts = {}) {
       const attemptIndex = state.retries[r.name] || 0;
       for (const result of results) {
         const observation = dispatchObservation(base, result, attemptIndex);
-        if (observation) logEvent(cwd, changeId, observation);
+        if (observation) { logEvent(cwd, changeId, observation); accumulateUngated(state, observation); }
       }
       state.retries[r.name] = (state.retries[r.name] || 0) + 1;
       if (r.stage && !state.stages_advanced.includes(r.stage)) state.stages_advanced.push(r.stage);
@@ -2164,7 +2202,7 @@ async function run(opts = {}) {
         const attemptIndex = state.retries[r.name] || 0;
         for (const result of results) {
           const observation = dispatchObservation(base, result, attemptIndex);
-          if (observation) logEvent(cwd, changeId, observation);
+          if (observation) { logEvent(cwd, changeId, observation); accumulateUngated(state, observation); }
         }
         state.retries[r.name] = (state.retries[r.name] || 0) + 1;
         // Phase 12.2: track stage IDs in state for `devteam commit` cursor.
@@ -2361,6 +2399,8 @@ async function run(opts = {}) {
     summary.tokens_used = finalTokens.total;
     summary.tokens_in = finalTokens.input;
     summary.tokens_out = finalTokens.output;
+    // Ungated spend (timeouts, crashes after the model ran) — see dispatchObservation.
+    summary.ungated_usage = state.ungated_usage || null;
     // Separable so the total is readable: cache reads bill well below uncached
     // input, and --budget-usd remains the control for money.
     summary.tokens_cached = finalTokens.cached;
@@ -2425,4 +2465,4 @@ async function run(opts = {}) {
   return summary;
 }
 
-module.exports = { run, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, costUsdDetail, tokenUsageDetail, runStatePath, runLogPath, seedDeployContext, blockerFiles };
+module.exports = { run, dispatchObservation, accumulateUngated, CONSEQUENCE_CEILING, DEFAULT_MAX_ITERATIONS, totalCostUsd, costUsdDetail, tokenUsageDetail, runStatePath, runLogPath, seedDeployContext, blockerFiles };

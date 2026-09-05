@@ -97,10 +97,19 @@ fixes it in their own area. See `.devteam/rules/pipeline.md` Stage 5.
 
 Reading order:
   1. `pipeline/brief.md` — acceptance criteria
-  2. `pipeline/design-spec.md` — what was supposed to be built
-  3. `pipeline/adr/` — all ADRs
-  4. The other reviewer's file if it exists (don't duplicate their points)
-  5. The changed source files (you will be given one or two areas to review)
+  2. `pipeline/pr-<area>.md` for the area(s) you review — the plan and its
+     `verify:` claims
+  3. The changed files listed in your dispatch's Changed-file manifest (or
+     `git diff`) — read these once, in full
+  4. Only if present in this run: `pipeline/design-spec.md`, `pipeline/adr/`,
+     the other reviewer's file. On `loop`/`nano`/`refactor` they do not
+     exist and you are the only reviewer — do not glob for them.
+
+Lint and tests: the stage-06 gate's `_orchestrator_stamped.runs` already
+holds verified results with receipts. Cite them; do not re-run them or
+`npm audit`. Never open `pipeline/run-plan.json`, `run-state.json`,
+`run-log.jsonl`, or `pipeline/logs/` — orchestrator state, not the change.
+See `.devteam/rules/stage-05.md` § Reviewer efficiency.
 
 ### Review file format
 

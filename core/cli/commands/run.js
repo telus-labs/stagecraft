@@ -203,6 +203,13 @@ function run(positional, _flags) {
         `${summary.tokens_used.toLocaleString("en-US")} token(s) counted, ` +
         `${summary.stages_advanced.length} stage(s) advanced\n`,
       );
+      const ungated = summary.ungated_usage;
+      if (ungated && ungated.dispatches > 0) {
+        process.stderr.write(
+          `  + ${ungated.cost_usd.toFixed(2)} / ${(ungated.tokens_in + ungated.tokens_out).toLocaleString("en-US")} token(s) ` +
+          `on ${ungated.dispatches} dispatch(es) that produced no gate (timeouts) — not in the total above\n`,
+        );
+      }
       if (summary.halted && summary.halt_reason) process.stderr.write(`  reason: ${summary.halt_reason}\n`);
       if (summary.halt_action === "fix-and-retry" || summary.halt_action === "resolve-escalation") {
         process.stderr.write(`  → run \`devteam next\` for the fix steps / escalation details\n`);
