@@ -202,7 +202,13 @@ for (const host of LAYERED_HOSTS) {
       fs.writeFileSync(path.join(cwd, ".devteam", "rules", "gates-core.md"), "# Gates rules\n" + "Gate line.\n".repeat(50));
       if (typeof adapter.install === "function") adapter.install(cwd, {});
 
-      const ctx = { track: "full", feature: "add HTTP endpoint", orchestrator: "devteam@test", cwd };
+      // trimRoleBriefOverride: this test pins the 37.2 inlining contract —
+      // layer 2 carries the brief's bytes and is identical across stages of
+      // the same role. Per-stage brief trimming (core/pipeline/brief-sections.js)
+      // deliberately makes layer 2 identical only across dispatches of the same
+      // role AND stage; tests/brief-trimming.test.js covers that contract, so
+      // it is switched off here to keep this one testing inlining alone.
+      const ctx = { track: "full", feature: "add HTTP endpoint", orchestrator: "devteam@test", cwd, trimRoleBriefOverride: false };
       // "build" and "pre-review" both dispatch "backend" — same-run,
       // same-role, different-stage pair, same as the byte-identical test above.
       const descA = descriptorFor("build", "backend");

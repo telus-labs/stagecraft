@@ -971,8 +971,9 @@ hosts:
 Every stage prompt is assembled in a stable four-layer order — framework
 preamble/rules, role brief, learned context, then the volatile per-dispatch
 tail — so the first three layers are byte-identical across every dispatch in
-a run that shares the same role. OpenAI-style endpoints get automatic prefix
-caching from that ordering alone, no config needed.
+a run that shares the same role and stage (and, within one dispatch, across
+every model turn). OpenAI-style endpoints get automatic prefix caching from
+that ordering alone, no config needed.
 
 By default (`prompts.inline_framework: true`), layers 1-2 carry the actual
 content of `AGENTS.md`, `.devteam/rules/*.md`, and the role brief — not just
@@ -983,7 +984,14 @@ copy of the role brief is also adjusted so it does not instruct a re-read: its
 "Read First" bullets for files already inlined above are replaced by one line
 saying so (the brief on disk is untouched), and markdown hosts render "Role
 brief for `<role>` (inlined below; source: `<path>`)" instead of "Read the
-role prompt at `<path>`". Set it to `false` to revert to the pre-37.2
+role prompt at `<path>`". The inlined brief is also trimmed to the dispatched
+stage (`prompts.trim_role_brief`, default true): a role brief covers every
+task its role can be given — pm.md carries brief, executable-spec,
+clarification, sign-off, post-deploy, and retrospective sections — and only
+one applies to a dispatch. The other "On a …" sections are dropped from the
+inlined copy and named in a one-line note; common sections (Read First,
+Writes, Standing Rules, Gate Writing Rules, …) always stay and the brief on
+disk is untouched. Set `inline_framework` to `false` to revert to the pre-37.2
 behaviour (the model reads the files itself, and both instructions return):
 
 ```yaml

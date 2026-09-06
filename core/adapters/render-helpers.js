@@ -312,6 +312,20 @@ function annotateInlinedReadFirst(content, inlinedFiles) {
   return [...lines.slice(0, start), ...section, ...lines.slice(end)].join("\n");
 }
 
+// prompts.trim_role_brief (default true): keep only the task sections for the
+// stage being dispatched in the inlined brief. Same config/ctx shape as
+// shouldInlineFramework; a per-call ctx.trimRoleBriefOverride === false wins.
+function shouldTrimRoleBrief(ctx) {
+  if (ctx && ctx.trimRoleBriefOverride === false) return false;
+  if (!ctx || !ctx.cwd) return true;
+  try {
+    const { loadConfig } = require("../config");
+    return loadConfig(ctx.cwd).prompts.trim_role_brief !== false;
+  } catch {
+    return true;
+  }
+}
+
 function renderRoleBriefBlock(lines, pointerLine, roleBriefRelPath, ctx, opts = {}) {
   const inline = shouldInlineFramework(ctx);
   lines.push(inline && opts.inlinedPointerLine ? opts.inlinedPointerLine : pointerLine);
@@ -322,7 +336,21 @@ function renderRoleBriefBlock(lines, pointerLine, roleBriefRelPath, ctx, opts = 
       lines.push(`(missing: ${roleBriefRelPath})`);
     } else {
       const inlinedFiles = opts.descriptor ? splitReadFirst(opts.descriptor.readFirst).framework : [];
-      lines.push(annotateInlinedReadFirst(content, inlinedFiles).trimEnd());
+      let body = annotateInlinedReadFirst(content, inlinedFiles);
+      // Per-stage trim (core/pipeline/brief-sections.js): a brief covers every
+      // task its role can be given; the dispatch needs one. The other sections
+      // were re-sent on every model turn of every dispatch. The on-disk brief
+      // is untouched; the omitted headings are named so the model knows the
+      // full brief exists and where.
+      const stageId = opts.descriptor && opts.descriptor.stage;
+      if (stageId && shouldTrimRoleBrief(ctx)) {
+        const { trimBriefForStage } = require("../pipeline/brief-sections");
+        const { text, omitted } = trimBriefForStage(body, stageId);
+        if (omitted.length > 0) {
+          body = `${text.trimEnd()}\n\n(Sections for other stages omitted from this inlined copy: ${omitted.join("; ")}. Full brief: \`${roleBriefRelPath}\`.)`;
+        }
+      }
+      lines.push(body.trimEnd());
     }
   }
   lines.push("");
@@ -509,4 +537,4 @@ function appendGateFooter(lines, descriptor, ctx, hostName) {
   lines.push(`Optional reproducibility (C4): include \`model_version\`, \`temperature\`, \`seed\`, \`max_tokens\`, \`tools_hash\` in the gate when known. Also stamp \`"system_prompt_hash": "${systemPromptHash}"\` verbatim — that's the hash of this prompt. \`devteam reproduce <stage>\` uses these for audit.`);
 }
 
-module.exports = { allowedWritesCaption, annotateInlinedReadFirst, appendGateFooter, readFrameworkFileContent, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderHostNotes, renderKnownPatterns, renderPatchBlock, renderPriorKnowledge, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, shouldInlineFramework, splitReadFirst, toolBudgetSection };
+module.exports = { allowedWritesCaption, annotateInlinedReadFirst, appendGateFooter, readFrameworkFileContent, shouldTrimRoleBrief, renderApprovedAffectedFiles, renderContextDelta, renderContextManifest, renderFrameworkPreamble, renderGoalCondition, renderHostNotes, renderKnownPatterns, renderPatchBlock, renderPriorKnowledge, renderProjectKnowledgePack, renderRoleBriefBlock, renderScopeLine, resolveFrameworkPath, shouldInlineFramework, splitReadFirst, toolBudgetSection };
