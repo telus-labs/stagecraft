@@ -91,6 +91,20 @@ this track, the reverse of every other track. A full stubbed `loop` run is
 exactly 4 dispatches: one PM brief, one build workstream, one QA pass, one
 reviewer.
 
+Why verify comes before review here: on the fuller tracks, peer review already
+has orchestrator-stamped evidence in front of it — pre-review (lint, dependency
+review, SCA), security review, red team, and migration safety all run between
+build and review — and QA then verifies the *approved* change as the last gate
+before sign-off. `loop` has none of those intermediate stages, so QA is the
+only stage the orchestrator can stamp mechanically. Running it first means the
+reviewer reads code that has already passed lint and tests and can cite the
+stage-06 gate's `_orchestrator_stamped.runs` instead of re-running them; it
+also puts the cheap, deterministic gate ahead of the expensive judgment one,
+and a review that requests changes re-runs build → QA → review, so the loop
+always ends on the gate most likely to catch what tests cannot. The stage
+numbers are names inherited from the full track's order; the gate chain
+follows the declared track order, not the numbers.
+
 Both `build` and `peer-review` dispatch a single workstream instead of the
 usual four-area matrix. The role defaults to `backend`; override it project-wide
 via `.devteam/config.yml`:
