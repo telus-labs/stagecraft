@@ -150,6 +150,9 @@ const DEFAULTS = {
   // for hosts where each dispatch is cheaper as a fresh, smaller prompt.
   prompts: {
     inline_framework: true,
+    // Keep only the dispatched stage's task sections in the inlined role
+    // brief (core/pipeline/brief-sections.js). false inlines the whole brief.
+    trim_role_brief: true,
   },
   execution: require("./containment").normalizeExecutionConfig(),
 };
@@ -297,6 +300,7 @@ function loadConfig(cwd = process.cwd()) {
       },
       prompts: {
         inline_framework: parsed.prompts?.inline_framework !== false,
+        trim_role_brief: parsed.prompts?.trim_role_brief !== false,
       },
       execution: require("./containment").normalizeExecutionConfig(parsed.execution),
       _source: "file",
@@ -643,6 +647,9 @@ function renderDefaultConfig(hosts, opts = {}) {
   lines.push("  # inline_framework: true   # phase-37 item 37.2 — inline AGENTS.md, rules/, and");
   lines.push("  #                           # the role brief into the cacheable prompt prefix;");
   lines.push("  #                           # false reverts to the pre-37.2 path-pointer behaviour");
+  lines.push("  # trim_role_brief: true     # keep only the dispatched stage's task sections in the inlined");
+  lines.push("  #                           # brief (pm.md's sign-off/retro sections leave a requirements");
+  lines.push("  #                           # prompt); false inlines the whole brief");
   lines.push("");
   lines.push("# evals:");
   lines.push("  # capture: true   # phase-33 item 33.1 — replayable case on gate FAIL/ESCALATE");
