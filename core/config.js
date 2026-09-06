@@ -56,6 +56,14 @@ const DEFAULTS = {
     // unrecognized value falls back to the default rather than erroring.
     // See loopBuildRole() in core/pipeline/stages.js.
     loop_build_role: "backend",
+    // Per-dispatch wall-clock caps, in ms. dispatch_timeout_ms is the run-wide
+    // default (null → core/adapters/headless.js DEFAULT_TIMEOUT_MS, 10 min);
+    // dispatch_timeouts maps a stage name or id ("peer-review" / "stage-05")
+    // to its own cap. 0 means no cap. --timeout-ms on the CLI overrides both.
+    // Exists because a 40-turn peer review needed ~14 minutes against the
+    // 10-minute default and the only knob was a run-wide flag.
+    dispatch_timeout_ms: null,
+    dispatch_timeouts: {},
     // 32.5: byte budget for pipeline/context.md, enforced by
     // core/context-budget.js whenever a devteam:* marker section is written.
     // Over budget, the oldest RESOLVED marker section compacts to a one-line
@@ -153,6 +161,40 @@ function configPath(cwd) {
 const _cache = new Map();
 function clearConfigCache() { _cache.clear(); }
 
+// A dispatch timeout is a non-negative integer number of milliseconds; 0 is
+// "no cap" (same meaning as `--timeout-ms 0`). Anything else is ignored.
+function timeoutMsOrNull(value) {
+  return Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function normalizeDispatchTimeouts(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [key, value] of Object.entries(raw)) {
+    const ms = timeoutMsOrNull(value);
+    if (typeof key === "string" && key && ms !== null) out[key] = ms;
+  }
+  return out;
+}
+
+// Resolve the wall-clock cap for one dispatch. Precedence: an explicit
+// per-run value (--timeout-ms) > pipeline.dispatch_timeouts[<stage name>] >
+// pipeline.dispatch_timeouts[<stage id>] > pipeline.dispatch_timeout_ms >
+// undefined, which lets core/adapters/headless.js apply its own default.
+// Stage definitions carry their id ("stage-05") but not their name (the
+// STAGES map key, "peer-review"), so the caller passes the name separately.
+function resolveDispatchTimeoutMs(explicitMs, config, stageDef, stageName) {
+  if (typeof explicitMs === "number") return explicitMs;
+  const pipeline = (config && config.pipeline) || {};
+  const table = pipeline.dispatch_timeouts || {};
+  const name = typeof stageName === "string" ? stageName : (stageDef && stageDef.name);
+  const id = stageDef && stageDef.stage;
+  if (name && typeof table[name] === "number") return table[name];
+  if (id && typeof table[id] === "number") return table[id];
+  if (typeof pipeline.dispatch_timeout_ms === "number") return pipeline.dispatch_timeout_ms;
+  return undefined;
+}
+
 function loadConfig(cwd = process.cwd()) {
   const resolved = path.resolve(cwd);
   if (_cache.has(resolved)) return _cache.get(resolved);
@@ -212,6 +254,8 @@ function loadConfig(cwd = process.cwd()) {
         context_budget_bytes: Number.isInteger(parsed.pipeline?.context_budget_bytes) && parsed.pipeline.context_budget_bytes > 0
           ? parsed.pipeline.context_budget_bytes
           : DEFAULTS.pipeline.context_budget_bytes,
+        dispatch_timeout_ms: timeoutMsOrNull(parsed.pipeline?.dispatch_timeout_ms),
+        dispatch_timeouts: normalizeDispatchTimeouts(parsed.pipeline?.dispatch_timeouts),
       },
       autonomy: {
         max_retries: Number.isInteger(parsed.autonomy?.max_retries) && parsed.autonomy.max_retries >= 0
@@ -544,6 +588,9 @@ function renderDefaultConfig(hosts, opts = {}) {
   lines.push("  # force_stages: []    # stage names to run even when skip/conditional rules would skip them");
   lines.push("  # right_sizing: true  # false disables deterministic auto-skips for inapplicable stages");
   lines.push("  # loop_build_role: backend  # single workstream the `loop` track's build + peer-review dispatch");
+  lines.push("  # dispatch_timeout_ms: 600000  # per-dispatch wall-clock cap (default 10 min; 0 = no cap; --timeout-ms overrides)");
+  lines.push("  # dispatch_timeouts:            # per-stage caps by stage name or id");
+  lines.push("  #   peer-review: 1200000        # a 40-turn review needed ~14 min against the 10-min default");
   lines.push("  # verify:             # orchestrator-stamped verification commands");
   lines.push("  #   lint_command: \"npm run lint\"   # override; defaults to package.json scripts.lint");
   lines.push("  #   test_command: \"npm test\"      # exclusive override; null disables auto-discovery");
@@ -671,6 +718,7 @@ function checkBoundedFence(config, commandName) {
 const KNOWN_DEPLOY_ADAPTERS = ["local", "docker-compose", "kubernetes", "terraform", "cloud-run", "gizmos", "npm", "custom"];
 
 module.exports = {
+  resolveDispatchTimeoutMs,
   loadConfig, clearConfigCache, resolveHost, resolveRoute, escalateModel,
   normalizeRouteValue, configPath, renderDefaultConfig,
   writeConfigIfAbsent, changeIdFromFeature, changeIdFromSymptom, DEFAULTS,

@@ -106,8 +106,9 @@ Reading order:
      exist and you are the only reviewer — do not glob for them.
 
 Lint and tests: the stage-06 gate's `_orchestrator_stamped.runs` already
-holds verified results with receipts. Cite them; do not re-run them or
-`npm audit`. Never open `pipeline/run-plan.json`, `run-state.json`,
+holds verified results with receipts. Cite them. One run to reproduce a
+specific suspicion is fine; re-running everything by default, or `npm audit`,
+is not. Never open `pipeline/run-plan.json`, `run-state.json`,
 `run-log.jsonl`, or `pipeline/logs/` — orchestrator state, not the change.
 See `.devteam/rules/stage-05.md` § Reviewer efficiency.
 

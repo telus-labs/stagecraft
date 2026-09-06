@@ -125,16 +125,16 @@ Pre-read requirement (pass to each reviewer agent):
   - The changed files named in the dispatch's Changed-file manifest (or
     `git diff`) — not the whole tree
   - Only if they exist: `pipeline/design-spec.md`, `pipeline/adr/`, the other
-    reviewer's `by-*.md`. Lean tracks (`loop`/`nano`/`refactor`) have none
-    of these; absence is expected and not worth a glob.
+    reviewer's `by-*.md`. Lean tracks (`loop`/`nano`/`refactor`) have none;
+    absence is expected, not worth a glob.
 
 ### Reviewer efficiency (every track)
 
-Every file opened slows every later turn. Do not re-run lint, tests, or
-`npm audit` when the stage-06 (or stage-04) gate carries
-`_orchestrator_stamped.runs` with `exit_code: 0` — cite it. Never read
-`pipeline/run-*.json`, `run-log.jsonl`, `pipeline/logs/`, or
-`.devteam/config.yml` — pipeline state, not the change.
+The stage-06 (or stage-04) gate's
+`_orchestrator_stamped.runs` holds lint/test results with receipts — cite
+them. One run to reproduce a specific suspicion is fine; re-running the whole
+suite by default, or `npm audit`, is not. Never read `pipeline/run-*.json`,
+`run-log.jsonl`, `pipeline/logs/`, or `.devteam/config.yml`.
 
 On architectural escalation: invoke `principal` agent. Principal ruling is binding.
 On deadlock (reviewers disagree, no escalation): invoke `principal` agent to decide.

@@ -118,6 +118,32 @@ describe("gate-validator: exit codes", () => {
 // pipeline halted" fallback with no indication of what a human was being
 // asked to rule on. Enforce it the same way retry_number/
 // this_attempt_differs_by is already enforced.
+describe("gate-validator: placeholder timestamps are called out (advisory)", () => {
+  it("a timestamp hours away from now prints an advisory and still exits 0", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { workstream: "pm", host: "generic", status: "PASS", timestamp: "2026-09-04T00:00:00Z" });
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /ℹ️ {2}stage-01\.json timestamp "2026-09-04T00:00:00Z" is \d+ h in the past — looks like a placeholder/);
+  });
+
+  it("a recent timestamp prints no timestamp advisory", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { workstream: "pm", host: "generic", status: "PASS", timestamp: new Date().toISOString() });
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    assert.doesNotMatch(r.stdout, /looks like a placeholder/);
+  });
+
+  it("a non-date timestamp is named as such", () => {
+    const cwd = track(makeTargetProject());
+    seedGate(cwd, "stage-01", { workstream: "pm", host: "generic", status: "PASS", timestamp: "<ISO-8601>" });
+    const r = runValidator(cwd);
+    assert.equal(r.status, 0);
+    assert.match(r.stdout, /timestamp "<ISO-8601>" is not an ISO-8601 date/);
+  });
+});
+
 describe("gate-validator: ESCALATE requires escalation_reason", () => {
   it("ESCALATE with no escalation_reason → exit 1, INVALID GATE", () => {
     const cwd = track(makeTargetProject());

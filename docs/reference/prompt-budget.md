@@ -24,15 +24,15 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | stage-02  | design                    | principal  | 14,281      | 14,820       | 29,101     | 7276    |
 | stage-03  | clarification             | pm         | 14,281      | 10,618       | 24,899     | 6225    |
 | stage-03b | executable-spec           | pm         | 14,281      | 10,618       | 24,899     | 6225    |
-| stage-04  | build                     | backend    | 14,281      | 8,718        | 22,999     | 5750    |
-| stage-04  | build                     | frontend   | 14,281      | 7,017        | 21,298     | 5325    |
+| stage-04  | build                     | backend    | 14,281      | 8,792        | 23,073     | 5769    |
+| stage-04  | build                     | frontend   | 14,281      | 7,099        | 21,380     | 5345    |
 | stage-04  | build                     | platform   | 14,281      | 2,400        | 16,681     | 4171    |
 | stage-04  | build                     | qa         | 14,281      | 3,105        | 17,386     | 4347    |
 | stage-04a | pre-review                | platform   | 14,281      | 2,400        | 16,681     | 4171    |
 | stage-04b | security-review           | security   | 14,281      | 7,303        | 21,584     | 5396    |
 | stage-04c | red-team                  | red-team   | 14,281      | 13,683       | 27,964     | 6991    |
 | stage-04d | migration-safety          | migrations | 14,281      | 8,272        | 22,553     | 5639    |
-| stage-05  | peer-review               | reviewer   | 14,281      | 8,206        | 22,487     | 5622    |
+| stage-05  | peer-review               | reviewer   | 14,281      | 8,288        | 22,569     | 5643    |
 | stage-06  | qa                        | qa         | 14,281      | 3,105        | 17,386     | 4347    |
 | stage-06b | accessibility-audit       | qa         | 14,281      | 3,105        | 17,386     | 4347    |
 | stage-06c | observability-gate        | platform   | 14,281      | 2,400        | 16,681     | 4171    |
@@ -51,7 +51,7 @@ Multi-role stages appear once per dispatched role. The CI advisory
 | roles/red-team.md  | 13,683 | 3421    |
 | roles/pm.md        | 10,618 | 2655    |
 | roles/verifier.md  | 9,089  | 2273    |
-| roles/backend.md   | 8,718  | 2180    |
+| roles/backend.md   | 8,792  | 2198    |
 
 ## Advisory file-size ceilings
 
@@ -87,12 +87,12 @@ stage-01,24899
 stage-02,29101
 stage-03,24899
 stage-03b,24899
-stage-04,22999
+stage-04,23073
 stage-04a,16681
 stage-04b,21584
 stage-04c,27964
 stage-04d,22553
-stage-05,22487
+stage-05,22569
 stage-06,17386
 stage-06b,17386
 stage-06c,16681
