@@ -30,7 +30,7 @@
     "@opentelemetry/sdk-trace-base": "~2.8.0",
     "@opentelemetry/sdk-trace-node": "~2.8.0",
     "@opentelemetry/semantic-conventions": "~1.28.0",
-    "js-yaml": "^5.2.3"
+    "js-yaml": "^5.4.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
